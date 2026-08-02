@@ -115,6 +115,13 @@ export function sfx(name, vol, x, y, game) {
         o3.connect(g8); g8.connect(out); __tails.push(g8); o3.start(t); o3.stop(t + 0.1);
         break;
       }
+      case 'penetrate': {
+        const op = c.createOscillator(); op.type = 'square';
+        op.frequency.setValueAtTime(rand(700, 900), t); op.frequency.exponentialRampToValueAtTime(150, t + 0.1);
+        const gp = c.createGain(); gp.gain.value = v * 0.4; gp.gain.exponentialRampToValueAtTime(0.001, t + 0.12);
+        op.connect(gp); gp.connect(out); __tails.push(gp); op.start(t); op.stop(t + 0.14);
+        break;
+      }
       case 'head': {
         const o4 = c.createOscillator(); o4.type = 'square'; o4.frequency.value = 1200;
         const g9 = c.createGain(); g9.gain.value = v * 0.5; g9.gain.exponentialRampToValueAtTime(0.001, t + 0.05);

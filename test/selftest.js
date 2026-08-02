@@ -8,7 +8,9 @@ import { setKey, setMouse, setMouseDown, switchWeapon, switchNade } from '../src
 import { buyItem } from '../src/economy.js';
 import { WEAPONS } from '../src/config.js';
 import { killEntity, fireWeapon } from '../src/combat.js';
-import { los, aStar, nearestWalkable, walkable, getMapDiagnostics, getGrid, getMap, findMapById } from '../src/map.js';
+import { los, aStar, nearestWalkable, walkable, getMapDiagnostics, getGrid, getMap, findMapById, loadMap, pathable, tileAt } from '../src/map.js';
+import { installMechTestMap } from './map-fixture.js';
+installMechTestMap();
 
 const game = createGame();
 const canvasStub = { getBoundingClientRect: () => ({ left: 0, top: 0 }), addEventListener: () => {}, getContext: () => null, style: {} };
@@ -300,6 +302,60 @@ T('full-match', () => {
 T('restart', () => {
   startMatch(game);
   if (state() !== 'BUY') throw new Error('restart failed');
+});
+
+T('mech-tile-semantics', () => {
+  loadMap(findMapById('mech-test'));
+  if (!tileAt(40, 40)) throw new Error('tileAt 未导出');
+  if (!walkable(6, 1)) throw new Error('T 区应可走');
+  if (walkable(12, 5)) throw new Error('薄墙不可走');
+  if (!walkable(3, 13)) throw new Error('浅水可走');
+  if (!walkable(9, 19)) throw new Error('高台可站');
+  if (pathable(9, 19)) throw new Error('高台不可寻路');
+  if (!pathable(3, 13)) throw new Error('浅水可寻路');
+  const pathUp = aStar(8, 19, 9, 19);
+  if (!pathUp || pathUp[pathUp.length - 1].x !== 9 || pathUp[pathUp.length - 1].y !== 19) throw new Error('^ 高台应可作为寻路目标');
+  const pathThrough = aStar(8, 19, 20, 19);
+  if (pathThrough !== null) throw new Error('路径不应穿越 ^ 高台');
+  if (getMap().barrels.length !== 1 || getMap().barrels[0].hp !== 2) throw new Error('油桶扫描应为 1 个 hp=2');
+  loadMap(findMapById('dust2'));
+});
+
+T('thin-wall', () => {
+  loadMap(findMapById('mech-test'));
+  const g = createGame();
+  g.opts.mapId = 'mech-test';
+  startMatch(g);
+  const shooter = g.player;
+  shooter.team = 't'; shooter.x = 140; shooter.y = 200; shooter.dead = false;
+  shooter.weapons.primary = 'ak';
+  shooter.slot = 'primary';
+  shooter.ammoMap.ak = 30;
+  const target = g.entities.find((e) => e.bot && e.team === 'ct');
+  target.x = 580; target.y = 200; target.dead = false; target.hp = 100;
+  target.armor = 100; target.helmet = true;
+  target.vx = 0; target.vy = 0;
+  shooter.angle = 0;
+  fireWeapon(shooter, g);
+  const dmgWall = 100 - target.hp;
+  target.hp = 100;
+  const g2 = createGame();
+  g2.opts.mapId = 'mech-test';
+  startMatch(g2);
+  const t2 = g2.player;
+  t2.team = 't'; t2.x = 540; t2.y = 200; t2.dead = false;
+  t2.weapons.primary = 'ak'; t2.slot = 'primary'; t2.ammoMap.ak = 30;
+  const tgt2 = g2.entities.find((e) => e.bot && e.team === 'ct');
+  tgt2.x = 700; tgt2.y = 200; tgt2.dead = false; tgt2.hp = 100;
+  tgt2.armor = 100; tgt2.helmet = true;
+  t2.angle = 0;
+  fireWeapon(t2, g2);
+  const dmgPlain = 100 - tgt2.hp;
+  if (!(dmgWall > 0 && Math.abs(dmgWall - dmgPlain * 0.7) < 1.5)) {
+    throw new Error('薄墙穿射伤害应为 0.7x: wall=' + dmgWall + ' plain=' + dmgPlain);
+  }
+  if (!g.decals.some((d) => d.type === 'bullet')) throw new Error('未生成穿射弹孔');
+  loadMap(findMapById('dust2'));
 });
 
 T('map-unit', () => {

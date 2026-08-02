@@ -1,5 +1,5 @@
 import { WEAPONS, ECONOMY, DIFF, MAX_DECALS } from './config.js';
-import { passableTolerant, collideCircle, los } from './map.js';
+import { passableTolerant, collideCircle, los, tileAt } from './map.js';
 import { weaponDef, wkey, ammoFor, reserveFor } from './entities.js';
 import { ctx } from './ctx.js';
 import { clamp, rand, angDiff } from './utils.js';
@@ -150,9 +150,29 @@ function fireRay(e, game, ang, w, dmg, isPellet) {
     if (perp < o.rad + 2 && (best === null || along < best.t)) best = { t: along, ent: o, perp };
   }
   let wallT = range;
+  let penMult = 1;
+  let inWall = false;
   const steps = Math.ceil(range / 6);
   for (let s = 1; s <= steps; s++) {
-    if (!passableTolerant(ox + cos * s * 6, oy + sin * s * 6)) { wallT = s * 6; break; }
+    const px = ox + cos * s * 6, py = oy + sin * s * 6;
+    const c = tileAt(px, py);
+    if (c === '=') {
+      if (!inWall) {
+        inWall = true;
+        penMult *= 0.7;
+        if (penMult < 0.49) { wallT = s * 6; break; }
+        addDecal(game, px, py, 'bullet');
+        emit('sfx', { name: 'penetrate', vol: 0.5, x: px, y: py, game });
+      }
+      continue;
+    }
+    inWall = false;
+    if (c === 'C' && e.height === 1) continue;
+    if (!passableTolerant(px, py)) {
+      if (c === 'o') hitBarrelByShot(game, px, py, e);
+      wallT = s * 6;
+      break;
+    }
   }
   for (const smoke of game.smokes) {
     const st = Math.ceil(range / 12);
@@ -169,6 +189,7 @@ function fireRay(e, game, ang, w, dmg, isPellet) {
     if (e === game.player) game.stats.hits++;
     const head = !isPellet && Math.random() < 0.12;
     let finalDmg = dmg;
+    finalDmg *= penMult;
     const dd = best.t;
     if (w.kind === 'pistol' || w.kind === 'smg') {
       if (dd > 700) finalDmg *= 0.8;
@@ -202,6 +223,9 @@ function fireRay(e, game, ang, w, dmg, isPellet) {
     }
   }
 }
+
+// 占位：Task 5 实现
+export function hitBarrelByShot(game, px, py, shooter) {}
 
 export function applyDamage(v, dmg, opt, game) {
   if (v.dead) return;

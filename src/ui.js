@@ -1,5 +1,6 @@
 import { WEAPONS, PRICES, DROP_COL } from './config.js';
 import { ctx } from './ctx.js';
+import { ACTIONS, getBindLabel, bind, resetBinds, getSensitivity, setSensitivity } from './keymap.js';
 
 let doc = null;
 let canvas = null;
@@ -21,6 +22,7 @@ export function initUi(documentRef, canvasRef, gameRef) {
   bindBus();
   bindMenu();
   bindOverlays();
+  bindSettings();
   return game.ui;
 }
 
@@ -505,6 +507,91 @@ function bindOverlays() {
   doc.addEventListener('mousedown', (e) => {
     if (buyOpen && !buyPanel.contains(e.target)) game.ui.closeBuy();
   }, false);
+}
+
+let bindTarget = null;
+let bindBtn = null;
+
+// 设置面板：灵敏度滑杆 + 按键重绑定（点击按钮→按任意键→保存到 localStorage）
+function bindSettings() {
+  if (!doc) return;
+  const settingsBtn = el('settingsBtn');
+  const settings = el('settings');
+  const settingsClose = el('settingsClose');
+  const sensRange = el('sensRange');
+  const sensVal = el('sensVal');
+  const resetBtn = el('resetBinds');
+  const listEl = el('keybindList');
+  if (settingsBtn && settings) {
+    settingsBtn.onclick = () => { settings.classList.add('show'); renderKeybindList(listEl); };
+    settingsClose.onclick = () => {
+      settings.classList.remove('show');
+      cancelBindTarget();
+    };
+  }
+  if (sensRange && sensVal) {
+    const sync = () => {
+      const v = parseFloat(sensRange.value);
+      game.opts.sensitivity = v;
+      setSensitivity(v);
+      sensVal.textContent = v.toFixed(2);
+    };
+    sensRange.value = String(getSensitivity());
+    sync();
+    sensRange.oninput = sync;
+  }
+  if (resetBtn) resetBtn.onclick = () => {
+    resetBinds();
+    game.opts.sensitivity = 1;
+    if (sensRange) sensRange.value = '1';
+    if (sensVal) sensVal.textContent = '1.00';
+    renderKeybindList(listEl);
+  };
+  // 绑定模式：捕获任意按键（Esc 取消）
+  window.addEventListener('keydown', (e) => {
+    if (!bindTarget) return;
+    e.preventDefault();
+    e.stopPropagation();
+    if (e.code === 'Escape') { cancelBindTarget(); return; }
+    bind(bindTarget, e.code);
+    cancelBindTarget();
+    renderKeybindList(listEl);
+  }, true);
+}
+
+function cancelBindTarget() {
+  if (bindBtn) {
+    bindBtn.textContent = getBindLabel(bindTarget);
+    bindBtn.classList.remove('sel');
+  }
+  bindTarget = null;
+  bindBtn = null;
+}
+
+function renderKeybindList(listEl) {
+  if (!listEl) return;
+  listEl.innerHTML = '';
+  for (const action of Object.keys(ACTIONS)) {
+    const row = doc.createElement('div');
+    row.className = 'row';
+    row.style.margin = '5px 0';
+    const label = doc.createElement('label');
+    label.textContent = ACTIONS[action];
+    label.style.minWidth = '110px';
+    const b = doc.createElement('button');
+    b.className = 'btn small';
+    b.textContent = getBindLabel(action);
+    b.onclick = () => {
+      cancelBindTarget();
+      bindTarget = action;
+      bindBtn = b;
+      b.textContent = '按任意键…（Esc 取消）';
+      b.classList.add('sel');
+    };
+    row.appendChild(label);
+    row.appendChild(b);
+    listEl.appendChild(row);
+  }
 }
 
 export function isBuyOpen() { return buyOpen; }

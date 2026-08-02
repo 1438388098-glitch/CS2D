@@ -44,6 +44,9 @@ export function createBuilder(w, h) {
         }
       }
     },
+    tile(x, y, ch) {
+      if (y >= 0 && y < h && x >= 0 && x < w) grid[y][x] = ch;
+    },
     rows() {
       return grid.map((r) => r.join(''));
     }

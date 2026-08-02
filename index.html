@@ -53,6 +53,7 @@
           <div class="row"><label>声音</label>
             <button class="btn small" id="muteBtn">开</button>
           </div>
+          <button class="btn" id="settingsBtn">设 置</button>
           <button class="btn primary" id="startBtn">开 始 比 赛</button>
         </div>
         <div class="menu-col">
@@ -66,7 +67,8 @@
             <div><b>R</b> 换弹</div>
             <div><b>E</b> 装/拆/拾取</div>
             <div><b>1/2/3</b> 主武器·手枪·刀</div>
-            <div><b>4/5/6</b> 雷·闪·烟</div>
+            <div><b>4/5/6</b> 快速投掷（按住即扔）</div>
+            <div><b>F1-F4</b> 集合·攻A·攻B·守点</div>
             <div><b>B</b> 购买菜单</div>
             <div><b>Tab</b> 记分板</div>
             <div><b>Esc</b> 暂停 · <b>M</b> 静音</div>
@@ -107,6 +109,21 @@
       <div class="buy-head"><h2>购买装备</h2><div class="cash" id="buyCash">$0</div></div>
       <div class="buy-grid" id="buyGrid"></div>
       <div class="buy-foot"><span>B / Esc 关闭</span><span>剩余 <b id="buyTime">0s</b> 可购买</span></div>
+    </div>
+  </div>
+
+  <div class="ov" id="settings">
+    <div class="panel">
+      <h2 style="letter-spacing:6px;color:#fff;margin-bottom:14px">设 置</h2>
+      <div class="row"><label>鼠标灵敏度</label><div>
+        <input type="range" id="sensRange" min="0.4" max="2.5" step="0.05" style="width:150px;vertical-align:middle">
+        <span id="sensVal" style="color:#ffd27a;font-weight:700;width:34px;display:inline-block;text-align:right">1.0</span>
+      </div></div>
+      <div class="row" style="margin-top:10px"><label>按键重绑定</label>
+        <button class="btn small" id="resetBinds">恢复默认</button>
+      </div>
+      <div id="keybindList" style="max-height:38vh;overflow-y:auto"></div>
+      <button class="btn primary" id="settingsClose" style="margin-top:14px">返 回</button>
     </div>
   </div>
 

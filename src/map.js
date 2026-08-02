@@ -81,7 +81,7 @@ function buildHolds(sites, rows) {
 
 function walkableTile(rows, tx, ty) {
   const c = rows[ty][tx];
-  return c === '.' || c === 'a' || c === 'b' || c === 't' || c === 'c';
+  return c === '.' || c === 'a' || c === 'b' || c === 't' || c === 'c' || c === '~' || c === '≈' || c === '^';
 }
 
 function checkConnectivity(rows) {
@@ -144,6 +144,17 @@ export function loadMap(mapDef) {
     center: { x: w * TILE / 2, y: h * TILE / 2 },
     sites, spawns,
     holds: buildHolds(sites, rows),
+    barrels: (() => {
+      const list = [];
+      for (let ty = 0; ty < rows.length; ty++) {
+        for (let tx = 0; tx < rows[ty].length; tx++) {
+          if (rows[ty][tx] === 'o') list.push({ tx, ty, x: tx * TILE + TILE / 2, y: ty * TILE + TILE / 2, hp: 2 });
+        }
+      }
+      return list;
+    })(),
+    penPoints: mapDef.penPoints || [],
+    highPoints: mapDef.highPoints || [],
     diagnostics: diag
   };
   return diag;
@@ -159,7 +170,23 @@ export function walkable(tx, ty) {
   if (!MAP) return false;
   if (tx < 0 || ty < 0 || tx >= MAP.w || ty >= MAP.h) return false;
   const c = MAP.grid[ty][tx];
-  return c === '.' || c === 'a' || c === 'b' || c === 't' || c === 'c';
+  return c === '.' || c === 'a' || c === 'b' || c === 't' || c === 'c' || c === '~' || c === '≈' || c === '^';
+}
+
+// 寻路可用（^ 高台可站不可越，排除在寻路外）
+export function pathable(tx, ty) {
+  if (!MAP) return false;
+  if (tx < 0 || ty < 0 || tx >= MAP.w || ty >= MAP.h) return false;
+  const c = MAP.grid[ty][tx];
+  return c === '.' || c === 'a' || c === 'b' || c === 't' || c === 'c' || c === '~' || c === '≈';
+}
+
+// 像素坐标 -> 瓦片字符
+export function tileAt(x, y) {
+  if (!MAP) return '#';
+  const tx = Math.floor(x / TILE), ty = Math.floor(y / TILE);
+  if (tx < 0 || ty < 0 || tx >= MAP.w || ty >= MAP.h) return '#';
+  return MAP.grid[ty][tx];
 }
 
 export function passable(x, y) {
@@ -294,6 +321,7 @@ export function aStar(sx, sy, tx, ty) {
       const k = key(nx, ny);
       if (closed.has(k)) continue;
       if (!walkable(nx, ny)) continue;
+      if (!pathable(nx, ny) && !(nx === tx && ny === ty)) continue;
       const ng = g.get(n.k) + 1;
       if (ng < (g.get(k) === undefined ? 1e9 : g.get(k))) {
         g.set(k, ng);

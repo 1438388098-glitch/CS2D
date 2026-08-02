@@ -1,4 +1,4 @@
-import { evolve, loadCheckpoint, listCheckpoints, CK_DIR } from './evolve.js';
+﻿import { evolve, loadCheckpoint, listCheckpoints, CK_DIR } from './evolve.js';
 import { mkdirSync } from 'fs';
 import { fork } from 'child_process';
 import { fileURLToPath } from 'url';
@@ -15,6 +15,7 @@ const mapId = args.map || maps[0];
 let startGen = parseInt(args.start || '0', 10);
 const resume = args.resume || null;
 
+// 并行模式：fork 子进程，每进程负责一张地图（--par N 即最多 N 张图同时训练）
 // 并行模式：fork 子进程，每进程负责一张地图（--par N 即最多 N 张图同时训练）
 if (par > 1 && maps.length > 1) {
   const self = fileURLToPath(import.meta.url);
