@@ -68,7 +68,6 @@ export function fireWeapon(e, game) {
     }
   }
   let spread = effectiveSpread(w, e);
-  if (e.aimTarget && e.aimTarget.height === 1 && e.height === 0) spread *= 1.25;
   registerShot(e);
   if (e.bot) spread *= (e.aiParams || diffOf(game)).spreadMult;
   let moveSpread = 0;
@@ -151,9 +150,11 @@ function fireRay(e, game, ang, w, dmg, isPellet) {
     if (o === e || o.dead || o.team === e.team) continue;
     const dx = o.x - ox, dy = o.y - oy;
     const along = dx * cos + dy * sin;
+    // 低打高：高台目标有效半径缩小 25%（精度惩罚下沉到命中几何，与 aimTarget 无关，玩家/AI 统一生效）
+    const effRad = (o.height === 1 && e.height === 0) ? (o.rad + 2) * 0.75 : o.rad + 2;
     if (along < 0 || along > range + o.rad) continue;
     const perp = Math.abs(dx * sin - dy * cos);
-    if (perp < o.rad + 2 && (best === null || along < best.t)) best = { t: along, ent: o, perp };
+    if (perp < effRad && (best === null || along < best.t)) best = { t: along, ent: o, perp };
   }
   let wallT = range;
   let penMult = 1;

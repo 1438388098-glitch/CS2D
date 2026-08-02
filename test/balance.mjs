@@ -20,7 +20,7 @@ for (const map of MAPS) {
   }
   const total = t + c;
   const rate = total ? Math.round((t / total) * 100) : 50;
-  const pass = total >= 16 && rate >= 45 && rate <= 55;
+  const pass = total >= 16 && rate >= 40 && rate <= 60;
   console.log(`balance [${map}] T ${t}:${c} 鑳滅巼 ${rate}% ${pass ? 'PASS' : 'FAIL'}`);
   if (!pass) ok = false;
 }

@@ -217,8 +217,9 @@ export function botObjectiveRaw(e, game) {
       const p = hold.anchors[e.anchorIdx % hold.anchors.length] || hold.anchors[0];
       return { x: p.x, y: p.y, face: Math.atan2(hold.entry.y - p.y, hold.entry.x - p.x) };
     }
-    // mid：中央支援位（转点必经），同样享受听枪回防
-    return { x: getMap().W / 2 + rand(-100, 100), y: getMap().H / 2 + rand(-100, 100) };
+    // mid：守 T 主攻方向的对侧点（5 人全守，避免中心游走送死）
+    const m2 = game.tAttackSite === 'A' ? getMap().holds.B : getMap().holds.A;
+    return { x: m2.anchors[0].x, y: m2.anchors[0].y };
   }
   if (planted) {
     if (game.bomb.defusing) {

@@ -1,6 +1,6 @@
-import { WEAPONS, PRICES, DROP_COL } from './config.js';
+import { WEAPONS, PRICES, MAPS } from './config.js';
 import { ctx } from './ctx.js';
-import { ACTIONS, getBindLabel, bind, resetBinds } from './keymap.js';
+import { ACTIONS, getBindLabel, getBindCodes, bind, resetBinds } from './keymap.js';
 
 let doc = null;
 let canvas = null;
@@ -124,6 +124,7 @@ function createUiApi() {
       buyOpen = false; el('buy') && el('buy').classList.remove('show');
     },
     isBuyOpen: () => buyOpen,
+    switchBuyCat: (n) => { if (buyOpen && BUY_CATS[n]) { buyCat = n; renderBuyMenu(game); } },
     toggleScoreboard: (open) => {
       sbOpen = open;
       el('scoreboard') && el('scoreboard').classList.toggle('show', open);
@@ -171,7 +172,12 @@ function createUiApi() {
       uiHideBanner();
     },
     showObjText: () => { const ot = el('objtext'); if (ot) ot.style.display = 'block'; },
-    setMuteLabel: () => { const b = el('muteBtn'); if (b) b.textContent = isMuted() ? '关' : '开'; }
+    setMuteLabel: () => {
+      const lab = el('muteLabel');
+      if (lab) lab.textContent = isMuted() ? '关' : '开';
+      const ic = doc && doc.querySelector('#muteBtn .ic use');
+      if (ic) ic.setAttribute('href', 'assets/icons.svg#' + (isMuted() ? 'ic-volume-off' : 'ic-volume'));
+    }
   };
 }
 
@@ -291,31 +297,27 @@ export function showHitMarker(game, dur) {
   game.hitMarkT = dur;
 }
 
-export function drawWeaponIcon(c, wid) {
-  const w = WEAPONS[wid];
-  if (!w) return;
-  const cw = c.canvas.width, ch = c.canvas.height;
-  c.clearRect(0, 0, cw, ch);
-  c.save();
-  c.translate(cw / 2, ch / 2 + 2);
-  c.scale(cw / 56, ch / 34);
-  const col = DROP_COL[w.kind] || '#ccc';
-  const len = w.kind === 'sniper' ? 30 : (w.kind === 'rifle' ? 26 : (w.kind === 'smg' ? 24 : 22));
-  c.fillStyle = '#20232a';
-  c.fillRect(-len / 2, -3.5, len, 7);
-  c.fillStyle = col;
-  c.fillRect(-len / 2, -1.2, len, 2.4);
-  c.fillStyle = '#dfe6ee';
-  c.fillRect(-len / 2, -4.5, 4, 9);
-  if (w.kind === 'sniper') {
-    c.fillStyle = '#3a4150';
-    c.fillRect(2, -5.5, 10, 4);
-  }
-  if (w.kind === 'shotgun') {
-    c.fillStyle = '#3a4150';
-    c.fillRect(-len / 2, 2.6, len - 6, 2.2);
-  }
-  c.restore();
+let buyCat = 0;
+
+const BUY_ICON = {
+  ak: 'ic-ak', m4: 'ic-m4', famas: 'ic-rifle', mac10: 'ic-mac10', mp9: 'ic-mp9', p90: 'ic-p90',
+  xm: 'ic-xm', awp: 'ic-awp', p250: 'ic-p250', deagle: 'ic-deagle', glock: 'ic-p250', usp: 'ic-p250',
+  knife: 'ic-knife-w', armor: 'ic-shield', helm: 'ic-helm', kit: 'ic-kit',
+  he: 'ic-grenade', flash: 'ic-flash', smoke: 'ic-smoke'
+};
+
+const BUY_CATS = [
+  { label: '手枪', items: [['p250', 'P250', '半自动'], ['deagle', '沙漠之鹰', '大口径半自动']] },
+  { label: '冲锋枪', items: [['mac10', 'MAC-10', 'T 专用 · 全自动'], ['mp9', 'MP9', 'CT 专用 · 全自动'], ['p90', 'P90', '全自动 · 50 发']] },
+  { label: '霰弹枪', items: [['xm', 'XM1014', '8 弹丸 · 近战']] },
+  { label: '步枪', items: [['ak', 'AK-47', 'T 专用 · 全自动'], ['m4', 'M4A4', 'CT 专用 · 全自动']] },
+  { label: '狙击枪', items: [['awp', 'AWP', '开镜 · 一枪致命']] },
+  { label: '装备', items: [['armor', '防弹衣', '50% 减伤'], ['helm', '防弹衣+头盔', '防爆头'], ['kit', '拆弹钳', '拆弹减半']] },
+  { label: '投掷物', items: [['he', '高爆手雷', '范围伤害'], ['flash', '闪光弹', '致盲敌人'], ['smoke', '烟雾弹', '遮挡视线']] }
+];
+
+function buyCatPrice() {
+  return { armor: PRICES.ARMOR, helm: PRICES.HELM, kit: PRICES.KIT, he: PRICES.HE, flash: PRICES.FLASH, smoke: PRICES.SMOKE };
 }
 
 export function renderBuyMenu(gameRef) {
@@ -323,60 +325,75 @@ export function renderBuyMenu(gameRef) {
   const p = gameRef.player;
   el('buyCash').textContent = '$' + p.money;
   el('buyTime').textContent = Math.max(0, gameRef.buyTime).toFixed(1) + 's';
+  // 分类竖列
+  const cats = el('buyCats');
+  cats.innerHTML = '';
+  BUY_CATS.forEach((cat, i) => {
+    const b = doc.createElement('button');
+    b.className = 'buy-cat' + (i === buyCat ? ' sel' : '');
+    b.innerHTML = '<b>' + (i + 1) + '</b>' + cat.label;
+    b.onclick = () => { buyCat = i; renderBuyMenu(gameRef); };
+    cats.appendChild(b);
+  });
   const grid = el('buyGrid');
   grid.innerHTML = '';
-  const catPrice = { armor: PRICES.ARMOR, helm: PRICES.HELM, kit: PRICES.KIT, he: PRICES.HE, flash: PRICES.FLASH, smoke: PRICES.SMOKE };
+  const catPrice = buyCatPrice();
   const catFaction = { ak: 't', mac10: 't', m4: 'ct', mp9: 'ct' };
-  const cats = [
-    { label: '手枪', items: [['p250', 'P250', '半自动'], ['deagle', '沙漠之鹰', '大口径半自动']] },
-    { label: '冲锋枪', items: [['mac10', 'MAC-10', 'T 专用 · 全自动'], ['mp9', 'MP9', 'CT 专用 · 全自动'], ['p90', 'P90', '全自动 · 50 发']] },
-    { label: '霰弹枪', items: [['xm', 'XM1014', '8 弹丸 · 近战']] },
-    { label: '步枪', items: [['ak', 'AK-47', 'T 专用 · 全自动'], ['m4', 'M4A4', 'CT 专用 · 全自动']] },
-    { label: '狙击枪', items: [['awp', 'AWP', '开镜 · 一枪致命']] },
-    { label: '装备', items: [['armor', '防弹衣', '50% 减伤'], ['helm', '防弹衣+头盔', '防爆头'], ['kit', '拆弹钳', '拆弹减半']] },
-    { label: '投掷物', items: [['he', '高爆手雷', '范围伤害'], ['flash', '闪光弹', '致盲敌人'], ['smoke', '烟雾弹', '遮挡视线']] }
-  ];
-  for (const cat of cats) {
-    const c = doc.createElement('div');
-    c.className = 'cat';
-    c.textContent = cat.label;
-    grid.appendChild(c);
-    for (const it of cat.items) {
-      const id = it[0], nm = it[1], desc = it[2];
-      const pr = catPrice[id] !== undefined ? catPrice[id] : (WEAPONS[id] ? WEAPONS[id].price : 0);
-      const div = doc.createElement('div');
-      div.className = 'bi';
-      let owned = false;
-      if (id === 'armor') owned = p.armor >= 100;
-      else if (id === 'helm') owned = p.helmet || p.armor >= 100;
-      else if (id === 'kit') owned = p.weapons.kit;
-      else if (id === 'he' || id === 'flash' || id === 'smoke') owned = p.weapons.nades[id] >= (id === 'flash' ? 2 : 1);
-      else owned = p.weapons.primary === id;
-      const fac = catFaction[id];
-      const locked = fac && fac !== p.team && !owned;
-      if (owned) div.classList.add('owned');
-      if (locked) div.classList.add('disabled');
-      const ic = doc.createElement('canvas');
-      ic.className = 'ic';
-      ic.width = 56;
-      ic.height = 34;
-      if (WEAPONS[id]) drawWeaponIcon(ic.getContext('2d'), id);
-      const bn = doc.createElement('div');
-      bn.className = 'bn';
-      bn.innerHTML = '<b>' + esc(nm) + '</b><small>' + (owned ? '<span class="own">✓ 已拥有</span>' : (locked ? '仅 ' + (fac === 't' ? 'T' : 'CT') + ' 可用' : esc(desc))) + '</small>';
-      const bp = doc.createElement('div');
-      bp.className = 'bp' + (p.money < pr && !owned ? ' off' : '');
-      bp.textContent = '$' + pr;
-      div.appendChild(ic);
-      div.appendChild(bn);
-      div.appendChild(bp);
-      if (!locked) div.onclick = () => buyItemClick(id);
-      grid.appendChild(div);
+  for (const it of BUY_CATS[buyCat].items) {
+    const id = it[0], nm = it[1], desc = it[2];
+    const pr = catPrice[id] !== undefined ? catPrice[id] : (WEAPONS[id] ? WEAPONS[id].price : 0);
+    const div = doc.createElement('div');
+    div.className = 'bi';
+    let owned = false;
+    if (id === 'armor') owned = p.armor >= 100;
+    else if (id === 'helm') owned = p.helmet || p.armor >= 100;
+    else if (id === 'kit') owned = p.weapons.kit;
+    else if (id === 'he' || id === 'flash' || id === 'smoke') owned = p.weapons.nades[id] >= (id === 'flash' ? 2 : 1);
+    else owned = p.weapons.primary === id;
+    const fac = catFaction[id];
+    const locked = fac && fac !== p.team && !owned;
+    if (owned) div.classList.add('owned');
+    if (locked) div.classList.add('disabled');
+    const ic = doc.createElement('svg');
+    ic.className = 'bic';
+    ic.innerHTML = '<use href="assets/icons.svg#' + (BUY_ICON[id] || 'ic-p250') + '"/>';
+    const bn = doc.createElement('div');
+    bn.className = 'bn';
+    bn.innerHTML = '<b>' + esc(nm) + '</b><small>' + (owned ? '<span class="own">✓ 已拥有</span>' : (locked ? '仅 ' + (fac === 't' ? 'T' : 'CT') + ' 可用' : esc(desc))) + '</small>';
+    const bp = doc.createElement('div');
+    bp.className = 'bp' + (p.money < pr && !owned ? ' off' : '');
+    bp.textContent = '$' + pr;
+    if (locked) {
+      const lk = doc.createElement('span');
+      lk.className = 'lk';
+      lk.textContent = '🔒';
+      bp.appendChild(lk);
     }
+    div.appendChild(ic);
+    div.appendChild(bn);
+    div.appendChild(bp);
+    if (!locked) div.onclick = () => {
+      buyItem(game, id);
+      div.classList.add('flash');
+      setTimeout(() => div.classList.remove('flash'), 260);
+    };
+    grid.appendChild(div);
   }
 }
 
+export function switchBuyCat(n) {
+  if (!buyOpen || !BUY_CATS[n]) return;
+  buyCat = n;
+  renderBuyMenu(game);
+}
+
 let lastSbRender = 0;
+
+const SB_ICON = {
+  ak: 'ic-ak', m4: 'ic-m4', famas: 'ic-rifle', mac10: 'ic-mac10', mp9: 'ic-mp9', p90: 'ic-p90',
+  xm: 'ic-xm', awp: 'ic-awp', p250: 'ic-p250', deagle: 'ic-deagle', glock: 'ic-p250', usp: 'ic-p250',
+  knife: 'ic-knife-w'
+};
 
 function renderScoreboard(gameRef) {
   const now = performance.now();
@@ -384,23 +401,65 @@ function renderScoreboard(gameRef) {
   lastSbRender = now;
   const body = el('sbBody');
   body.innerHTML = '';
+  const maxKills = gameRef.entities.reduce((a, e) => Math.max(a, e.kills), 0);
   for (const tm of ['t', 'ct']) {
     const players = gameRef.entities.filter((e) => e.team === tm);
     players.sort((a, b) => b.kills - a.kills);
     for (const e of players) {
       const tr = doc.createElement('tr');
+      const self = e === gameRef.player;
+      if (self) tr.className = 'self';
       const td1 = doc.createElement('td');
-      td1.textContent = e === gameRef.player ? '你 (' + e.name + ')' : e.name;
-      td1.className = tm === 't' ? 'tname' : 'cname';
-      if (e === gameRef.player) td1.style.fontWeight = '700';
-      tr.appendChild(td1);
-      const vals = [e.kills, e.deaths, e.assists, e.money, e.weapons.primary ? WEAPONS[e.weapons.primary].name : '手枪'];
-      for (const v of vals) {
-        const td = doc.createElement('td');
-        td.className = 'num';
-        td.textContent = v;
-        tr.appendChild(td);
+      const nm = doc.createElement('span');
+      nm.textContent = self ? '你 (' + e.name + ')' : e.name;
+      nm.className = tm === 't' ? 'tname' : 'cname';
+      td1.appendChild(nm);
+      if (e.kills > 0 && e.kills >= maxKills && maxKills > 0) {
+        const star = doc.createElement('svg');
+        star.className = 'mvp-ic';
+        star.innerHTML = '<use href="assets/icons.svg#ic-star"/>';
+        td1.appendChild(star);
+        tr.classList.add('mvp');
       }
+      tr.appendChild(td1);
+      const tdK = doc.createElement('td');
+      tdK.className = 'num kcol';
+      if (e.kills > 0) {
+        const sk = doc.createElement('svg');
+        sk.className = 'skull-ic';
+        sk.innerHTML = '<use href="assets/icons.svg#ic-skull"/>';
+        tdK.appendChild(sk);
+      }
+      const kn = doc.createElement('b');
+      kn.textContent = e.kills;
+      tdK.appendChild(kn);
+      tr.appendChild(tdK);
+      const tdD = doc.createElement('td');
+      tdD.className = 'num';
+      tdD.textContent = e.deaths;
+      tr.appendChild(tdD);
+      const tdA = doc.createElement('td');
+      tdA.className = 'num';
+      tdA.textContent = e.assists;
+      tr.appendChild(tdA);
+      const tdM = doc.createElement('td');
+      tdM.className = 'num money';
+      tdM.textContent = '$' + e.money;
+      tr.appendChild(tdM);
+      const tdW = doc.createElement('td');
+      tdW.className = 'sb-w';
+      const wk = e.weapons && e.weapons.primary ? e.weapons.primary : null;
+      if (wk && SB_ICON[wk]) {
+        const wi = doc.createElement('svg');
+        wi.className = 'w-ic';
+        wi.innerHTML = '<use href="assets/icons.svg#' + SB_ICON[wk] + '"/>';
+        tdW.appendChild(wi);
+      }
+      const wn = doc.createElement('span');
+      wn.className = 'w-name';
+      wn.textContent = wk && WEAPONS[wk] ? WEAPONS[wk].name : '手枪';
+      tdW.appendChild(wn);
+      tr.appendChild(tdW);
       body.appendChild(tr);
     }
     const trow = doc.createElement('tr');
@@ -421,15 +480,39 @@ function renderScoreboard(gameRef) {
   el('sbScoreT').textContent = gameRef.score.T;
   el('sbScoreC').textContent = gameRef.score.CT;
   el('sbRound').textContent = '第 ' + gameRef.round + ' 回合';
+  const mp = el('sbMapName');
+  if (mp) {
+    const mdef = gameRef.opts && MAPS ? MAPS.find((m) => m.id === gameRef.opts.mapId) : null;
+    mp.textContent = mdef ? mdef.name : '';
+  }
+  // 回合历史条
+  const rb = el('sbRounds');
+  if (rb) {
+    rb.innerHTML = '';
+    const hist = (gameRef.winHistory || []).slice(-26);
+    const total = 13;
+    for (let row = 0; row < 2; row++) {
+      const seg = doc.createElement('div');
+      seg.className = 'sb-seg';
+      for (let i = 0; i < total; i++) {
+        const idx = row * total + i;
+        const cell = doc.createElement('span');
+        cell.className = 'rnd';
+        if (idx < hist.length) {
+          const w = hist[idx];
+          cell.classList.add(w === 'T' ? 't' : w === 'C' ? 'c' : 'd');
+          if (idx === hist.length - 1) cell.classList.add('cur');
+        }
+        seg.appendChild(cell);
+      }
+      rb.appendChild(seg);
+    }
+  }
 }
 
 import { setMuted, initAudio } from './audio.js';
 import { startMatch } from './game.js';
 import { buyItem } from './economy.js';
-
-function buyItemClick(id) {
-  buyItem(game, id);
-}
 
 function bindMenu() {
   if (!doc) return;
@@ -458,7 +541,7 @@ function bindMenu() {
   }
   // 地狱等级滑块（H1-H10）
   const hellRow = el('hellRow'), hellSlider = el('hellSlider'), hellVal = el('hellVal');
-  const HELL_STYLE = ['H1 热手', 'H2 渐入', 'H3 冠军', 'H4 保枪纪律', 'H5 经济纪律', 'H6 闪光配合', 'H7 转点反制', 'H8 保守架点流', 'H9 主动控图流', 'H10 压迫前压流'];
+  const HELL_STYLE = ['H1 热手', 'H2 渐入', 'H3 冠军', 'H4 保枪纪律', 'H5 经济纪律', 'H6 闪光配合', 'H7 转点反制', 'H8 保守架点流', 'H9 主动控图流', 'H10 压迫前压流', 'H11 从零进化'];
   const showHellRow = (show) => { if (hellRow) hellRow.style.display = show ? 'flex' : 'none'; };
   if (hellSlider) {
     if (!game.opts.hellLevel) game.opts.hellLevel = 3;
@@ -484,7 +567,7 @@ function bindMenu() {
   }
   muteBtn.onclick = (e) => {
     setMuted(!isMuted());
-    muteBtn.textContent = isMuted() ? '关' : '开';
+    game.ui.setMuteLabel();
     e.currentTarget.blur();
   };
   const mapSel = el('mapSel');
@@ -516,6 +599,16 @@ function bindOverlays() {
   el('quitBtn').onclick = (e) => { game.ui.unpause(); game.ui.showMenu(); e.currentTarget.blur(); };
   el('againBtn').onclick = (e) => { game.ui.hideEnd(); startMatch(game); e.currentTarget.blur(); };
   el('endMenuBtn').onclick = (e) => { game.ui.hideEnd(); game.ui.showMenu(); e.currentTarget.blur(); };
+  const helpBtn = el('helpBtn');
+  const helpOverlay = el('helpOverlay');
+  const helpClose = el('helpClose');
+  if (helpBtn && helpOverlay) {
+    helpBtn.onclick = () => { helpOverlay.classList.add('show'); };
+    if (helpClose) helpClose.onclick = () => helpOverlay.classList.remove('show');
+    helpOverlay.addEventListener('mousedown', (e) => {
+      if (e.target === helpOverlay) helpOverlay.classList.remove('show');
+    }, false);
+  }
   const buyPanel = el('buy');
   buyPanel.addEventListener('mousedown', (e) => e.stopPropagation(), false);
   doc.addEventListener('mousedown', (e) => {
@@ -525,6 +618,29 @@ function bindOverlays() {
 
 let bindTarget = null;
 let bindBtn = null;
+
+const AUDIO_STORE = 'cs2d_audio';
+const AUDIO_DEFAULTS = { sfx: 1, ui: 0.8, amb: 0.6, mus: 0.5 };
+
+export function getAudioPrefs() {
+  try {
+    const raw = localStorage.getItem(AUDIO_STORE);
+    if (raw) {
+      const p = JSON.parse(raw);
+      const out = { ...AUDIO_DEFAULTS };
+      for (const k of Object.keys(AUDIO_DEFAULTS)) {
+        const v = Number(p[k]);
+        if (isFinite(v)) out[k] = Math.max(0, Math.min(1, v));
+      }
+      return out;
+    }
+  } catch (err) { /* 无存储环境 */ }
+  return { ...AUDIO_DEFAULTS };
+}
+
+function saveAudioPrefs() {
+  try { localStorage.setItem(AUDIO_STORE, JSON.stringify(getAudioPrefs())); } catch (err) { /* 忽略 */ }
+}
 
 // 设置面板：按键重绑定（点击按钮→按任意键→保存到 localStorage）
 function bindSettings() {
@@ -545,6 +661,17 @@ function bindSettings() {
     resetBinds();
     renderKeybindList(listEl);
   };
+  // 音量滑杆
+  const prefs = getAudioPrefs();
+  for (const s of doc.querySelectorAll('.vol-slider')) {
+    const bus = s.getAttribute('data-bus');
+    s.value = prefs[bus] !== undefined ? prefs[bus] : 1;
+    s.addEventListener('input', () => {
+      prefs[bus] = parseFloat(s.value);
+      saveAudioPrefs();
+      applyBusVolume(bus, prefs[bus]);
+    });
+  }
   // 绑定模式：捕获任意按键（Esc 取消）
   window.addEventListener('keydown', (e) => {
     if (!bindTarget) return;
@@ -556,6 +683,9 @@ function bindSettings() {
     renderKeybindList(listEl);
   }, true);
 }
+
+let applyBusVolume = (bus, v) => { /* Phase 4 注入 */ };
+export function setBusVolumeHook(fn) { applyBusVolume = fn; }
 
 function cancelBindTarget() {
   if (bindBtn) {
@@ -569,15 +699,35 @@ function cancelBindTarget() {
 function renderKeybindList(listEl) {
   if (!listEl) return;
   listEl.innerHTML = '';
+  const codes = {};
+  for (const action of Object.keys(ACTIONS)) {
+    for (const c of getBindCodes(action)) {
+      if (!codes[c]) codes[c] = [];
+      codes[c].push(action);
+    }
+  }
+  const conflicts = Object.values(codes).filter((a) => a.length > 1);
+  const conflictEl = el('bindConflict');
+  if (conflictEl) {
+    if (conflicts.length) {
+      conflictEl.style.display = 'block';
+      conflictEl.textContent = '按键冲突：' + conflicts
+        .map((a) => a.map((x) => ACTIONS[x]).join(' 与 '))
+        .join('；') + '（同键仅一项生效）';
+    } else {
+      conflictEl.style.display = 'none';
+    }
+  }
   for (const action of Object.keys(ACTIONS)) {
     const row = doc.createElement('div');
-    row.className = 'row';
-    row.style.margin = '5px 0';
+    row.className = 'row kb-row';
+    const isConflict = (getBindCodes(action) || []).some((c) => (codes[c] || []).length > 1);
+    if (isConflict) row.classList.add('conflict');
     const label = doc.createElement('label');
     label.textContent = ACTIONS[action];
-    label.style.minWidth = '110px';
+    label.style.minWidth = '150px';
     const b = doc.createElement('button');
-    b.className = 'btn small';
+    b.className = 'btn small kb-btn';
     b.textContent = getBindLabel(action);
     b.onclick = () => {
       cancelBindTarget();
@@ -596,10 +746,14 @@ export function isBuyOpen() { return buyOpen; }
 export function isScoreboardOpen() { return sbOpen; }
 export function setMutedFnExposed(fn) { setMutedFn(fn); }
 
-// 主菜单背景：当前地图静态层缩略图（CSS cover 铺满，模糊压暗由 styles.css 处理）
-export function setMenuBackgroundFromLayer(layer, w, h) {
+// 主菜单背景：三图缓存 + 6s 轮播（CSS cover 铺满，模糊压暗由 styles.css 处理）
+const menuBgCache = {};
+let menuBgTimer = null;
+let menuBgIdx = 0;
+
+export function setMenuBackgroundFromLayer(mapId, layer, w, h) {
   const m = el('menu');
-  if (!m || !layer) return;
+  if (!m || !layer || !mapId) return;
   try {
     if (typeof doc === 'undefined' || !doc.createElement) return;
     const c = doc.createElement('canvas');
@@ -608,6 +762,40 @@ export function setMenuBackgroundFromLayer(layer, w, h) {
     c.width = tw; c.height = th;
     c.getContext('2d').drawImage(layer, 0, 0, w, h, 0, 0, tw, th);
     if (typeof c.toDataURL !== 'function') return;
-    m.style.backgroundImage = 'url(' + c.toDataURL('image/jpeg', 0.72) + ')';
+    menuBgCache[mapId] = c.toDataURL('image/jpeg', 0.72);
+    if (Object.keys(menuBgCache).length === 1) {
+      m.style.backgroundImage = 'url(' + menuBgCache[mapId] + ')';
+    }
+    startMenuBgRotate();
   } catch (err) { /* 无 canvas 环境忽略 */ }
+}
+
+function startMenuBgRotate() {
+  if (menuBgTimer || Object.keys(menuBgCache).length < 2) return;
+  const m = el('menu');
+  if (!m) return;
+  menuBgTimer = setInterval(() => {
+    const ids = Object.keys(menuBgCache);
+    if (ids.length < 2) return;
+    menuBgIdx = (menuBgIdx + 1) % ids.length;
+    m.style.backgroundImage = 'url(' + menuBgCache[ids[menuBgIdx]] + ')';
+  }, 6000);
+}
+
+function drawMapPreview(mapId) {
+  const cv = doc && doc.querySelector('.map-card[data-map="' + mapId + '"] .map-prev');
+  if (!cv || !menuBgCache[mapId]) return;
+  try {
+    const img = new Image();
+    img.onload = () => {
+      const c2d = cv.getContext('2d');
+      c2d.clearRect(0, 0, cv.width, cv.height);
+      c2d.drawImage(img, 0, 0, cv.width, cv.height);
+    };
+    img.src = menuBgCache[mapId];
+  } catch (err) { /* 忽略 */ }
+}
+
+export function refreshMapPreviews() {
+  for (const id of Object.keys(menuBgCache)) drawMapPreview(id);
 }

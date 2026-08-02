@@ -14,6 +14,64 @@
   <div id="lowhp"></div>
   <div id="flash"></div>
 
+  <div id="hud-root" style="display:none">
+    <div id="hud-top">
+      <div class="ht-main">
+        <span class="ht-t" id="hudScoreT">T 0</span>
+        <span class="ht-time" id="hudTime">01:55</span>
+        <span class="ht-c" id="hudScoreC">0 CT</span>
+      </div>
+      <div class="ht-sub" id="hudBuyTip" style="display:none"></div>
+      <div class="ht-sub hell" id="hudHellTip" style="display:none"></div>
+    </div>
+
+    <div id="hud-left">
+      <div class="hl-head">
+        <svg class="hl-ic"><use id="hudWeaponIc" href="assets/icons.svg#ic-p250"/></svg>
+        <span class="hl-name" id="hudWeaponName">P250</span>
+      </div>
+      <div class="hl-main">
+        <span class="hl-num" id="hudHp">100</span>
+        <span class="hl-unit">HP</span>
+        <div class="hl-bars">
+          <div class="hl-bar" id="hudHpBar"><i></i></div>
+          <div class="hl-bar armor" id="hudArmorBar"><i></i></div>
+        </div>
+      </div>
+      <div class="hl-foot">
+        <span class="hl-money" id="hudMoney">$ 0</span>
+        <span class="hl-state" id="hudStateRow" style="display:none">
+          <svg class="hl-sic"><use id="hudStateIc" href="assets/icons.svg#ic-reload"/></svg><span id="hudStateText"></span>
+        </span>
+      </div>
+    </div>
+
+    <div id="hud-right">
+      <div class="hr-ammo">
+        <span class="hr-mag" id="hudAmmoMag">∞</span>
+        <span class="hr-res" id="hudAmmoRes"></span>
+        <div class="hr-ring" id="hudReloadRing"></div>
+      </div>
+      <div class="hr-name" id="hudAmmoName"></div>
+      <div class="hr-nades">
+        <span class="nade" id="nadeHe"><svg class="nade-ic"><use href="assets/icons.svg#ic-grenade"/></svg><b>4</b></span>
+        <span class="nade" id="nadeFlash"><svg class="nade-ic"><use href="assets/icons.svg#ic-flash"/></svg><b>5</b></span>
+        <span class="nade" id="nadeSmoke"><svg class="nade-ic"><use href="assets/icons.svg#ic-smoke"/></svg><b>6</b></span>
+      </div>
+    </div>
+
+    <div id="hud-bomb" style="display:none">
+      <svg class="bomb-ic"><use href="assets/icons.svg#ic-bomb"/></svg>
+      <span id="hudBombSecs">40.0</span>
+    </div>
+
+    <div id="hud-spectate" style="display:none"><span id="hudSpecText"></span></div>
+    <div id="mm-controls">
+      <button class="mm-btn" id="mmIn" title="放大">＋</button>
+      <button class="mm-btn" id="mmOut" title="缩小">－</button>
+    </div>
+  </div>
+
   <div id="banner"><div class="b1" id="ban1"></div><div class="b2" id="ban2"></div></div>
   <div id="streak"><div class="s1"></div><div class="s2"></div></div>
   <div id="killfeed"></div>
@@ -24,65 +82,90 @@
   <div id="holdbar"><i id="holdbarfill"></i></div>
 
   <div class="ov" id="menu">
-    <div class="panel">
+    <div class="panel menu-panel">
       <div class="title">
         <h1>CS<span>2D</span></h1>
         <p>平面反恐精英 · 5V5 战术竞技</p>
       </div>
       <div class="menu-body">
+        <div class="menu-col maps-col">
+          <h3>选择地图</h3>
+          <div id="mapSel" class="map-cards">
+            <button class="map-card" data-map="dust2">
+              <canvas class="map-prev" width="280" height="196"></canvas>
+              <div class="mc-name">沙漠遗址</div>
+              <div class="mc-desc">经典平衡 · 三路对峙</div>
+              <span class="mc-check">✓</span>
+            </button>
+            <button class="map-card" data-map="canal">
+              <canvas class="map-prev" width="280" height="196"></canvas>
+              <div class="mc-name">运河小镇</div>
+              <div class="mc-desc">水路穿行 · 高台制衡</div>
+              <span class="mc-check">✓</span>
+            </button>
+            <button class="map-card" data-map="metro">
+              <canvas class="map-prev" width="280" height="196"></canvas>
+              <div class="mc-name">地铁枢纽</div>
+              <div class="mc-desc">密闭走廊 · 油桶伏击</div>
+              <span class="mc-check">✓</span>
+            </button>
+          </div>
+        </div>
         <div class="menu-col">
           <h3>对战设置</h3>
-          <div class="row"><label>你的阵营</label><div>
-            <button class="btn team ct sel" id="teamCt">CT 反恐</button>
-            <button class="btn team t" id="teamT">T 恐怖</button>
-          </div></div>
-          <div class="row"><label>AI 难度</label><div>
+          <div class="row"><label>你的阵营</label></div>
+          <div class="team-row">
+            <button class="btn team-wide ct sel" id="teamCt">CT 反恐</button>
+            <button class="btn team-wide t" id="teamT">T 恐怖</button>
+          </div>
+          <div class="row"><label>AI 难度</label></div>
+          <div class="diff-grid">
             <button class="btn diff n sel" id="diffN">普通</button>
             <button class="btn diff e" id="diffE">简单</button>
             <button class="btn diff h" id="diffH">困难</button>
             <button class="btn diff hell" id="diffHell">地狱</button>
-          </div></div>
+          </div>
           <div class="row" id="hellRow" style="display:none"><label>地狱等级</label><div class="hell-slider">
-            <input type="range" id="hellSlider" min="1" max="10" value="3" step="1">
+            <input type="range" id="hellSlider" min="1" max="11" value="3" step="1">
             <span class="hell-val" id="hellVal">H3</span>
           </div></div>
           <div class="row"><label>每队机器人</label><div id="botSel"></div></div>
-          <div class="row"><label>选择地图</label><div id="mapSel">
-            <button class="btn small" data-map="dust2">沙漠</button>
-            <button class="btn small" data-map="canal">运河</button>
-            <button class="btn small" data-map="metro">地铁</button>
-          </div></div>
           <div class="row"><label>声音</label>
-            <button class="btn small" id="muteBtn">开</button>
+            <button class="btn small" id="muteBtn"><svg class="ic"><use href="assets/icons.svg#ic-volume"/></svg><span id="muteLabel">开</span></button>
           </div>
-          <button class="btn" id="settingsBtn">设 置</button>
+          <button class="btn" id="settingsBtn"><svg class="ic"><use href="assets/icons.svg#ic-gear"/></svg>设 置</button>
           <button class="btn primary" id="startBtn">开 始 比 赛</button>
         </div>
-        <div class="menu-col">
-          <h3>操作说明</h3>
-          <div class="ctrl-list">
-            <div><b>W A S D</b> 移动</div>
-            <div><b>Shift</b> 静步</div>
-            <div><b>鼠标</b> 瞄准</div>
-            <div><b>左键</b> 射击</div>
-            <div><b>右键</b> 开镜/重击</div>
-            <div><b>R</b> 换弹</div>
-            <div><b>E</b> 装/拆/拾取</div>
-            <div><b>1/2/3</b> 主武器·手枪·刀</div>
-            <div><b>4/5/6</b> 快速投掷（按住即扔）</div>
-            <div><b>F1-F4</b> 集合·攻A·攻B·守点</div>
-            <div><b>B</b> 购买菜单</div>
-            <div><b>Tab</b> 记分板</div>
-            <div><b>Esc</b> 暂停 · <b>M</b> 静音</div>
-          </div>
-          <h3 style="margin-top:12px">目标</h3>
-          <div class="ctrl-list">
-            <div><b>CT</b> 守点·拆弹</div>
-            <div><b>T</b> 装弹·引爆</div>
-            <div>先赢 <b>13</b> 回合胜</div>
-          </div>
-        </div>
       </div>
+      <button class="help-btn" id="helpBtn" title="操作说明"><svg class="ic"><use href="assets/icons.svg#ic-help"/></svg></button>
+    </div>
+  </div>
+
+  <div class="ov" id="helpOverlay">
+    <div class="panel">
+      <h3 class="help-title">操作说明</h3>
+      <div class="ctrl-list">
+        <div><b>W A S D</b> 移动</div>
+        <div><b>Shift</b> 静步</div>
+        <div><b>鼠标</b> 瞄准</div>
+        <div><b>左键</b> 射击</div>
+        <div><b>右键</b> 开镜/重击</div>
+        <div><b>R</b> 换弹</div>
+        <div><b>E</b> 装/拆/拾取</div>
+        <div><b>1/2/3</b> 主武器·手枪·刀</div>
+        <div><b>4/5/6</b> 快速投掷（按住即扔）</div>
+        <div><b>F1-F4</b> 集合·攻A·攻B·守点</div>
+        <div><b>B</b> 购买菜单</div>
+        <div><b>Tab</b> 记分板</div>
+        <div><b>Esc</b> 暂停 · <b>M</b> 静音</div>
+      </div>
+      <h3 class="help-title" style="margin-top:12px">目标</h3>
+      <div class="ctrl-list">
+        <div><b>CT</b> 守点·拆弹</div>
+        <div><b>T</b> 装弹·引爆</div>
+        <div>先赢 <b>13</b> 回合胜</div>
+      </div>
+      <button class="btn primary" id="helpClose" style="margin-top:16px">知道了</button>
     </div>
   </div>
 
@@ -98,29 +181,50 @@
   <div class="ov" id="scoreboard">
     <div class="panel">
       <div class="sb-head">
-        <div style="font-size:16px;font-weight:700;letter-spacing:2px">记分板 <span id="sbRound" style="color:#7d8794;font-size:12px"></span></div>
+        <div class="sb-title">
+          <span class="sb-name">记分板</span>
+          <span id="sbRound" class="sb-round"></span>
+        </div>
         <div class="score"><span class="t" id="sbScoreT">0</span> : <span class="c" id="sbScoreC">0</span></div>
       </div>
-      <table class="sb"><thead><tr><th>玩家</th><th class="num">击杀</th><th class="num">死亡</th><th class="num">助攻</th><th class="num">金钱</th><th class="num">装备</th></tr></thead><tbody id="sbBody"></tbody></table>
-      <div class="sb-foot">先到 13 分获胜 · 12 回合后交换阵营 · 按 Tab 关闭</div>
+      <div class="sb-rounds" id="sbRounds"></div>
+      <table class="sb">
+        <thead><tr><th>玩家</th><th class="num">击杀</th><th class="num">死亡</th><th class="num">助攻</th><th class="num">金钱</th><th class="sb-w">装备</th></tr></thead>
+        <tbody id="sbBody"></tbody>
+      </table>
+      <div class="sb-foot"><span id="sbMapName"></span> · 先到 13 分获胜 · 12 回合后交换阵营 · 按 Tab 关闭</div>
     </div>
   </div>
 
   <div class="ov" id="buy">
-    <div class="panel">
+    <div class="panel buy-panel">
       <div class="buy-head"><h2>购买装备</h2><div class="cash" id="buyCash">$0</div></div>
-      <div class="buy-grid" id="buyGrid"></div>
-      <div class="buy-foot"><span>B / Esc 关闭</span><span>剩余 <b id="buyTime">0s</b> 可购买</span></div>
+      <div class="buy-wrap">
+        <div class="buy-cats" id="buyCats"></div>
+        <div class="buy-grid" id="buyGrid"></div>
+      </div>
+      <div class="buy-foot"><span>1-7 切换分类 · B / Esc 关闭</span><span>剩余 <b id="buyTime">0s</b> 可购买</span></div>
     </div>
   </div>
 
   <div class="ov" id="settings">
-    <div class="panel">
-      <h2 style="letter-spacing:6px;color:#fff;margin-bottom:14px">设 置</h2>
-      <div class="row" style="margin-top:10px"><label>按键重绑定</label>
-        <button class="btn small" id="resetBinds">恢复默认</button>
+    <div class="panel settings-panel">
+      <h2 class="settings-title">设 置</h2>
+      <div class="settings-sec">
+        <div class="sec-head">按键绑定</div>
+        <div class="row"><label>按键重绑定</label>
+          <button class="btn small" id="resetBinds">恢复默认</button>
+        </div>
+        <div id="bindConflict" class="bind-conflict" style="display:none"></div>
+        <div id="keybindList"></div>
       </div>
-      <div id="keybindList" style="max-height:38vh;overflow-y:auto"></div>
+      <div class="settings-sec">
+        <div class="sec-head">音量</div>
+        <div class="row"><label>音效</label><input type="range" class="vol-slider" data-bus="sfx" min="0" max="1" step="0.05" value="1"></div>
+        <div class="row"><label>界面音</label><input type="range" class="vol-slider" data-bus="ui" min="0" max="1" step="0.05" value="0.8"></div>
+        <div class="row"><label>环境音</label><input type="range" class="vol-slider" data-bus="amb" min="0" max="1" step="0.05" value="0.6"></div>
+        <div class="row"><label>音乐</label><input type="range" class="vol-slider" data-bus="mus" min="0" max="1" step="0.05" value="0.5"></div>
+      </div>
       <button class="btn primary" id="settingsClose" style="margin-top:14px">返 回</button>
     </div>
   </div>

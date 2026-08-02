@@ -1,11 +1,13 @@
 import { createGame, startMatch, update } from './game.js';
 import { initTextures } from './textures.js';
 import { initRenderer, render } from './render.js';
-import { initHud, renderHud, renderCrosshair, renderMinimap, toggleMiniZoom, isMiniZoomed } from './hud.js';
-import { initUi, setMutedFnExposed, setMenuBackgroundFromLayer } from './ui.js';
+import { initHud, renderHud, renderCrosshair, renderMinimap, toggleMiniZoom, isMiniZoomed, setMiniZoom } from './hud.js';
+import { initUi, setMutedFnExposed, setMenuBackgroundFromLayer, refreshMapPreviews } from './ui.js';
+import { initUiDom, updateHudDom } from './ui-dom.js';
 import { initInput, resizeCanvas, setKey, setMouse, setMouseDown } from './input.js';
 import { killEntity } from './combat.js';
 import { getMap } from './map.js';
+import { MAPS } from './config.js';
 import { setMuted, isMuted, setAudioContext } from './audio.js';
 
 const canvas = document.getElementById('game');
@@ -18,12 +20,25 @@ function reloadMapLayers() {
   game.layers = initTextures(getMap());
   initRenderer(canvas, game.layers);
   initHud(canvas, game.layers);
-  if (game.layers) setMenuBackgroundFromLayer(game.layers.staticLayer, game.layers.W, game.layers.H);
+  if (game.layers) setMenuBackgroundFromLayer(game.opts.mapId, game.layers.staticLayer, game.layers.W, game.layers.H);
 }
 game.onMapChanged = reloadMapLayers;
 
+// 主菜单三图背景与卡片缩略图：启动时对全部地图预生成（initTextures 为纯函数，不污染当前地图）
+function initMenuBackgrounds() {
+  for (const m of MAPS) {
+    try {
+      const layers = initTextures(m);
+      if (layers) setMenuBackgroundFromLayer(m.id, layers.staticLayer, layers.W, layers.H);
+    } catch (err) { /* 单图失败不阻塞 */ }
+  }
+  refreshMapPreviews();
+}
+
 reloadMapLayers();
+initMenuBackgrounds();
 initUi(document, canvas, game);
+initUiDom(game);
 initInput(game, canvas);
 resizeCanvas(game, canvas);
 game.ui.showMenu();
@@ -38,6 +53,9 @@ canvas.addEventListener('mousedown', (e) => {
   if (x > cw - mmW - 12 && y < mmH + 10) toggleMiniZoom();
 }, false);
 
+document.getElementById('mmIn').addEventListener('click', (e) => { setMiniZoom(2); e.stopPropagation(); });
+document.getElementById('mmOut').addEventListener('click', (e) => { setMiniZoom(1); e.stopPropagation(); });
+
 let lastT = performance.now();
 function loop(t) {
   const now = t || performance.now();
@@ -47,6 +65,7 @@ function loop(t) {
     update(game, dt);
     render(game);
     renderMinimap(game);
+    updateHudDom(now);
     renderHud(game);
     renderCrosshair(game);
   } catch (err) {

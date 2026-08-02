@@ -23,6 +23,10 @@ export function initInput(game, canvasRef) {
       if (game.ui.isBuyOpen()) game.ui.closeBuy();
       else game.ui.openBuy();
     }
+    if (/^Digit[1-7]$/.test(e.code) && game.ui.isBuyOpen()) {
+      e.preventDefault();
+      game.ui.switchBuyCat(parseInt(e.code.slice(5), 10) - 1);
+    }
     if (matches(e.code, 'scoreboard')) {
       e.preventDefault();
       game.ui.toggleScoreboard(true);

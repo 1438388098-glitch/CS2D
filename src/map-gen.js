@@ -109,8 +109,8 @@ export function buildCanal() {
   for (let x = 24; x <= 47; x++) for (let y = 28; y <= 29; y++) b.tile(x, y, '≈'); // B 水岸（水下暗道入水）
   b.boxes(8, 37, 2, 2); b.boxes(21, 36, 2, 2); b.boxes(13, 40, 2, 2);
   b.boxes(8, 24, 2, 2); b.boxes(28, 24, 2, 2); b.boxes(48, 23, 2, 2);             // 桥下阴影箱
-  b.spawn('t', 2, 41, 5, 3);
-  b.spawn('c', 57, 3, 5, 4);
+  b.spawn('t', 2, 43, 5, 2);
+  b.spawn('c', 55, 6, 5, 3);
   return b;
 }
 

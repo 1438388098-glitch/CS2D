@@ -1,8 +1,7 @@
-import { WEAPONS, ROUND } from './config.js';
-import { weaponDef, ammoFor, reserveFor } from './entities.js';
+import { MAPS } from './config.js';
+import { weaponDef } from './entities.js';
 import { effectiveSpread } from './ballistic.js';
 import { los, getMap } from './map.js';
-import { FONT } from './render-utils.js';
 import { clamp } from './utils.js';
 
 let ctx = null;
@@ -19,7 +18,21 @@ export function toggleMiniZoom() {
   mmZoom = mmZoom === 1 ? 2 : 1;
 }
 
+export function setMiniZoom(z) {
+  mmZoom = z === 2 ? 2 : 1;
+}
+
 export function isMiniZoomed() { return mmZoom === 2; }
+
+function rr(mctx, x, y, w, h, r) {
+  mctx.beginPath();
+  mctx.moveTo(x + r, y);
+  mctx.arcTo(x + w, y, x + w, y + h, r);
+  mctx.arcTo(x + w, y + h, x, y + h, r);
+  mctx.arcTo(x, y + h, x, y, r);
+  mctx.arcTo(x, y, x + w, y, r);
+  mctx.closePath();
+}
 
 export function renderMinimap(game) {
   const dpr = game.dpr || 1;
@@ -31,34 +44,60 @@ export function renderMinimap(game) {
   const oy = 8;
   const mctx = ctx;
   mctx.save();
+  // 玻璃底
+  rr(mctx, ox - 2, oy - 2, mw + 4, mh + 4, 8);
+  mctx.fillStyle = 'rgba(10,13,17,.8)';
+  mctx.fill();
+  mctx.strokeStyle = 'rgba(255,255,255,.16)';
+  mctx.lineWidth = 1;
+  mctx.stroke();
+  mctx.save();
+  rr(mctx, ox - 2, oy - 2, mw + 4, mh + 4, 8);
+  mctx.clip();
   mctx.globalAlpha = 0.94;
   mctx.drawImage(layers.miniMap, ox, oy, mw, mh);
   mctx.globalAlpha = 1;
-  mctx.strokeStyle = 'rgba(255,255,255,0.18)';
-  mctx.lineWidth = 1;
-  mctx.strokeRect(ox - 2, oy - 2, mw + 4, mh + 4);
-
+  // 底部暗角 + 地图名
+  const grd = mctx.createLinearGradient(0, oy + mh - 26, 0, oy + mh);
+  grd.addColorStop(0, 'rgba(0,0,0,0)');
+  grd.addColorStop(1, 'rgba(0,0,0,.55)');
+  mctx.fillStyle = grd;
+  mctx.fillRect(ox, oy + mh - 26, mw, 26);
   const map = getMap();
+  const mapDef = MAPS.find((m) => m.id === game.mapId);
+  mctx.fillStyle = 'rgba(255,255,255,.5)';
+  mctx.font = "10px 'Microsoft YaHei',sans-serif";
+  mctx.textAlign = 'center';
+  mctx.textBaseline = 'middle';
+  mctx.fillText(mapDef ? mapDef.name : (map ? map.name : ''), ox + mw / 2, oy + mh - 12);
+  mctx.restore();
+
+  const now = performance.now();
   for (const key of ['A', 'B']) {
     const site = map.sites && map.sites[key];
     if (!site) continue;
     const px = ox + site.cx * s;
     const py = oy + site.cy * s;
-    const pulse = Math.sin(performance.now() / 400) > 0 ? 0.25 : 0.5;
+    const pulse = Math.sin(now / 400) > 0 ? 0.3 : 0.55;
+    mctx.save();
+    mctx.shadowColor = key === 'A' ? 'rgba(255,120,70,.9)' : 'rgba(70,150,255,.9)';
+    mctx.shadowBlur = 8;
     mctx.fillStyle = key === 'A' ? 'rgba(255,120,70,' + pulse + ')' : 'rgba(70,150,255,' + pulse + ')';
-    mctx.fillRect(px - 8, py - 8, 16, 16);
+    rr(mctx, px - 7, py - 7, 14, 14, 3);
+    mctx.fill();
+    mctx.restore();
     mctx.strokeStyle = key === 'A' ? '#ffb08a' : '#8ac0ff';
     mctx.lineWidth = 1.2;
-    mctx.strokeRect(px - 8, py - 8, 16, 16);
+    rr(mctx, px - 7, py - 7, 14, 14, 3);
+    mctx.stroke();
     mctx.fillStyle = '#111';
-    mctx.font = "bold 12px 'Segoe UI',sans-serif";
+    mctx.font = "bold 11px 'Segoe UI',sans-serif";
     mctx.textAlign = 'center';
     mctx.textBaseline = 'middle';
     mctx.fillText(key, px, py + 1);
   }
 
   const p = game.player;
-  const now = performance.now();
   const canSee = p && !p.dead && now - lastMiniUpdate > 250;
   if (canSee) lastMiniUpdate = now;
 
@@ -73,17 +112,19 @@ export function renderMinimap(game) {
   for (const e of game.entities) {
     if (e.dead) continue;
     if (e === p) {
-      mctx.fillStyle = '#fff';
       mctx.save();
       mctx.translate(ox + e.x * s, oy + e.y * s);
       mctx.rotate(e.angle);
-      mctx.fillRect(-5, -2.5, 10, 5);
+      mctx.fillStyle = '#fff';
+      mctx.strokeStyle = 'rgba(0,0,0,.65)';
+      mctx.lineWidth = 1;
       mctx.beginPath();
-      mctx.moveTo(6, 0);
-      mctx.lineTo(10, -3);
-      mctx.lineTo(10, 3);
+      mctx.moveTo(10, 0);
+      mctx.lineTo(-6, -5);
+      mctx.lineTo(-6, 5);
       mctx.closePath();
       mctx.fill();
+      mctx.stroke();
       mctx.restore();
     } else {
       if (p && e.team !== p.team) {
@@ -101,11 +142,21 @@ export function renderMinimap(game) {
     const blink = Math.sin(now / 160) > 0;
     const bx = ox + game.bomb.x * s;
     const by = oy + game.bomb.y * s;
+    mctx.save();
+    mctx.translate(bx, by);
+    mctx.rotate(Math.PI / 4);
+    mctx.shadowColor = blink ? 'rgba(255,59,48,.95)' : 'rgba(138,26,18,.8)';
+    mctx.shadowBlur = blink ? 10 : 5;
     mctx.fillStyle = blink ? '#ff3b30' : '#8a1a12';
-    mctx.fillRect(bx - 5, by - 5, 10, 10);
+    mctx.fillRect(-5.5, -5.5, 11, 11);
+    mctx.restore();
     mctx.strokeStyle = blink ? '#ffd0c0' : '#7a5a52';
     mctx.lineWidth = 1.4;
-    mctx.strokeRect(bx - 5, by - 5, 10, 10);
+    mctx.save();
+    mctx.translate(bx, by);
+    mctx.rotate(Math.PI / 4);
+    mctx.strokeRect(-5.5, -5.5, 11, 11);
+    mctx.restore();
     mctx.fillStyle = blink ? '#fff' : '#888';
     mctx.fillRect(bx - 2, by - 2, 4, 4);
   }
@@ -116,119 +167,8 @@ export function renderHud(game) {
   const dpr = game.dpr || 1;
   const w2 = ctx.canvas.width / dpr;
   const h2 = ctx.canvas.height / dpr;
-  const narrow = w2 < 900;
   const p = game.player;
   ctx.save();
-  ctx.textAlign = 'center';
-  ctx.font = FONT;
-  let tT = Math.max(0, Math.ceil((game.roundDur || ROUND.DURATION) - game.roundTime));
-  const tMin = Math.floor(tT / 60);
-  const tSec = tT % 60;
-  const timeStr = (tMin < 10 ? '0' : '') + tMin + ':' + (tSec < 10 ? '0' : '') + tSec;
-  ctx.fillStyle = 'rgba(0,0,0,0.55)';
-  ctx.fillRect(w2 / 2 - 90, 8, 180, 34);
-  ctx.strokeStyle = 'rgba(255,255,255,0.15)';
-  ctx.strokeRect(w2 / 2 - 90, 8, 180, 34);
-  ctx.fillStyle = '#fff';
-  ctx.fillText(timeStr, w2 / 2, 32);
-  ctx.fillStyle = '#ffb545';
-  ctx.fillText('T ' + game.score.T, w2 / 2 - 110, 32);
-  ctx.fillStyle = '#5ab0ff';
-  ctx.fillText(game.score.CT + ' CT', w2 / 2 + 110, 32);
-  if (game.state === 'BUY' && game.freezeT > 0) {
-    ctx.fillStyle = '#ff8a2a';
-    ctx.fillText(Math.ceil(game.freezeT), w2 / 2, 58);
-  }
-  if (game.opts && game.opts.diff === 'hell') {
-    ctx.fillStyle = '#ffcf8a';
-    ctx.font = "12px 'Segoe UI','Microsoft YaHei',sans-serif";
-    ctx.fillText('HELL H' + (game.opts.hellLevel || 10), w2 / 2, 58);
-  }
-  if (p && !p.dead) {
-    const hx = 24, hy = h2 - 64;
-    ctx.fillStyle = 'rgba(0,0,0,0.55)';
-    ctx.fillRect(hx - 10, hy - 34, 220, 88);
-    ctx.font = FONT;
-    ctx.textAlign = 'left';
-    const hp = Math.max(0, Math.ceil(p.hp));
-    ctx.fillStyle = hp <= 25 ? '#ff4444' : '#fff';
-    ctx.fillText(hp, hx, hy + 14);
-    ctx.font = "11px 'Segoe UI','Microsoft YaHei',sans-serif";
-    ctx.fillStyle = '#8b95a1';
-    ctx.fillText('HP', hx + 56, hy + 8);
-    ctx.fillStyle = '#ffd27a';
-    ctx.font = FONT;
-    ctx.fillText('$' + p.money, hx, hy + 30);
-    ctx.fillStyle = 'rgba(255,255,255,0.15)';
-    ctx.fillRect(hx + 70, hy - 20, 140, 7);
-    ctx.fillStyle = '#3ddc68';
-    ctx.fillRect(hx + 70, hy - 20, 140 * clamp(p.hp / 100, 0, 1), 7);
-    ctx.fillStyle = 'rgba(255,255,255,0.4)';
-    ctx.fillRect(hx + 70, hy - 8, 140, 5);
-    ctx.fillStyle = '#7fc7ff';
-    ctx.fillRect(hx + 70, hy - 8, 140 * clamp(p.armor / 100, 0, 1), 5);
-    const wd = weaponDef(p);
-    let ammoStr = '∞';
-    if (wd && wd.mag > 0) ammoStr = ammoFor(p) + ' / ' + reserveFor(p);
-    ctx.font = FONT;
-    ctx.textAlign = 'right';
-    ctx.fillStyle = '#fff';
-    ctx.fillText(ammoStr, w2 - 26, h2 - 30);
-    ctx.font = "12px 'Segoe UI','Microsoft YaHei',sans-serif";
-    ctx.fillStyle = '#8b95a1';
-    ctx.fillText(wd ? wd.name : (p.slot && p.slot.indexOf('nade:') === 0 ? '手雷' : ''), w2 - 26, h2 - 12);
-    if (p.reloading) {
-      ctx.fillStyle = '#ff8a2a';
-      ctx.fillText('换弹中…', w2 - 26, h2 - 50);
-    } else if (wd && wd.kind === 'sniper' && p.scoped) {
-      ctx.fillStyle = '#8ab4ff';
-      ctx.fillText('已开镜', w2 - 26, h2 - 50);
-    }
-    if (!narrow) {
-      ctx.textAlign = 'left';
-      ctx.font = "11px 'Segoe UI','Microsoft YaHei',sans-serif";
-      ctx.fillStyle = '#8b95a1';
-      const nades = p.weapons.nades;
-      ctx.fillText('雷 4:' + nades.he + '  闪 5:' + nades.flash + '  烟 6:' + nades.smoke, w2 - 230, h2 - 30);
-    }
-  } else if (p && !narrow) {
-    ctx.textAlign = 'center';
-    ctx.fillStyle = 'rgba(255,255,255,0.7)';
-    ctx.font = "14px 'Segoe UI','Microsoft YaHei',sans-serif";
-    const mates = game.entities.filter((e) => e.team === p.team && !e.dead);
-    if (mates.length) {
-      ctx.fillText('观战: ' + mates[game.spectateIdx % mates.length].name + ' · 左键切换视角', w2 / 2, h2 - 40);
-    } else {
-      ctx.fillText('本回合已结束', w2 / 2, h2 - 40);
-    }
-  }
-  if (game.state === 'BUY') {
-    ctx.textAlign = 'center';
-    ctx.fillStyle = 'rgba(255,138,42,0.9)';
-    ctx.font = "12px 'Segoe UI','Microsoft YaHei',sans-serif";
-    ctx.fillText('购买阶段 剩余 ' + Math.max(0, Math.ceil(game.buyTime)) + 's · B 打开购买菜单', w2 / 2, 72);
-  }
-  if (game.bomb && game.bomb.planted) {
-    const t = game.bomb.timer;
-    const urgent = t < 10;
-    const col = urgent && Math.floor(performance.now() / 250) % 2 === 0 ? '#ff3b30' : '#ffd27a';
-    ctx.textAlign = 'center';
-    ctx.font = FONT;
-    ctx.fillStyle = col;
-    const bx = w2 / 2 - 38;
-    ctx.fillRect(bx - 14, h2 - 160, 30, 22);
-    ctx.fillRect(bx - 6, h2 - 172, 14, 12);
-    ctx.fillStyle = '#0a0c0e';
-    ctx.beginPath();
-    ctx.arc(bx + 1, h2 - 147, 4, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.fillStyle = urgent ? '#ff3b30' : '#ffd27a';
-    ctx.beginPath();
-    ctx.arc(bx + 1, h2 - 147, 2, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.fillStyle = col;
-    ctx.fillText(Math.max(0, t).toFixed(1), w2 / 2 + 18, Math.round(h2 - 148));
-  }
   // 受击方向指示：屏幕边缘红色箭头指向伤害来源，1.2s 内衰减
   if (p && !p.dead && p.lastDmgFrom && (game.time * 1000 - p.lastDmgT) < 1200) {
     const src = p.lastDmgFrom;
@@ -243,6 +183,8 @@ export function renderHud(game) {
     ctx.translate(ax, ay);
     ctx.rotate(ang);
     ctx.fillStyle = 'rgba(255,60,50,' + a + ')';
+    ctx.shadowColor = 'rgba(255,40,30,' + a + ')';
+    ctx.shadowBlur = 10;
     ctx.beginPath();
     ctx.moveTo(20, 0);
     ctx.lineTo(-8, -11);
@@ -251,13 +193,15 @@ export function renderHud(game) {
     ctx.fill();
     ctx.restore();
   }
+  // 命中标记（爆头放大 1.5x + 金色）
   if (game.hitMarkT > 0) {
     const hmA = clamp(game.hitMarkT / 0.2, 0, 1);
-    const hx = game.input.mouse.x + (game._shx || 0) * (game.zoom || 1);
-    const hy = game.input.mouse.y + (game._shy || 0) * (game.zoom || 1);
-    ctx.strokeStyle = 'rgba(255,60,60,' + hmA + ')';
+    const hx = game.input.mouse.x;
+    const hy = game.input.mouse.y;
+    const hs = game.headshotT > 0 ? 1.5 : 1;
+    ctx.strokeStyle = game.headshotT > 0 ? 'rgba(255,200,60,' + hmA + ')' : 'rgba(255,60,60,' + hmA + ')';
     ctx.lineWidth = 2;
-    const s2 = 8;
+    const s2 = 8 * hs;
     ctx.beginPath();
     ctx.moveTo(hx - s2, hy - s2); ctx.lineTo(hx - s2 / 3, hy - s2 / 3);
     ctx.moveTo(hx + s2, hy - s2); ctx.lineTo(hx + s2 / 3, hy - s2 / 3);
@@ -265,11 +209,12 @@ export function renderHud(game) {
     ctx.moveTo(hx + s2, hy + s2); ctx.lineTo(hx + s2 / 3, hy + s2 / 3);
     ctx.stroke();
   }
+  // 狙击镜
   if (p && !p.dead && p.scoped) {
     const wd = weaponDef(p);
     if (wd && wd.kind === 'sniper') {
-      const cx = game.input.mouse.x + (game._shx || 0) * (game.zoom || 1);
-      const cy = game.input.mouse.y + (game._shy || 0) * (game.zoom || 1);
+      const cx = game.input.mouse.x;
+      const cy = game.input.mouse.y;
       const r = Math.min(w2, h2) / 2;
       ctx.save();
       ctx.beginPath();
@@ -294,8 +239,8 @@ export function renderCrosshair(game) {
   const ch = ctx.canvas.height / dpr;
   const p = game.player;
   if (!p || p.dead) return;
-  const mx = game.input.mouse.x + (game._shx || 0) * (game.zoom || 1);
-  const my = game.input.mouse.y + (game._shy || 0) * (game.zoom || 1);
+  const mx = game.input.mouse.x;
+  const my = game.input.mouse.y;
   if (mx < -10 || my < -10 || mx > cw + 10 || my > ch + 10) return;
   const w = weaponDef(p);
   let spread = w && w.kind !== 'knife' ? effectiveSpread(w, p) : 0;
@@ -305,7 +250,8 @@ export function renderCrosshair(game) {
   const py = ch / 2 + (p.y - (game.camY || 0)) * (game.zoom || 1);
   const dist = Math.hypot(mx - px, my - py) || 1;
   const spreadPx = Math.tan(((spread + recoilDeg) * Math.PI) / 180) * dist;
-  const gap = 6 + clamp(spreadPx, 0, 260) + (p.scoped ? 2 : 0);
+  let gap = 6 + clamp(spreadPx, 0, 260) + (p.scoped ? 2 : 0);
+  if (p.hp <= 25) gap = Math.max(3, gap - 2);
   const len = 7;
   ctx.save();
   ctx.strokeStyle = 'rgba(0,0,0,0.6)';
@@ -324,6 +270,15 @@ export function renderCrosshair(game) {
   ctx.moveTo(mx, my - gap - len); ctx.lineTo(mx, my - gap);
   ctx.moveTo(mx, my + gap); ctx.lineTo(mx, my + gap + len);
   ctx.stroke();
+  // 爆头命中：四臂外圈双点标记
+  if (game.headshotT > 0) {
+    ctx.fillStyle = 'rgba(255,200,60,0.95)';
+    const hg = gap + len + 5;
+    ctx.fillRect(mx - hg - 2, my - 1, 4, 2);
+    ctx.fillRect(mx + hg - 2, my - 1, 4, 2);
+    ctx.fillRect(mx - 1, my - hg - 2, 2, 4);
+    ctx.fillRect(mx - 1, my + hg - 2, 2, 4);
+  }
   ctx.fillStyle = 'rgba(0,0,0,0.6)';
   ctx.fillRect(mx - 2, my - 2, 4, 4);
   ctx.fillStyle = 'rgba(255,255,255,0.9)';

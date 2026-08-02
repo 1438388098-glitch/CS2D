@@ -27,7 +27,11 @@ function load() {
     const raw = localStorage.getItem(STORE_KEY);
     if (raw) {
       const saved = JSON.parse(raw);
-      map = { ...DEFAULTS, ...saved };
+      map = { ...DEFAULTS };
+      for (const a of Object.keys(DEFAULTS)) {
+        const v = saved[a];
+        if (Array.isArray(v) && v.length && v.every((c) => typeof c === 'string' && c.length)) map[a] = v;
+      }
       return;
     }
   } catch (err) { /* 无存储环境 */ }

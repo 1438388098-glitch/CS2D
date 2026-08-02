@@ -169,6 +169,8 @@ export function endRound(game, winner, reason) {
   if (game.state === 'END') return;
   game.state = 'END';
   game.endedT = 6.5;
+  if (!game.winHistory) game.winHistory = [];
+  game.winHistory.push(winner === 't' ? 'T' : winner === 'ct' ? 'C' : 'D');
   if (winner) {
     game.score[winner === 't' ? 'T' : 'CT']++;
     for (const e of game.entities) {
@@ -510,15 +512,15 @@ function updatePlayerAim(game) {
   const p = game.player;
   if (!p || p.dead) return;
   if (game.state !== 'BUY' && game.state !== 'LIVE') return;
-  const mw = mouseToWorld(game);
-  // 绝对瞄准：人物朝向死死跟随鼠标指向
-  p.angle = Math.atan2(mw.y - p.y, mw.x - p.x);
-}
-
-function mouseToWorld(game) {
-  const scale = game.zoom || 1;
+  const z = game.zoom || 1;
   const sx = game.canvasW / 2, sy = game.canvasH / 2;
-  return { x: game.camX + (game.input.mouse.x - sx) / scale, y: game.camY + (game.input.mouse.y - sy) / scale };
+  const shx = game._shx || 0, shy = game._shy || 0;
+  // 屏幕几何：角色朝向 = 鼠标相对"玩家屏幕投影位置"的方向（与渲染同构）。
+  // 枪口射线从玩家屏幕位置出发严格经过准星（鼠标）像素——任意相机/震动/缩放状态一致；
+  // 鼠标靠近角色时短向量=大角度变化（灵敏），远离时亦然，方向始终=玩家→准星。
+  const px = (p.x - (game.camX || 0) + shx) * z + sx;
+  const py = (p.y - (game.camY || 0) + shy) * z + sy;
+  p.angle = Math.atan2(game.input.mouse.y - py, game.input.mouse.x - px);
 }
 
 function botObjectiveForStuck(e, game) {
