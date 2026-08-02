@@ -1,7 +1,6 @@
 // 按键映射（可重绑定）：action → 键码数组（数组支持多键，如蹲伏默认 Ctrl/C 双键）
 // 持久化到 localStorage，默认值不可被覆盖删除（reset 恢复）
 const STORE_KEY = 'cs2d_keymap';
-const SENS_KEY = 'cs2d_sens';
 
 export const ACTIONS = {
   moveUp: '前进', moveDown: '后退', moveLeft: '左移', moveRight: '右移',
@@ -69,18 +68,6 @@ export function resetBinds() {
 
 function persist() {
   try { localStorage.setItem(STORE_KEY, JSON.stringify(map)); } catch (err) { /* 忽略 */ }
-}
-
-export function getSensitivity() {
-  try {
-    const v = parseFloat(localStorage.getItem(SENS_KEY));
-    if (Number.isFinite(v)) return v;
-  } catch (err) { /* 忽略 */ }
-  return 1;
-}
-
-export function setSensitivity(v) {
-  try { localStorage.setItem(SENS_KEY, String(v)); } catch (err) { /* 忽略 */ }
 }
 
 load();

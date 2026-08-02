@@ -1,6 +1,6 @@
 import { WEAPONS, PRICES, DROP_COL } from './config.js';
 import { ctx } from './ctx.js';
-import { ACTIONS, getBindLabel, bind, resetBinds, getSensitivity, setSensitivity } from './keymap.js';
+import { ACTIONS, getBindLabel, bind, resetBinds } from './keymap.js';
 
 let doc = null;
 let canvas = null;
@@ -512,14 +512,12 @@ function bindOverlays() {
 let bindTarget = null;
 let bindBtn = null;
 
-// 设置面板：灵敏度滑杆 + 按键重绑定（点击按钮→按任意键→保存到 localStorage）
+// 设置面板：按键重绑定（点击按钮→按任意键→保存到 localStorage）
 function bindSettings() {
   if (!doc) return;
   const settingsBtn = el('settingsBtn');
   const settings = el('settings');
   const settingsClose = el('settingsClose');
-  const sensRange = el('sensRange');
-  const sensVal = el('sensVal');
   const resetBtn = el('resetBinds');
   const listEl = el('keybindList');
   if (settingsBtn && settings) {
@@ -529,22 +527,8 @@ function bindSettings() {
       cancelBindTarget();
     };
   }
-  if (sensRange && sensVal) {
-    const sync = () => {
-      const v = parseFloat(sensRange.value);
-      game.opts.sensitivity = v;
-      setSensitivity(v);
-      sensVal.textContent = v.toFixed(2);
-    };
-    sensRange.value = String(getSensitivity());
-    sync();
-    sensRange.oninput = sync;
-  }
   if (resetBtn) resetBtn.onclick = () => {
     resetBinds();
-    game.opts.sensitivity = 1;
-    if (sensRange) sensRange.value = '1';
-    if (sensVal) sensVal.textContent = '1.00';
     renderKeybindList(listEl);
   };
   // 绑定模式：捕获任意按键（Esc 取消）

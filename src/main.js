@@ -7,14 +7,12 @@ import { initInput, resizeCanvas, setKey, setMouse, setMouseDown } from './input
 import { killEntity } from './combat.js';
 import { getMap } from './map.js';
 import { setMuted, isMuted, setAudioContext } from './audio.js';
-import { getSensitivity } from './keymap.js';
 
 const canvas = document.getElementById('game');
 const game = createGame();
 
 setMutedFnExposed(() => isMuted());
 setAudioContext(() => game);
-game.opts.sensitivity = getSensitivity();
 
 function reloadMapLayers() {
   game.layers = initTextures(getMap());

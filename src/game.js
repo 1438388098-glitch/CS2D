@@ -34,7 +34,7 @@ export function createGame(opts = {}) {
     mode: null,
     ot: false,
     mapW: 2400, mapH: 1800, canvasW: 1280, canvasH: 720,
-    opts: { team: 'ct', diff: 'normal', bots: 4, sound: true, mapId: 'dust2', sensitivity: 1 },
+    opts: { team: 'ct', diff: 'normal', bots: 4, sound: true, mapId: 'dust2' },
     input: { keys: {}, mouse: { x: 0, y: 0, down: false, rdown: false, wasDown: false }, lastMouse: { x: 0, y: 0 } },
     ui: null,
     layers: null,
@@ -482,9 +482,8 @@ function updatePlayerAim(game) {
   if (!p || p.dead) return;
   if (game.state !== 'BUY' && game.state !== 'LIVE') return;
   const mw = mouseToWorld(game);
-  // 灵敏度：鼠标相对中心的偏移 × 系数（sens=1 时与原来完全一致）
-  const sens = game.opts.sensitivity || 1;
-  p.angle = Math.atan2((mw.y - p.y) * sens, (mw.x - p.x) * sens);
+  // 绝对瞄准：人物朝向死死跟随鼠标指向
+  p.angle = Math.atan2(mw.y - p.y, mw.x - p.x);
 }
 
 function mouseToWorld(game) {
