@@ -1,6 +1,9 @@
+import { ctx } from './ctx.js';
+
 export function clamp(v, a, b) { return v < a ? a : (v > b ? b : v); }
 export function lerp(a, b, t) { return a + (b - a) * t; }
-export function rand(a, b) { return a + Math.random() * (b - a); }
+// 世界随机：走 ctx.rand（对局 seed 后全游戏可复现）；无参调用等价 Math.random()（0..1）
+export function rand(a = 0, b = 1) { return a + ctx.rand() * (b - a); }
 export function angNorm(a) {
   a %= Math.PI * 2;
   if (a < 0) a += Math.PI * 2;

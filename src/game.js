@@ -1,4 +1,4 @@
-import { ROUND, ECONOMY, MAX_PARTICLES } from './config.js';
+﻿import { ROUND, ECONOMY, MAX_PARTICLES } from './config.js';
 import { getMap, loadMap, findMapById, collideCircle, los, pathTo, tileAt } from './map.js';
 import { createEntity, spawnEntity, weaponDef, ammoFor } from './entities.js';
 import { fireWeapon, startReload, finishReload, pickupWeapon, RECOIL_RECOVER } from './combat.js';
@@ -6,10 +6,11 @@ import { updateShotStreak } from './ballistic.js';
 import { updateGrenades } from './grenades.js';
 import { updateBots, assignRoles, botBuyAll } from './ai.js';
 import { explodeBomb, plantBomb, defuseBomb, pickupBomb } from './bomb.js';
-import { ctx } from './ctx.js';
+import { ctx, seedWorld } from './ctx.js';
 import { getMode } from './registry.js';
 import { clamp, lerp, rand, angDiff } from './utils.js';
 import { pressed, getBindLabel } from './keymap.js';
+import { initInfo, prune } from './info.js';
 
 const emit = (evt, p) => ctx.bus.emit(evt, p);
 
@@ -34,6 +35,8 @@ export function createGame(opts = {}) {
     tSwitchedAt: 0, tRush: false,
     mode: null,
     ot: false,
+    seed: null,
+    playerKills: [],
     mapW: 2400, mapH: 1800, canvasW: 1280, canvasH: 720,
     opts: { team: 'ct', diff: 'normal', bots: 4, sound: true, mapId: 'dust2' },
     input: { keys: {}, mouse: { x: 0, y: 0, down: false, rdown: false, wasDown: false }, lastMouse: { x: 0, y: 0 } },
@@ -70,10 +73,15 @@ export function startMatch(game) {
   fresh.input = game.input;
   fresh.onMapChanged = game.onMapChanged;
   Object.assign(game, fresh);
+  // 世界种子：整局随机流可复现（回放/调试/训练一致性）；可传 game.seed 固定复现
+  if (game.seed === null) game.seed = Math.floor(Math.random() * 0x7fffffff);
+  seedWorld(game.seed);
+  initInfo(game);
   game.over = false;
   loadMap(findMapById(game.opts.mapId || 'dust2'));
   game.mapW = getMap().W;
   game.mapH = getMap().H;
+  game.barrels = (getMap().barrels || []).map((b) => ({ ...b }));
   if (game.onMapChanged) game.onMapChanged(getMap());
   const human = createEntity(game.opts.team, false);
   game.player = human;
@@ -100,7 +108,7 @@ function spawnRound(game) {
   const tBots = game.entities.filter((e) => e.team === 't');
   for (const e of tBots) e.hasBomb = false;
   if (tBots.length) {
-    const carrier = tBots[Math.floor(Math.random() * tBots.length)];
+    const carrier = tBots[Math.floor(rand() * tBots.length)];
     carrier.hasBomb = true;
   }
   game.bomb = null;
@@ -115,6 +123,7 @@ function spawnRound(game) {
   game.tSwitchedAt = 0;
   game.tRush = false;
   if (game.player) { game.player.dmgGiven = 0; game.player.dmgHeads = 0; }
+  prune(game);
   if (game.layers) game.layers.decal.getContext('2d').clearRect(0, 0, getMap().W, getMap().H);
   if (game.ui) {
     emit('flash', { opacity: 0 });
@@ -253,17 +262,29 @@ export function update(game, dt) {
   updateGrenades(game, dt);
   for (const e of game.entities) {
     if (e.dead) continue;
+    const curTile = tileAt(e.x, e.y);
+    // 涉水减速：浅水/深水均为 40%（spec 4.3）
+    if (curTile === '~' || curTile === '≈') { e.vx *= 0.6; e.vy *= 0.6; }
+    if (e.stunT > 0) { e.vx *= 0.3; e.vy *= 0.3; }
     e.x += e.vx * dt;
     e.y += e.vy * dt;
     collideCircle(e);
-    const curTile = tileAt(e.x, e.y);
     const prevH = e.height;
     e.height = curTile === '^' ? 1 : 0;
     if (prevH === 1 && e.height === 0) e.stunT = 0.4;
     if (e.stunT > 0) e.stunT = Math.max(0, e.stunT - dt);
-    if (e.stunT > 0) { e.vx *= 0.3; e.vy *= 0.3; }
     e.vx *= Math.max(0, 1 - 7 * dt);
     e.vy *= Math.max(0, 1 - 7 * dt);
+    // 溅水：仅浅水发声/水花（深水静音，spec 4.3）
+    if (e.splashCd > 0) e.splashCd = Math.max(0, e.splashCd - dt);
+    if (e.splashCd <= 0 && curTile === '~' && Math.hypot(e.vx, e.vy) > 60) {
+      e.splashCd = 0.5;
+      game.lastSplash = { team: e.team, x: e.x, y: e.y, t: game.time };
+      for (let i = 0; i < 4; i++) {
+        game.particles.push({ kind: 'splash', x: e.x + rand(-8, 8), y: e.y + rand(-4, 6), vx: rand(-40, 40), vy: rand(-140, -40), life: 0.4, size: rand(2, 4) });
+      }
+      emit('sfx', { name: 'splash', vol: 0.5, x: e.x, y: e.y, game });
+    }
     if (e.bot) {
       e.stuckT += dt;
       if (e.stuckT > 0.6) {

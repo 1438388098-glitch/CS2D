@@ -421,7 +421,8 @@ export function nearestSite(x, y) {
 export function isWater(x, y) {
   if (!MAP) return false;
   const tx = Math.floor(x / TILE), ty = Math.floor(y / TILE);
-  return MAP.grid[ty] && MAP.grid[ty][tx] === '~';
+  const c = MAP.grid[ty] && MAP.grid[ty][tx];
+  return c === '~' || c === '≈';
 }
 
 export function findMapById(id) {

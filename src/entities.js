@@ -1,4 +1,6 @@
 import { WEAPONS, BOT_NAMES, ECONOMY } from './config.js';
+import { ctx } from './ctx.js';
+import { rollPersonality } from './persona.js';
 
 let botNameIdx = 0;
 
@@ -23,6 +25,9 @@ export function createEntity(team, bot) {
     plantRetryT: 0, usedNadeRound: 0, anchorIdx: 0,
     rushMode: false, vanguard: false, plantedSmokeRound: 0,
     streak: 0, wKills: {}, aiParams: null,
+    personality: rollPersonality(botNameIdx),
+    archetype: 'rifler',
+    memory: [],
     decT: 0,
     height: 0, stunT: 0, splashCd: 0, highPointT: 0, highIdx: 0,
     prefireT: 0, prefireX: 0, prefireY: 0, prefireCount: 0, barrelT: 0, botThreatT: 0,
@@ -34,15 +39,15 @@ export function spawnEntity(e, spawnList) {
     console.warn('spawnEntity: spawn list empty for team ' + e.team);
     return;
   }
-  const s = spawnList[Math.floor(Math.random() * spawnList.length)];
+  const s = spawnList[Math.floor(ctx.rand() * spawnList.length)];
   e.x = s.x;
   e.y = s.y;
   e.vx = 0; e.vy = 0; e.dead = false; e.hp = 100;
-  e.angle = Math.random() * Math.PI * 2;
+  e.angle = ctx.rand() * Math.PI * 2;
   e.slot = e.weapons.primary ? 'primary' : 'secondary';
   e.reloading = false; e.reloadT = 0; e.fireCd = 0; e.recoil = 0;
   e.blind = 0; e.scoped = false;
-  e.strafeDir = Math.random() < 0.5 ? -1 : 1; e.strafeT = 0;
+  e.strafeDir = ctx.rand() < 0.5 ? -1 : 1; e.strafeT = 0;
   e.reaction = 0; e.aimTarget = null; e.aimLostT = 0; e.aimLastPos = null;
   e.lastKnown = null; e.lastKnownT = 99;
   e.path = null; e.pathI = 0; e.stuckT = 0;

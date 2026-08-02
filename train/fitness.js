@@ -3,7 +3,7 @@ installStubs();
 const { createGame, startMatch, update } = await import('../src/game.js');
 const { ROUND } = await import('../src/config.js');
 const { decodeGenome } = await import('../src/ai-genome.js');
-const { mulberry32 } = await import('../src/ctx.js');
+const { seedWorld } = await import('../src/ctx.js');
 
 export const EVAL_ROUNDS = 6;
 export const WIN_WEIGHT = 6;
@@ -17,27 +17,14 @@ function initBonus() {
   bonusInited = true;
 }
 
-// 可复现 RNG：评估期间将 Math.random 替换为 seedable 实现，结束后恢复
+// 可复现评估：以 seed 播种世界随机流（utils.rand/ctx.rand 全部确定性）
 // 同 genome + 同 seed → 严格相同结果（回放/对比/断点续训前提）
-let savedRandom = null;
-
-function setEvalSeed(seed) {
-  if (savedRandom === null) savedRandom = Math.random;
-  Math.random = mulberry32(seed >>> 0);
-}
-
-function restoreRandom() {
-  if (savedRandom !== null) {
-    Math.random = savedRandom;
-    savedRandom = null;
-  }
-}
-
 export function runEval(genome, mapId = 'dust2', rounds = EVAL_ROUNDS, seed = 0) {
   initBonus();
-  setEvalSeed(seed);
+  seedWorld(seed);
   const params = decodeGenome(genome);
   const g = createGame({ team: 'ct', diff: 'normal', bots: 5, mapId });
+  g.seed = seed;
   g.ui = null;
   startMatch(g);
   g.player.bot = true;
@@ -84,6 +71,5 @@ export function runEval(genome, mapId = 'dust2', rounds = EVAL_ROUNDS, seed = 0)
   }
   const alive = g.entities.filter((e) => e.team === 't' && !e.dead).length;
   score += alive * 0.5;
-  restoreRandom();
   return { fitness: score, roundsDone, tkills, plants, alive, tScore: g.score.T, ctScore: g.score.CT };
 }

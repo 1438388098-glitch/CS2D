@@ -30,3 +30,11 @@ export function createContext(overrides = {}) {
 }
 
 export const ctx = createContext();
+
+// 世界种子接入：对局开始前调用，全游戏随机（utils.rand / ctx.rand）转为该种子的确定性流
+// 同 seed → 整局行为逐帧可复现（回放/调试/训练一致性）
+export function seedWorld(seed) {
+  ctx.seed = seed >>> 0;
+  ctx.rand = mulberry32(ctx.seed);
+  return ctx.seed;
+}

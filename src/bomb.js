@@ -1,4 +1,4 @@
-import { ROUND, ECONOMY } from './config.js';
+﻿import { ROUND, ECONOMY } from './config.js';
 import { inSite, los, getMap } from './map.js';
 import { applyDamage } from './combat.js';
 import { endRound } from './game.js';
@@ -84,11 +84,11 @@ export function explodeBomb(game) {
   game.shake = Math.max(game.shake, 14);
   game.particles.push({ kind: 'boom', x: b.x, y: b.y, life: 0.5, size: 300 });
   for (let i = 0; i < 40; i++) {
-    const a = Math.random() * Math.PI * 2;
+    const a = rand() * Math.PI * 2;
     game.particles.push({ kind: 'fire', x: b.x, y: b.y, vx: Math.cos(a) * rand(100, 420), vy: Math.sin(a) * rand(100, 420), life: rand(0.2, 0.6), size: rand(3, 7) });
   }
   for (let j = 0; j < 14; j++) {
-    const a2 = Math.random() * Math.PI * 2;
+    const a2 = rand() * Math.PI * 2;
     game.particles.push({ kind: 'smokep', x: b.x + Math.cos(a2) * 40, y: b.y + Math.sin(a2) * 40, vx: Math.cos(a2) * rand(30, 120), vy: Math.sin(a2) * rand(30, 120), life: rand(1.2, 2.4), size: rand(6, 14) });
   }
   for (const e of game.entities) {

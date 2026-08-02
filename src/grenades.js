@@ -1,4 +1,4 @@
-import { passable, los } from './map.js';
+﻿import { passable, los } from './map.js';
 import { applyDamage } from './combat.js';
 import { ctx } from './ctx.js';
 import { rand, angDiff } from './utils.js';
@@ -37,7 +37,7 @@ export function updateGrenades(game, dt) {
         game.shake = Math.max(game.shake, 9);
         game.particles.push({ kind: 'boom', x: g.x, y: g.y, life: 0.5, size: 180 });
         for (let f = 0; f < 26; f++) {
-          const a = Math.random() * Math.PI * 2;
+          const a = rand() * Math.PI * 2;
           game.particles.push({ kind: 'fire', x: g.x, y: g.y, vx: Math.cos(a) * rand(80, 360), vy: Math.sin(a) * rand(80, 360), life: rand(0.2, 0.5), size: rand(3, 6) });
         }
         for (const e of game.entities) {
@@ -71,7 +71,7 @@ export function updateGrenades(game, dt) {
         emit('sfx', { name: 'smoke', vol: 0.8, x: g.x, y: g.y, game });
         game.smokes.push({ x: g.x, y: g.y, r: 20, gr: 150, life: 12 });
         for (let s2 = 0; s2 < 10; s2++) {
-          const a3 = Math.random() * Math.PI * 2;
+          const a3 = rand() * Math.PI * 2;
           game.particles.push({ kind: 'smokep', x: g.x + Math.cos(a3) * 20, y: g.y + Math.sin(a3) * 20, vx: Math.cos(a3) * rand(20, 80), vy: Math.sin(a3) * rand(20, 80), life: rand(0.8, 1.6), size: rand(8, 16) });
         }
       }

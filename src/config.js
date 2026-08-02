@@ -74,7 +74,9 @@ export const BOT_AI = {
   HEAR_RADIUS: 1000,
   HEAR_TTL: 1500,
   FLASH_ANGLE: 1.2,
-  ORDER_TTL: 15
+  ORDER_TTL: 15,
+  COM_RADIUS: 1200,
+  IGL_INTERVAL: 5
 };
 
 export const BOT_NAMES = ['Rex', 'Nova', 'Echo', 'Onyx', 'Frost', 'Viper', 'Dusk', 'Blaze', 'Kane', 'Sable', 'Jinx', 'Cobra', 'Havoc', 'Zulu', 'Pike'];

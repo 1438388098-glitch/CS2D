@@ -3,6 +3,7 @@ import { weaponDef } from './entities.js';
 import { getMap } from './map.js';
 import { gunLen, FONT } from './render-utils.js';
 import { clamp, rand } from './utils.js';
+import { ARCHETYPES } from './persona.js';
 
 let ctx = null;
 let layers = null;
@@ -208,7 +209,8 @@ function drawEntities(game) {
       ctx.font = "10px 'Segoe UI','Microsoft YaHei',sans-serif";
       ctx.textAlign = 'center';
       ctx.fillStyle = e.team === 'ct' ? '#7fb8ff' : '#ffcf8a';
-      ctx.fillText(e.name, e.x, e.y - 22);
+      const arch = ARCHETYPES[e.archetype];
+      ctx.fillText(e.name + (arch ? ' ·' + arch.label : ''), e.x, e.y - 22);
       ctx.restore();
     }
     if (e.defuseT > 0) {
@@ -317,6 +319,11 @@ function drawParticles(game) {
       ctx.fillStyle = 'rgba(255,220,140,' + pr * 0.5 + ')';
       ctx.beginPath();
       ctx.arc(p.x, p.y, p.size * pr * 0.5, 0, Math.PI * 2);
+      ctx.fill();
+    } else if (p.kind === 'splash') {
+      ctx.fillStyle = 'rgba(120,190,235,' + a + ')';
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
       ctx.fill();
     }
   }

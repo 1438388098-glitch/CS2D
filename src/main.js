@@ -58,10 +58,13 @@ requestAnimationFrame(loop);
 
 window.GAME = {
   startMatch: () => startMatch(game),
+  setSeed: (s) => { game.seed = s >>> 0; },
   debug: {
     tick: (dt) => update(game, dt),
     game: () => game,
     state: () => game.state,
+    aiLog: () => game.aiLog,
+    commLog: () => game.commLog,
     setOpts: (o) => {
       if (o.team) game.opts.team = o.team;
       if (o.diff) game.opts.diff = o.diff;

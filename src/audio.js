@@ -135,6 +135,13 @@ export function sfx(name, vol, x, y, game) {
         s5.connect(f6); f6.connect(g10); g10.connect(out); __tails.push(g10); s5.start(t); s5.stop(t + 0.06);
         break;
       }
+      case 'splash': {
+        const ss = c.createBufferSource(); ss.buffer = buffer;
+        const fs = c.createBiquadFilter(); fs.type = 'bandpass'; fs.frequency.value = rand(1200, 1800); fs.Q.value = 2;
+        const gs = c.createGain(); gs.gain.value = v * 0.5; gs.gain.exponentialRampToValueAtTime(0.001, t + 0.2);
+        ss.connect(fs); fs.connect(gs); gs.connect(out); __tails.push(gs); ss.start(t); ss.stop(t + 0.22);
+        break;
+      }
       case 'boom': {
         const o5 = c.createOscillator(); o5.type = 'sine';
         o5.frequency.setValueAtTime(120, t); o5.frequency.exponentialRampToValueAtTime(22, t + 0.9);

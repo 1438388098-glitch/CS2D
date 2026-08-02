@@ -1,8 +1,9 @@
-import { WEAPONS, ECONOMY, DIFF, MAX_DECALS } from './config.js';
-import { passableTolerant, collideCircle, los, tileAt } from './map.js';
+﻿import { WEAPONS, ECONOMY, DIFF, MAX_DECALS, TILE } from './config.js';
+import { passableTolerant, collideCircle, los, tileAt, getGrid } from './map.js';
 import { weaponDef, wkey, ammoFor, reserveFor } from './entities.js';
 import { ctx } from './ctx.js';
 import { clamp, rand, angDiff, viewCap } from './utils.js';
+import { report, MSG } from './info.js';
 
 import { endRound } from './game.js';
 import { dropBomb } from './bomb.js';
@@ -78,7 +79,7 @@ export function fireWeapon(e, game) {
   }
   const pellets = w.pellets || 1;
   for (let pi = 0; pi < pellets; pi++) {
-    const spreadAngle = (spread + moveSpread + recoilSpread) * (Math.random() * 2 - 1) * (Math.PI / 180);
+    const spreadAngle = (spread + moveSpread + recoilSpread) * (rand() * 2 - 1) * (Math.PI / 180);
     fireRay(e, game, e.angle + spreadAngle, w, w.dmg, pellets > 1);
   }
   if (w.mag > 0) e.ammoMap[k] -= 1;
@@ -119,7 +120,7 @@ export function fireWeapon(e, game) {
 
 function meleeAttack(e, game) {
   const wk = WEAPONS.knife;
-  const heavy = e.bot ? Math.random() < 0.25 : game.input.rdown;
+  const heavy = e.bot ? rand() < 0.25 : game.input.rdown;
   const range = heavy ? 95 : 75;
   const dmg = heavy ? wk.dmg2 : wk.dmg;
   let hitAny = false;
@@ -173,6 +174,8 @@ function fireRay(e, game, ang, w, dmg, isPellet) {
     }
     inWall = false;
     if (c === 'C' && e.height === 1) continue;
+    // 深水挡弹（spec 4.3：水下隐蔽 + 弹丸被水阻挡）；浅水 ~ 可穿透
+    if (c === '≈') { wallT = s * 6; break; }
     if (!passableTolerant(px, py)) {
       if (c === 'o') hitBarrelByShot(game, px, py, e);
       wallT = s * 6;
@@ -193,7 +196,7 @@ function fireRay(e, game, ang, w, dmg, isPellet) {
   if (hit) {
     if (e === game.player) game.stats.hits++;
     // 爆头由瞄准精度驱动（中心命中/近距离/精密武器 → 概率更高），不再纯随机
-    const head = !isPellet && Math.random() < headshotChance(w, hit, best.perp, best.t);
+    const head = !isPellet && rand() < headshotChance(w, hit, best.perp, best.t);
     let finalDmg = dmg;
     finalDmg *= penMult;
     const dd = best.t;
@@ -230,8 +233,43 @@ function fireRay(e, game, ang, w, dmg, isPellet) {
   }
 }
 
-// 占位：Task 5 实现
-export function hitBarrelByShot(game, px, py, shooter) {}
+export function barrelAt(game, px, py) {
+  if (!game.barrels) return null;
+  const tx = Math.floor(px / TILE), ty = Math.floor(py / TILE);
+  for (const b of game.barrels) if (b.tx === tx && b.ty === ty) return b;
+  return null;
+}
+
+export function hitBarrelByShot(game, px, py, shooter) {
+  const b = barrelAt(game, px, py);
+  if (!b) return;
+  b.hp--;
+  emit('sfx', { name: 'hit', vol: 0.6, x: b.x, y: b.y, game });
+  if (b.hp <= 0) explodeBarrel(game, b, shooter);
+}
+
+export function explodeBarrel(game, b, shooter) {
+  game.barrels = game.barrels.filter((x) => x !== b);
+  const grid = getGrid();
+  grid[b.ty][b.tx] = '.';
+  emit('sfx', { name: 'boom', vol: 1, x: b.x, y: b.y, game });
+  game.shake = Math.max(game.shake, 8);
+  for (let i = 0; i < 6; i++) {
+    game.particles.push({ kind: 'boom', x: b.x, y: b.y, vx: 0, vy: 0, life: 0.5, size: 160 });
+    game.particles.push({ kind: 'fire', x: b.x + rand(-40, 40), y: b.y + rand(-40, 40), vx: rand(-60, 60), vy: rand(-80, 0), life: 0.6, size: 18 });
+  }
+  for (const o of game.entities) {
+    if (o.dead) continue;
+    const d = Math.hypot(o.x - b.x, o.y - b.y);
+    if (d < 160) {
+      const dmg = o.team === shooter.team ? 30 : 60;
+      applyDamage(o, dmg, { killer: shooter, weapon: 'barrel', head: false }, game);
+    }
+  }
+  for (const o of game.entities) {
+    if (o.bot && !o.dead && o.team !== shooter.team) { o.lastKnown = { x: b.x, y: b.y }; o.lastKnownT = 0; }
+  }
+}
 
 export function applyDamage(v, dmg, opt, game) {
   if (v.dead) return;
@@ -312,7 +350,15 @@ export function killEntity(v, killer, weapon, head, game) {
     // 伤害报告：本回合造成总伤害 / 爆头数
     emit('damagereport', { dmg: Math.round(v.dmgGiven || 0), heads: v.dmgHeads || 0 });
   }
-  spawnBlood(v.x, v.y, Math.random() * Math.PI * 2, head, game);
+  // 队内报告：bot 阵亡 → 同队收到"击杀点"消息（队友据此调整）
+  if (v.bot) report(game, v, MSG.KILL, v.x, v.y);
+  // 对手建模：记录玩家（敌方视角）击杀位置，供 CT 队长反制守点分配
+  if (killer === game.player) {
+    game.playerKills = game.playerKills || [];
+    game.playerKills.push({ x: v.x, y: v.y, t: game.time });
+    if (game.playerKills.length > 20) game.playerKills.shift();
+  }
+  spawnBlood(v.x, v.y, rand() * Math.PI * 2, head, game);
   game.decals.push({ type: 'corpse', x: v.x, y: v.y, angle: v.angle, team: v.team, life: 60 });
   redrawDecals(game);
   if (v.weapons.primary) {

@@ -459,6 +459,55 @@ T('high-ground', () => {
   loadMap(findMapById('dust2'));
 });
 
+T('water', () => {
+  loadMap(findMapById('mech-test'));
+  const g = createGame();
+  g.opts.mapId = 'mech-test';
+  startMatch(g);
+  g.freezeT = 0;
+  const b = g.entities.find((e) => e.bot && e.team === 't');
+  b.weapons.primary = null; b.weapons.secondary = null;
+  b.dead = false; b.usedNadeRound = g.round; b.hasBomb = false;
+  b.role = 'mid'; b.blind = 0; b.aimTarget = null;
+  for (const o of g.entities) if (o !== b && o.bot) o.dead = true;
+  // AI 挂起：objCache 命中 + repathT 冷却 → botThink 不覆写 vx，速度逐帧持续
+  const aiHold = (x, y) => { b.objCache = { x, y }; b.objAt = 0; b.objBombState = 'n'; b.path = null; b.repathT = 5; };
+  aiHold(300, 540);
+  // 浅水减速：涉水 0.5s 位移 vs 干燥地
+  b.x = 100; b.y = 540; b.vx = 235; b.vy = 0;
+  for (let i = 0; i < 15; i++) update(g, 1 / 30);
+  const waterDist = b.x - 100;
+  aiHold(300, 60);
+  b.x = 100; b.y = 60; b.vx = 235; b.vy = 0;
+  for (let i = 0; i < 15; i++) update(g, 1 / 30);
+  const dryDist = b.x - 100;
+  if (!(waterDist < dryDist * 0.8)) throw new Error('涉水应减速: water=' + waterDist + ' dry=' + dryDist);
+  // 溅水声广播（仅浅水）
+  aiHold(300, 540);
+  b.x = 100; b.y = 540; b.vx = 235; b.vy = 0;
+  update(g, 1 / 30);
+  if (!g.lastSplash || g.lastSplash.team !== 't') throw new Error('涉水应产生溅水声广播');
+  // 深水静音：不产生溅水广播
+  b.x = 640; b.y = 570; b.vx = 235; b.vy = 0;
+  g.lastSplash = null;
+  update(g, 1 / 30);
+  if (g.lastSplash) throw new Error('深水应静音（无溅水声）');
+  // 深水隐蔽：岸上 CT 看不见深水里的 T
+  const ct = g.entities.find((e) => e.bot && e.team === 'ct');
+  ct.x = 60; ct.y = 60; ct.dead = false; ct.role = 'mid';
+  const tb = b;
+  tb.x = 640; tb.y = 560; tb.vx = 0; tb.vy = 0;
+  if (los(g, ct.x, ct.y, tb.x, tb.y)) throw new Error('岸上看深水目标应不可见');
+  // 深水中开火：弹丸被水阻挡（靶无伤）
+  const tgt = g.entities.find((e) => e.bot && e.team === 'ct' && e !== ct);
+  tgt.x = 1160; tgt.y = 570; tgt.dead = false; tgt.hp = 100; tgt.role = 'mid';
+  tb.x = 640; tb.y = 570;
+  tb.weapons.primary = 'ak'; tb.slot = 'primary'; tb.ammoMap.ak = 5; tb.angle = 0;
+  fireWeapon(tb, g);
+  if (tgt.hp < 100) throw new Error('深水中开火弹丸应被水阻挡');
+  loadMap(findMapById('dust2'));
+});
+
 console.log('selftest: ' + (errors.length === 0 ? 'PASS' : 'FAIL'));
 if (errors.length) {
   for (const e of errors) console.log('  ' + e);
