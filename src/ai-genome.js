@@ -1,6 +1,7 @@
 import { clamp } from './utils.js';
 
-export const GENOME_SIZE = 10;
+// 13 维基因组：0-9 战斗参数（S1 兼容），10-12 策略参数（S2 新增）
+export const GENOME_SIZE = 13;
 
 export function randomGenome() {
   const g = new Array(GENOME_SIZE);
@@ -20,7 +21,10 @@ export function decodeGenome(g) {
     idealMax: 550 + v(6, 0.5) * 400,
     peekChance: v(7, 0.5) * 0.5,
     nadeUse: 0.2 + v(8, 0.5) * 0.8,
-    riskT: 0.3 + v(9, 0.5) * 1.2
+    riskT: 0.3 + v(9, 0.5) * 1.2,
+    rushChance: 0.1 + v(10, 0.35) * 0.6,
+    rotateChance: 0.2 + v(11, 0.45) * 0.6,
+    saveChance: 0.2 + v(12, 0.55) * 0.8
   };
 }
 

@@ -448,13 +448,27 @@ function bindMenu() {
     teamCt.classList.remove('sel');
     e.currentTarget.blur();
   };
-  diffN.onclick = (e) => { game.opts.diff = 'normal'; pickDiff(diffN); e.currentTarget.blur(); };
-  diffE.onclick = (e) => { game.opts.diff = 'easy'; pickDiff(diffE); e.currentTarget.blur(); };
-  diffH.onclick = (e) => { game.opts.diff = 'hard'; pickDiff(diffH); e.currentTarget.blur(); };
-  if (diffHell) diffHell.onclick = (e) => { game.opts.diff = 'hell'; pickDiff(diffHell); e.currentTarget.blur(); };
+  diffN.onclick = (e) => { game.opts.diff = 'normal'; pickDiff(diffN); showHellRow(false); e.currentTarget.blur(); };
+  diffE.onclick = (e) => { game.opts.diff = 'easy'; pickDiff(diffE); showHellRow(false); e.currentTarget.blur(); };
+  diffH.onclick = (e) => { game.opts.diff = 'hard'; pickDiff(diffH); showHellRow(false); e.currentTarget.blur(); };
+  if (diffHell) diffHell.onclick = (e) => { game.opts.diff = 'hell'; pickDiff(diffHell); showHellRow(true); e.currentTarget.blur(); };
   function pickDiff(b) {
     for (const d of [diffN, diffE, diffH, diffHell]) d.classList.remove('sel');
     b.classList.add('sel');
+  }
+  // 地狱等级滑块（H1-H10）
+  const hellRow = el('hellRow'), hellSlider = el('hellSlider'), hellVal = el('hellVal');
+  const HELL_STYLE = ['H1 热手', 'H2 渐入', 'H3 冠军', 'H4 保枪纪律', 'H5 经济纪律', 'H6 闪光配合', 'H7 转点反制', 'H8 保守架点流', 'H9 主动控图流', 'H10 压迫前压流'];
+  const showHellRow = (show) => { if (hellRow) hellRow.style.display = show ? 'flex' : 'none'; };
+  if (hellSlider) {
+    if (!game.opts.hellLevel) game.opts.hellLevel = 3;
+    hellSlider.value = game.opts.hellLevel;
+    hellVal.textContent = 'H' + game.opts.hellLevel + ' ' + HELL_STYLE[game.opts.hellLevel - 1];
+    hellSlider.oninput = () => {
+      game.opts.hellLevel = parseInt(hellSlider.value, 10);
+      hellVal.textContent = 'H' + game.opts.hellLevel + ' ' + HELL_STYLE[game.opts.hellLevel - 1];
+    };
+    if (game.opts.diff === 'hell') showHellRow(true);
   }
   for (let i = 1; i <= 5; i++) {
     const b = doc.createElement('button');

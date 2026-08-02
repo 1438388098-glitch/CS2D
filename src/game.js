@@ -1,4 +1,4 @@
-﻿import { ROUND, ECONOMY, MAX_PARTICLES } from './config.js';
+﻿import { ROUND, ECONOMY, MAX_PARTICLES, resolveDiff } from './config.js';
 import { getMap, loadMap, findMapById, collideCircle, los, pathTo, tileAt } from './map.js';
 import { createEntity, spawnEntity, weaponDef, ammoFor } from './entities.js';
 import { fireWeapon, startReload, finishReload, pickupWeapon, RECOIL_RECOVER } from './combat.js';
@@ -18,7 +18,7 @@ const emit = (evt, p) => ctx.bus.emit(evt, p);
 export function createGame(opts = {}) {
   const game = {
     state: 'MENU',
-    entities: [], grenades: [], particles: [], tracers: [], smokes: [], decals: [], drops: [],
+    entities: [], grenades: [], particles: [], tracers: [], smokes: [], decals: [], drops: [], barrels: [],
     lastSplash: null,
     player: null,
     camX: 1200, camY: 900,
@@ -67,6 +67,7 @@ export function startMatch(game) {
   }
   const fresh = createGame();
   fresh.opts = game.opts;
+  fresh.opts.diffParams = resolveDiff(game.opts.diff, game.opts.hellLevel);
   fresh.ui = game.ui;
   fresh.layers = game.layers;
   fresh.canvasW = game.canvasW;
@@ -340,8 +341,8 @@ export function update(game, dt) {
     if (mates.length) camTarget = mates[game.spectateIdx % mates.length];
   }
   if (camTarget) {
-    game.camX = lerp(game.camX, camTarget.x, Math.min(1, 8 * dt));
-    game.camY = lerp(game.camY, camTarget.y, Math.min(1, 8 * dt));
+    game.camX = lerp(game.camX, camTarget.x, Math.min(1, 18 * dt));
+    game.camY = lerp(game.camY, camTarget.y, Math.min(1, 18 * dt));
   }
   const z = game.zoom || 1;
   const hw = game.canvasW / 2 / z;
@@ -362,8 +363,8 @@ function updateCam(game, dt) {
     if (mates.length) camTarget = mates[game.spectateIdx % mates.length];
   }
   if (camTarget) {
-    game.camX = lerp(game.camX, camTarget.x, Math.min(1, 8 * dt));
-    game.camY = lerp(game.camY, camTarget.y, Math.min(1, 8 * dt));
+    game.camX = lerp(game.camX, camTarget.x, Math.min(1, 18 * dt));
+    game.camY = lerp(game.camY, camTarget.y, Math.min(1, 18 * dt));
   }
   const z = game.zoom || 1;
   const hw = game.canvasW / 2 / z;

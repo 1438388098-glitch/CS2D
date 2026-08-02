@@ -1,5 +1,5 @@
 // 队伍编成：角色分配（突破/狙击/辅助/绕后/步枪）+ 队长 IGL + 玩家战术指令
-import { DIFF } from '../config.js';
+import { diffOf } from '../config.js';
 import { getMap } from '../map.js';
 import { ctx } from '../ctx.js';
 import { assignArchetypes } from '../persona.js';
@@ -10,7 +10,9 @@ export function assignRoles(game) {
   const cBots = game.entities.filter((e) => e.bot && e.team === 'ct');
   game.tAttackSite = ctx.rand() < 0.5 ? 'A' : 'B';
   game.tSwitchedAt = 0;
-  game.tRush = ctx.rand() < (DIFF[game.opts.diff] || DIFF.normal).rushChance;
+  // rush 决策：训练队（aiParams）用基因，否则用难度基线
+  const t0 = tBots[0];
+  game.tRush = ctx.rand() < (t0 && t0.aiParams ? t0.aiParams.rushChance : diffOf(game).rushChance);
   // 角色分配（阵容：突破/辅助/狙击/绕后/步枪）
   assignArchetypes(tBots, game.seed || 1);
   assignArchetypes(cBots, (game.seed || 1) + 7);

@@ -1,5 +1,5 @@
 // AI 主循环 + 感知→决策调度（botThink）
-import { DIFF } from '../config.js';
+import { DIFF, diffOf } from '../config.js';
 import { los, pathTo, followPath, getMap } from '../map.js';
 import { weaponDef, ammoFor } from '../entities.js';
 import { startReload } from '../combat.js';
@@ -28,7 +28,7 @@ export function updateBots(game, dt) {
 }
 
 function botThink(e, game, dt) {
-  const d = e.aiParams || DIFF[game.opts.diff];
+  const d = e.aiParams || diffOf(game);
   if (e.dead) return;
   if (game.freezeT > 0) {
     e.vx = 0; e.vy = 0;
@@ -195,19 +195,37 @@ function botThink(e, game, dt) {
   }
   const obj = botObjective(e, game);
   if (obj) {
+    // 投掷推进（net nade 动作 / 基因 nadeUse）：进点前沿移动丢闪清点
+    if (obj.nade && e.weapons && e.weapons.nades && e.weapons.nades.flash > 0 && rand() < dt * 1.5 && game.roundTime - (e.lastNadeT || 0) > 8) {
+      e.slot = 'nade:flash';
+      throwGrenade(e, game);
+      e.slot = 'primary';
+      e.lastNadeT = game.roundTime;
+    }
     if (Math.hypot(obj.x - e.x, obj.y - e.y) < 24) {
       e.vx = 0; e.vy = 0;
       e.path = null; e.repathT = 0;
       if (obj.face !== undefined) e.angle = angNorm(obj.face);
     } else {
-      if (e.path === null) {
-        if (e.repathT <= 0) {
-          pathTo(e, obj.x, obj.y);
-          e.repathT = 0.8;
-        }
+      // 小身位探点（net peek 动作 / peekChance 基因）：接近目标边缘时快速垂直摆动探视
+      const pkNear = Math.hypot(obj.x - e.x, obj.y - e.y) < 260;
+      const pkTrigger = obj.peek || (d.peekChance !== undefined && pkNear && rand() < d.peekChance * dt * 4);
+      if (pkTrigger && pkNear) {
+        const pkDir = Math.sin(game.time * 2.4 + e.anchorIdx * 1.9) > 0 ? 1 : -1;
+        e.vx = Math.cos(e.angle + Math.PI / 2 * pkDir) * weapon.speed * 235 * 0.6;
+        e.vy = Math.sin(e.angle + Math.PI / 2 * pkDir) * weapon.speed * 235 * 0.6;
+        e.path = null;
+        if (e.repathT > 0.9) e.repathT = 0.5;
       } else {
-        const done = followPath(e, dt, weapon.speed * 235);
-        if (!done) { e.path = null; e.repathT = 0; }
+        if (e.path === null) {
+          if (e.repathT <= 0) {
+            pathTo(e, obj.x, obj.y);
+            e.repathT = 0.8;
+          }
+        } else {
+          const done = followPath(e, dt, weapon.speed * 235);
+          if (!done) { e.path = null; e.repathT = 0; }
+        }
       }
       // 移动扫视（拟合人类）：朝目标方向 ±0.95rad 摆动视角，扩大 FOV 覆盖；
       // 有新鲜目击记忆时改为架枪记忆点（预瞄）

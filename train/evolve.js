@@ -9,7 +9,7 @@ export const MUT_RATE = 0.12;
 
 export const CK_DIR = 'D:/Claudeworkspace/CS2D/train/checkpoints';
 
-export async function evolve({ gens = 8, mapId = 'dust2', startGen = 0, seeds = null, log = console.log } = {}) {
+export async function evolve({ gens = 8, mapId = 'dust2', startGen = 0, seeds = null, spec = null, tag = '', log = console.log } = {}) {
   let pop = seeds || Array.from({ length: POP }, randomGenome);
   let best = null;
   const t0 = Date.now();
@@ -18,7 +18,7 @@ export async function evolve({ gens = 8, mapId = 'dust2', startGen = 0, seeds = 
     for (let i = 0; i < pop.length; i++) {
       // 确定性评估：每代每个体固定 seed（同 genome 结果可复现）
       const seed = gen * 100000 + i;
-      const r = runEval(pop[i], mapId, EVAL_ROUNDS, seed);
+      const r = runEval(pop[i], mapId, EVAL_ROUNDS, seed, spec);
       results.push({ g: pop[i], f: r.fitness, r });
     }
     results.sort((a, b) => b.f - a.f);
@@ -26,7 +26,7 @@ export async function evolve({ gens = 8, mapId = 'dust2', startGen = 0, seeds = 
     if (!best || results[0].f > best.f) {
       best = results[0];
       log(`GEN ${gen + 1}  best=${best.f.toFixed(1)} (tWins=${best.r.tScore}/${best.r.roundsDone} plants=${best.r.plants} tkills=${best.r.tkills})  avg=${avg.toFixed(1)}`);
-      writeCheckpoint(gen + 1, best);
+      writeCheckpoint(gen + 1, best, tag);
     } else {
       log(`GEN ${gen + 1}  best=${results[0].f.toFixed(1)} (no improvement)  avg=${avg.toFixed(1)}`);
     }
@@ -44,10 +44,12 @@ export async function evolve({ gens = 8, mapId = 'dust2', startGen = 0, seeds = 
   return best;
 }
 
-function writeCheckpoint(gen, best) {
+function writeCheckpoint(gen, best, tag = '') {
   mkdirSync(CK_DIR, { recursive: true });
-  writeFileSync(`${CK_DIR}/best_gen_${gen}.json`, JSON.stringify({
+  const fname = tag ? `best_gen_${gen}_${tag}.json` : `best_gen_${gen}.json`;
+  writeFileSync(`${CK_DIR}/${fname}`, JSON.stringify({
     gen,
+    tag,
     fitness: best.f,
     genome: Array.from(best.g),
     params: decodeGenome(best.g),

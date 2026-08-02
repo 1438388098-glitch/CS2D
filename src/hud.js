@@ -139,6 +139,11 @@ export function renderHud(game) {
     ctx.fillStyle = '#ff8a2a';
     ctx.fillText(Math.ceil(game.freezeT), w2 / 2, 58);
   }
+  if (game.opts && game.opts.diff === 'hell') {
+    ctx.fillStyle = '#ffcf8a';
+    ctx.font = "12px 'Segoe UI','Microsoft YaHei',sans-serif";
+    ctx.fillText('HELL H' + (game.opts.hellLevel || 10), w2 / 2, 58);
+  }
   if (p && !p.dead) {
     const hx = 24, hy = h2 - 64;
     ctx.fillStyle = 'rgba(0,0,0,0.55)';
@@ -248,8 +253,8 @@ export function renderHud(game) {
   }
   if (game.hitMarkT > 0) {
     const hmA = clamp(game.hitMarkT / 0.2, 0, 1);
-    const hx = game.input.mouse.x + (game._shx || 0);
-    const hy = game.input.mouse.y + (game._shy || 0);
+    const hx = game.input.mouse.x + (game._shx || 0) * (game.zoom || 1);
+    const hy = game.input.mouse.y + (game._shy || 0) * (game.zoom || 1);
     ctx.strokeStyle = 'rgba(255,60,60,' + hmA + ')';
     ctx.lineWidth = 2;
     const s2 = 8;
@@ -263,8 +268,8 @@ export function renderHud(game) {
   if (p && !p.dead && p.scoped) {
     const wd = weaponDef(p);
     if (wd && wd.kind === 'sniper') {
-      const cx = game.input.mouse.x + (game._shx || 0);
-      const cy = game.input.mouse.y + (game._shy || 0);
+      const cx = game.input.mouse.x + (game._shx || 0) * (game.zoom || 1);
+      const cy = game.input.mouse.y + (game._shy || 0) * (game.zoom || 1);
       const r = Math.min(w2, h2) / 2;
       ctx.save();
       ctx.beginPath();
@@ -289,8 +294,8 @@ export function renderCrosshair(game) {
   const ch = ctx.canvas.height / dpr;
   const p = game.player;
   if (!p || p.dead) return;
-  const mx = game.input.mouse.x + (game._shx || 0);
-  const my = game.input.mouse.y + (game._shy || 0);
+  const mx = game.input.mouse.x + (game._shx || 0) * (game.zoom || 1);
+  const my = game.input.mouse.y + (game._shy || 0) * (game.zoom || 1);
   if (mx < -10 || my < -10 || mx > cw + 10 || my > ch + 10) return;
   const w = weaponDef(p);
   let spread = w && w.kind !== 'knife' ? effectiveSpread(w, p) : 0;

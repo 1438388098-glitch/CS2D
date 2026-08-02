@@ -1,4 +1,4 @@
-﻿import { WEAPONS, ECONOMY, DIFF, MAX_DECALS, TILE } from './config.js';
+﻿import { WEAPONS, ECONOMY, DIFF, diffOf, MAX_DECALS, TILE } from './config.js';
 import { passableTolerant, collideCircle, los, tileAt, getGrid } from './map.js';
 import { weaponDef, wkey, ammoFor, reserveFor } from './entities.js';
 import { ctx } from './ctx.js';
@@ -70,7 +70,7 @@ export function fireWeapon(e, game) {
   let spread = effectiveSpread(w, e);
   if (e.aimTarget && e.aimTarget.height === 1 && e.height === 0) spread *= 1.25;
   registerShot(e);
-  if (e.bot) spread *= (e.aiParams || DIFF[game.opts.diff] || DIFF.normal).spreadMult;
+  if (e.bot) spread *= (e.aiParams || diffOf(game)).spreadMult;
   let moveSpread = 0;
   const recoilSpread = e.recoil * 0.6;
   if (w.kind === 'sniper') {
@@ -267,7 +267,12 @@ export function explodeBarrel(game, b, shooter) {
     }
   }
   for (const o of game.entities) {
-    if (o.bot && !o.dead && o.team !== shooter.team) { o.lastKnown = { x: b.x, y: b.y }; o.lastKnownT = 0; }
+    if (o.bot && !o.dead && o.team !== shooter.team && Math.hypot(o.x - b.x, o.y - b.y) < 1600) {
+      if (!los(game, b.x, b.y, o.x, o.y)) continue;
+      o.lastKnown = { x: b.x, y: b.y };
+      o.lastKnownT = 0;
+      if (o.aimTarget === null && o.path !== null) o.path = null;
+    }
   }
 }
 
@@ -309,6 +314,10 @@ export function applyDamage(v, dmg, opt, game) {
     v.lastDmgFrom = opt.killer;
     v.lastDmgT = game.time * 1000;
   }
+  if (v.bot && v.highPointT > 0) {
+    v.highPointT -= 2;
+    if (v.highPointT <= 0) { v.objCache = null; v.path = null; }
+  }
 }
 
 export function killEntity(v, killer, weapon, head, game) {
@@ -317,7 +326,7 @@ export function killEntity(v, killer, weapon, head, game) {
   v.deaths++;
   v.vx = 0; v.vy = 0;
   if (v.team === 'ct' && game.bomb && game.bomb.planted && game.bomb.defusing) game.bomb.defusing = false;
-  const wname = WEAPONS[weapon] ? WEAPONS[weapon].name : (weapon === 'bomb' ? '炸弹' : (weapon === 'grenade' ? '手雷' : '战术刀'));
+  const wname = WEAPONS[weapon] ? WEAPONS[weapon].name : (weapon === 'bomb' ? '炸弹' : (weapon === 'grenade' ? '手雷' : (weapon === 'barrel' ? '油桶' : '战术刀')));
   if (killer && killer !== v) {
     killer.kills++;
     killer.money = clamp(killer.money + ECONOMY.KILL_MONEY, 0, ECONOMY.MONEY_CAP);

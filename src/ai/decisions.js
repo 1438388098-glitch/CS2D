@@ -1,8 +1,129 @@
 // 战术目标层：CT 守点/回防/前压/保枪、T 进点/装弹/守弹/转点/绕后、玩家指令服从
-import { BOT_AI, DIFF } from '../config.js';
+import { BOT_AI, DIFF, diffOf } from '../config.js';
 import { getMap, nearestSite } from '../map.js';
-import { rand } from '../utils.js';
+import { rand, clamp } from '../utils.js';
 import { logAct, styleOf } from './shared.js';
+import { dqnFromJSON } from '../dqn.js';
+
+// ===== 决策网络（DQN 推理层，H8-H10 地狱级）=====
+// 宏观动作空间：hold 守点 / push 进攻 / rotate 转点 / nade 投掷推进 / save 保枪 / peek 探身
+export const NET_ACTIONS = ['hold', 'push', 'rotate', 'nade', 'save', 'peek'];
+const NET_DECISION_S = 0.6;
+
+// 13 维观察（全部归一化 [0,1]）：血量/弹药/双方存活/最近敌距/道具/时间/炸弹/持包/目标距/交战/队长/队友持包
+export function netObs(e, game) {
+  const m = getMap();
+  const w = e.weapons && (e.weapons.primary || e.weapons.pistol);
+  const ammo = w && w.mag > 0 ? Math.min((e.ammoMap && e.ammoMap[w.id] != null ? e.ammoMap[w.id] : w.mag) / w.mag, 1) : 0;
+  const myAlive = game.entities.filter((o) => o.team === e.team && !o.dead).length;
+  const enAlive = game.entities.filter((o) => o.team !== e.team && !o.dead).length;
+  let nd = 2000;
+  for (const o of game.entities) {
+    if (o.team !== e.team && !o.dead) {
+      const dd = Math.hypot(o.x - e.x, o.y - e.y);
+      if (dd < nd) nd = dd;
+    }
+  }
+  const nades = e.weapons && e.weapons.nades
+    ? (e.weapons.nades.flash > 0 ? 1 : 0) + (e.weapons.nades.smoke > 0 ? 1 : 0) + (e.weapons.nades.he > 0 ? 1 : 0)
+    : 0;
+  let tx = m.W / 2, ty = m.H / 2;
+  if (e.team === 't') {
+    const cs = game.tAttackSite === 'A' ? m.sites.A : m.sites.B;
+    tx = cs.cx; ty = cs.cy;
+  } else {
+    const hold = e.role === 'a' ? m.holds.A : m.holds.B;
+    tx = hold.anchors[0].x; ty = hold.anchors[0].y;
+  }
+  // 队友持包信号（配合进点关键特征）
+  let mateHasBomb = 0;
+  for (const o of game.entities) {
+    if (o.bot && o.team === e.team && o !== e && o.hasBomb) { mateHasBomb = 1; break; }
+  }
+  return [
+    clamp((e.hp || 100) / 100, 0, 1),
+    ammo,
+    myAlive / 5,
+    enAlive / 5,
+    clamp(nd / 2000, 0, 1),
+    nades / 3,
+    clamp((game.roundTime || 0) / (game.roundDur || 115), 0, 1),
+    game.bomb && game.bomb.planted ? 1 : 0,
+    e.hasBomb ? 1 : 0,
+    clamp(Math.hypot(e.x - tx, e.y - ty) / 2000, 0, 1),
+    e.aimTarget && !e.aimTarget.dead ? 1 : 0,
+    e.igl ? 1 : 0,
+    mateHasBomb
+  ];
+}
+
+// 网络宏观决策（带 0.6s 决策间隔缓存）；无网络（H1-H7）返回 null → 走原有逻辑
+export function netAct(e, game) {
+  const d = e.aiParams || diffOf(game);
+  const w = d && d.netWeights;
+  if (!w || w.length === 0) return null;
+  if (e.netAct !== undefined && game.time - (e.netAt || 0) < NET_DECISION_S) return e.netAct;
+  const net = (d._net = d._net || dqnFromJSON(w));
+  const q = net.forward(netObs(e, game));
+  let ai = 0;
+  for (let i = 1; i < q.length; i++) if (q[i] > q[ai]) ai = i;
+  e.netAct = NET_ACTIONS[ai];
+  e.netAt = game.time;
+  return e.netAct;
+}
+
+// 动作 → 具体目标（持包 bot 的 save 降级为守入口，不允许弃包）
+function netObjective(e, game, act) {
+  const m = getMap();
+  const cs = e.team === 't' ? (game.tAttackSite === 'A' ? m.sites.A : m.sites.B) : null;
+  const csOther = e.team === 't' ? (game.tAttackSite === 'A' ? m.sites.B : m.sites.A) : null;
+  const ctHold = () => {
+    const hold = e.role === 'a' ? m.holds.A : m.holds.B;
+    const p = hold.anchors[e.anchorIdx % hold.anchors.length] || hold.anchors[0];
+    return { x: p.x, y: p.y, face: Math.atan2(hold.entry.y - p.y, hold.entry.x - p.x) };
+  };
+  const tEntry = (s) => {
+    const entry = entryPoint(s, game);
+    return { x: entry.x + rand(-60, 60), y: entry.y + rand(-60, 60), face: Math.atan2(s.cy - entry.y, s.cx - entry.x) };
+  };
+  const tOtherEntry = () => {
+    const entry = entryPoint(csOther, game);
+    return { x: entry.x + rand(-60, 60), y: entry.y + rand(-60, 60) };
+  };
+  switch (act) {
+    case 'hold':
+      return e.team === 't' ? (e.hasBomb ? tEntry(cs) : { x: e.x + rand(-40, 40), y: e.y + rand(-40, 40) }) : ctHold();
+    case 'push':
+      return e.team === 't'
+        ? { x: cs.cx + rand(-100, 100), y: cs.cy + rand(-60, 60) }
+        : { x: m.spawns.t[0].x + rand(-120, 120), y: m.spawns.t[0].y + rand(-80, 80) };
+    case 'rotate':
+      // IGL 拍板才翻转全队攻击点（协同转点）；其余成员前往另一站点入口待命
+      if (e.igl && e.team === 't' && !(game.bomb && game.bomb.planted)) {
+        game.tAttackSite = game.tAttackSite === 'A' ? 'B' : 'A';
+        game.tSwitchedAt = game.roundTime;
+      }
+      return e.team === 't' ? tOtherEntry() : { x: (e.role === 'a' ? m.holds.B : m.holds.A).anchors[0].x, y: (e.role === 'a' ? m.holds.B : m.holds.A).anchors[0].y };
+    case 'nade':
+      return e.team === 't'
+        ? { x: cs.cx + rand(-120, 120), y: cs.cy + rand(-60, 60), nade: true }
+        : { x: m.spawns.t[0].x + rand(-80, 80), y: m.spawns.t[0].y + rand(-60, 60), nade: true };
+    case 'save':
+      if (e.hasBomb) return tEntry(cs);
+      return retreatPoint(e, game);
+    case 'peek': {
+      if (e.team === 't') {
+        if (e.hasBomb) return tEntry(cs);
+        const entry = entryPoint(cs, game);
+        return { x: entry.x, y: entry.y, peek: true };
+      }
+      const hold = e.role === 'a' ? m.holds.A : m.holds.B;
+      const p = hold.anchors[e.anchorIdx % hold.anchors.length] || hold.anchors[0];
+      return { x: p.x, y: p.y, peek: true };
+    }
+  }
+  return null;
+}
 
 export function botObjective(e, game) {
   const now = game.time * 1000;
@@ -53,7 +174,7 @@ export function botObjectiveRaw(e, game) {
     const ctAlive = game.entities.filter((o) => o.team === 'ct' && !o.dead && o !== e).length;
     const tAlive = game.entities.filter((o) => o.team === 't' && !o.dead).length;
     // 残局劣势保枪（风险偏好：莽的 bot 不保）
-    if (ctAlive === 0 && tAlive >= 3 && rand() < (e.aiParams || DIFF[game.opts.diff]).saveChance * (1 - st.p.riskT * 0.5)) {
+    if (ctAlive === 0 && tAlive >= 3 && rand() < (e.aiParams || diffOf(game)).saveChance * (1 - st.p.riskT * 0.5)) {
       logAct(game, e, 'retreat', '1v' + tAlive + ' 保枪');
       return retreatPoint(e, game);
     }
@@ -64,6 +185,12 @@ export function botObjectiveRaw(e, game) {
         if (Math.hypot(o.x - e.x, o.y - e.y) < BOT_AI.HEAR_RADIUS) return { x: o.x, y: o.y };
       }
     }
+    // 决策网络（H8-H10）：常规守点/前压由网络拍板，反应层（保枪/听枪）保持优先
+    const nAct = netAct(e, game);
+    if (nAct) {
+      const no = netObjective(e, game, nAct);
+      if (no) { logAct(game, e, nAct, 'net'); return no; }
+    }
     // 前压侦察：IGL 拍板（game.ctPush），攻击性 bot 更积极，其余随队
     if (game.ctPush && rand() < 0.8 * st.p.aggression) {
       const sp = getMap().spawns.t[0];
@@ -73,6 +200,12 @@ export function botObjectiveRaw(e, game) {
         logAct(game, e, 'push', '前压侦察');
         return { x: e.x + dx / len * 380 + rand(-90, 90), y: e.y + dy / len * 380 + rand(-90, 90) };
       }
+    }
+    if (getMap().highPoints && getMap().highPoints.length && e.role === 'a' && !planted && e.highPointT <= 0 && rand() < 0.02) {
+      e.highIdx = (e.highIdx || 0) + 1;
+      const hp = getMap().highPoints[e.highIdx % getMap().highPoints.length];
+      e.highPointT = 8;
+      return { x: hp.x, y: hp.y, face: hp.face };
     }
     if (e.role === 'a' || e.role === 'b') {
       const hold = e.role === 'a' ? getMap().holds.A : getMap().holds.B;
@@ -131,7 +264,7 @@ export function botObjectiveRaw(e, game) {
   const tAlive2 = game.entities.filter((o) => o.team === 't' && !o.dead && o !== e).length;
   const ctAlive2 = game.entities.filter((o) => o.team === 'ct' && !o.dead).length;
   // 残局劣势保枪（风险偏好：莽的 bot 不保）
-  if (tAlive2 === 0 && ctAlive2 >= 2 && rand() < (e.aiParams || DIFF[game.opts.diff]).saveChance * (1 - st.p.riskT * 0.5)) {
+  if (tAlive2 === 0 && ctAlive2 >= 2 && rand() < (e.aiParams || diffOf(game)).saveChance * (1 - st.p.riskT * 0.5)) {
     logAct(game, e, 'retreat', '1v' + ctAlive2 + ' 保枪');
     return retreatPoint(e, game);
   }
@@ -142,6 +275,12 @@ export function botObjectiveRaw(e, game) {
       logAct(game, e, 'lurk', '绕后至 CT 半场');
       return { x: ctSpawn.x + rand(-150, 150), y: ctSpawn.y + rand(-150, 150) };
     }
+  }
+  // 决策网络（H8-H10）：进攻节奏由网络拍板（进入点/转点/投掷/保枪/探身）
+  const nActT = netAct(e, game);
+  if (nActT) {
+    const no = netObjective(e, game, nActT);
+    if (no) { logAct(game, e, nActT, 'net'); return no; }
   }
   if (e.rushMode || st.arch.aggression > 1.2) return { x: cs.cx + rand(-120, 120), y: cs.cy + rand(-60, 60) };
   // 协同集结：存活人数不足时全员到齐即进点（修复 1v1/2v2 死等 3 人的发呆）；人多时凑 3 人同步

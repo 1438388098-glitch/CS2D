@@ -508,6 +508,58 @@ T('water', () => {
   loadMap(findMapById('dust2'));
 });
 
+T('barrel', () => {
+  loadMap(findMapById('mech-test'));
+  const g = createGame();
+  g.opts.mapId = 'mech-test';
+  startMatch(g);
+  if (!g.barrels || g.barrels.length !== 1) throw new Error('油桶应初始化为 1 个');
+  const b = g.entities.find((e) => e.bot && e.team === 't');
+  b.weapons.primary = 'ak'; b.slot = 'primary'; b.ammoMap.ak = 5;
+  b.x = 500; b.y = 780; b.dead = false; b.usedNadeRound = g.round; b.hasBomb = false;
+  b.fireCd = 0;
+  for (const o of g.entities) if (o !== b && o.bot) o.dead = true;
+  const tgt = g.entities.find((e) => e.bot && e.team === 'ct');
+  tgt.x = 580; tgt.y = 935; tgt.dead = false; tgt.hp = 100;
+  b.angle = 0;
+  fireWeapon(b, g);      // 第一发：桶 hp 2 -> 1
+  if (g.barrels[0].hp !== 1) throw new Error('第一发应使桶 hp=1, got ' + g.barrels[0].hp);
+  if (tgt.hp !== 100) throw new Error('第一发不应命中弹道线外靶, hp=' + tgt.hp);
+  b.fireCd = 0;
+  fireWeapon(b, g);      // 第二发：引爆
+  if (g.barrels.length !== 0) throw new Error('油桶应被引爆移除');
+  if (tgt.hp === 100) throw new Error('油桶爆炸应造成 AOE 伤害');
+  if (tgt.hp !== 40) throw new Error('AOE 应为 60 纯伤害(无护甲), hp=' + tgt.hp);
+  loadMap(findMapById('dust2'));
+});
+
+T('ai-mechanics', () => {
+  const g = createGame();
+  startMatch(g);
+  const b = g.entities.find((e) => e.bot && e.team === 'ct');
+  if (!('prefireCount' in b && 'highPointT' in b && 'splashCd' in b)) {
+    throw new Error('AI 机制字段缺失');
+  }
+  loadMap(findMapById('mech-test'));
+  const g2 = createGame();
+  g2.opts.mapId = 'mech-test';
+  startMatch(g2);
+  g2.freezeT = 0;
+  const tBot = g2.entities.find((e) => e.bot && e.team === 't');
+  tBot.x = 100; tBot.y = 540; tBot.vx = 235; tBot.vy = 0; tBot.dead = false;
+  tBot.usedNadeRound = g2.round; tBot.hasBomb = false;
+  tBot.role = 'mid';
+  for (const o of g2.entities) if (o !== tBot && o.bot) o.dead = true;
+  update(g2, 1 / 30);
+  const ctBot = g2.entities.find((e) => e.bot && e.team === 'ct');
+  ctBot.x = 100; ctBot.y = 100; ctBot.dead = false;
+  ctBot.role = 'mid';
+  ctBot.lastKnown = null; ctBot.lastKnownT = 99;
+  update(g2, 1 / 30);
+  if (ctBot.lastKnown === null) throw new Error('AI 应听到溅水声并更新 lastKnown');
+  loadMap(findMapById('dust2'));
+});
+
 console.log('selftest: ' + (errors.length === 0 ? 'PASS' : 'FAIL'));
 if (errors.length) {
   for (const e of errors) console.log('  ' + e);
