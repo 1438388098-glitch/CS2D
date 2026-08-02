@@ -20,7 +20,7 @@ npm run train-batch# 地狱 AI 批量训练（长时后台）
 - **武器系统**：11 把武器（手枪/冲锋枪/步枪/狙击/霰弹/战术刀），后坐力、换弹、掉落拾取、专属弹道扩散（`src/ballistic.js`：首发准/连射扩散/移动扩散/恢复，准星实时联动）
 - **经济系统**：击杀/胜利/连败奖励，手枪局、降级链、护甲/头盔/拆弹器/投掷物
 - **AI 人机**：4 难度（简单/普通/困难/**地狱**）。地狱参数由进化算法训练产出（`train/`，见 [train/README.md](train/README.md)），行为全部基于参数化 AI（无透视等特权逻辑）
-- **5 张地图**：沙漠 dust2 / 雪地 snow / 仓库 depot / 运河 canal / 地铁 metro（程序化生成，`src/map-gen.js`，带光照烘焙与水瓦片）
+- **3 张地图**：沙漠遗址 dust2 / 运河小镇 canal / 地铁枢纽 metro（程序化生成，`src/map-gen.js`，带光照烘焙与水瓦片；薄墙穿射、高台、水域、油桶机制）
 - **表现细节**：命中反馈/爆头、击杀提示、连杀公告、死亡提示、小地图(队友/敌人/炸弹/A-B点标记/视野圈/点击右上角2倍缩放)、击杀播报、AWP 取景框、蹲伏(CTRL)、天空渐变渲染
 - **匹配统计**：每场结束结算（KD/命中率/爆头数/最顺手武器/MVP）
 
@@ -52,7 +52,7 @@ src/
   ai.js            bot 行为（寻路/交火/装弹/拆弹/换位）
   ai-genome.js     10 维 AI 基因（训练对象）
   map.js          地图实例/寻路(A*)/碰撞
-  map-gen.js       5 图程序化生成器
+  map-gen.js       3 图程序化生成器
   textures.js      瓦片烘焙/光照软阴影
   entities.js      实体工厂
   economy.js       购买决策
@@ -69,7 +69,7 @@ test/              selftest + simulate + hell-battle + CDP 浏览器全链路
 ## 测试
 
 - `npm test`：selftest（回合机/经济/地图连通/寻路/自动换弹/平局处理）+ simulate（7 回合模拟）
-- `node test/hell-battle.mjs`：5 图 × 4 难度 × 3 回合稳定性
+- `node test/hell-battle.mjs`：3 图 × 4 难度 × 3 回合稳定性
 - `node test/cdp-test.mjs`：Edge headless + CDP 协议，真实浏览器全链路（菜单→地狱→开赛→移动→开火）
 
 ## 地狱 AI（训练产出）

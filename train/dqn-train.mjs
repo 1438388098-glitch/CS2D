@@ -256,10 +256,11 @@ for (let ep = 1; ep <= EPS; ep++) {
   }
   if (epScore > best.score) {
     best.score = epScore; best.ep = ep;
-    // 存档 best 快照（防训练后期退化导致 best 丢失）
+    // 存档 best 快照（防训练后期退化导致 best 丢失；多图训练按图独立命名）
     const out = path.join(path.dirname(require.resolve('../package.json')), 'train', 'checkpoints');
     fs.mkdirSync(out, { recursive: true });
-    fs.writeFileSync(path.join(out, `net_${STYLE}_best.json`), JSON.stringify({ ...net.toJSON(), style: STYLE, ep, score: epScore, seed: SEED }));
+    const mapTag = MAP !== 'dust2' ? '_' + MAP : '';
+    fs.writeFileSync(path.join(out, `net_${STYLE}_best${mapTag}.json`), JSON.stringify({ ...net.toJSON(), style: STYLE, ep, score: epScore, seed: SEED, map: MAP }));
   }
   if (ep % 25 === 0 || ep === EPS) {
     const avg = epScore / (epRounds || 1);

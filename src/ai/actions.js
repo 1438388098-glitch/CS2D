@@ -148,7 +148,7 @@ export function botActions(e, game, dt) {
     if (Math.hypot(e.x - game.bomb.x, e.y - game.bomb.y) < 55) {
       let enemiesNear = false;
       for (const o of game.entities) {
-        if (o.team === 't' && !o.dead && Math.hypot(o.x - e.x, o.y - e.y) < 420 && los(game, e.x, e.y, o.x, o.y, e.height)) {
+        if (o.team === 't' && !o.dead && Math.hypot(o.x - e.x, o.y - e.y) < 300 && los(game, e.x, e.y, o.x, o.y, e.height)) {
           enemiesNear = true;
           break;
         }

@@ -61,9 +61,14 @@ export function netObs(e, game) {
 export function netAct(e, game) {
   const d = e.aiParams || diffOf(game);
   const w = d && d.netWeights;
-  if (!w || w.length === 0) return null;
+  if (!w || (Array.isArray(w) && w.length === 0) || (typeof w === 'object' && !w.input && Object.keys(w).length === 0)) return null;
   if (e.netAct !== undefined && game.time - (e.netAt || 0) < NET_DECISION_S) return e.netAct;
-  const net = (d._net = d._net || dqnFromJSON(w));
+  // 多图权重：{ mapId: weights } 按当前地图取，缺省回退 __default
+  let weights = w;
+  if (w && !w.input && !Array.isArray(w)) {
+    weights = w[game.opts && game.opts.mapId] || w.__default || w;
+  }
+  const net = (d._net = d._net || dqnFromJSON(weights));
   const q = net.forward(netObs(e, game));
   let ai = 0;
   for (let i = 1; i < q.length; i++) if (q[i] > q[ai]) ai = i;
@@ -201,7 +206,7 @@ export function botObjectiveRaw(e, game) {
         return { x: e.x + dx / len * 380 + rand(-90, 90), y: e.y + dy / len * 380 + rand(-90, 90) };
       }
     }
-    if (getMap().highPoints && getMap().highPoints.length && e.role === 'a' && !planted && e.highPointT <= 0 && rand() < 0.02) {
+    if (getMap().highPoints && getMap().highPoints.length && e.role === 'a' && !planted && e.highPointT <= 0 && rand() < 0.12) {
       e.highIdx = (e.highIdx || 0) + 1;
       const hp = getMap().highPoints[e.highIdx % getMap().highPoints.length];
       e.highPointT = 8;
@@ -226,7 +231,7 @@ export function botObjectiveRaw(e, game) {
     const site2 = game.bomb.site === 'A' ? getMap().sites.A : getMap().sites.B;
     if (e.guardPointSite !== game.bomb.site || e.guardPoint === null) {
       // 守弹目标围绕炸弹实际位置（而非站点中心），确保能打断拆弹
-      e.guardPoint = { x: game.bomb.x + rand(-90, 90), y: game.bomb.y + rand(-90, 90) };
+      e.guardPoint = { x: game.bomb.x + rand(-130, 130), y: game.bomb.y + rand(-130, 130) };
       e.guardPointSite = game.bomb.site;
     }
     return e.guardPoint;

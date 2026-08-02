@@ -101,6 +101,52 @@ export function initTextures(map) {
     }
   }
 
+  const thinWallTex = mk(64, 64);
+  {
+    const t = thinWallTex.getContext('2d');
+    t.fillStyle = 'rgba(120,116,110,0.75)';
+    t.fillRect(0, 0, 64, 64);
+    t.strokeStyle = 'rgba(60,58,54,0.9)';
+    t.lineWidth = 2;
+    for (let i = 0; i < 3; i++) { t.beginPath(); t.moveTo(0, i * 24 + 8); t.lineTo(64, i * 24 + 8); t.stroke(); }
+    for (let i = 0; i < 6; i++) { t.beginPath(); t.moveTo(i * 18 + 6, 0); t.lineTo(i * 18 + 6, 14); t.stroke(); }
+    t.strokeStyle = 'rgba(40,38,36,0.7)';
+    t.beginPath(); t.moveTo(0, 60); t.lineTo(30, 28); t.lineTo(52, 52); t.stroke();
+  }
+  const deepWaterTex = mk(64, 64);
+  {
+    const t = deepWaterTex.getContext('2d');
+    t.fillStyle = '#12304a';
+    t.fillRect(0, 0, 64, 64);
+    for (let i = 0; i < 40; i++) {
+      t.fillStyle = 'rgba(' + (40 + Math.random() * 50) + ',' + (90 + Math.random() * 60) + ',' + (150 + Math.random() * 50) + ',0.35)';
+      t.fillRect(Math.random() * 64, Math.random() * 64, 3, 1);
+    }
+  }
+  const platformTex = mk(64, 64);
+  {
+    const t = platformTex.getContext('2d');
+    t.fillStyle = '#3a3f46';
+    t.fillRect(0, 0, 64, 64);
+    t.fillStyle = 'rgba(255,255,255,0.08)';
+    for (let i = 0; i < 6; i++) t.fillRect(0, i * 12, 64, 2);
+    t.fillStyle = 'rgba(0,0,0,0.5)';
+    t.fillRect(0, 60, 64, 4);
+  }
+  const barrelTex = mk(48, 48);
+  {
+    const t = barrelTex.getContext('2d');
+    t.fillStyle = '#8a2f22';
+    t.beginPath(); t.arc(24, 24, 18, 0, Math.PI * 2); t.fill();
+    t.fillStyle = '#b8462f';
+    t.beginPath(); t.arc(24, 24, 13, 0, Math.PI * 2); t.fill();
+    t.fillStyle = 'rgba(255,255,255,0.25)';
+    t.fillRect(20, 8, 8, 4);
+    t.strokeStyle = 'rgba(60,20,14,0.9)';
+    t.lineWidth = 2;
+    t.beginPath(); t.arc(24, 24, 18, 0, Math.PI * 2); t.stroke();
+  }
+
   const staticLayer = mk(W, H);
   const decalLayer = mk(W, H);
   const miniMap = mk(480, 360);
@@ -122,6 +168,14 @@ export function initTextures(map) {
         if (c === '#') t.drawImage(wallTex, px, py, TILE, TILE);
         if (c === 'C') t.drawImage(crateTex, px, py, TILE, TILE);
         if (c === '~') t.drawImage(waterTex, px, py, TILE, TILE);
+        if (c === '=') t.drawImage(thinWallTex, px, py, TILE, TILE);
+        if (c === '≈') t.drawImage(deepWaterTex, px, py, TILE, TILE);
+        if (c === '^') {
+          t.drawImage(platformTex, px, py, TILE, TILE);
+          t.fillStyle = 'rgba(255,255,255,0.10)';
+          t.fillRect(px + 2, py + 2, TILE - 4, 3);
+        }
+        if (c === 'o') t.drawImage(barrelTex, px + 8, py + 8, 24, 24);
       }
     }
     // 光照烘焙：墙边缘软阴影（顶部光照，朝 y+ 方向投影）
@@ -181,6 +235,18 @@ export function initTextures(map) {
         } else if (c === '~') {
           t.fillStyle = '#1d4a6e';
           t.fillRect(x * mmScale, y * mmScale, mmScale + 0.6, mmScale + 0.6);
+        } else if (c === '=') {
+          t.fillStyle = '#a8a29a';
+          t.fillRect(x * mmScale, y * mmScale, mmScale + 0.6, mmScale + 0.6);
+        } else if (c === '≈') {
+          t.fillStyle = '#0d2740';
+          t.fillRect(x * mmScale, y * mmScale, mmScale + 0.6, mmScale + 0.6);
+        } else if (c === '^') {
+          t.fillStyle = '#6a7280';
+          t.fillRect(x * mmScale, y * mmScale, mmScale + 0.6, mmScale + 0.6);
+        } else if (c === 'o') {
+          t.fillStyle = '#c05030';
+          t.fillRect(x * mmScale, y * mmScale, mmScale + 0.6, mmScale + 0.6);
         } else if (c === 'a' || c === 'b') {
           t.fillStyle = c === 'a' ? 'rgba(255,120,70,0.30)' : 'rgba(70,150,255,0.30)';
           t.fillRect(x * mmScale, y * mmScale, mmScale + 0.6, mmScale + 0.6);
@@ -199,6 +265,7 @@ export function initTextures(map) {
   return {
     W, H,
     floorTex, wallTex, crateTex, waterTex,
+    thinWallTex, deepWaterTex, platformTex, barrelTex,
     staticLayer, decalLayer, miniMap, mmScale,
     decal: decalLayer
   };

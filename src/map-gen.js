@@ -80,7 +80,8 @@ export function buildDust2() {
   b.tile(26, 20, '^'); b.tile(27, 20, '^'); b.tile(26, 21, '^'); b.tile(27, 21, '^');  // 中台
   b.corridor(33, 35, 26, 6);        // CT 区
   for (let y = 28; y <= 34; y++) { b.tile(53, y, '.'); b.tile(54, y, '.'); } // CT 竖通道
-  b.spawn('c', 52, 36, 4, 3);
+  for (let y = 28; y <= 34; y++) { b.tile(46, y, '.'); b.tile(47, y, '.'); } // CT 第二竖通道
+  b.spawn('c', 44, 36, 4, 3);
   b.boxes(50, 39, 2, 1);
   return b;
 }
@@ -123,7 +124,7 @@ export function buildMetro() {
   b.corridor(27, 6, 4, 29);         // 中竖
   b.corridor(46, 6, 4, 29);         // 右竖
   b.spawn('t', 2, 7, 4, 2);
-  b.spawn('c', 52, 7, 4, 2);
+  b.spawn('c', 48, 7, 4, 2);
   b.corridor(24, 11, 11, 6);        // B 站台
   b.site('B', 25, 12, 9, 4);
   b.tile(24, 13, '^'); b.tile(25, 13, '^'); b.tile(24, 14, '^'); b.tile(25, 14, '^');

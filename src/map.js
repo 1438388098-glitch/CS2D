@@ -294,7 +294,7 @@ export function aStar(sx, sy, tx, ty) {
       while (true) {
         const l = i * 2 + 1, r = l + 1;
         let s = i;
-        if (l < heap.length && heap[l].f < heap[s].f) s = l;
+        if (l < heap.length && heap[l].f < last.f) s = l;
         if (r < heap.length && heap[r].f < heap[s].f) s = r;
         if (s === i) break;
         heap[i] = heap[s];
