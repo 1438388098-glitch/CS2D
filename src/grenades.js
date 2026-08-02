@@ -58,7 +58,7 @@ export function updateGrenades(game, dt) {
           if (d > 800) continue;
           const fa = Math.atan2(g.y - e.y, g.x - e.x);
           if (Math.abs(angDiff(e.angle, fa)) > BOT_AI.FLASH_ANGLE) continue;
-          if (!los(game, g.x, g.y, e.x, e.y)) continue;
+          if (!los(game, g.x, g.y, e.x, e.y, e.height)) continue;
           const dur = (1 - d / 800) * 4;
           if (e === game.player) {
             game.flashT = Math.max(game.flashT, dur);

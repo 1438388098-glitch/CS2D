@@ -2,12 +2,12 @@ import { WEAPONS, ECONOMY, DIFF, MAX_DECALS } from './config.js';
 import { passableTolerant, collideCircle, los, tileAt } from './map.js';
 import { weaponDef, wkey, ammoFor, reserveFor } from './entities.js';
 import { ctx } from './ctx.js';
-import { clamp, rand, angDiff } from './utils.js';
+import { clamp, rand, angDiff, viewCap } from './utils.js';
 
 import { endRound } from './game.js';
 import { dropBomb } from './bomb.js';
 import { throwGrenade } from './grenades.js';
-import { effectiveSpread, registerShot, updateShotStreak } from './ballistic.js';
+import { effectiveSpread, registerShot, updateShotStreak, headshotChance } from './ballistic.js';
 
 const emit = (evt, p) => ctx.bus.emit(evt, p);
 
@@ -44,6 +44,7 @@ export function finishReload(e) {
 
 export function fireWeapon(e, game) {
   if (e.dead) return;
+  if (e.stunT > 0) return;
   if (e.reloading || e.fireCd > 0) return;
   if (e.slot && e.slot.indexOf('nade:') === 0) {
     throwGrenade(e, game);
@@ -66,6 +67,7 @@ export function fireWeapon(e, game) {
     }
   }
   let spread = effectiveSpread(w, e);
+  if (e.aimTarget && e.aimTarget.height === 1 && e.height === 0) spread *= 1.25;
   registerShot(e);
   if (e.bot) spread *= (e.aiParams || DIFF[game.opts.diff] || DIFF.normal).spreadMult;
   let moveSpread = 0;
@@ -99,7 +101,10 @@ export function fireWeapon(e, game) {
   } else {
     emit('sfx', { name: 'shot', vol: 0.85, x: e.x, y: e.y, game });
   }
-  const expRad = w.kind === 'rifle' ? 950 : (w.kind === 'sniper' ? 1300 : (w.kind === 'smg' ? 700 : (w.kind === 'pistol' ? 450 : (w.kind === 'shotgun' ? 500 : 0))));
+  const expRad = Math.min(
+    w.kind === 'rifle' ? 950 : (w.kind === 'sniper' ? 1300 : (w.kind === 'smg' ? 700 : (w.kind === 'pistol' ? 450 : (w.kind === 'shotgun' ? 500 : 0)))),
+    viewCap(game)
+  );
   if (expRad > 0) {
     for (const o of game.entities) {
       if (o.bot && !o.dead && o.team !== e.team && Math.hypot(o.x - e.x, o.y - e.y) < expRad) {
@@ -187,7 +192,8 @@ function fireRay(e, game, ang, w, dmg, isPellet) {
   const hit = best && best.t <= wallT ? best.ent : null;
   if (hit) {
     if (e === game.player) game.stats.hits++;
-    const head = !isPellet && Math.random() < 0.12;
+    // 爆头由瞄准精度驱动（中心命中/近距离/精密武器 → 概率更高），不再纯随机
+    const head = !isPellet && Math.random() < headshotChance(w, hit, best.perp, best.t);
     let finalDmg = dmg;
     finalDmg *= penMult;
     const dd = best.t;
@@ -386,6 +392,11 @@ export function redrawDecals(game) {
     } else if (d.type === 'spark') {
       t.fillStyle = 'rgba(255,190,90,' + a * 0.8 + ')';
       t.beginPath(); t.arc(d.x, d.y, 2.5, 0, Math.PI * 2); t.fill();
+    } else if (d.type === 'bullet') {
+      t.fillStyle = 'rgba(40,38,36,' + a * 0.85 + ')';
+      t.beginPath(); t.arc(d.x, d.y, 3, 0, Math.PI * 2); t.fill();
+      t.fillStyle = 'rgba(255,255,255,' + a * 0.18 + ')';
+      t.beginPath(); t.arc(d.x - 1, d.y - 1, 1.2, 0, Math.PI * 2); t.fill();
     }
   }
 }

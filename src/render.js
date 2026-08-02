@@ -237,15 +237,32 @@ function drawEntities(game) {
 
 function drawSmokes(game) {
   for (const s of game.smokes) {
-    const a = clamp(s.life / 2, 0, 1) * 0.75;
-    const g = ctx.createRadialGradient(s.x, s.y, s.r * 0.2, s.x, s.y, s.r);
-    g.addColorStop(0, 'rgba(210,212,215,' + a + ')');
-    g.addColorStop(0.7, 'rgba(160,164,170,' + a * 0.7 + ')');
+    // 淡入（半径增长期）+ 淡出（生命末期 2s），其余时段完全遮挡
+    const fade = clamp(s.life / 2, 0, 1) * clamp((s.r - 20) / 40, 0.3, 1);
+    // 外圈柔边
+    const g = ctx.createRadialGradient(s.x, s.y, s.r * 0.3, s.x, s.y, s.r);
+    g.addColorStop(0, 'rgba(206,208,211,' + (0.96 * fade) + ')');
+    g.addColorStop(0.75, 'rgba(190,193,197,' + (0.94 * fade) + ')');
+    g.addColorStop(0.95, 'rgba(150,155,161,' + (0.55 * fade) + ')');
     g.addColorStop(1, 'rgba(120,124,130,0)');
     ctx.fillStyle = g;
     ctx.beginPath();
     ctx.arc(s.x, s.y, s.r, 0, Math.PI * 2);
     ctx.fill();
+    // 实心核（完全遮挡，与 LOS/子弹截断判定一致）
+    ctx.fillStyle = 'rgba(198,200,204,' + (0.97 * fade) + ')';
+    ctx.beginPath();
+    ctx.arc(s.x, s.y, s.r * 0.72, 0, Math.PI * 2);
+    ctx.fill();
+    // 边缘噪点（增强体积感）
+    ctx.fillStyle = 'rgba(212,214,217,' + (0.5 * fade) + ')';
+    for (let i = 0; i < 6; i++) {
+      const na = Math.random() * Math.PI * 2;
+      const nr = s.r * (0.55 + Math.random() * 0.35);
+      ctx.beginPath();
+      ctx.arc(s.x + Math.cos(na) * nr, s.y + Math.sin(na) * nr, 6 + Math.random() * 8, 0, Math.PI * 2);
+      ctx.fill();
+    }
   }
 }
 

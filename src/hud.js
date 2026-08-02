@@ -88,7 +88,7 @@ export function renderMinimap(game) {
     } else {
       if (p && e.team !== p.team) {
         const d = Math.hypot(e.x - p.x, e.y - p.y);
-        if (d >= 300 && (!canSee || !los(game, p.x, p.y, e.x, e.y))) continue;
+        if (d >= 300 && (!canSee || !los(game, p.x, p.y, e.x, e.y, p.height))) continue;
       }
       mctx.fillStyle = e.team === 'ct' ? '#4da6ff' : '#ffb84d';
       mctx.beginPath();

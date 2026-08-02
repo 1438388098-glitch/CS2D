@@ -23,7 +23,9 @@ export function createEntity(team, bot) {
     plantRetryT: 0, usedNadeRound: 0, anchorIdx: 0,
     rushMode: false, vanguard: false, plantedSmokeRound: 0,
     streak: 0, wKills: {}, aiParams: null,
-    decT: 0
+    decT: 0,
+    height: 0, stunT: 0, splashCd: 0, highPointT: 0, highIdx: 0,
+    prefireT: 0, prefireX: 0, prefireY: 0, prefireCount: 0, barrelT: 0, botThreatT: 0,
   };
 }
 

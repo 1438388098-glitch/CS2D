@@ -233,7 +233,16 @@ export function collideCircle(ent) {
   }
 }
 
-export function los(game, ax, ay, bx, by) {
+// 视线阻挡：薄墙可看穿；高台观察者无视矮掩体(C)；深水/实墙/油桶阻挡
+function losBlocked(x, y, optH) {
+  if (passableTolerant(x, y)) return false;
+  const c = tileAt(x, y);
+  if (c === '=') return false;
+  if (c === 'C' && optH === 1) return false;
+  return true;
+}
+
+export function los(game, ax, ay, bx, by, optH) {
   const d = Math.hypot(bx - ax, by - ay);
   if (d < 1) return true;
   // 步长与 fireRay 子弹采样一致（6px），保证视线与命中判定对称（擦角结果相同）
@@ -241,7 +250,7 @@ export function los(game, ax, ay, bx, by) {
   for (let i = 0; i <= steps; i++) {
     const x = ax + (bx - ax) * i / steps;
     const y = ay + (by - ay) * i / steps;
-    if (!passableTolerant(x, y)) return false;
+    if (losBlocked(x, y, optH)) return false;
     for (const s of game.smokes) {
       const dx = x - s.x, dy = y - s.y;
       const rr = s.r + 8;
@@ -249,6 +258,9 @@ export function los(game, ax, ay, bx, by) {
       if (Math.hypot(x - s.x, y - s.y) < s.r + 8) return false;
     }
   }
+  const obsw = tileAt(ax, ay) === '≈';
+  const tgtw = tileAt(bx, by) === '≈';
+  if (tgtw && !obsw) return false;
   return true;
 }
 

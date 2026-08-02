@@ -1,5 +1,5 @@
 import { ROUND, ECONOMY, MAX_PARTICLES } from './config.js';
-import { getMap, loadMap, findMapById, collideCircle, los, pathTo } from './map.js';
+import { getMap, loadMap, findMapById, collideCircle, los, pathTo, tileAt } from './map.js';
 import { createEntity, spawnEntity, weaponDef, ammoFor } from './entities.js';
 import { fireWeapon, startReload, finishReload, pickupWeapon, RECOIL_RECOVER } from './combat.js';
 import { updateShotStreak } from './ballistic.js';
@@ -18,6 +18,7 @@ export function createGame(opts = {}) {
   const game = {
     state: 'MENU',
     entities: [], grenades: [], particles: [], tracers: [], smokes: [], decals: [], drops: [],
+    lastSplash: null,
     player: null,
     camX: 1200, camY: 900,
     round: 0, roundTime: 0, roundDur: ROUND.DURATION, buyTime: 0,
@@ -255,6 +256,12 @@ export function update(game, dt) {
     e.x += e.vx * dt;
     e.y += e.vy * dt;
     collideCircle(e);
+    const curTile = tileAt(e.x, e.y);
+    const prevH = e.height;
+    e.height = curTile === '^' ? 1 : 0;
+    if (prevH === 1 && e.height === 0) e.stunT = 0.4;
+    if (e.stunT > 0) e.stunT = Math.max(0, e.stunT - dt);
+    if (e.stunT > 0) { e.vx *= 0.3; e.vy *= 0.3; }
     e.vx *= Math.max(0, 1 - 7 * dt);
     e.vy *= Math.max(0, 1 - 7 * dt);
     if (e.bot) {
@@ -441,7 +448,7 @@ function updatePlayer(game, dt) {
     if (o === p || o.dead || o.team === p.team) continue;
     if (Math.hypot(o.x - p.x, o.y - p.y) < 600) {
       const a = Math.atan2(o.y - p.y, o.x - p.x);
-      if (Math.abs(angDiff(a, p.angle)) < 0.09 && los(game, p.x, p.y, o.x, o.y)) {
+      if (Math.abs(angDiff(a, p.angle)) < 0.09 && los(game, p.x, p.y, o.x, o.y, p.height)) {
         p.aimTarget = o;
         break;
       }

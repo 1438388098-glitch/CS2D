@@ -432,6 +432,33 @@ T('tie-round', () => {
   if (game.score.T !== scoreT || game.score.CT !== scoreC + 1) throw new Error('elimination score wrong: ' + game.score.T + ':' + game.score.CT);
 });
 
+T('high-ground', () => {
+  loadMap(findMapById('mech-test'));
+  const g = createGame();
+  g.opts.mapId = 'mech-test';
+  startMatch(g);
+  const b = g.entities.find((e) => e.bot && e.team === 't');
+  for (const e of g.entities) {
+    if (e !== b) e.dead = true;
+  }
+  // mech-test 无站点：屏蔽 bot 的安弹/道具分支，避免 botActions 访问 sites.A 崩溃
+  b.dead = false;
+  b.hasBomb = false;
+  b.usedNadeRound = g.round;
+  b.x = 380; b.y = 800;                    // x9 高台列, y19 行（高台格 x=9*40+20=380）
+  update(g, 1 / 30);
+  if (b.height !== 1) throw new Error('站高台应 height=1, got ' + b.height);
+  b.x = 340; b.y = 800;                    // 跳下到 x8 地面格
+  update(g, 1 / 30);
+  if (b.stunT <= 0) throw new Error('落台应有硬直');
+  const ammoBefore = b.ammoMap.ak || 0;
+  b.weapons.primary = 'ak'; b.slot = 'primary'; b.ammoMap.ak = 5;
+  b.angle = 0;
+  fireWeapon(b, g);
+  if (b.ammoMap.ak !== 5) throw new Error('硬直期间不能开火');
+  loadMap(findMapById('dust2'));
+});
+
 console.log('selftest: ' + (errors.length === 0 ? 'PASS' : 'FAIL'));
 if (errors.length) {
   for (const e of errors) console.log('  ' + e);

@@ -6,7 +6,7 @@ import { updateShotStreak } from './ballistic.js';
 import { throwGrenade } from './grenades.js';
 import { plantBomb, pickupBomb, defuseBomb } from './bomb.js';
 import { ctx } from './ctx.js';
-import { clamp, rand, angDiff, angNorm } from './utils.js';
+import { clamp, rand, angDiff, angNorm, viewCap } from './utils.js';
 
 const emit = (evt, p) => ctx.bus.emit(evt, p);
 
@@ -147,7 +147,7 @@ function botThink(e, game, dt) {
     e.aimTarget = vis;
     e.reaction = d.react * (0.7 + Math.random() * 0.6);
   }
-  if (e.aimTarget && (e.aimTarget.dead || !los(game, e.x, e.y, e.aimTarget.x, e.aimTarget.y) || Math.hypot(e.aimTarget.x - e.x, e.aimTarget.y - e.y) > d.view * 1.2)) {
+  if (e.aimTarget && (e.aimTarget.dead || !los(game, e.x, e.y, e.aimTarget.x, e.aimTarget.y, e.height) || Math.hypot(e.aimTarget.x - e.x, e.aimTarget.y - e.y) > viewCap(game) * 1.2)) {
     if (e.aimLostT > 1.4) {
       if (e.aimLastPos) {
         e.lastKnown = { x: e.aimLastPos.x, y: e.aimLastPos.y };
@@ -179,7 +179,7 @@ function botThink(e, game, dt) {
     }
   }
   // LOS 有效才能进入战斗（拟合人类：看不到目标就停止对空 strafe，架枪/换位）
-  const canSeeTarget = e.aimTarget && !e.aimTarget.dead && los(game, e.x, e.y, e.aimTarget.x, e.aimTarget.y);
+  const canSeeTarget = e.aimTarget && !e.aimTarget.dead && los(game, e.x, e.y, e.aimTarget.x, e.aimTarget.y, e.height);
   const combat = canSeeTarget && e.reaction <= 0;
   if (combat && e.hasBomb) {
     const t = e.aimTarget;
@@ -361,22 +361,33 @@ function botObjectiveRaw(e, game) {
     if (planted) return { x: game.bomb.x, y: game.bomb.y };
     const ctAlive = game.entities.filter((o) => o.team === 'ct' && !o.dead && o !== e).length;
     const tAlive = game.entities.filter((o) => o.team === 't' && !o.dead).length;
-    // 残局劣势保枪（未安弹时）
-    if (ctAlive === 0 && tAlive >= 2 && Math.random() < (e.aiParams || DIFF[game.opts.diff]).saveChance) {
+    // 残局劣势保枪（未安弹时，且劣势显著）
+    if (ctAlive === 0 && tAlive >= 3 && Math.random() < (e.aiParams || DIFF[game.opts.diff]).saveChance) {
       return retreatPoint(e, game);
     }
-    if (e.role === 'a' || e.role === 'b') {
-      const now = game.time * 1000;
-      for (const o of game.entities) {
-        if (o.team === 't' && !o.dead && now - o.lastShot < BOT_AI.HEAR_TTL) {
-          if (Math.hypot(o.x - e.x, o.y - e.y) < BOT_AI.HEAR_RADIUS) return { x: o.x, y: o.y };
-        }
+    // 听枪回防（全角色生效，不再只限 a/b 守点）
+    const now = game.time * 1000;
+    for (const o of game.entities) {
+      if (o.team === 't' && !o.dead && now - o.lastShot < BOT_AI.HEAR_TTL) {
+        if (Math.hypot(o.x - e.x, o.y - e.y) < BOT_AI.HEAR_RADIUS) return { x: o.x, y: o.y };
       }
+    }
+    // 前压侦察：回合中后期未接敌时部分守点 bot 向 T 半场推进找枪（避免死守站桩）
+    if (game.roundTime > 30 && Math.random() < 0.45) {
+      const sp = getMap().spawns.t[0];
+      if (sp) {
+        const dx = sp.x - e.x, dy = sp.y - e.y;
+        const len = Math.hypot(dx, dy) || 1;
+        return { x: e.x + dx / len * 380 + rand(-90, 90), y: e.y + dy / len * 380 + rand(-90, 90) };
+      }
+    }
+    if (e.role === 'a' || e.role === 'b') {
       const hold = e.role === 'a' ? getMap().holds.A : getMap().holds.B;
       const p = hold.anchors[e.anchorIdx % hold.anchors.length] || hold.anchors[0];
       return { x: p.x, y: p.y, face: Math.atan2(hold.entry.y - p.y, hold.entry.x - p.x) };
     }
-    return { x: getMap().W / 2 + rand(-60, 60), y: getMap().H / 2 + rand(-60, 60) };
+    // mid：中央支援位（转点必经），同样享受听枪回防
+    return { x: getMap().W / 2 + rand(-100, 100), y: getMap().H / 2 + rand(-100, 100) };
   }
   if (planted) {
     if (game.bomb.defusing) {
@@ -403,6 +414,8 @@ function botObjectiveRaw(e, game) {
     }
     // 已在点附近则直接进点安弹；否则在入口等队友清点（不在交火中冲点送死）
     if (Math.hypot(e.x - cs.cx, e.y - cs.cy) < 300 || e.rushMode) return { x: cs.cx, y: cs.cy };
+    // 等待超时：队友迟迟不来（阵亡/被牵制）则不再干等，直接进点
+    if (game.roundTime > 15) return { x: cs.cx, y: cs.cy };
     const alliesIn = game.entities.filter((o) => o.bot && o.team === 't' && !o.dead && o !== e && Math.hypot(o.x - cs.cx, o.y - cs.cy) < 300).length;
     if (alliesIn < 1) return entryPoint(cs, game);
     return { x: cs.cx, y: cs.cy };
@@ -429,12 +442,14 @@ function botObjectiveRaw(e, game) {
     return retreatPoint(e, game);
   }
   if (e.rushMode) return { x: cs.cx + rand(-120, 120), y: cs.cy + rand(-60, 60) };
-  // 协同集结：全队在入口集合，凑够 3 人同步进点（避免添油送死）
+  // 协同集结：存活人数不足时全员到齐即进点（修复 1v1/2v2 死等 3 人的发呆）；人多时凑 3 人同步
+  const tAlive3 = game.entities.filter((o) => o.team === 't' && !o.dead).length;
+  const needAll = Math.min(3, tAlive3);
   const entry = entryPoint(cs, game);
   const here = game.entities.filter((o) => o.bot && o.team === 't' && !o.dead && Math.hypot(o.x - entry.x, o.y - entry.y) < 300).length;
-  if (here < 3 && game.roundTime < 12) return entry;
-  if (game.roundTime > 8) return { x: cs.cx + rand(-120, 120), y: cs.cy + rand(-60, 60) };
-  return entry;
+  if (here >= needAll) return { x: cs.cx + rand(-120, 120), y: cs.cy + rand(-60, 60) };
+  if (game.roundTime < 12) return entry;
+  return { x: cs.cx + rand(-120, 120), y: cs.cy + rand(-60, 60) };
 }
 
 function botActions(e, game, dt) {
@@ -503,7 +518,7 @@ function botActions(e, game, dt) {
       for (const o of game.entities) {
         if (o.team === 'ct' && !o.dead && o.blind <= 0) {
           const dd = Math.hypot(o.x - e.x, o.y - e.y);
-          if (dd < 700 && dd < sd && los(game, e.x, e.y, o.x, o.y)) {
+          if (dd < 700 && dd < sd && los(game, e.x, e.y, o.x, o.y, e.height)) {
             sd = dd;
             src = o;
           }
@@ -530,7 +545,7 @@ function botActions(e, game, dt) {
     if (Math.hypot(e.x - game.bomb.x, e.y - game.bomb.y) < 55) {
       let enemiesNear = false;
       for (const o of game.entities) {
-        if (o.team === 't' && !o.dead && Math.hypot(o.x - e.x, o.y - e.y) < 420 && los(game, e.x, e.y, o.x, o.y)) {
+        if (o.team === 't' && !o.dead && Math.hypot(o.x - e.x, o.y - e.y) < 420 && los(game, e.x, e.y, o.x, o.y, e.height)) {
           enemiesNear = true;
           break;
         }
@@ -570,14 +585,15 @@ function botActions(e, game, dt) {
 
 function findVisibleEnemy(e, game) {
   let best = null;
-  let bestD = (e.aiParams || DIFF[game.opts.diff]).view;
+  // 感知距离上限 = min(难度视野, 玩家屏幕最远可视距离)——不开"屏幕外透视"
+  let bestD = Math.min((e.aiParams || DIFF[game.opts.diff]).view, viewCap(game));
   for (const o of game.entities) {
     if (o === e || o.dead || o.team === e.team) continue;
     const d = Math.hypot(o.x - e.x, o.y - e.y);
     if (d > bestD) continue;
     const a = Math.atan2(o.y - e.y, o.x - e.x);
     if (Math.abs(angDiff(a, e.angle)) > BOT_AI.FOV) continue;
-    if (!los(game, e.x, e.y, o.x, o.y)) continue;
+    if (!los(game, e.x, e.y, o.x, o.y, e.height)) continue;
     if (d < bestD) { bestD = d; best = o; }
   }
   return best;

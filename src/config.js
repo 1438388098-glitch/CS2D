@@ -57,13 +57,13 @@ export const ROUND = {
 };
 
 export const DIFF = {
-  easy: { react: 0.45, spreadMult: 1.8, view: 860, strafe: 0.8, aimSpeed: 22, idealMin: 220, idealMax: 550, rushChance: 0.15, rotateChance: 0.25, saveChance: 0.5 },
-  normal: { react: 0.24, spreadMult: 1.15, view: 1000, strafe: 0.55, aimSpeed: 32, idealMin: 220, idealMax: 550, rushChance: 0.3, rotateChance: 0.4, saveChance: 0.8 },
-  hard: { react: 0.12, spreadMult: 0.75, view: 1120, strafe: 0.4, aimSpeed: 40, idealMin: 200, idealMax: 550, rushChance: 0.4, rotateChance: 0.6, saveChance: 0.95 },
+  easy: { react: 0.45, spreadMult: 1.8, view: 860, strafe: 0.8, aimSpeed: 22, idealMin: 220, idealMax: 550, rushChance: 0.15, rotateChance: 0.25, saveChance: 0.3 },
+  normal: { react: 0.24, spreadMult: 1.15, view: 1000, strafe: 0.55, aimSpeed: 32, idealMin: 220, idealMax: 550, rushChance: 0.3, rotateChance: 0.4, saveChance: 0.5 },
+  hard: { react: 0.12, spreadMult: 0.75, view: 1120, strafe: 0.4, aimSpeed: 40, idealMin: 200, idealMax: 550, rushChance: 0.4, rotateChance: 0.6, saveChance: 0.7 },
   hell: {
     react: 0.064, spreadMult: 0.5, view: 1171, strafe: 0.46, aimSpeed: 141,
     idealMin: 238, idealMax: 590, peekChance: 0.09, nadeUse: 0.93, riskT: 0.98,
-    rushChance: 0.45, rotateChance: 0.75, saveChance: 1,
+    rushChance: 0.45, rotateChance: 0.75, saveChance: 0.8,
     trained: true, genome: [0.0277, 0.0019, 0.7421, 0.6751, 0.4305, 0.0947, 0.0996, 0.1883, 0.9134, 0.5657],
     training: { gens: 8, pop: 16, map: 'dust2', evalRounds: 6, fitness: 101.0, note: '7胜0负基线normal/尘2图, 待多图续训' }
   }
