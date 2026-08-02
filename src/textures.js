@@ -4,8 +4,6 @@ import { getMap } from './map.js';
 // 地图主题色板（floor/wall/crate/water 基础色 + 噪点色 + 小地图色）
 const THEMES = {
   dust2: { floor: [36, 39, 44], floorSpots: [90, 85, 75], wall: [90, 96, 104], wallSpots: [80, 86, 96], crate: [122, 90, 52], crateSpots: [110, 82, 44], water: [29, 74, 94], waterSpots: [50, 110, 160], mmWall: '#4d545e', mmCrate: '#6d5534' },
-  snow:  { floor: [150, 162, 172], floorSpots: [118, 130, 140], wall: [178, 190, 202], wallSpots: [150, 162, 174], crate: [120, 132, 146], crateSpots: [100, 112, 126], water: [60, 120, 165], waterSpots: [105, 165, 205], mmWall: '#a8b4c2', mmCrate: '#8a96a6' },
-  depot: { floor: [50, 44, 38], floorSpots: [100, 84, 64], wall: [100, 90, 76], wallSpots: [84, 76, 64], crate: [122, 92, 54], crateSpots: [110, 82, 44], water: [29, 74, 94], waterSpots: [50, 110, 160], mmWall: '#5d5547', mmCrate: '#6d5534' },
   canal: { floor: [44, 54, 52], floorSpots: [88, 102, 96], wall: [88, 102, 98], wallSpots: [74, 88, 84], crate: [106, 88, 64], crateSpots: [94, 78, 56], water: [23, 66, 88], waterSpots: [50, 110, 160], mmWall: '#4d645f', mmCrate: '#6d5c42' },
   metro: { floor: [38, 40, 52], floorSpots: [82, 82, 102], wall: [70, 76, 96], wallSpots: [58, 64, 82], crate: [92, 84, 78], crateSpots: [76, 68, 62], water: [29, 74, 94], waterSpots: [50, 110, 160], mmWall: '#464c63', mmCrate: '#5f564f' }
 };

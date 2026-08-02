@@ -5,7 +5,7 @@ const { ROUND } = await import('../src/config.js');
 ROUND.DURATION = 30;
 
 let allPass = true;
-for (const mapId of ['dust2', 'snow', 'depot', 'canal', 'metro']) {
+for (const mapId of ['dust2', 'canal', 'metro']) {
   for (const diff of ['easy', 'normal', 'hard', 'hell']) {
     const g = createGame({ team: 't', diff, bots: 5, mapId });
     g.ui = null;

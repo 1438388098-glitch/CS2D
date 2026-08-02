@@ -26,6 +26,23 @@ const MAP = arg('map', 'dust2');
 const ROUNDS_PER_EP = parseInt(arg('rounds', '4'), 10);
 const SEED = parseInt(arg('seed', '1'), 10);
 const DEC_S = 0.6;
+// 迁移学习：--init=checkpoint路径 用已有权重初始化（多图续训）
+const INIT = arg('init', '');
+// 课程学习：对手难度逐步升级（easy → normal → hard），防止前期被碾压学到保命流
+const CURRICULUM = arg('curriculum', 'off') === 'on';
+const CUR_LEVELS = [DIFF.easy, DIFF.normal, DIFF.hard];
+const CUR_EPS = parseInt(arg('cur-len', '150'), 10); // 每档对手训练多少 eps
+// 学习率衰减：每 LR_DECAY_EPS eps 减半（后期稳定收敛，防震荡）
+const LR_DECAY_EPS = parseInt(arg('lr-decay', '150'), 10);
+const net = new DQN({ input: 13, hidden: 24, output: 6 });
+const targetNet = new DQN({ input: 13, hidden: 24, output: 6 });
+if (INIT) {
+  const initCk = JSON.parse(fs.readFileSync(INIT, 'utf8'));
+  const initNet = DQN.fromJSON(initCk);
+  net.copyFrom(initNet);
+  console.log(`[dqn-train] 迁移学习初始化 ← ${INIT} (ep${initCk.ep})`);
+}
+targetNet.copyFrom(net);
 
 // —— 风格配置（reward 塑形）——
 const STYLE_CFG = {
@@ -35,24 +52,27 @@ const STYLE_CFG = {
 };
 const CFG = STYLE_CFG[STYLE] || STYLE_CFG.hold;
 
-console.log(`[dqn-train] style=${STYLE} (${CFG.name}) eps=${EPS} map=${MAP} seed=${SEED}`);
+console.log(`[dqn-train] style=${STYLE} (${CFG.name}) eps=${EPS} map=${MAP} seed=${SEED} curriculum=${CURRICULUM ? 'on' : 'off'}`);
 
-const net = new DQN({ input: 13, hidden: 24, output: 6 });
-const targetNet = new DQN({ input: 13, hidden: 24, output: 6 });
-targetNet.copyFrom(net);
 const replay = new ReplayBuffer(20000);
 let eps = DQN_EPS_START;
 let step = 0, targetSyncAt = DQN_TARGET_SYNC;
 let totalKills = 0, totalRounds = 0, totalWins = 0;
 
 // —— 环境 ——
-function makeEnv() {
+function makeEnv(ep) {
   seedWorld(SEED * 1000 + Math.floor(Math.random() * 10000));
   const g = createGame({ team: 'ct', diff: 'normal', bots: 5, mapId: MAP });
   g.opts.diffParams = DIFF.normal;
   g.ui = null;
   startMatch(g);
   g.player.bot = true;
+  // 课程对手：CT 队难度随训练阶段升级
+  if (CURRICULUM) {
+    const idx = Math.min(Math.floor((ep - 1) / CUR_EPS), CUR_LEVELS.length - 1);
+    const curOpp = CUR_LEVELS[idx];
+    for (const e of g.entities) if (e.bot && e.team === 'ct') e.aiParams = curOpp;
+  }
   // 训练队（T）5 bot 共享网络参数
   const shared = { ...DIFF.normal, netWeights: net.toJSON() };
   g.buyTime = 0.3;
@@ -96,8 +116,9 @@ function shapeBonus(e, g, act) {
 
 // —— 主训练循环 ——
 const best = { ep: 0, score: -Infinity };
+let curStage = 0;
 for (let ep = 1; ep <= EPS; ep++) {
-  const g = makeEnv();
+  const g = makeEnv(ep);
   let epScore = 0, epRounds = 0;
   let prevTKills = 0, prevTKillsBy = new Map(); // 每 bot 击杀数
   for (const e of g.entities) if (e.bot && e.team === 't') prevTKillsBy.set(e, e.kills || 0);
@@ -201,6 +222,20 @@ for (let ep = 1; ep <= EPS; ep++) {
       // —— 学习更新（回放采样）——
       step++;
       eps = Math.max(DQN_EPS_END, eps * DQN_EPS_DECAY);
+      // 课程阶段推进（每 150 eps 对手升档 + 学习率减半）
+      if (CURRICULUM && ep % CUR_EPS === 0 && ep < EPS) {
+        const stage = Math.floor(ep / CUR_EPS);
+        if (stage !== curStage) {
+          curStage = stage;
+          net.lr = Math.max(0.0003, net.lr * 0.5);
+          targetNet.lr = net.lr;
+          console.log(`[ep ${ep}] 课程阶段 → 对手=${curStage + 1}/3, lr=${net.lr}`);
+        }
+      }
+      if (ep % LR_DECAY_EPS === 0 && ep < EPS) {
+        net.lr = Math.max(0.0003, net.lr * 0.5);
+        targetNet.lr = net.lr;
+      }
       if (step >= targetSyncAt) {
         targetNet.copyFrom(net);
         targetSyncAt += DQN_TARGET_SYNC;
@@ -221,6 +256,10 @@ for (let ep = 1; ep <= EPS; ep++) {
   }
   if (epScore > best.score) {
     best.score = epScore; best.ep = ep;
+    // 存档 best 快照（防训练后期退化导致 best 丢失）
+    const out = path.join(path.dirname(require.resolve('../package.json')), 'train', 'checkpoints');
+    fs.mkdirSync(out, { recursive: true });
+    fs.writeFileSync(path.join(out, `net_${STYLE}_best.json`), JSON.stringify({ ...net.toJSON(), style: STYLE, ep, score: epScore, seed: SEED }));
   }
   if (ep % 25 === 0 || ep === EPS) {
     const avg = epScore / (epRounds || 1);

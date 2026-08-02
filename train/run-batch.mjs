@@ -10,7 +10,7 @@ for (const a of process.argv.slice(2)) {
 }
 const gens = parseInt(args.gens || '200', 10);
 const par = parseInt(args.par || '1', 10);
-const maps = (args.maps || 'dust2,snow,depot,canal,metro').split(',').filter(Boolean);
+const maps = (args.maps || 'dust2,canal,metro').split(',').filter(Boolean);
 const mapId = args.map || maps[0];
 let startGen = parseInt(args.start || '0', 10);
 const resume = args.resume || null;

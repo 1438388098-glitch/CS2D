@@ -6,7 +6,7 @@ import { createGame, startMatch, startRound, update } from '../src/game.js';
 import { initUi } from '../src/ui.js';
 import { setKey, setMouse, setMouseDown, switchWeapon, switchNade } from '../src/input.js';
 import { buyItem } from '../src/economy.js';
-import { WEAPONS } from '../src/config.js';
+import { WEAPONS, MAPS } from '../src/config.js';
 import { killEntity, fireWeapon } from '../src/combat.js';
 import { los, aStar, nearestWalkable, walkable, getMapDiagnostics, getGrid, getMap, findMapById, loadMap, pathable, tileAt } from '../src/map.js';
 import { installMechTestMap } from './map-fixture.js';
@@ -32,7 +32,21 @@ T('boot-match', () => {
   startMatch(game);
   if (state() !== 'BUY') throw new Error('state=' + state());
   if (game.entities.length !== 1 + game.opts.bots * 2) throw new Error('entity count=' + game.entities.length);
-  if (game.mapW !== 2400 || game.mapH !== 1800) throw new Error('map size wrong');
+  if (game.mapW !== getMap().W || game.mapH !== getMap().H) throw new Error('map size wrong');
+});
+
+T('maps-three', () => {
+  for (const id of ['dust2', 'canal', 'metro']) {
+    const def = findMapById(id);
+    if (!def) throw new Error('缺少地图 ' + id);
+    const diag = loadMap(def);
+    if (diag.unreachable.length > 0) throw new Error(id + ' 存在不可达格: ' + diag.unreachable.length);
+    if (!getMap().sites.A || !getMap().sites.B) throw new Error(id + ' 缺站点');
+    if (!getMap().spawns.t.length || !getMap().spawns.ct.length) throw new Error(id + ' 缺出生点');
+  }
+  if (MAPS.find((m) => m.id === 'snow')) throw new Error('snow 应已删除');
+  if (MAPS.find((m) => m.id === 'depot')) throw new Error('depot 应已删除');
+  loadMap(findMapById('dust2'));
 });
 
 T('player-tank', () => {
@@ -557,6 +571,34 @@ T('ai-mechanics', () => {
   ctBot.lastKnown = null; ctBot.lastKnownT = 99;
   update(g2, 1 / 30);
   if (ctBot.lastKnown === null) throw new Error('AI 应听到溅水声并更新 lastKnown');
+  loadMap(findMapById('dust2'));
+});
+
+T('ai-barrel', () => {
+  loadMap(findMapById('mech-test'));
+  const g = createGame();
+  g.opts.mapId = 'mech-test';
+  startMatch(g);
+  g.buyTime = 0;
+  g.freezeT = 0;
+  const b = g.entities.find((e) => e.bot && e.team === 't');
+  b.weapons.primary = 'ak'; b.slot = 'primary'; b.ammoMap.ak = 30;
+  b.x = 300; b.y = 780; b.dead = false; b.usedNadeRound = g.round; b.hasBomb = false;
+  b.role = 'mid'; b.shotStreak = 1; b.fireCd = 0;
+  for (const o of g.entities) if (o !== b && o.bot) o.dead = true;
+  const ct = g.entities.find((e) => e.bot && e.team === 'ct');
+  ct.x = 620; ct.y = 780; ct.dead = false;
+  ct.hp = 100;
+  b.aimTarget = ct;
+  let guard = 0;
+  while (g.barrels.length > 0 && guard++ < 600) {
+    update(g, 1 / 30);
+    if (b.aimTarget === null && g.barrels.length > 0 && b.barrelT <= 0) b.aimTarget = ct;
+    b.x = 300; b.y = 780; b.vx = 0; b.vy = 0;
+    ct.x = 620; ct.y = 780; ct.vx = 0; ct.vy = 0;
+  }
+  if (g.barrels.length !== 0) throw new Error('AI 应能引爆油桶');
+  if (ct.hp !== 40) throw new Error('油桶爆炸应造成 60 点 AOE 伤害, hp=' + ct.hp);
   loadMap(findMapById('dust2'));
 });
 

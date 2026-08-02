@@ -16,10 +16,11 @@ function tanh(x) { return Math.tanh(x); }
 function dtanh(x) { const t = Math.tanh(x); return 1 - t * t; }
 
 export class DQN {
-  constructor({ input, hidden, output }) {
+  constructor({ input, hidden, output, lr = DQN_LEARN_RATE }) {
     this.input = input;
     this.hidden = hidden;
     this.output = output;
+    this.lr = lr;
     this.reset();
   }
 
@@ -106,7 +107,7 @@ export class DQN {
       const gx = g * (i < actN ? act[i] : 1);
       mRow[i] = 0.9 * mRow[i] + 0.1 * gx;
       vRow[i] = 0.999 * vRow[i] + 0.001 * gx * gx;
-      row[i] += DQN_LEARN_RATE * mRow[i] / (Math.sqrt(vRow[i]) + t);
+      row[i] += this.lr * mRow[i] / (Math.sqrt(vRow[i]) + t);
     }
   }
 
@@ -151,7 +152,14 @@ export class ReplayBuffer {
     const n = this.buf.length;
     if (n < batch) return null;
     const out = [];
-    for (let i = 0; i < batch; i++) out.push(this.buf[Math.floor(Math.random() * n)]);
+    // 分层采样：近 25% 经验池占 60%（优先近期经验，缓解回放震荡）
+    const recentStart = Math.floor(n * 0.75);
+    for (let i = 0; i < batch; i++) {
+      const recent = Math.random() < 0.6;
+      const from = recent ? recentStart : 0;
+      const to = recent ? n : recentStart;
+      out.push(this.buf[from + Math.floor(Math.random() * (to - from))]);
+    }
     return out;
   }
   get size() { return this.buf.length; }

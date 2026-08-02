@@ -18,8 +18,8 @@ try {
   const maps = await cdp.eval(`JSON.stringify([...document.querySelectorAll('[data-map]')].map(b=>({m:b.getAttribute('data-map'),t:b.textContent.trim()})))`);
   pass('map buttons: ' + maps);
 
-  const clickSnow = await cdp.eval(`(()=>{const b=document.querySelector('[data-map="snow"]');if(!b)return 'no-snow-btn';b.click();return document.querySelector('[data-map="snow"]').classList.contains('sel')})()`);
-  pass('click snow selected: ' + clickSnow);
+  const clickCanal = await cdp.eval(`(()=>{const b=document.querySelector('[data-map="canal"]');if(!b)return 'no-canal-btn';b.click();return document.querySelector('[data-map="canal"]').classList.contains('sel')})()`);
+  pass('click canal selected: ' + clickCanal);
 
   const stored = await cdp.eval(`localStorage.getItem('cs2d_map')`);
   pass('localStorage cs2d_map: ' + stored);
@@ -40,8 +40,8 @@ try {
   const layerSize = await cdp.eval(`(()=>{const g=window.__cs2d.game;const l=g.layers;return l&&l.staticLayer?(l.staticLayer.width+'x'+l.staticLayer.height):'no'})()`);
   pass('static layer size: ' + layerSize + ' (game mapW/H: ' + (await cdp.eval(`window.__cs2d.game.mapW + 'x' + window.__cs2d.game.mapH`)) + ')');
 
-  const snowPix = await cdp.eval(`(()=>{const c=document.querySelector('canvas');const d=c.getContext('2d').getImageData(c.width-250,8,20,20).data;let sum=0;for(let i=0;i<d.length;i+=4)sum+=d[i]+d[i+1]+d[i+2];return Math.round(sum/100)})()`);
-  pass('snow map brightness: ' + snowPix);
+  const canalPix = await cdp.eval(`(()=>{const c=document.querySelector('canvas');const d=c.getContext('2d').getImageData(c.width-250,8,20,20).data;let sum=0;for(let i=0;i<d.length;i+=4)sum+=d[i]+d[i+1]+d[i+2];return Math.round(sum/100)})()`);
+  pass('canal map brightness: ' + canalPix);
 
   await cdp.close();
 } catch (e) {
