@@ -1,5 +1,5 @@
 import { createGame, startMatch, update } from './game.js';
-import { initTextures } from './textures.js';
+import { initTextures, preloadTextures } from './textures.js';
 import { initRenderer, render } from './render.js';
 import { initHud, renderHud, renderCrosshair, renderMinimap, toggleMiniZoom, isMiniZoomed, setMiniZoom } from './hud.js';
 import { initUi, setMutedFnExposed, setMenuBackgroundFromLayer, refreshMapPreviews } from './ui.js';
@@ -8,7 +8,7 @@ import { initInput, resizeCanvas, setKey, setMouse, setMouseDown } from './input
 import { killEntity } from './combat.js';
 import { getMap } from './map.js';
 import { MAPS } from './config.js';
-import { setMuted, isMuted, setAudioContext } from './audio.js';
+import { setMuted, isMuted, setAudioContext, startAmbient } from './audio.js';
 
 const canvas = document.getElementById('game');
 const game = createGame();
@@ -21,6 +21,7 @@ function reloadMapLayers() {
   initRenderer(canvas, game.layers);
   initHud(canvas, game.layers);
   if (game.layers) setMenuBackgroundFromLayer(game.opts.mapId, game.layers.staticLayer, game.layers.W, game.layers.H);
+  startAmbient(game.opts.mapId);
 }
 game.onMapChanged = reloadMapLayers;
 
@@ -35,45 +36,57 @@ function initMenuBackgrounds() {
   refreshMapPreviews();
 }
 
-reloadMapLayers();
-initMenuBackgrounds();
-initUi(document, canvas, game);
-initUiDom(game);
-initInput(game, canvas);
-resizeCanvas(game, canvas);
-game.ui.showMenu();
+// 启动：先预加载真实纹理（失败自动降级程序化），再初始化所有图层与界面
+async function boot() {
+  await preloadTextures();
+  reloadMapLayers();
+  initMenuBackgrounds();
+  initUi(document, canvas, game);
+  initUiDom(game);
+  initInput(game, canvas);
+  resizeCanvas(game, canvas);
 
-canvas.addEventListener('mousedown', (e) => {
-  const cw = game.canvasW || window.innerWidth;
-  const mmW = (isMiniZoomed() ? 480 : 240);
-  const mmH = (isMiniZoomed() ? 360 : 180);
-  const r = canvas.getBoundingClientRect();
-  const x = e.clientX - r.left;
-  const y = e.clientY - r.top;
-  if (x > cw - mmW - 12 && y < mmH + 10) toggleMiniZoom();
-}, false);
+  canvas.addEventListener('mousedown', (e) => {
+    const cw = game.canvasW || window.innerWidth;
+    const mmW = (isMiniZoomed() ? 480 : 240);
+    const mmH = (isMiniZoomed() ? 360 : 180);
+    const r = canvas.getBoundingClientRect();
+    const x = e.clientX - r.left;
+    const y = e.clientY - r.top;
+    if (x > cw - mmW - 12 && y < mmH + 10) toggleMiniZoom();
+  }, false);
 
-document.getElementById('mmIn').addEventListener('click', (e) => { setMiniZoom(2); e.stopPropagation(); });
-document.getElementById('mmOut').addEventListener('click', (e) => { setMiniZoom(1); e.stopPropagation(); });
+  const mmIn = document.getElementById('mmIn');
+  const mmOut = document.getElementById('mmOut');
+  if (mmIn) mmIn.addEventListener('click', (e) => { setMiniZoom(2); e.stopPropagation(); });
+  if (mmOut) mmOut.addEventListener('click', (e) => { setMiniZoom(1); e.stopPropagation(); });
+
+  game.ui.showMenu();
+  startLoop();
+}
 
 let lastT = performance.now();
-function loop(t) {
-  const now = t || performance.now();
-  const dt = Math.min((now - lastT) / 1000, 0.05);
-  lastT = now;
-  try {
-    update(game, dt);
-    render(game);
-    renderMinimap(game);
-    updateHudDom(now);
-    renderHud(game);
-    renderCrosshair(game);
-  } catch (err) {
-    console.error('frame error:', err);
+function startLoop() {
+  function loop(t) {
+    const now = t || performance.now();
+    const dt = Math.min((now - lastT) / 1000, 0.05);
+    lastT = now;
+    try {
+      update(game, dt);
+      render(game);
+      renderMinimap(game);
+      updateHudDom(now);
+      renderHud(game);
+      renderCrosshair(game);
+    } catch (err) {
+      console.error('frame error:', err);
+    }
+    requestAnimationFrame(loop);
   }
   requestAnimationFrame(loop);
 }
-requestAnimationFrame(loop);
+
+boot();
 
 window.GAME = {
   startMatch: () => startMatch(game),

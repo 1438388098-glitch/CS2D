@@ -206,7 +206,7 @@ export function botObjectiveRaw(e, game) {
         return { x: e.x + dx / len * 380 + rand(-90, 90), y: e.y + dy / len * 380 + rand(-90, 90) };
       }
     }
-    if (getMap().highPoints && getMap().highPoints.length && e.role === 'a' && !planted && e.highPointT <= 0 && rand() < 0.12) {
+    if (getMap().highPoints && getMap().highPoints.length && e.role === 'a' && !planted && e.highPointT <= 0 && rand() < 0.18) {
       e.highIdx = (e.highIdx || 0) + 1;
       const hp = getMap().highPoints[e.highIdx % getMap().highPoints.length];
       e.highPointT = 8;

@@ -23,7 +23,30 @@ export function initUi(documentRef, canvasRef, gameRef) {
   bindMenu();
   bindOverlays();
   bindSettings();
+  setBusVolumeHook(setBusVolume);
+  bindUiSfx();
   return game.ui;
+}
+
+// UI 音效事件委托：按钮 hover/click
+function bindUiSfx() {
+  if (!doc) return;
+  doc.addEventListener('mouseover', (e) => {
+    const t = e.target;
+    if (t && t.closest && t.closest('.btn, .map-card, .buy-cat, .bi, .mm-btn, .help-btn, .kb-btn')) uiHover();
+  }, false);
+  doc.addEventListener('click', (e) => {
+    const t = e.target;
+    if (t && t.closest && t.closest('.btn, .map-card, .buy-cat, .help-btn, .mm-btn')) uiSfx('click', 0.3);
+  }, false);
+  const startBtn = el('startBtn');
+  if (startBtn) startBtn.addEventListener('click', () => uiSfx('confirm', 0.6));
+  const closeS = el('settingsClose');
+  if (closeS) closeS.addEventListener('click', () => uiSfx('confirm', 0.6));
+  const helpC = el('helpClose');
+  if (helpC) helpC.addEventListener('click', () => uiSfx('confirm', 0.6));
+  const resetB = el('resetBinds');
+  if (resetB) resetB.addEventListener('click', () => uiSfx('confirm', 0.5));
 }
 
 // 事件总线订阅（② 依赖方向反转：逻辑层 emit，UI 订阅渲染）
@@ -101,7 +124,11 @@ function createUiApi() {
       hb.style.display = show ? 'block' : 'none';
       if (show && hf) hf.style.width = pct + '%';
     },
-    showMenu: () => { el('menu') && el('menu').classList.add('show'); game.state = 'MENU'; game.over = false; const ot = el('objtext'); if (ot) ot.style.display = 'none'; uiHideBanner(); },
+    showMenu: () => {
+      el('menu') && el('menu').classList.add('show');
+      stopAmbient();
+      game.state = 'MENU'; game.over = false; const ot = el('objtext'); if (ot) ot.style.display = 'none'; uiHideBanner();
+    },
     hideMenu: () => el('menu') && el('menu').classList.remove('show'),
     hideEnd: () => el('end') && el('end').classList.remove('show'),
     showEnd: () => el('end') && el('end').classList.add('show'),
@@ -140,7 +167,9 @@ function createUiApi() {
       f.className = 'final ' + (win ? 'win' : 'lose');
       el('endScore').textContent = score;
       el('endKd').textContent = kd;
-      el('endMvp').textContent = mvp;
+      const mv = el('endMvp');
+      mv.textContent = mvp;
+      mv.className = 'mvp-line';
       const box = el('endStats');
       if (box) {
         box.innerHTML = '';
@@ -166,6 +195,42 @@ function createUiApi() {
             l2.innerHTML = parts.join(' · ');
             box.appendChild(l2);
           }
+        }
+        // 数据小结四格
+        const grid = el('endGrid');
+        if (grid) {
+          grid.innerHTML = '';
+          const hsRate = stats && stats.headshots > 0 && stats.hits > 0 ? Math.round(stats.headshots / stats.hits * 100) : 0;
+          const accPct = stats && stats.accuracy !== undefined
+            ? Math.round((stats.accuracy > 1 ? stats.accuracy / 100 : stats.accuracy) * 100)
+            : 0;
+          const cells = [
+            { ic: 'ic-skull', v: game.player.kills, l: '击杀' },
+            { ic: 'ic-headshot', v: hsRate + '%', l: '爆头率' },
+            { ic: 'ic-scope', v: accPct + '%', l: '命中率' },
+            { ic: 'ic-step', v: game.player.assists, l: '助攻' }
+          ];
+          for (const c of cells) {
+            const cell = doc.createElement('div');
+            cell.className = 'eg-cell';
+            cell.innerHTML = '<svg class="eg-ic"><use href="assets/icons.svg#' + c.ic + '"/></svg><b>' + c.v + '</b><small>' + c.l + '</small>';
+            grid.appendChild(cell);
+          }
+        }
+        // 比分柱状图
+        const bars = el('endBars');
+        if (bars) {
+          bars.innerHTML = '';
+          const tScore = game.score.T, cScore = game.score.CT;
+          const maxV = Math.max(13, tScore, cScore);
+          const rowT = doc.createElement('div');
+          rowT.className = 'eb-row t';
+          rowT.innerHTML = '<span class="eb-lab">T</span><div class="eb-track"><i style="width:' + (tScore / maxV * 100) + '%"></i></div><b>' + tScore + '</b>';
+          const rowC = doc.createElement('div');
+          rowC.className = 'eb-row c';
+          rowC.innerHTML = '<span class="eb-lab">CT</span><div class="eb-track"><i style="width:' + (cScore / maxV * 100) + '%"></i></div><b>' + cScore + '</b>';
+          bars.appendChild(rowT);
+          bars.appendChild(rowC);
         }
       }
       el('end').classList.add('show');
@@ -235,6 +300,13 @@ export function showDeathInfo(killerName, weaponName, headshot) {
   e.classList.remove('show');
   void e.offsetWidth;
   e.classList.add('show');
+  // 死亡红闪
+  const df = el('deathflash');
+  if (df) {
+    df.classList.remove('go');
+    void df.offsetWidth;
+    df.classList.add('go');
+  }
   clearTimeout(showDeathInfo._t);
   showDeathInfo._t = setTimeout(() => e.classList.remove('show'), 2500);
 }
@@ -372,10 +444,17 @@ export function renderBuyMenu(gameRef) {
     div.appendChild(ic);
     div.appendChild(bn);
     div.appendChild(bp);
-    if (!locked) div.onclick = () => {
-      buyItem(game, id);
-      div.classList.add('flash');
-      setTimeout(() => div.classList.remove('flash'), 260);
+    div.onclick = () => {
+      const ok = buyItem(game, id);
+      if (ok) {
+        uiSfx('confirm', 0.5);
+        div.classList.add('flash');
+        setTimeout(() => div.classList.remove('flash'), 260);
+      } else {
+        uiSfx('error', 0.4);
+        div.classList.add('deny');
+        setTimeout(() => div.classList.remove('deny'), 180);
+      }
     };
     grid.appendChild(div);
   }
@@ -510,15 +589,26 @@ function renderScoreboard(gameRef) {
   }
 }
 
-import { setMuted, initAudio } from './audio.js';
+import { setMuted, initAudio, uiSfx, setBusVolume, stopAmbient } from './audio.js';
 import { startMatch } from './game.js';
 import { buyItem } from './economy.js';
+
+let lastHoverT = 0;
+
+function uiHover() {
+  const now = performance.now();
+  if (now - lastHoverT < 40) return;
+  lastHoverT = now;
+  uiSfx('hover', 0.12);
+}
 
 function bindMenu() {
   if (!doc) return;
   const teamCt = el('teamCt'), teamT = el('teamT');
   const diffN = el('diffN'), diffE = el('diffE'), diffH = el('diffH'), diffHell = el('diffHell');
-  const botSel = el('botSel'), muteBtn = el('muteBtn'), startBtn = el('startBtn');
+  const muteBtn = el('muteBtn'), startBtn = el('startBtn');
+  const tut = el('tutCheck');
+  let tutorialShown = false;
   teamCt.onclick = (e) => {
     game.opts.team = 'ct';
     teamCt.classList.add('sel');
@@ -553,17 +643,15 @@ function bindMenu() {
     };
     if (game.opts.diff === 'hell') showHellRow(true);
   }
-  for (let i = 1; i <= 5; i++) {
-    const b = doc.createElement('button');
-    b.className = 'btn botc' + (i === 4 ? ' sel' : '');
-    b.textContent = i + 'v' + i;
-    b.onclick = (e) => {
-      game.opts.bots = i;
-      for (const c of botSel.children) c.classList.remove('sel');
-      b.classList.add('sel');
-      e.currentTarget.blur();
-    };
-    botSel.appendChild(b);
+  // 每队机器人：−/＋ 步进器（0-9）
+  const botMinus = el('botMinus'), botPlus = el('botPlus'), botVal = el('botVal');
+  const clampBots = (v) => Math.max(0, Math.min(9, Math.round(v)));
+  let bots = clampBots(game.opts.bots === undefined ? 4 : game.opts.bots);
+  if (botVal) {
+    botVal.textContent = bots;
+    const renderBots = () => { botVal.textContent = bots; };
+    if (botMinus) botMinus.onclick = (e) => { bots = clampBots(bots - 1); renderBots(); game.opts.bots = bots; e.currentTarget.blur(); };
+    if (botPlus) botPlus.onclick = (e) => { bots = clampBots(bots + 1); renderBots(); game.opts.bots = bots; e.currentTarget.blur(); };
   }
   muteBtn.onclick = (e) => {
     setMuted(!isMuted());
@@ -585,9 +673,18 @@ function bindMenu() {
     if (savedMap) game.opts.mapId = savedMap;
     for (const c of mapSel.children) c.classList.toggle('sel', c.getAttribute('data-map') === game.opts.mapId);
   }
+  if (tut) {
+    try { tut.checked = localStorage.getItem('cs2d_tutorial') !== '0'; } catch (err) { tut.checked = true; }
+    tut.onchange = () => { try { localStorage.setItem('cs2d_tutorial', tut.checked ? '1' : '0'); } catch (err) { /* no storage */ } };
+  }
   startBtn.onclick = (e) => {
     initAudio();
     startMatch(game);
+    if (tut && tut.checked && !tutorialShown) {
+      const o = el('tutorialOverlay');
+      if (o) o.classList.add('show');
+      tutorialShown = true;
+    }
     e.currentTarget.blur();
   };
 }
@@ -599,6 +696,14 @@ function bindOverlays() {
   el('quitBtn').onclick = (e) => { game.ui.unpause(); game.ui.showMenu(); e.currentTarget.blur(); };
   el('againBtn').onclick = (e) => { game.ui.hideEnd(); startMatch(game); e.currentTarget.blur(); };
   el('endMenuBtn').onclick = (e) => { game.ui.hideEnd(); game.ui.showMenu(); e.currentTarget.blur(); };
+  const tutorialOverlay = el('tutorialOverlay');
+  const tutorialClose = el('tutorialClose');
+  if (tutorialOverlay) {
+    if (tutorialClose) tutorialClose.onclick = () => tutorialOverlay.classList.remove('show');
+    tutorialOverlay.addEventListener('mousedown', (e) => {
+      if (e.target === tutorialOverlay) tutorialOverlay.classList.remove('show');
+    }, false);
+  }
   const helpBtn = el('helpBtn');
   const helpOverlay = el('helpOverlay');
   const helpClose = el('helpClose');
@@ -663,7 +768,8 @@ function bindSettings() {
   };
   // 音量滑杆
   const prefs = getAudioPrefs();
-  for (const s of doc.querySelectorAll('.vol-slider')) {
+  const sliders = typeof doc.querySelectorAll === 'function' ? doc.querySelectorAll('.vol-slider') : [];
+  for (const s of sliders) {
     const bus = s.getAttribute('data-bus');
     s.value = prefs[bus] !== undefined ? prefs[bus] : 1;
     s.addEventListener('input', () => {

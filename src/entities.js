@@ -30,7 +30,7 @@ export function createEntity(team, bot) {
     memory: [],
     decT: 0,
     height: 0, stunT: 0, splashCd: 0, highPointT: 0, highIdx: 0,
-    prefireT: 0, prefireX: 0, prefireY: 0, prefireCount: 0, barrelT: 0, botThreatT: 0,
+    prefireT: 0, prefireX: 0, prefireY: 0, prefireCount: 0, barrelT: 0, crateT: 0, botThreatT: 0,
   };
 }
 

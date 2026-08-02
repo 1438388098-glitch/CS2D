@@ -12,6 +12,7 @@
   <div id="vignette"></div>
   <div id="dmgv"></div>
   <div id="lowhp"></div>
+  <div id="deathflash"></div>
   <div id="flash"></div>
 
   <div id="hud-root" style="display:none">
@@ -129,11 +130,16 @@
             <input type="range" id="hellSlider" min="1" max="11" value="3" step="1">
             <span class="hell-val" id="hellVal">H3</span>
           </div></div>
-          <div class="row"><label>每队机器人</label><div id="botSel"></div></div>
+          <div class="row"><label>每队机器人</label><div class="bot-stepper">
+            <button class="stepper-btn" id="botMinus">−</button>
+            <span class="stepper-val" id="botVal">4</span>
+            <button class="stepper-btn" id="botPlus">＋</button>
+          </div></div>
           <div class="row"><label>声音</label>
             <button class="btn small" id="muteBtn"><svg class="ic"><use href="assets/icons.svg#ic-volume"/></svg><span id="muteLabel">开</span></button>
           </div>
           <button class="btn" id="settingsBtn"><svg class="ic"><use href="assets/icons.svg#ic-gear"/></svg>设 置</button>
+          <div class="row"><label class="check-row"><input type="checkbox" id="tutCheck" checked> 新手提示</label></div>
           <button class="btn primary" id="startBtn">开 始 比 赛</button>
         </div>
       </div>
@@ -169,6 +175,19 @@
     </div>
   </div>
 
+  <div class="ov" id="tutorialOverlay">
+    <div class="panel tutorial-panel">
+      <h3 class="help-title">新手提示</h3>
+      <div class="ctrl-list">
+        <div><b>W A S D</b> 移动 · <b>鼠标</b> 瞄准 · <b>左键</b> 射击</div>
+        <div><b>E</b> 安装 / 拆除炸弹 · <b>B</b> 购买装备</div>
+        <div><b>F1-F4</b> 指挥队友 · <b>Tab</b> 计分板</div>
+        <div>目标：守住或占领 A/B 点，先赢 13 回合。</div>
+        <div>提示：薄墙可穿射，深水可静音潜行，木箱可破坏。</div>
+      </div>
+      <button class="btn primary" id="tutorialClose" style="margin-top:16px">开始行动</button>
+    </div>
+  </div>
   <div class="ov" id="pause">
     <div class="panel">
       <h2 style="letter-spacing:6px;color:#fff;margin-bottom:14px">已暂停</h2>
@@ -230,11 +249,13 @@
   </div>
 
   <div class="ov" id="end">
-    <div class="panel">
+    <div class="panel end-panel">
       <div class="final" id="endFinal"></div>
       <div class="stat-line">比分 <b id="endScore"></b></div>
       <div class="stat-line">你的战绩 <b id="endKd"></b></div>
-      <div class="stat-line">MVP <b id="endMvp"></b></div>
+      <div class="stat-line">MVP <b id="endMvp" class="mvp-line"></b></div>
+      <div class="end-grid" id="endGrid"></div>
+      <div class="end-bars" id="endBars"></div>
       <div id="endStats"></div>
       <button class="btn primary" id="againBtn" style="margin-top:16px">再战一局</button>
       <button class="btn" id="endMenuBtn">返回主菜单</button>

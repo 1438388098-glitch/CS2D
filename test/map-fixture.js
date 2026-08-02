@@ -13,7 +13,8 @@ export const MECH_TEST_ROWS = (() => {
   for (let i = 0; i < 6; i++) rows.push(water);
   rows.push('#'.repeat(31));
   rows.push('#........^....o....#..........#');
-  for (let i = 0; i < 8; i++) rows.push('#........^.........#..........#');
+  rows.push('#........^...D.....#..........#');
+  for (let i = 0; i < 7; i++) rows.push('#........^.........#..........#');
   rows.push('#'.repeat(31));
   return rows;
 })();

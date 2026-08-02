@@ -332,6 +332,7 @@ T('mech-tile-semantics', () => {
   const pathThrough = aStar(8, 19, 20, 19);
   if (pathThrough !== null) throw new Error('路径不应穿越 ^ 高台');
   if (getMap().barrels.length !== 1 || getMap().barrels[0].hp !== 2) throw new Error('油桶扫描应为 1 个 hp=2');
+  if (getMap().crates.length !== 1 || getMap().crates[0].hp !== 2) throw new Error('木箱扫描应为 1 个 hp=2');
   loadMap(findMapById('dust2'));
 });
 
@@ -547,11 +548,57 @@ T('barrel', () => {
   loadMap(findMapById('dust2'));
 });
 
+T('crate', () => {
+  loadMap(findMapById('mech-test'));
+  const g = createGame();
+  g.opts.mapId = 'mech-test';
+  startMatch(g);
+  if (!g.crates || g.crates.length !== 1) throw new Error('木箱应初始化为 1 个');
+  const b = g.entities.find((e) => e.bot && e.team === 't');
+  b.weapons.primary = 'ak'; b.slot = 'primary'; b.ammoMap.ak = 10;
+  b.x = 300; b.y = 820; b.dead = false; b.usedNadeRound = g.round; b.hasBomb = false;
+  b.fireCd = 0;
+  for (const o of g.entities) if (o !== b && o.bot) o.dead = true;
+  b.angle = 0;
+  fireWeapon(b, g);
+  if (g.crates[0].hp !== 1) throw new Error('第一发应使木箱 hp=1, got ' + g.crates[0].hp);
+  b.fireCd = 0;
+  fireWeapon(b, g);
+  if (g.crates.length !== 0) throw new Error('第二发应摧毁木箱');
+  if (tileAt(540, 820) !== '.') throw new Error('摧毁后应为可走地面: ' + tileAt(540, 820));
+  loadMap(findMapById('dust2'));
+});
+
+T('ai-crate', () => {
+  loadMap(findMapById('mech-test'));
+  const g = createGame();
+  g.opts.mapId = 'mech-test';
+  startMatch(g);
+  g.buyTime = 0;
+  g.freezeT = 0;
+  const b = g.entities.find((e) => e.bot && e.team === 't');
+  b.weapons.primary = 'ak'; b.slot = 'primary'; b.ammoMap.ak = 30;
+  b.x = 300; b.y = 820; b.dead = false; b.usedNadeRound = g.round; b.hasBomb = false;
+  b.role = 'mid'; b.shotStreak = 1; b.fireCd = 0;
+  for (const o of g.entities) if (o !== b && o.bot) o.dead = true;
+  const ct = g.entities.find((e) => e.bot && e.team === 'ct');
+  ct.x = 700; ct.y = 820; ct.dead = false; ct.hp = 100; ct.role = 'mid';
+  b.aimTarget = ct;
+  let guard = 0;
+  while (g.crates.length > 0 && guard++ < 900) {
+    update(g, 1 / 30);
+    if (b.aimTarget === null && g.crates.length > 0 && b.crateT <= 0) b.aimTarget = ct;
+    b.x = 300; b.y = 820; b.vx = 0; b.vy = 0;
+    ct.x = 700; ct.y = 820; ct.vx = 0; ct.vy = 0;
+  }
+  if (g.crates.length !== 0) throw new Error('AI 应能打掉木箱');
+  loadMap(findMapById('dust2'));
+});
 T('ai-mechanics', () => {
   const g = createGame();
   startMatch(g);
   const b = g.entities.find((e) => e.bot && e.team === 'ct');
-  if (!('prefireCount' in b && 'highPointT' in b && 'splashCd' in b)) {
+  if (!('prefireCount' in b && 'highPointT' in b && 'splashCd' in b && 'crateT' in b)) {
     throw new Error('AI 机制字段缺失');
   }
   loadMap(findMapById('mech-test'));

@@ -24,6 +24,7 @@ export function botActions(e, game, dt) {
   if (e.highPointT > 0) e.highPointT -= dt;
   if (e.barrelT > 0) e.barrelT -= dt;
   if (e.botThreatT > 0) e.botThreatT -= dt;
+  if (e.crateT > 0) e.crateT -= dt;
   if (!e.weapons.primary) pickupWeapon(e, game);
   if (e.plantRetryT > 0) e.plantRetryT -= dt;
   // CT 队长（IGL）决策：回合中后期 T 方无动静 → 拍板全体前压（每 5s 重评估）
@@ -167,7 +168,7 @@ export function botActions(e, game, dt) {
   }
   if (e.fireCd > 0) e.fireCd -= dt;
   // 设计意图：bot 后坐力恢复比玩家慢（1.2 vs 玩家 RECOIL_RECOVER 2.2），克制 AI 火力
-  if (e.recoil > 0) e.recoil -= dt * 1.2;
+  if (e.recoil > 0) e.recoil -= dt * 1.2 * (e.recoil > 1.1 ? 1.8 : 0.55);
   if (e.muzzleT > 0) e.muzzleT -= dt;
   if (e.aimTarget && e.barrelT <= 0 && rand() < 0.4 && (e.weapons.primary || e.weapons.secondary)) {
     const near = game.barrels.find((bl) =>
@@ -176,6 +177,20 @@ export function botActions(e, game, dt) {
     if (near) {
       e.barrelT = 1.5;
       const dx = near.x - e.x, dy = near.y - e.y;
+      e.angle = angNorm(Math.atan2(dy, dx));
+      e.shotStreak = 0;
+      e.aimTarget = null;
+      e.trigger = true;
+    }
+  }
+  if (e.aimTarget && e.crateT <= 0 && rand() < 0.1 && (e.weapons.primary || e.weapons.secondary)) {
+    const nearCrate = game.crates.find((cr) =>
+      Math.hypot(cr.x - e.aimTarget.x, cr.y - e.aimTarget.y) < 220 &&
+      los(game, e.x, e.y, cr.x, cr.y, e.height) &&
+      !game.entities.some((o) => o.bot && !o.dead && o.team === e.team && Math.hypot(o.x - cr.x, o.y - cr.y) < 200));
+    if (nearCrate) {
+      e.crateT = 1.8;
+      const dx = nearCrate.x - e.x, dy = nearCrate.y - e.y;
       e.angle = angNorm(Math.atan2(dy, dx));
       e.shotStreak = 0;
       e.aimTarget = null;

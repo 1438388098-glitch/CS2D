@@ -138,6 +138,22 @@ export function renderMinimap(game) {
     }
   }
 
+  if (game.crates) {
+    mctx.fillStyle = 'rgba(158,116,64,0.95)';
+    for (const c of game.crates) {
+      mctx.fillRect(ox + c.x * s - 1.5, oy + c.y * s - 1.5, 3, 3);
+    }
+  }
+  if (p && p.dead) {
+    mctx.fillStyle = 'rgba(255,255,255,0.85)';
+    mctx.font = '9px Segoe UI,Microsoft YaHei,sans-serif';
+    mctx.textAlign = 'left';
+    mctx.textBaseline = 'top';
+    for (const e of game.entities) {
+      if (e.dead || e.team !== p.team) continue;
+      mctx.fillText(e.name, ox + e.x * s + 5, oy + e.y * s - 4);
+    }
+  }
   if (game.bomb && (game.bomb.dropped || game.bomb.planted)) {
     const blink = Math.sin(now / 160) > 0;
     const bx = ox + game.bomb.x * s;
@@ -210,7 +226,15 @@ export function renderHud(game) {
     ctx.stroke();
   }
   // 狙击镜
-  if (p && !p.dead && p.scoped) {
+  if (game.killRingT > 0) {
+    const kt = 0.7 - game.killRingT;
+    const pr = Math.min(1, Math.max(0, kt / 0.35));
+    ctx.strokeStyle = 'rgba(255,210,90,' + ((1 - pr) * 0.9) + ')';
+    ctx.lineWidth = 2.5;
+    ctx.beginPath();
+    ctx.arc(game.input.mouse.x, game.input.mouse.y, 20 + pr * 55, 0, Math.PI * 2);
+    ctx.stroke();
+  }  if (p && !p.dead && p.scoped) {
     const wd = weaponDef(p);
     if (wd && wd.kind === 'sniper') {
       const cx = game.input.mouse.x;
@@ -252,6 +276,7 @@ export function renderCrosshair(game) {
   const spreadPx = Math.tan(((spread + recoilDeg) * Math.PI) / 180) * dist;
   let gap = 6 + clamp(spreadPx, 0, 260) + (p.scoped ? 2 : 0);
   if (p.hp <= 25) gap = Math.max(3, gap - 2);
+  if (game.dmgSpreadT > 0) gap += clamp(game.dmgSpreadT * 34, 0, 34);
   const len = 7;
   ctx.save();
   ctx.strokeStyle = 'rgba(0,0,0,0.6)';

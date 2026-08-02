@@ -153,6 +153,15 @@ export function loadMap(mapDef) {
       }
       return list;
     })(),
+    crates: (() => {
+      const list = [];
+      for (let ty = 0; ty < rows.length; ty++) {
+        for (let tx = 0; tx < rows[ty].length; tx++) {
+          if (rows[ty][tx] === 'D') list.push({ tx, ty, x: tx * TILE + TILE / 2, y: ty * TILE + TILE / 2, hp: 2 });
+        }
+      }
+      return list;
+    })(),
     penPoints: mapDef.penPoints || [],
     highPoints: mapDef.highPoints || [],
     diagnostics: diag

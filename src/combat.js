@@ -1,11 +1,11 @@
-﻿import { WEAPONS, ECONOMY, DIFF, diffOf, MAX_DECALS, TILE } from './config.js';
+import { WEAPONS, ECONOMY, DIFF, diffOf, MAX_DECALS, TILE } from './config.js';
 import { passableTolerant, collideCircle, los, tileAt, getGrid } from './map.js';
 import { weaponDef, wkey, ammoFor, reserveFor } from './entities.js';
 import { ctx } from './ctx.js';
 import { clamp, rand, angDiff, viewCap } from './utils.js';
 import { report, MSG } from './info.js';
 
-import { endRound } from './game.js';
+import { endRound, spawnParticle } from './game.js';
 import { dropBomb } from './bomb.js';
 import { throwGrenade } from './grenades.js';
 import { effectiveSpread, registerShot, updateShotStreak, headshotChance } from './ballistic.js';
@@ -31,9 +31,10 @@ export function startReload(e, game) {
   emit('sfx', { name: 'reload', vol: 0.5, x: e.x, y: e.y, game });
 }
 
-export function finishReload(e) {
+export function finishReload(e, game) {
   const w = weaponDef(e);
   if (!w || w.mag <= 0) { e.reloading = false; return; }
+  if (game) emit('sfx', { name: 'reloadEnd', vol: 0.4, x: e.x, y: e.y, game });
   const k = wkey(e);
   const need = w.mag - (e.ammoMap[k] || 0);
   const r = e.reserveMap[k] === undefined ? w.reserve : e.reserveMap[k];
@@ -63,6 +64,7 @@ export function fireWeapon(e, game) {
   if (w.mag > 0) {
     if (e.ammoMap[k] === undefined) e.ammoMap[k] = w.mag;
     if (e.ammoMap[k] <= 0) {
+      emit('sfx', { name: 'empty', vol: 0.5, x: e.x, y: e.y, game });
       startReload(e, game);
       return;
     }
@@ -88,18 +90,18 @@ export function fireWeapon(e, game) {
   e.lastShot = game.time * 1000;
   e.muzzleT = 0.06;
   if (!e.bot) {
-    game.particles.push({ kind: 'shell', x: e.x + Math.cos(e.angle + 1.4) * 10, y: e.y + Math.sin(e.angle + 1.4) * 10, vx: Math.cos(e.angle + rand(1, 2.2)) * rand(60, 140), vy: Math.sin(e.angle + rand(1, 2.2)) * rand(60, 140), life: 0.5, size: 2, spin: rand(0, Math.PI * 2) });
+    spawnParticle(game, { kind: 'shell', x: e.x + Math.cos(e.angle + 1.4) * 10, y: e.y + Math.sin(e.angle + 1.4) * 10, vx: Math.cos(e.angle + rand(1, 2.2)) * rand(60, 140), vy: Math.sin(e.angle + rand(1, 2.2)) * rand(60, 140), life: 0.5, size: 2, spin: rand(0, Math.PI * 2) });
   }
   if (w.kind === 'sniper') {
     e.scoped = false;
-    emit('sfx', { name: 'awp', vol: 0.9, x: e.x, y: e.y, game });
+    emit('sfx', { name: 'awp', vol: 0.9, x: e.x, y: e.y, game, wid: e.weapons.primary || e.weapons.secondary });
     game.shake = Math.max(game.shake, 5);
   } else if (w.kind === 'shotgun') {
-    emit('sfx', { name: 'shotgun', vol: 0.9, x: e.x, y: e.y, game });
+    emit('sfx', { name: 'shotgun', vol: 0.9, x: e.x, y: e.y, game, wid: e.weapons.primary || e.weapons.secondary });
   } else if (w.kind === 'pistol' || w.kind === 'smg') {
-    emit('sfx', { name: 'pistol', vol: 0.8, x: e.x, y: e.y, game });
+    emit('sfx', { name: 'pistol', vol: 0.8, x: e.x, y: e.y, game, wid: e.weapons.primary || e.weapons.secondary });
   } else {
-    emit('sfx', { name: 'shot', vol: 0.85, x: e.x, y: e.y, game });
+    emit('sfx', { name: 'shot', vol: 0.85, x: e.x, y: e.y, game, wid: e.weapons.primary || e.weapons.secondary });
   }
   const expRad = Math.min(
     w.kind === 'rifle' ? 950 : (w.kind === 'sniper' ? 1300 : (w.kind === 'smg' ? 700 : (w.kind === 'pistol' ? 450 : (w.kind === 'shotgun' ? 500 : 0)))),
@@ -137,7 +139,7 @@ function meleeAttack(e, game) {
   else emit('sfx', { name: 'knife', vol: 0.5, x: e.x, y: e.y, game });
   for (let i = 0; i < 5; i++) {
     const a = e.angle + rand(-0.5, 0.5);
-    game.particles.push({ kind: 'swing', x: e.x + Math.cos(a) * 40, y: e.y + Math.sin(a) * 40, vx: Math.cos(a) * 100, vy: Math.sin(a) * 100, life: 0.15, size: 2 });
+    spawnParticle(game, { kind: 'swing', x: e.x + Math.cos(a) * 40, y: e.y + Math.sin(a) * 40, vx: Math.cos(a) * 100, vy: Math.sin(a) * 100, life: 0.15, size: 2 });
   }
 }
 
@@ -175,6 +177,7 @@ function fireRay(e, game, ang, w, dmg, isPellet) {
     }
     inWall = false;
     if (c === 'C' && e.height === 1) continue;
+    if (c === 'D') { hitCrateByShot(game, px, py, e); wallT = s * 6; break; }
     // 深水挡弹（spec 4.3：水下隐蔽 + 弹丸被水阻挡）；浅水 ~ 可穿透
     if (c === '≈') { wallT = s * 6; break; }
     if (!passableTolerant(px, py)) {
@@ -216,7 +219,7 @@ function fireRay(e, game, ang, w, dmg, isPellet) {
     game.tracers.push({ x1: ox, y1: oy, x2: tx, y2: ty, life: 0.09, team: e.team });
     addDecal(game, tx, ty, 'spark');
     for (let sp = 0; sp < 6; sp++) {
-      game.particles.push({ kind: 'spark', x: tx, y: ty, vx: Math.cos(ang + rand(-1, 1)) * rand(60, 260), vy: Math.sin(ang + rand(-1, 1)) * rand(60, 260), life: rand(0.1, 0.3), size: 1.5 });
+      spawnParticle(game, { kind: 'spark', x: tx, y: ty, vx: Math.cos(ang + rand(-1, 1)) * rand(60, 260), vy: Math.sin(ang + rand(-1, 1)) * rand(60, 260), life: rand(0.1, 0.3), size: 1.5 });
     }
   }
   if (e.bot && game.player && !game.player.dead && game.player.team !== e.team) {
@@ -241,6 +244,47 @@ export function barrelAt(game, px, py) {
   return null;
 }
 
+export function crateAt(game, px, py) {
+  if (!game.crates) return null;
+  const tx = Math.floor(px / TILE), ty = Math.floor(py / TILE);
+  for (const c of game.crates) if (c.tx === tx && c.ty === ty) return c;
+  return null;
+}
+
+export function damageCrate(game, c, dmg, shooter) {
+  if (!c) return;
+  c.hp -= dmg;
+  emit('sfx', { name: 'crateHit', vol: 0.45, x: c.x, y: c.y, game });
+  for (let i = 0; i < 3; i++) {
+    spawnParticle(game, { kind: 'wood', x: c.x, y: c.y, vx: rand(-70, 70), vy: rand(-90, -10), life: 0.35, size: rand(2, 4) });
+  }
+  if (c.hp <= 0) destroyCrate(game, c, shooter);
+}
+
+export function hitCrateByShot(game, px, py, shooter) {
+  const c = crateAt(game, px, py);
+  if (!c) return;
+  damageCrate(game, c, 1, shooter);
+}
+
+export function destroyCrate(game, c, shooter) {
+  game.crates = game.crates.filter((x) => x !== c);
+  const grid = getGrid();
+  grid[c.ty][c.tx] = '.';
+  emit('sfx', { name: 'crateBreak', vol: 0.7, x: c.x, y: c.y, game });
+  for (let i = 0; i < 10; i++) {
+    spawnParticle(game, { kind: 'wood', x: c.x, y: c.y, vx: rand(-140, 140), vy: rand(-220, -20), life: rand(0.3, 0.6), size: rand(2, 5) });
+  }
+  for (const o of game.entities) {
+    if (o.bot && !o.dead && o.team !== shooter.team && Math.hypot(o.x - c.x, o.y - c.y) < 1200) {
+      if (!los(game, c.x, c.y, o.x, o.y)) continue;
+      o.lastKnown = { x: c.x, y: c.y };
+      o.lastKnownT = 0;
+      if (o.aimTarget === null && o.path !== null) o.path = null;
+    }
+  }
+}
+
 export function hitBarrelByShot(game, px, py, shooter) {
   const b = barrelAt(game, px, py);
   if (!b) return;
@@ -255,9 +299,12 @@ export function explodeBarrel(game, b, shooter) {
   grid[b.ty][b.tx] = '.';
   emit('sfx', { name: 'boom', vol: 1, x: b.x, y: b.y, game });
   game.shake = Math.max(game.shake, 8);
+  for (const c of game.crates.slice()) {
+    if (Math.hypot(c.x - b.x, c.y - b.y) < 160) damageCrate(game, c, 2, shooter);
+  }
   for (let i = 0; i < 6; i++) {
-    game.particles.push({ kind: 'boom', x: b.x, y: b.y, vx: 0, vy: 0, life: 0.5, size: 160 });
-    game.particles.push({ kind: 'fire', x: b.x + rand(-40, 40), y: b.y + rand(-40, 40), vx: rand(-60, 60), vy: rand(-80, 0), life: 0.6, size: 18 });
+    spawnParticle(game, { kind: 'boom', x: b.x, y: b.y, vx: 0, vy: 0, life: 0.5, size: 160 });
+    spawnParticle(game, { kind: 'fire', x: b.x + rand(-40, 40), y: b.y + rand(-40, 40), vx: rand(-60, 60), vy: rand(-80, 0), life: 0.6, size: 18 });
   }
   for (const o of game.entities) {
     if (o.dead) continue;
@@ -303,7 +350,11 @@ export function applyDamage(v, dmg, opt, game) {
       game.player.dmgGiven = (game.player.dmgGiven || 0) + hpLoss;
       if (head) game.player.dmgHeads = (game.player.dmgHeads || 0) + 1;
     }
-    if (opt.killer.bot && v === game.player) game.dmgT = 0.5;
+    if (opt.killer.bot && v === game.player) {
+      game.dmgT = 0.5;
+      game.dmgSpreadT = Math.max(game.dmgSpreadT || 0, head ? 0.9 : 0.55);
+      game.shake = Math.max(game.shake, head ? 8 : 4);
+    }
   }
   v.armor = Math.max(0, v.armor - armLoss);
   v.hp -= hpLoss;
@@ -343,6 +394,7 @@ export function killEntity(v, killer, weapon, head, game) {
   }
   if (killer === game.player) {
     emit('sfx', { name: 'kill', vol: 0.6, game });
+    game.killRingT = 0.7;
     killer.streak = (killer.streak || 0) + 1;
     killer.wKills[weapon] = (killer.wKills[weapon] || 0) + 1;
     if (head) game.stats.headshots++;
@@ -460,7 +512,7 @@ export function redrawDecals(game) {
 function spawnBlood(x, y, ang, head, game) {
   const n = head ? 18 : 10;
   for (let i = 0; i < n; i++) {
-    game.particles.push({ kind: 'blood', x, y, vx: Math.cos(ang + rand(-0.8, 0.8)) * rand(40, 220), vy: Math.sin(ang + rand(-0.8, 0.8)) * rand(40, 220), life: rand(0.3, 0.7), size: rand(1.5, 3.5) });
+    spawnParticle(game, { kind: 'blood', x, y, vx: Math.cos(ang + rand(-0.8, 0.8)) * rand(40, 220), vy: Math.sin(ang + rand(-0.8, 0.8)) * rand(40, 220), life: rand(0.3, 0.7), size: rand(1.5, 3.5) });
   }
 }
 

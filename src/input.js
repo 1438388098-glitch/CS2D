@@ -1,5 +1,5 @@
 import { startReload, fireWeapon } from './combat.js';
-import { initAudio, setMuted } from './audio.js';
+import { initAudio, setMuted, uiSfx } from './audio.js';
 import { isMiniZoomed } from './hud.js';
 import { matches } from './keymap.js';
 import { setPlayerOrder } from './ai.js';
@@ -21,7 +21,7 @@ export function initInput(game, canvasRef) {
     if (e.code === 'F4') setPlayerOrder(game, 'hold');
     if (matches(e.code, 'buy')) {
       if (game.ui.isBuyOpen()) game.ui.closeBuy();
-      else game.ui.openBuy();
+      else { game.ui.openBuy(); uiSfx('panel', 0.3); }
     }
     if (/^Digit[1-7]$/.test(e.code) && game.ui.isBuyOpen()) {
       e.preventDefault();
@@ -29,6 +29,7 @@ export function initInput(game, canvasRef) {
     }
     if (matches(e.code, 'scoreboard')) {
       e.preventDefault();
+      uiSfx('panel', 0.25);
       game.ui.toggleScoreboard(true);
     }
     if (matches(e.code, 'pause')) {

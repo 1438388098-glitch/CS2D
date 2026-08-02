@@ -1,7 +1,7 @@
-﻿import { ROUND, ECONOMY } from './config.js';
+import { ROUND, ECONOMY } from './config.js';
 import { inSite, los, getMap } from './map.js';
 import { applyDamage } from './combat.js';
-import { endRound } from './game.js';
+import { endRound, spawnParticle } from './game.js';
 
 import { ctx } from './ctx.js';
 import { clamp, rand } from './utils.js';
@@ -46,7 +46,7 @@ export function plantBomb(e, game) {
     e.plants++;
     e.money = clamp(e.money + ECONOMY.PLANT_MONEY, 0, ECONOMY.MONEY_CAP);
     emit('sysfeed', { text: 'Bomb has been planted at ' + (s.label === 'A' ? 'A' : 'B') });
-    emit('sfx', { name: 'plant', vol: 0.9, x: e.x, y: e.y, game });
+    emit('sfx', { name: 'bombPlanted', vol: 0.9, x: e.x, y: e.y, game });
   }
 }
 
@@ -82,14 +82,14 @@ export function explodeBomb(game) {
   b.planted = false;
   emit('sfx', { name: 'boom', vol: 1.3, x: b.x, y: b.y, game });
   game.shake = Math.max(game.shake, 14);
-  game.particles.push({ kind: 'boom', x: b.x, y: b.y, life: 0.5, size: 300 });
+  spawnParticle(game, { kind: 'boom', x: b.x, y: b.y, life: 0.5, size: 300 });
   for (let i = 0; i < 40; i++) {
     const a = rand() * Math.PI * 2;
-    game.particles.push({ kind: 'fire', x: b.x, y: b.y, vx: Math.cos(a) * rand(100, 420), vy: Math.sin(a) * rand(100, 420), life: rand(0.2, 0.6), size: rand(3, 7) });
+    spawnParticle(game, { kind: 'fire', x: b.x, y: b.y, vx: Math.cos(a) * rand(100, 420), vy: Math.sin(a) * rand(100, 420), life: rand(0.2, 0.6), size: rand(3, 7) });
   }
   for (let j = 0; j < 14; j++) {
     const a2 = rand() * Math.PI * 2;
-    game.particles.push({ kind: 'smokep', x: b.x + Math.cos(a2) * 40, y: b.y + Math.sin(a2) * 40, vx: Math.cos(a2) * rand(30, 120), vy: Math.sin(a2) * rand(30, 120), life: rand(1.2, 2.4), size: rand(6, 14) });
+    spawnParticle(game, { kind: 'smokep', x: b.x + Math.cos(a2) * 40, y: b.y + Math.sin(a2) * 40, vx: Math.cos(a2) * rand(30, 120), vy: Math.sin(a2) * rand(30, 120), life: rand(1.2, 2.4), size: rand(6, 14) });
   }
   for (const e of game.entities) {
     if (e.dead) continue;

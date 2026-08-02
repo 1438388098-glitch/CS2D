@@ -16,11 +16,12 @@ function tanh(x) { return Math.tanh(x); }
 function dtanh(x) { const t = Math.tanh(x); return 1 - t * t; }
 
 export class DQN {
-  constructor({ input, hidden, output, lr = DQN_LEARN_RATE }) {
+  constructor({ input, hidden, output, lr = DQN_LEARN_RATE, gamma = DQN_GAMMA }) {
     this.input = input;
     this.hidden = hidden;
     this.output = output;
     this.lr = lr;
+    this.gamma = gamma;
     this.reset();
   }
 
@@ -76,7 +77,7 @@ export class DQN {
       const q2 = this.forward(s2);
       let maxQ2 = -Infinity;
       for (let k = 0; k < q2.length; k++) if (q2[k] > maxQ2) maxQ2 = q2[k];
-      target = r + DQN_GAMMA * maxQ2;
+      target = r + this.gamma * maxQ2;
     }
     const qs = this.forward(s);
     const hAct = this.hAct;

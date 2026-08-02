@@ -1,4 +1,4 @@
-﻿import { ROUND, ECONOMY, MAX_PARTICLES, resolveDiff } from './config.js';
+import { ROUND, ECONOMY, MAX_PARTICLES, resolveDiff } from './config.js';
 import { getMap, loadMap, findMapById, collideCircle, los, pathTo, tileAt } from './map.js';
 import { createEntity, spawnEntity, weaponDef, ammoFor } from './entities.js';
 import { fireWeapon, startReload, finishReload, pickupWeapon, RECOIL_RECOVER } from './combat.js';
@@ -18,14 +18,14 @@ const emit = (evt, p) => ctx.bus.emit(evt, p);
 export function createGame(opts = {}) {
   const game = {
     state: 'MENU',
-    entities: [], grenades: [], particles: [], tracers: [], smokes: [], decals: [], drops: [], barrels: [],
+    entities: [], grenades: [], particles: [], tracers: [], smokes: [], decals: [], drops: [], barrels: [], crates: [], _particlePool: [],
     lastSplash: null,
     player: null,
     camX: 1200, camY: 900,
     round: 0, roundTime: 0, roundDur: ROUND.DURATION, buyTime: 0,
     freezeT: 0, endedT: 0,
     score: { T: 0, CT: 0 },
-    bomb: null, flashT: 0, dmgT: 0, shake: 0,
+    bomb: null, flashT: 0, dmgT: 0, shake: 0, dmgSpreadT: 0, killRingT: 0,
     over: false, spectateIdx: 0, lastPlantSite: null, dt: 0.016,
     lossStreakT: 0, lossStreakCT: 0,
     hitMarkT: 0, zoom: 1,
@@ -56,6 +56,14 @@ export function setLayers(game, layers) {
   game.camY = clamp(game.camY, 0, Math.max(0, game.mapH));
 }
 
+export function spawnParticle(game, props) {
+  if (!game._particlePool) game._particlePool = [];
+  const p = game._particlePool.pop() || {};
+  Object.assign(p, props);
+  game.particles.push(p);
+  return p;
+}
+
 export function startMatch(game) {
   const ui = game.ui;
   if (ui) {
@@ -83,6 +91,7 @@ export function startMatch(game) {
   game.mapW = getMap().W;
   game.mapH = getMap().H;
   game.barrels = (getMap().barrels || []).map((b) => ({ ...b }));
+  game.crates = (getMap().crates || []).map((c) => ({ ...c }));
   if (game.onMapChanged) game.onMapChanged(getMap());
   const human = createEntity(game.opts.team, false);
   game.player = human;
@@ -115,6 +124,8 @@ function spawnRound(game) {
   game.bomb = null;
   game.smokes.length = 0;
   game.grenades.length = 0;
+  game._particlePool = game._particlePool || [];
+  game._particlePool.push(...game.particles);
   game.particles.length = 0;
   game.tracers.length = 0;
   game.drops.length = 0;
@@ -284,7 +295,7 @@ export function update(game, dt) {
       e.splashCd = 0.5;
       game.lastSplash = { team: e.team, x: e.x, y: e.y, t: game.time };
       for (let i = 0; i < 4; i++) {
-        game.particles.push({ kind: 'splash', x: e.x + rand(-8, 8), y: e.y + rand(-4, 6), vx: rand(-40, 40), vy: rand(-140, -40), life: 0.4, size: rand(2, 4) });
+        spawnParticle(game, { kind: 'splash', x: e.x + rand(-8, 8), y: e.y + rand(-4, 6), vx: rand(-40, 40), vy: rand(-140, -40), life: 0.4, size: rand(2, 4) });
       }
       emit('sfx', { name: 'splash', vol: 0.5, x: e.x, y: e.y, game });
     }
@@ -301,11 +312,11 @@ export function update(game, dt) {
       }
     }
   }
-  if (game.particles.length > MAX_PARTICLES) game.particles.splice(0, game.particles.length - MAX_PARTICLES);
+  while (game.particles.length > MAX_PARTICLES) { game._particlePool.push(game.particles.shift()); }
   for (let i = game.particles.length - 1; i >= 0; i--) {
     const pa = game.particles[i];
     pa.life -= dt;
-    if (pa.life <= 0) { game.particles.splice(i, 1); continue; }
+    if (pa.life <= 0) { game._particlePool.push(pa); game.particles[i] = game.particles[game.particles.length - 1]; game.particles.pop(); continue; }
     pa.x += pa.vx * dt;
     pa.y += pa.vy * dt;
     pa.vx *= Math.max(0, 1 - 3 * dt);
@@ -323,6 +334,8 @@ export function update(game, dt) {
   }
   if (game.shake > 0) game.shake = Math.max(0, game.shake - dt * 20);
   if (game.dmgT > 0) game.dmgT -= dt;
+  if (game.dmgSpreadT > 0) game.dmgSpreadT -= dt;
+  if (game.killRingT > 0) game.killRingT -= dt;
   if (game.hitMarkT > 0) game.hitMarkT -= dt;
   if (game.flashT > 0) {
     game.flashT -= dt;
@@ -333,7 +346,8 @@ export function update(game, dt) {
   emit('dmg', { opacity: clamp(game.dmgT * 2, 0, 1) });
   const pl = game.player;
   if (pl && !pl.dead && pl.hp <= 25) {
-    emit('lowhp', { opacity: 0.35 + 0.2 * Math.sin(performance.now() / 150) });
+    const hpRatio = (25 - pl.hp) / 25;
+    emit('lowhp', { opacity: clamp(0.15 + hpRatio * 0.5, 0, 0.55) + 0.08 * Math.sin(performance.now() / 150) });
   } else if (pl && !pl.dead) {
     emit('lowhp', { opacity: 0 });
   }
@@ -411,6 +425,23 @@ function updateTimers(game, dt) {
   if ((game.state === 'BUY' || game.state === 'LIVE') && game.bomb && game.bomb.planted) {
     game.bomb.timer -= dt;
     if (game.bomb.timer <= 0) explodeBomb(game);
+    // 倒计时 beep 加速：>10s 每秒、<10s 半秒、<5s 1/4 秒升频
+    const bt = game.bomb.timer;
+    const bInt = bt < 5 ? 0.25 : bt < 10 ? 0.5 : 1;
+    game._bombBeepT = (game._bombBeepT || 0) - dt;
+    if (game._bombBeepT <= 0) {
+      game._bombBeepT = bInt;
+      emit('sfx', { name: bt < 5 ? 'beepFast' : 'beep', vol: bt < 10 ? 0.6 : 0.4, x: game.bomb.x, y: game.bomb.y, game });
+    }
+  }
+  // 低血心跳（≤25hp，音量随血量线性）
+  const hp = game.player && !game.player.dead ? game.player.hp : 0;
+  if (hp > 0 && hp <= 25 && (game.state === 'BUY' || game.state === 'LIVE')) {
+    game._heartT = (game._heartT || 0.8) - dt;
+    if (game._heartT <= 0) {
+      game._heartT = 0.8;
+      emit('sfx', { name: 'heart', vol: 0.2 + (25 - hp) / 25 * 0.2, game });
+    }
   }
 }
 
@@ -447,7 +478,12 @@ function updatePlayer(game, dt) {
   p.stepT -= dt;
   if (moving && p.stepT <= 0) {
     p.stepT = walk ? 0.45 : 0.3;
-    emit('sfx', { name: 'step', vol: 0.4, x: p.x, y: p.y, game });
+    const stTile = tileAt(p.x, p.y);
+    let stMat = 'flat';
+    if (stTile === '≈' || stTile === '~') stMat = 'water';
+    else if (stTile === '=') stMat = 'thin';
+    else if (stTile === 'M' || stTile === 'm') stMat = 'metal';
+    emit('sfx', { name: 'step', vol: walk ? 0.14 : 0.4, x: p.x, y: p.y, game, mat: stMat });
   }
   updatePlayerAim(game);
   input.lastMouse.x = mouse.x;
@@ -455,13 +491,13 @@ function updatePlayer(game, dt) {
   const wantFire = mouse.down && game.freezeT <= 0 && (game.state === 'BUY' || game.state === 'LIVE');
   p.trigger = wantFire && (w.auto ? true : !mouse.wasDown);
   mouse.wasDown = mouse.down;
-  p.recoil = Math.max(0, p.recoil - RECOIL_RECOVER * dt);
+  p.recoil = Math.max(0, p.recoil - RECOIL_RECOVER * dt * (p.recoil > 1.1 ? 1.8 : 0.55));
   updateShotStreak(p, dt);
   if (p.fireCd > 0) p.fireCd -= dt;
   if (p.muzzleT > 0) p.muzzleT -= dt;
   if (p.reloading) {
     p.reloadT -= dt;
-    if (p.reloadT <= 0) finishReload(p);
+    if (p.reloadT <= 0) finishReload(p, game);
   }
   if (p.trigger && p.fireCd <= 0) fireWeapon(p, game);
   if (p.blind > 0) p.blind -= dt;
@@ -486,6 +522,11 @@ function updatePlayer(game, dt) {
       if (p.plantT > 0) {
         emit('holdbar', { show: true, pct: clamp(p.plantT / 3 * 100, 0, 100) });
         holdActive = true;
+        game._plantTicT = (game._plantTicT || 0) - dt;
+        if (game._plantTicT <= 0) {
+          game._plantTicT = 0.15;
+          emit('sfx', { name: 'plantTic', vol: 0.35, x: p.x, y: p.y, game });
+        }
       }
     }
     if (game.bomb && game.bomb.dropped && p.team === 't') pickupBomb(p, game);
@@ -495,6 +536,11 @@ function updatePlayer(game, dt) {
         const kitSpeed = p.weapons.kit ? 2.5 : 5;
         emit('holdbar', { show: true, pct: clamp(p.defuseT / kitSpeed * 100, 0, 100) });
         holdActive = true;
+        game._defuseTicT = (game._defuseTicT || 0) - dt;
+        if (game._defuseTicT <= 0) {
+          game._defuseTicT = 0.15;
+          emit('sfx', { name: 'plantTic', vol: 0.35, x: p.x, y: p.y, game });
+        }
       }
     }
   }

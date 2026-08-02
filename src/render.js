@@ -1,6 +1,6 @@
-import { WEAPONS, DROP_COL } from './config.js';
+import { WEAPONS, DROP_COL, TILE } from './config.js';
 import { weaponDef } from './entities.js';
-import { getMap } from './map.js';
+import { getMap, getGrid } from './map.js';
 import { gunLen, FONT } from './render-utils.js';
 import { clamp, rand } from './utils.js';
 import { ARCHETYPES } from './persona.js';
@@ -36,7 +36,9 @@ export function render(game) {
   ctx.translate(-game.camX + shx, -game.camY + shy);
   ctx.drawImage(layers.staticLayer, 0, 0);
   ctx.drawImage(layers.decalLayer, 0, 0);
+  drawWaterOverlay(game);
   drawBombSiteMarks(game);
+  drawCrates(game);
   drawBomb(game);
   drawDrops(game);
   drawGrenades(game);
@@ -44,6 +46,32 @@ export function render(game) {
   drawSmokes(game);
   drawParticles(game);
   drawTracers(game);
+  ctx.restore();
+}
+
+// 动态水面：可见浅水瓦片叠加移动亮线（时间相位差），裁剪到相机视口
+function drawWaterOverlay(game) {
+  if (game.state !== 'BUY' && game.state !== 'LIVE') return;
+  const grid = getGrid();
+  if (!grid || !grid.length) return;
+  const now = performance.now() / 1000;
+  const x0 = Math.max(0, Math.floor((game.camX - game.canvasW / game.zoom / 2) / TILE) - 1);
+  const y0 = Math.max(0, Math.floor((game.camY - game.canvasH / game.zoom / 2) / TILE) - 1);
+  const x1 = Math.min(grid[0].length, Math.ceil((game.camX + game.canvasW / game.zoom / 2) / TILE) + 1);
+  const y1 = Math.min(grid.length, Math.ceil((game.camY + game.canvasH / game.zoom / 2) / TILE) + 1);
+  ctx.save();
+  for (let y = y0; y < y1; y++) {
+    for (let x = x0; x < x1; x++) {
+      if (grid[y][x] !== '~') continue;
+      const px = x * TILE, py = y * TILE;
+      const seed = (x * 7 + y * 13) % 17;
+      const off = (now * 14 + seed * 5) % 30;
+      ctx.fillStyle = 'rgba(220,240,255,0.20)';
+      ctx.fillRect(px + off - 10, py + 8 + (seed % 5) * 5, 8, 1.5);
+      ctx.fillStyle = 'rgba(255,255,255,0.12)';
+      ctx.fillRect(px + ((off + 16) % 30) - 12, py + 4 + ((seed + 3) % 6) * 4, 6, 1);
+    }
+  }
   ctx.restore();
 }
 
@@ -56,6 +84,30 @@ function drawBombSiteMarks(game) {
   ctx.strokeRect(map.sites.A.x0, map.sites.A.y0, map.sites.A.x1 - map.sites.A.x0, map.sites.A.y1 - map.sites.A.y0);
   ctx.strokeStyle = 'rgba(90,160,255,' + (0.25 + 0.2 * pulse) + ')';
   ctx.strokeRect(map.sites.B.x0, map.sites.B.y0, map.sites.B.x1 - map.sites.B.x0, map.sites.B.y1 - map.sites.B.y0);
+}
+
+function drawCrates(game) {
+  if (!game.crates || !game.crates.length) return;
+  for (const c of game.crates) {
+    const px = c.x - TILE / 2, py = c.y - TILE / 2;
+    ctx.fillStyle = 'rgba(0,0,0,0.42)';
+    ctx.fillRect(px + 3, py + TILE - 4, TILE, 4);
+    ctx.fillStyle = c.hp > 1 ? 'rgba(118,88,54,0.96)' : 'rgba(104,76,48,0.96)';
+    ctx.fillRect(px, py, TILE, TILE);
+    ctx.fillStyle = 'rgba(255,255,255,0.12)';
+    ctx.fillRect(px, py, TILE, 3);
+    ctx.strokeStyle = 'rgba(56,40,24,0.9)';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(px + 1, py + 1, TILE - 2, TILE - 2);
+    if (c.hp <= 1) {
+      ctx.strokeStyle = 'rgba(34,24,14,0.9)';
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.moveTo(px + 8, py + 10); ctx.lineTo(px + 30, py + 30);
+      ctx.moveTo(px + 30, py + 9); ctx.lineTo(px + 12, py + 27);
+      ctx.stroke();
+    }
+  }
 }
 
 function drawBomb(game) {
@@ -269,19 +321,27 @@ function drawSmokes(game) {
 }
 
 function drawParticles(game) {
+  const styles = {
+    blood: 'rgba(150,20,15,',
+    spark: 'rgba(255,200,110,',
+    smokep: 'rgba(190,193,198,',
+    splash: 'rgba(120,190,235,',
+    wood: 'rgba(150,110,60,'
+  };
+  for (const kind of Object.keys(styles)) {
+    ctx.fillStyle = styles[kind];
+    for (const p of game.particles) {
+      if (p.kind !== kind) continue;
+      ctx.globalAlpha = clamp(p.life, 0, 1);
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+  ctx.globalAlpha = 1;
   for (const p of game.particles) {
     const a = clamp(p.life, 0, 1);
-    if (p.kind === 'blood') {
-      ctx.fillStyle = 'rgba(150,20,15,' + a + ')';
-      ctx.beginPath();
-      ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
-      ctx.fill();
-    } else if (p.kind === 'spark') {
-      ctx.fillStyle = 'rgba(255,200,110,' + a + ')';
-      ctx.beginPath();
-      ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
-      ctx.fill();
-    } else if (p.kind === 'shell') {
+    if (p.kind === 'shell') {
       ctx.save();
       ctx.translate(p.x, p.y);
       ctx.rotate(p.spin || 0);
@@ -289,46 +349,37 @@ function drawParticles(game) {
       ctx.fillRect(-2, -1, 4, 2);
       ctx.restore();
     } else if (p.kind === 'swing') {
-      ctx.strokeStyle = 'rgba(255,255,255,' + a * 0.5 + ')';
+      ctx.strokeStyle = 'rgba(255,255,255,' + (a * 0.5) + ')';
       ctx.lineWidth = 2;
       ctx.beginPath();
       ctx.moveTo(p.x, p.y);
       ctx.lineTo(p.x - p.vx * 0.05, p.y - p.vy * 0.05);
       ctx.stroke();
-    } else if (p.kind === 'smokep') {
-      ctx.fillStyle = 'rgba(190,193,198,' + a * 0.4 + ')';
-      ctx.beginPath();
-      ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
-      ctx.fill();
     } else if (p.kind === 'fire') {
       ctx.fillStyle = p.life > 0.4 ? '#ff8a2a' : '#ffd75e';
+      ctx.globalAlpha = clamp(1 - p.life * 0.3, 0.15, 1);
       ctx.beginPath();
       ctx.arc(p.x, p.y, p.size * (1 - p.life * 0.3), 0, Math.PI * 2);
       ctx.fill();
+      ctx.globalAlpha = 1;
     } else if (p.kind === 'boom') {
       const pr = p.life / 0.5;
-      ctx.fillStyle = 'rgba(255,150,50,' + pr * 0.22 + ')';
+      ctx.fillStyle = 'rgba(255,150,50,' + (pr * 0.22) + ')';
       ctx.beginPath();
       ctx.arc(p.x, p.y, p.size * pr * 1.4, 0, Math.PI * 2);
       ctx.fill();
-      ctx.strokeStyle = 'rgba(255,160,60,' + pr * 0.8 + ')';
+      ctx.strokeStyle = 'rgba(255,160,60,' + (pr * 0.8) + ')';
       ctx.lineWidth = 6 * pr + 2;
       ctx.beginPath();
       ctx.arc(p.x, p.y, p.size * pr, 0, Math.PI * 2);
       ctx.stroke();
-      ctx.fillStyle = 'rgba(255,220,140,' + pr * 0.5 + ')';
+      ctx.fillStyle = 'rgba(255,220,140,' + (pr * 0.5) + ')';
       ctx.beginPath();
       ctx.arc(p.x, p.y, p.size * pr * 0.5, 0, Math.PI * 2);
-      ctx.fill();
-    } else if (p.kind === 'splash') {
-      ctx.fillStyle = 'rgba(120,190,235,' + a + ')';
-      ctx.beginPath();
-      ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
       ctx.fill();
     }
   }
 }
-
 function drawTracers(game) {
   for (const t of game.tracers) {
     const a = clamp(t.life / 0.09, 0, 1);
