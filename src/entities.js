@@ -1,0 +1,85 @@
+import { WEAPONS, BOT_NAMES, ECONOMY } from './config.js';
+
+let botNameIdx = 0;
+
+export function createEntity(team, bot) {
+  return {
+    team, bot,
+    name: bot ? BOT_NAMES[botNameIdx++ % BOT_NAMES.length] : 'You',
+    x: 0, y: 0, vx: 0, vy: 0, angle: 0, rad: 13,
+    hp: 100, armor: 0, helmet: false, money: ECONOMY.START_MONEY,
+    weapons: { primary: null, secondary: null, knife: 'knife', nades: { he: 0, flash: 0, smoke: 0 }, kit: false },
+    slot: 'secondary', lastSlot: 'knife',
+    reloading: false, reloadT: 0, fireCd: 0, recoil: 0, shotStreak: 0, crouched: false,
+    ammoMap: {}, reserveMap: {},
+    dead: false, kills: 0, deaths: 0, assists: 0, plants: 0, defuses: 0,
+    hasBomb: false, walking: false, blind: 0, scoped: false, lossStreak: 0,
+    stepT: 0, stepFlip: false, lastDmgFrom: null, lastDmgT: -99999, muzzleT: 0,
+    strafeDir: 1, strafeT: 0, reaction: 0, aimTarget: null, aimLostT: 0, aimLastPos: null,
+    lastKnown: null, lastKnownT: 99,
+    path: null, pathI: 0, role: 'a', repathT: 0, stuckT: 0, lastSample: { x: 0, y: 0 },
+    plantT: 0, defuseT: 0, lastShot: 0, trigger: false, triggerHeld: false, triggerWas: false,
+    objCache: null, objAt: 0, objBombState: null, guardPoint: null, guardPointSite: null,
+    plantRetryT: 0, usedNadeRound: 0, anchorIdx: 0,
+    rushMode: false, vanguard: false, plantedSmokeRound: 0,
+    streak: 0, wKills: {}, aiParams: null,
+    decT: 0
+  };
+}
+
+export function spawnEntity(e, spawnList) {
+  if (!spawnList || spawnList.length === 0) {
+    console.warn('spawnEntity: spawn list empty for team ' + e.team);
+    return;
+  }
+  const s = spawnList[Math.floor(Math.random() * spawnList.length)];
+  e.x = s.x;
+  e.y = s.y;
+  e.vx = 0; e.vy = 0; e.dead = false; e.hp = 100;
+  e.angle = Math.random() * Math.PI * 2;
+  e.slot = e.weapons.primary ? 'primary' : 'secondary';
+  e.reloading = false; e.reloadT = 0; e.fireCd = 0; e.recoil = 0;
+  e.blind = 0; e.scoped = false;
+  e.strafeDir = Math.random() < 0.5 ? -1 : 1; e.strafeT = 0;
+  e.reaction = 0; e.aimTarget = null; e.aimLostT = 0; e.aimLastPos = null;
+  e.lastKnown = null; e.lastKnownT = 99;
+  e.path = null; e.pathI = 0; e.stuckT = 0;
+  e.lastSample = { x: e.x, y: e.y };
+  e.plantT = 0; e.defuseT = 0;
+  e.trigger = false; e.triggerHeld = false; e.triggerWas = false;
+  e.shotStreak = 0; e.crouched = false;
+  e.objCache = null; e.objAt = 0; e.guardPoint = null; e.guardPointSite = null;
+  e.walking = false; e.muzzleT = 0;
+  e.rushMode = false; e.vanguard = false; e.plantedSmokeRound = 0;
+  if (!e.weapons.secondary) e.weapons.secondary = defaultPistol(e.team);
+  // 新回合弹药回满（CS 惯例；仅补齐已有武器）
+  for (const k in e.ammoMap) { const w = WEAPONS[k]; if (w && w.mag > 0) e.ammoMap[k] = w.mag; }
+  for (const k in e.reserveMap) { const w = WEAPONS[k]; if (w) e.reserveMap[k] = w.reserve; }
+}
+
+export function defaultPistol(team) { return team === 'ct' ? 'usp' : 'glock'; }
+
+export function weaponDef(e) {
+  if (e.slot && e.slot.indexOf('nade:') === 0) return null;
+  if (e.slot === 'knife') return WEAPONS.knife;
+  if (e.slot === 'primary' && e.weapons.primary) return WEAPONS[e.weapons.primary];
+  return WEAPONS[e.weapons.secondary || 'glock'];
+}
+
+export function wkey(e) {
+  if (e.slot === 'knife') return 'knife';
+  if (e.slot === 'primary' && e.weapons.primary) return e.weapons.primary;
+  return e.weapons.secondary || 'glock';
+}
+
+export function ammoFor(e) {
+  const w = weaponDef(e), k = wkey(e);
+  if (w && e.ammoMap[k] === undefined) e.ammoMap[k] = w.mag;
+  return e.ammoMap[k] || 0;
+}
+
+export function reserveFor(e) {
+  const w = weaponDef(e), k = wkey(e);
+  if (w && e.reserveMap[k] === undefined) e.reserveMap[k] = w.reserve;
+  return e.reserveMap[k] || 0;
+}

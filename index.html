@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CS2D · 平面反恐精英</title>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<canvas id="game"></canvas>
+<div id="ui">
+  <div id="vignette"></div>
+  <div id="dmgv"></div>
+  <div id="lowhp"></div>
+  <div id="flash"></div>
+
+  <div id="banner"><div class="b1" id="ban1"></div><div class="b2" id="ban2"></div></div>
+  <div id="streak"><div class="s1"></div><div class="s2"></div></div>
+  <div id="killfeed"></div>
+  <div id="toast"></div>
+  <div id="deathinfo"></div>
+  <div id="dmgreport"></div>
+  <div id="objtext"><div id="obj1"></div><div id="obj2" class="sub"></div></div>
+  <div id="holdbar"><i id="holdbarfill"></i></div>
+
+  <div class="ov" id="menu">
+    <div class="panel">
+      <div class="title">
+        <h1>CS<span>2D</span></h1>
+        <p>平面反恐精英 · 5V5 战术竞技</p>
+      </div>
+      <div class="menu-body">
+        <div class="menu-col">
+          <h3>对战设置</h3>
+          <div class="row"><label>你的阵营</label><div>
+            <button class="btn team ct sel" id="teamCt">CT 反恐</button>
+            <button class="btn team t" id="teamT">T 恐怖</button>
+          </div></div>
+          <div class="row"><label>AI 难度</label><div>
+            <button class="btn diff n sel" id="diffN">普通</button>
+            <button class="btn diff e" id="diffE">简单</button>
+            <button class="btn diff h" id="diffH">困难</button>
+            <button class="btn diff hell" id="diffHell">地狱</button>
+          </div></div>
+          <div class="row"><label>每队机器人</label><div id="botSel"></div></div>
+          <div class="row"><label>选择地图</label><div id="mapSel">
+            <button class="btn small" data-map="dust2">沙漠</button>
+            <button class="btn small" data-map="snow">雪地</button>
+            <button class="btn small" data-map="depot">仓库</button>
+            <button class="btn small" data-map="canal">运河</button>
+            <button class="btn small" data-map="metro">地铁</button>
+          </div></div>
+          <div class="row"><label>声音</label>
+            <button class="btn small" id="muteBtn">开</button>
+          </div>
+          <button class="btn primary" id="startBtn">开 始 比 赛</button>
+        </div>
+        <div class="menu-col">
+          <h3>操作说明</h3>
+          <div class="ctrl-list">
+            <div><b>W A S D</b> 移动</div>
+            <div><b>Shift</b> 静步</div>
+            <div><b>鼠标</b> 瞄准</div>
+            <div><b>左键</b> 射击</div>
+            <div><b>右键</b> 开镜/重击</div>
+            <div><b>R</b> 换弹</div>
+            <div><b>E</b> 装/拆/拾取</div>
+            <div><b>1/2/3</b> 主武器·手枪·刀</div>
+            <div><b>4/5/6</b> 雷·闪·烟</div>
+            <div><b>B</b> 购买菜单</div>
+            <div><b>Tab</b> 记分板</div>
+            <div><b>Esc</b> 暂停 · <b>M</b> 静音</div>
+          </div>
+          <h3 style="margin-top:12px">目标</h3>
+          <div class="ctrl-list">
+            <div><b>CT</b> 守点·拆弹</div>
+            <div><b>T</b> 装弹·引爆</div>
+            <div>先赢 <b>13</b> 回合胜</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="ov" id="pause">
+    <div class="panel">
+      <h2 style="letter-spacing:6px;color:#fff;margin-bottom:14px">已暂停</h2>
+      <button class="btn" id="resumeBtn">继续游戏</button>
+      <button class="btn" id="restartBtn">重新开始比赛</button>
+      <button class="btn" id="quitBtn">返回主菜单</button>
+    </div>
+  </div>
+
+  <div class="ov" id="scoreboard">
+    <div class="panel">
+      <div class="sb-head">
+        <div style="font-size:16px;font-weight:700;letter-spacing:2px">记分板 <span id="sbRound" style="color:#7d8794;font-size:12px"></span></div>
+        <div class="score"><span class="t" id="sbScoreT">0</span> : <span class="c" id="sbScoreC">0</span></div>
+      </div>
+      <table class="sb"><thead><tr><th>玩家</th><th class="num">击杀</th><th class="num">死亡</th><th class="num">助攻</th><th class="num">金钱</th><th class="num">装备</th></tr></thead><tbody id="sbBody"></tbody></table>
+      <div class="sb-foot">先到 13 分获胜 · 12 回合后交换阵营 · 按 Tab 关闭</div>
+    </div>
+  </div>
+
+  <div class="ov" id="buy">
+    <div class="panel">
+      <div class="buy-head"><h2>购买装备</h2><div class="cash" id="buyCash">$0</div></div>
+      <div class="buy-grid" id="buyGrid"></div>
+      <div class="buy-foot"><span>B / Esc 关闭</span><span>剩余 <b id="buyTime">0s</b> 可购买</span></div>
+    </div>
+  </div>
+
+  <div class="ov" id="end">
+    <div class="panel">
+      <div class="final" id="endFinal"></div>
+      <div class="stat-line">比分 <b id="endScore"></b></div>
+      <div class="stat-line">你的战绩 <b id="endKd"></b></div>
+      <div class="stat-line">MVP <b id="endMvp"></b></div>
+      <div id="endStats"></div>
+      <button class="btn primary" id="againBtn" style="margin-top:16px">再战一局</button>
+      <button class="btn" id="endMenuBtn">返回主菜单</button>
+    </div>
+  </div>
+</div>
+<script type="module" src="src/main.js"></script>
+</body>
+</html>

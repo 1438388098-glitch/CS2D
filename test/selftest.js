@@ -1,0 +1,384 @@
+import { installStubs, registerUiIds } from './stubdom.js';
+installStubs();
+registerUiIds();
+
+import { createGame, startMatch, startRound, update } from '../src/game.js';
+import { initUi } from '../src/ui.js';
+import { setKey, setMouse, setMouseDown, switchWeapon, switchNade } from '../src/input.js';
+import { buyItem } from '../src/economy.js';
+import { WEAPONS } from '../src/config.js';
+import { killEntity, fireWeapon } from '../src/combat.js';
+import { los, aStar, nearestWalkable, walkable, getMapDiagnostics, getGrid, getMap, findMapById } from '../src/map.js';
+
+const game = createGame();
+const canvasStub = { getBoundingClientRect: () => ({ left: 0, top: 0 }), addEventListener: () => {}, getContext: () => null, style: {} };
+initUi(document, canvasStub, game);
+
+const errors = [];
+function T(name, fn) {
+  try {
+    fn();
+  } catch (e) {
+    errors.push(name + ': ' + e.message);
+  }
+}
+const tick = (n, dt) => { for (let i = 0; i < n; i++) update(game, dt); };
+const player = () => game.player;
+const state = () => game.state;
+
+T('boot-match', () => {
+  startMatch(game);
+  if (state() !== 'BUY') throw new Error('state=' + state());
+  if (game.entities.length !== 1 + game.opts.bots * 2) throw new Error('entity count=' + game.entities.length);
+  if (game.mapW !== 2400 || game.mapH !== 1800) throw new Error('map size wrong');
+});
+
+T('player-tank', () => {
+  player().hp = 1000000;
+});
+
+T('buy-items', () => {
+  player().money = 20000;
+  player().armor = 0;
+  if (!buyItem(game, 'ak')) throw new Error('buy ak failed');
+  if (!buyItem(game, 'armor')) throw new Error('buy armor failed');
+  if (!buyItem(game, 'he')) throw new Error('buy he failed');
+  if (!buyItem(game, 'flash')) throw new Error('buy flash failed');
+  if (!buyItem(game, 'smoke')) throw new Error('buy smoke failed');
+  if (buyItem(game, 'ak')) throw new Error('duplicate buy allowed');
+});
+
+T('tick-round', () => {
+  game.buyTime = 0.05;
+  game.freezeT = 0;
+  for (const e of game.entities) {
+    if (e.bot) {
+      e.x = 200; e.y = 1700;
+      e.blind = 9999;
+      e.weapons.primary = null;
+      e.weapons.secondary = null;
+    }
+  }
+  tick(600, 1 / 30);
+  if (state() !== 'LIVE') throw new Error('did not go live: ' + state());
+});
+
+T('switch-weapons', () => {
+  const p = player();
+  switchWeapon(p, 'primary');
+  if (p.slot !== 'primary') throw new Error('slot wrong');
+  switchWeapon(p, 'knife');
+  switchWeapon(p, 'secondary');
+  switchNade(p, 'he');
+  if (p.slot.indexOf('nade') < 0) throw new Error('nade slot wrong');
+  p.slot = 'primary';
+});
+
+T('mouse-aim', () => {
+  const p = player();
+  p.dead = false;
+  p.x = 1200; p.y = 900;
+  game.camX = 1200; game.camY = 900;
+  game.input.mouse.x = 800; game.input.mouse.y = 450;
+  tick(1, 1 / 30);
+  const expect = Math.atan2(90, 160);
+  if (Math.abs(p.angle - expect) > 0.002) throw new Error('aim not following mouse: ' + p.angle + ' expect ' + expect);
+});
+
+T('fire-and-kill', () => {
+  const target = game.entities.filter((e) => e.bot && e.team !== player().team && !e.dead)[0];
+  if (!target) throw new Error('no target');
+  target.x = 1200; target.y = 880;
+  target.vx = 0; target.vy = 0;
+  target.blind = 999;
+  for (const e of game.entities) {
+    if (e !== target && e.bot && !e.dead) e.blind = 999;
+  }
+  player().x = 1130; player().y = 880;
+  setMouseDown(game, true);
+  let guard = 0;
+  while (!target.dead && guard++ < 400) {
+    update(game, 1 / 60);
+    target.x = 1200; target.y = 880;
+    player().x = 1130; player().y = 880;
+    setMouse(game, game.canvasW / 2 + (target.x - game.camX), game.canvasH / 2 + (target.y - game.camY));
+  }
+  setMouseDown(game, false);
+  if (!target.dead) throw new Error('target survived');
+  if (player().kills < 1) throw new Error('kill not credited');
+});
+
+T('bullet-hits-mouse-line', () => {
+  const p = player();
+  p.dead = false;
+  p.fireCd = 0;
+  p.reloading = false;
+  p.ammoMap = { ak: 30 };
+  p.reserveMap = { ak: 90 };
+  p.slot = 'primary';
+  p.weapons.primary = 'ak';
+  p.recoil = 0;
+  p.shotStreak = 0;
+  game.state = 'LIVE';
+  game.freezeT = 0;
+  p.x = 1200; p.y = 900;
+  game.camX = 1200; game.camY = 900;
+  game.input.mouse.x = 960; game.input.mouse.y = 540;
+  tick(1, 1 / 30);
+  const expect = Math.atan2(180, 320);
+  if (Math.abs(p.angle - expect) > 0.002) throw new Error('angle off: ' + p.angle);
+  const before = game.tracers.length;
+  fireWeapon(p, game);
+  const t = game.tracers.find((tr) => Math.abs(tr.x1 - 1200) < 1 && Math.abs(tr.y1 - 900) < 1);
+  if (!t) throw new Error('no tracer');
+  const targ = game.entities.find((e2) => {
+    if (e2 === p || e2.dead || e2.team === p.team) return false;
+    const ca = Math.cos(p.angle), sa = Math.sin(p.angle);
+    const dx = e2.x - 1200, dy = e2.y - 900;
+    const along = dx * ca + dy * sa;
+    return along > 0 && along < 1400 && Math.abs(dx * sa - dy * ca) < e2.rad + 4;
+  });
+  if (targ) {
+    const dc = Math.hypot(t.x2 - targ.x, t.y2 - targ.y);
+    if (Math.abs(dc - targ.rad) > 4) throw new Error('hit marker not on target surface: ' + dc);
+    const td = Math.atan2(t.y2 - t.y1, t.x2 - t.x1);
+    const dA = ((td - p.angle + Math.PI * 3) % (Math.PI * 2)) - Math.PI;
+    if (Math.abs(dA) > 0.12) throw new Error('tracer dir off: ' + td + ' vs ' + p.angle);
+  } else {
+    const td = Math.atan2(t.y2 - t.y1, t.x2 - t.x1);
+    const dA = ((td - p.angle + Math.PI * 3) % (Math.PI * 2)) - Math.PI;
+    if (Math.abs(dA) > 0.03) throw new Error('tracer dir off: ' + td + ' vs ' + p.angle);
+  }
+});
+
+T('awp-scope-zoom-consistency', () => {
+  const p = player();
+  p.dead = false;
+  game.endedT = 0;
+  game.roundTime = 0;
+  game.state = 'LIVE';
+  p.weapons.primary = 'awp';
+  p.ammoMap = { awp: 5 };
+  p.reserveMap = { awp: 30 };
+  p.slot = 'primary';
+  p.fireCd = 0;
+  p.reloading = false;
+  p.recoil = 0;
+  game.freezeT = 0;
+  game.input.mouse.rdown = true;
+  tick(1, 1 / 30);
+  if (!p.scoped) throw new Error('awp not scoped on rdown');
+  if (game.zoom !== 1.7) throw new Error('zoom not 1.7 when scoped: ' + game.zoom);
+  const before = game.tracers.length;
+  game.input.mouse.down = true;
+  game.input.mouse.wasDown = false;
+  tick(1, 1 / 30);
+  game.input.mouse.down = false;
+  game.input.mouse.rdown = false;
+  if (game.zoom !== 1.7) throw new Error('zoom collapsed after firing frame: ' + game.zoom);
+  const t = game.tracers.find((tr) => Math.abs(tr.x1 - p.x) < 1 && Math.abs(tr.y1 - p.y) < 1);
+  if (!t) throw new Error('awp no tracer');
+});
+
+T('plant-bomb', () => {
+  startRound(game);
+  game.freezeT = 0;
+  game.buyTime = 30;
+  player().team = 't';
+  player().hp = 1000000;
+  for (const e of game.entities) {
+    if (e.bot) {
+      e.x = 200; e.y = 1700;
+      e.blind = 9999;
+      e.weapons.primary = null;
+      e.weapons.secondary = null;
+      e.weapons.kit = false;
+      e.hasBomb = false;
+    }
+  }
+  player().hasBomb = true;
+  player().x = getMap().sites.A.cx + 40;
+  player().y = getMap().sites.A.cy;
+  setKey(game, 'KeyE', true);
+  let guard = 0;
+  while (!game.bomb && guard++ < 400) {
+    update(game, 1 / 30);
+    for (const e of game.entities) {
+      if (e.bot) { e.x = 200; e.y = 1700; }
+    }
+  }
+  setKey(game, 'KeyE', false);
+  if (!game.bomb || !game.bomb.planted) throw new Error('bomb not planted');
+});
+
+T('bomb-explodes', () => {
+  let guard = 0;
+  while (game.bomb && game.bomb.planted && guard++ < 2000 && state() !== 'END') {
+    update(game, 1 / 30);
+    for (const e of game.entities) {
+      if (e.bot) { e.x = 200; e.y = 1700; }
+    }
+  }
+  if (game.score.T < 1 && state() !== 'END') throw new Error('bomb round not resolved');
+});
+
+T('next-round-auto', () => {
+  let guard = 0;
+  while (state() === 'END' && guard++ < 900) update(game, 1 / 30);
+  if (state() !== 'BUY') throw new Error('next round not started, state=' + state());
+});
+
+T('defuse-round', () => {
+  startRound(game);
+  game.freezeT = 0;
+  game.buyTime = 30;
+  player().team = 'ct';
+  player().hp = 1000000;
+  player().weapons.kit = true;
+  const tbot = game.entities.filter((e) => e.bot && e.team === 't')[0];
+  for (const e of game.entities) {
+    if (e.bot && e !== tbot) {
+      e.x = 200; e.y = 1700;
+      e.blind = 9999;
+      e.weapons.primary = null;
+      e.weapons.secondary = null;
+      e.weapons.kit = false;
+      e.hasBomb = false;
+    }
+    if (e.bot && e.team === 'ct' && e !== player()) {
+      e.dead = true;
+    }
+  }
+  tbot.hasBomb = true;
+  tbot.x = getMap().sites.B.cx;
+  tbot.y = getMap().sites.B.cy;
+  tbot.role = 'B';
+  // 固定攻击点为 B，避免随机 tAttackSite 使 bot 目标与测试位置错位
+  game.tAttackSite = 'B';
+  for (const e of game.entities) {
+    if (e.bot && e.team === 't') { e.role = 'B'; e.objCache = null; e.objAt = 0; }
+  }
+  tbot.objCache = null;
+  let guard2 = 0;
+  while ((!game.bomb || !game.bomb.planted) && guard2++ < 900) {
+    update(game, 1 / 30);
+    for (const e of game.entities) {
+      if (e.bot && e !== tbot) { e.x = 200; e.y = 1700; }
+    }
+  }
+  if (!game.bomb || !game.bomb.planted) throw new Error('bot failed to plant');
+  player().x = game.bomb.x;
+  player().y = game.bomb.y;
+  setKey(game, 'KeyE', true);
+  let guard3 = 0;
+  while (game.bomb && game.bomb.planted && guard3++ < 900 && state() !== 'END') update(game, 1 / 30);
+  setKey(game, 'KeyE', false);
+  if (state() !== 'END' || game.score.CT < 1) throw new Error('defuse failed: state=' + state() + ' score=' + game.score.T + ':' + game.score.CT);
+});
+
+T('full-match', () => {
+  let guard = 0;
+  while (!game.over && guard++ < 9000) {
+    update(game, 1 / 30);
+    if (state() === 'END') {
+      if (game.endedT > 3) game.endedT = 0.2;
+    } else if (state() === 'BUY') {
+      if (game.buyTime > 3) game.buyTime = 0.05;
+      if (game.freezeT > 0) game.freezeT = 0;
+    } else if (state() === 'LIVE' && game.roundTime > 6) {
+      for (const e of game.entities) {
+        if (e.team === (game.round % 2 === 0 ? 't' : 'ct') && !e.dead) {
+          killEntity(e, null, 'test', false, game);
+        }
+      }
+    }
+  }
+  if (!game.over) throw new Error('match did not finish');
+  if (game.score.T < 13 && game.score.CT < 13) throw new Error('no team reached 13: ' + game.score.T + ':' + game.score.CT);
+});
+
+T('restart', () => {
+  startMatch(game);
+  if (state() !== 'BUY') throw new Error('restart failed');
+});
+
+T('map-unit', () => {
+  const g = getGrid();
+  let wallX = -1, wallY = -1;
+  outer: for (let ty = 0; ty < g.length; ty++) {
+    for (let tx = 1; tx < g[ty].length; tx++) {
+      const l = g[ty][tx - 1], r = g[ty][tx];
+      if (r === '#' && (l === '.' || l === 'a' || l === 'b' || l === 't' || l === 'c')) {
+        wallX = tx; wallY = ty;
+        break outer;
+      }
+    }
+  }
+  if (wallX < 0) throw new Error('no walkable/wall boundary found in grid');
+  const cx = (x) => x * 40 + 20, cy = (y) => y * 40 + 20;
+  if (los({ smokes: [] }, cx(wallX - 1), cy(wallY), cx(wallX), cy(wallY))) throw new Error('los through wall returned true');
+  if (!los({ smokes: [] }, cx(wallX - 2), cy(wallY), cx(wallX - 1), cy(wallY))) throw new Error('los in same room returned false');
+  const st = getMap().spawns.t[0];
+  const p = aStar(Math.floor(st.x / 40), Math.floor(st.y / 40), Math.floor(getMap().sites.A.cx / 40), Math.floor(getMap().sites.A.cy / 40));
+  if (!p || !p.length) throw new Error('aStar T spawn -> A site returned no path');
+  if (aStar(2, 17, 999, 999) !== null) throw new Error('aStar to out-of-map target did not return null');
+  if (aStar(2, 17, 0, 0) !== null) throw new Error('aStar to wall tile did not return null');
+  const n1 = nearestWalkable(-50, -50);
+  if (!n1 || !walkable(n1.x, n1.y)) throw new Error('nearestWalkable negative coords failed: ' + JSON.stringify(n1));
+  const n2 = nearestWalkable(99999, 99999);
+  if (n2 !== null && !walkable(n2.x, n2.y)) throw new Error('nearestWalkable over-bound returned non-walkable tile: ' + JSON.stringify(n2));
+  const diag = getMapDiagnostics();
+  if (typeof diag.walkableCount !== 'number' || diag.walkableCount <= 0) throw new Error('getMapDiagnostics walkableCount wrong: ' + diag.walkableCount);
+  if (!Array.isArray(diag.unreachable)) throw new Error('getMapDiagnostics unreachable not an array');
+});
+
+T('aStar-same-point', () => {
+  const st = getMap().spawns.t[0];
+  const tx = Math.floor(st.x / 40), ty = Math.floor(st.y / 40);
+  const p = aStar(tx, ty, tx, ty);
+  if (!p || p.length !== 1 || p[0].x !== tx || p[0].y !== ty) throw new Error('aStar same point did not return single-point path');
+  if (aStar(0, 0, 0, 0) !== null) throw new Error('aStar same wall point did not return null');
+});
+
+T('auto-reload', () => {
+  startRound(game);
+  game.freezeT = 0;
+  game.buyTime = 30;
+  const p = player();
+  p.team = 'ct';
+  p.hp = 1000000;
+  p.weapons.primary = 'ak';
+  p.weapons.secondary = 'usp';
+  p.slot = 'primary';
+  p.ammoMap = { ak: 0, usp: 12 };
+  p.reserveMap = { ak: 90, usp: 36 };
+  p.reloading = false;
+  p.reloadT = 0;
+  update(game, 1 / 60);
+  if (!p.reloading) throw new Error('auto reload did not start');
+  for (let i = 0; i < 400; i++) update(game, 1 / 60);
+  if (p.reloading) throw new Error('reload did not finish');
+  if (p.ammoMap.ak !== 30) throw new Error('ammo not refilled: ' + p.ammoMap.ak);
+  if (p.reserveMap.ak !== 60) throw new Error('reserve not reduced: ' + p.reserveMap.ak);
+});
+
+T('tie-round', () => {
+  startRound(game);
+  game.freezeT = 0;
+  game.buyTime = 30;
+  const scoreT = game.score.T, scoreC = game.score.CT;
+  const lastC = game.entities.filter((e) => e.team === 'ct' && !e.dead)[0];
+  if (!lastC) throw new Error('no ct entities left');
+  for (const e of game.entities) {
+    if (e.team === 't' && !e.dead) killEntity(e, null, 'test', false, game);
+  }
+  if (state() !== 'END') throw new Error('elimination did not end round: ' + state());
+  if (game.score.T !== scoreT || game.score.CT !== scoreC + 1) throw new Error('elimination score wrong: ' + game.score.T + ':' + game.score.CT);
+});
+
+console.log('selftest: ' + (errors.length === 0 ? 'PASS' : 'FAIL'));
+if (errors.length) {
+  for (const e of errors) console.log('  ' + e);
+  process.exit(1);
+}
+process.exit(0);
