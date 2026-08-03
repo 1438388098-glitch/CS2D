@@ -2,8 +2,10 @@ import { TILE, MAPS } from './config.js';
 import { clamp } from './utils.js';
 
 let MAP = null;
+const DEFAULT_TILE = TILE;
+function tileSize() { return MAP ? MAP.tile : DEFAULT_TILE; }
 
-function scanTiles(rows) {
+function scanTiles(rows, T) {
   const sites = { A: null, B: null };
   const spawns = { t: [], ct: [] };
   for (let ty = 0; ty < rows.length; ty++) {
@@ -19,8 +21,8 @@ function scanTiles(rows) {
           sites[key].y1 = Math.max(sites[key].y1, ty);
         }
       }
-      if (c === 't') spawns.t.push({ x: tx * TILE + TILE / 2, y: ty * TILE + TILE / 2 });
-      if (c === 'c') spawns.ct.push({ x: tx * TILE + TILE / 2, y: ty * TILE + TILE / 2 });
+      if (c === 't') spawns.t.push({ x: tx * T + T / 2, y: ty * T + T / 2 });
+      if (c === 'c') spawns.ct.push({ x: tx * T + T / 2, y: ty * T + T / 2 });
     }
   }
   const result = {};
@@ -28,28 +30,28 @@ function scanTiles(rows) {
     const s = sites[key];
     if (!s) continue;
     result[key] = {
-      x0: s.x0 * TILE, y0: s.y0 * TILE,
-      x1: (s.x1 + 1) * TILE, y1: (s.y1 + 1) * TILE,
-      cx: (s.x0 + s.x1 + 1) * TILE / 2,
-      cy: (s.y0 + s.y1 + 1) * TILE / 2,
+      x0: s.x0 * T, y0: s.y0 * T,
+      x1: (s.x1 + 1) * T, y1: (s.y1 + 1) * T,
+      cx: (s.x0 + s.x1 + 1) * T / 2,
+      cy: (s.y0 + s.y1 + 1) * T / 2,
       label: key
     };
   }
   return { sites: result, spawns };
 }
 
-function buildHolds(sites, rows) {
+function buildHolds(sites, rows, T) {
   const holds = {};
   for (const key of ['A', 'B']) {
     const s = sites[key];
     if (!s) continue;
-    const tx0 = Math.floor(s.x0 / TILE), ty0 = Math.floor(s.y0 / TILE);
-    const tx1 = Math.floor((s.x1 - 1) / TILE), ty1 = Math.floor((s.y1 - 1) / TILE);
+    const tx0 = Math.floor(s.x0 / T), ty0 = Math.floor(s.y0 / T);
+    const tx1 = Math.floor((s.x1 - 1) / T), ty1 = Math.floor((s.y1 - 1) / T);
     const anchors = [];
     const cx = (tx0 + tx1) / 2, cy = (ty0 + ty1) / 2;
     for (const [px, py] of [[tx0 + 2, ty0 + 2], [tx1 - 2, ty0 + 2], [tx0 + 2, ty1 - 2], [tx1 - 2, ty1 - 2]]) {
       if (px >= 0 && py >= 0 && px < rows[0].length && py < rows.length && walkableTile(rows, px, py)) {
-        anchors.push({ x: px * TILE + TILE / 2, y: py * TILE + TILE / 2 });
+        anchors.push({ x: px * T + T / 2, y: py * T + T / 2 });
       }
     }
     // 入口点：扫描站点四边外侧的可走格，取离站点中心方向最近的
@@ -68,11 +70,11 @@ function buildHolds(sites, rows) {
       const d = Math.hypot(ex - cx, ey - cy);
       if (d < bestD) {
         bestD = d;
-        entry = { x: ex * TILE + TILE / 2, y: ey * TILE + TILE / 2 };
+        entry = { x: ex * T + T / 2, y: ey * T + T / 2 };
       }
     }
     if (!anchors.length) {
-      anchors.push({ x: (tx0 + 1) * TILE, y: (ty0 + 1) * TILE });
+      anchors.push({ x: (tx0 + 1) * T, y: (ty0 + 1) * T });
     }
     holds[key] = { anchors, entry: entry || { x: s.cx, y: s.cy } };
   }
@@ -81,7 +83,7 @@ function buildHolds(sites, rows) {
 
 function walkableTile(rows, tx, ty) {
   const c = rows[ty][tx];
-  return c === '.' || c === 'a' || c === 'b' || c === 't' || c === 'c' || c === '~' || c === '≈' || c === '^';
+  return c === '.' || c === 'a' || c === 'b' || c === 't' || c === 'c' || c === '~' || c === '≈' || c === '^' || c === 'R';
 }
 
 function checkConnectivity(rows) {
@@ -124,11 +126,12 @@ function checkConnectivity(rows) {
 }
 
 export function loadMap(mapDef) {
+  const T = mapDef.tile || TILE;
   const rows = mapDef.rows;
   const w = rows[0].length;
   const h = rows.length;
   const grid = rows.map((r) => r.split(''));
-  const { sites, spawns } = scanTiles(rows);
+  const { sites, spawns } = scanTiles(rows, T);
   PATH_CACHE.clear();
   const diag = checkConnectivity(rows);
   if (diag.unreachable.length) {
@@ -140,15 +143,16 @@ export function loadMap(mapDef) {
     name: mapDef.name,
     accent: mapDef.accent || '#ff8a2a',
     grid, rows, w, h,
-    W: w * TILE, H: h * TILE,
-    center: { x: w * TILE / 2, y: h * TILE / 2 },
+    tile: T,
+    W: w * T, H: h * T,
+    center: { x: w * T / 2, y: h * T / 2 },
     sites, spawns,
-    holds: buildHolds(sites, rows),
+    holds: buildHolds(sites, rows, T),
     barrels: (() => {
       const list = [];
       for (let ty = 0; ty < rows.length; ty++) {
         for (let tx = 0; tx < rows[ty].length; tx++) {
-          if (rows[ty][tx] === 'o') list.push({ tx, ty, x: tx * TILE + TILE / 2, y: ty * TILE + TILE / 2, hp: 2 });
+          if (rows[ty][tx] === 'o') list.push({ tx, ty, x: tx * T + T / 2, y: ty * T + T / 2, hp: 2 });
         }
       }
       return list;
@@ -157,7 +161,7 @@ export function loadMap(mapDef) {
       const list = [];
       for (let ty = 0; ty < rows.length; ty++) {
         for (let tx = 0; tx < rows[ty].length; tx++) {
-          if (rows[ty][tx] === 'D') list.push({ tx, ty, x: tx * TILE + TILE / 2, y: ty * TILE + TILE / 2, hp: 2 });
+          if (rows[ty][tx] === 'D') list.push({ tx, ty, x: tx * T + T / 2, y: ty * T + T / 2, hp: 2 });
         }
       }
       return list;
@@ -166,6 +170,57 @@ export function loadMap(mapDef) {
     highPoints: mapDef.highPoints || [],
     diagnostics: diag
   };
+  const tsp = spawns.t[0] && nearestWalkable(spawns.t[0].x, spawns.t[0].y);
+  MAP.entries = {};
+  MAP.mid = null;
+  if (tsp) {
+    for (const key of ['A', 'B']) {
+      const s = sites[key];
+      if (!s) continue;
+      const st = nearestWalkable(s.cx, s.cy);
+      const path = aStar(tsp.x, tsp.y, st.x, st.y);
+      if (!path) continue;
+      const anchors = [];
+      const wanted = mapDef.id === 'metro' ? [140, 260, 380] : [100, 190, 300];
+      const tpx = tsp.x * T + T / 2, tpy = tsp.y * T + T / 2;
+      for (const w of wanted) {
+        let best = null, bestD = Infinity;
+        for (let pi = 0; pi < path.length; pi++) {
+          const p = path[pi];
+          const px = p.x * T + T / 2, py = p.y * T + T / 2;
+          const d = Math.hypot(px - s.cx, py - s.cy);
+          const score = Math.abs(d - w);
+          if (score < bestD && !anchors.some((c) => Math.hypot(c.x - px, c.y - py) < 70)) {
+            bestD = score;
+            best = { x: px, y: py, pi };
+          }
+        }
+        if (best) {
+          best.face = Math.atan2(tpy - best.y, tpx - best.x);
+          anchors.push(best);
+        }
+      }
+      if (anchors.length >= 2) MAP.holds[key].anchors = anchors;
+      let entry = null, bestE = Infinity;
+      for (const p of path) {
+        const px = p.x * T + T / 2, py = p.y * T + T / 2;
+        const d = Math.hypot(px - s.cx, py - s.cy);
+        const score = Math.abs(d - 340);
+        if (score < bestE) { bestE = score; entry = { x: px, y: py }; }
+      }
+      if (entry) MAP.entries[key] = entry;
+    }
+    const centerTile = nearestWalkable(MAP.W / 2, MAP.H / 2);
+    const ctSpawnTile = spawns.ct[0] && nearestWalkable(spawns.ct[0].x, spawns.ct[0].y);
+    let midTile = centerTile;
+    if (ctSpawnTile && centerTile) {
+      const midPath = aStar(ctSpawnTile.x, ctSpawnTile.y, centerTile.x, centerTile.y);
+      if (midPath && midPath.length > 4) {
+        midTile = midPath[Math.min(midPath.length - 1, Math.floor(midPath.length * 0.55))];
+      }
+    }
+    if (midTile) MAP.mid = { x: midTile.x * T + T / 2, y: midTile.y * T + T / 2 };
+  }
   return diag;
 }
 
@@ -179,7 +234,7 @@ export function walkable(tx, ty) {
   if (!MAP) return false;
   if (tx < 0 || ty < 0 || tx >= MAP.w || ty >= MAP.h) return false;
   const c = MAP.grid[ty][tx];
-  return c === '.' || c === 'a' || c === 'b' || c === 't' || c === 'c' || c === '~' || c === '≈' || c === '^';
+  return c === '.' || c === 'a' || c === 'b' || c === 't' || c === 'c' || c === '~' || c === '≈' || c === '^' || c === 'R';
 }
 
 // 寻路可用（^ 高台可站不可越，排除在寻路外）
@@ -187,28 +242,28 @@ export function pathable(tx, ty) {
   if (!MAP) return false;
   if (tx < 0 || ty < 0 || tx >= MAP.w || ty >= MAP.h) return false;
   const c = MAP.grid[ty][tx];
-  return c === '.' || c === 'a' || c === 'b' || c === 't' || c === 'c' || c === '~' || c === '≈';
+  return c === '.' || c === 'a' || c === 'b' || c === 't' || c === 'c' || c === '~' || c === '≈' || c === '^' || c === 'R';
 }
 
 // 像素坐标 -> 瓦片字符
 export function tileAt(x, y) {
   if (!MAP) return '#';
-  const tx = Math.floor(x / TILE), ty = Math.floor(y / TILE);
+  const tx = Math.floor(x / tileSize()), ty = Math.floor(y / tileSize());
   if (tx < 0 || ty < 0 || tx >= MAP.w || ty >= MAP.h) return '#';
   return MAP.grid[ty][tx];
 }
 
 export function passable(x, y) {
-  return walkable(Math.floor(x / TILE), Math.floor(y / TILE));
+  return walkable(Math.floor(x / tileSize()), Math.floor(y / tileSize()));
 }
 
 // 子弹/视线的擦角容差判定（拟合真实 CS 物理）：
 // 采样点落在墙格边缘 6px 内、且相邻瓦片可通行时，视为可擦角通过
 export function passableTolerant(x, y) {
   if (passable(x, y)) return true;
-  const fx = Math.floor(x / TILE), fy = Math.floor(y / TILE);
+  const fx = Math.floor(x / tileSize()), fy = Math.floor(y / tileSize());
   if (!MAP || fx < 0 || fy < 0 || fx >= MAP.w || fy >= MAP.h) return false;
-  const ox = (x - fx * TILE) / TILE, oy = (y - fy * TILE) / TILE;
+  const ox = (x - fx * tileSize()) / tileSize(), oy = (y - fy * tileSize()) / tileSize();
   const TOL = 0.12;
   if (ox < TOL && walkable(fx - 1, fy)) return true;
   if (ox > 1 - TOL && walkable(fx + 1, fy)) return true;
@@ -219,13 +274,13 @@ export function passableTolerant(x, y) {
 
 export function collideCircle(ent) {
   const r = ent.rad;
-  const x0 = Math.floor((ent.x - r) / TILE), x1 = Math.floor((ent.x + r) / TILE);
-  const y0 = Math.floor((ent.y - r) / TILE), y1 = Math.floor((ent.y + r) / TILE);
+  const x0 = Math.floor((ent.x - r) / tileSize()), x1 = Math.floor((ent.x + r) / tileSize());
+  const y0 = Math.floor((ent.y - r) / tileSize()), y1 = Math.floor((ent.y + r) / tileSize());
   for (let ty = y0; ty <= y1; ty++) {
     for (let tx = x0; tx <= x1; tx++) {
       if (walkable(tx, ty)) continue;
-      const wx = tx * TILE, wy = ty * TILE;
-      const cx = clamp(ent.x, wx, wx + TILE), cy = clamp(ent.y, wy, wy + TILE);
+      const wx = tx * tileSize(), wy = ty * tileSize();
+      const cx = clamp(ent.x, wx, wx + tileSize()), cy = clamp(ent.y, wy, wy + tileSize());
       const dx = ent.x - cx, dy = ent.y - cy;
       const d2 = dx * dx + dy * dy;
       if (d2 < r * r) {
@@ -318,7 +373,7 @@ export function aStar(sx, sy, tx, ty) {
   push({ x: sx, y: sy, f: h(sx, sy), k: start });
   let iter = 0;
   let result = null;
-  while (heap.length && iter < 4000) {
+  while (heap.length && iter < 50000) {
     iter++;
     const n = pop();
     if (n.x === tx && n.y === ty) {
@@ -365,8 +420,8 @@ const PATH_CACHE = new Map();
 
 export function nearestWalkable(px, py) {
   if (!MAP) return null;
-  const tx = clamp(Math.floor(px / TILE), 0, MAP.w - 1);
-  const ty = clamp(Math.floor(py / TILE), 0, MAP.h - 1);
+  const tx = clamp(Math.floor(px / tileSize()), 0, MAP.w - 1);
+  const ty = clamp(Math.floor(py / tileSize()), 0, MAP.h - 1);
   if (walkable(tx, ty)) return { x: tx, y: ty };
   for (let r = 1; r < 12; r++) {
     for (let dy = -r; dy <= r; dy++) {
@@ -401,7 +456,7 @@ export function pathTo(e, tx, ty) {
 export function followPath(e, dt, speed) {
   if (!MAP || !e.path || e.pathI >= e.path.length) { e.path = null; return false; }
   const wp = e.path[e.pathI];
-  const wx = wp.x * TILE + TILE / 2, wy = wp.y * TILE + TILE / 2;
+  const wx = wp.x * tileSize() + tileSize() / 2, wy = wp.y * tileSize() + tileSize() / 2;
   const dx = wx - e.x, dy = wy - e.y;
   const d = Math.hypot(dx, dy);
   if (d < 16) {
@@ -429,7 +484,7 @@ export function nearestSite(x, y) {
 
 export function isWater(x, y) {
   if (!MAP) return false;
-  const tx = Math.floor(x / TILE), ty = Math.floor(y / TILE);
+  const tx = Math.floor(x / tileSize()), ty = Math.floor(y / tileSize());
   const c = MAP.grid[ty] && MAP.grid[ty][tx];
   return c === '~' || c === '≈';
 }

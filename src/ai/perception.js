@@ -2,6 +2,7 @@
 import { BOT_AI, DIFF, diffOf } from '../config.js';
 import { los } from '../map.js';
 import { angDiff, viewCap } from '../utils.js';
+import { recordOppPos } from './oppmodel.js';
 
 export function findVisibleEnemy(e, game) {
   let best = null;
@@ -15,6 +16,10 @@ export function findVisibleEnemy(e, game) {
     if (Math.abs(angDiff(a, e.angle)) > BOT_AI.FOV) continue;
     if (!los(game, e.x, e.y, o.x, o.y, e.height)) continue;
     if (d < bestD) { bestD = d; best = o; }
+  }
+  // S3 对手建模：H11 队目击到 CT 时记录站位（合法情报，非透视）
+  if (best && e.aiParams && e.aiParams.oppModel) {
+    recordOppPos(game, best.x, best.y, 1);
   }
   return best;
 }

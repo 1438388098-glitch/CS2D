@@ -1,0 +1,82 @@
+﻿<h2>三张图采用哪种空间原型？</h2>
+<p class="subtitle">只保留地图 id/名称，主题和结构都可重设计。先定空间骨架，再给每张图做差异化。</p>
+
+<div class="options">
+  <div class="option" data-choice="classic-lanes" onclick="toggleSelect(this)">
+    <div class="letter">A</div>
+    <div class="content">
+      <h3>经典三线 / 双点（推荐）</h3>
+      <p>T/CT 分区明确，A/B 分离，3 条清晰路线连接出生区与点位。路线清楚、防守站位和回防节奏最接近成熟爆破图。</p>
+      <div class="mockup">
+        <svg viewBox="0 0 260 180" width="100%" height="140" role="img" aria-label="三线结构示意">
+          <rect x="5" y="5" width="250" height="170" rx="6" fill="#1d242c" stroke="#3a414d"/>
+          <rect x="18" y="16" width="34" height="18" fill="#ffb84d" opacity="0.85" rx="3"/>
+          <text x="35" y="29" text-anchor="middle" fill="#111" font-size="10" font-weight="bold">T</text>
+          <rect x="208" y="146" width="34" height="18" fill="#4da6ff" opacity="0.85" rx="3"/>
+          <text x="225" y="159" text-anchor="middle" fill="#111" font-size="10" font-weight="bold">CT</text>
+          <rect x="190" y="24" width="44" height="22" fill="#ff8a4d" opacity="0.9" rx="3"/>
+          <text x="212" y="39" text-anchor="middle" fill="#111" font-size="10" font-weight="bold">A</text>
+          <rect x="28" y="138" width="44" height="22" fill="#5aa6ff" opacity="0.9" rx="3"/>
+          <text x="50" y="153" text-anchor="middle" fill="#111" font-size="10" font-weight="bold">B</text>
+          <path d="M52 25 H150 V35 H188" fill="none" stroke="#d7a86e" stroke-width="4" opacity="0.8"/>
+          <path d="M35 55 H70 V90 H110" fill="none" stroke="#d7a86e" stroke-width="4" opacity="0.8"/>
+          <path d="M52 155 H140 V120 H188" fill="none" stroke="#d7a86e" stroke-width="4" opacity="0.8"/>
+          <circle cx="118" cy="90" r="8" fill="#7b8797" opacity="0.9"/>
+          <text x="118" y="94" text-anchor="middle" fill="#fff" font-size="10">M</text>
+        </svg>
+      </div>
+    </div>
+  </div>
+
+  <div class="option" data-choice="hub-control" onclick="toggleSelect(this)">
+    <div class="letter">B</div>
+    <div class="content">
+      <h3>枢纽争夺</h3>
+      <p>地图中央是长期争夺的控制区，A/B 像卫星点分布在周围。差异化强，但对双方节奏和平衡要求更高。</p>
+      <div class="mockup">
+        <svg viewBox="0 0 260 180" width="100%" height="140" role="img" aria-label="枢纽结构示意">
+          <rect x="5" y="5" width="250" height="170" rx="6" fill="#1d242c" stroke="#3a414d"/>
+          <rect x="18" y="16" width="34" height="18" fill="#ffb84d" opacity="0.85" rx="3"/>
+          <text x="35" y="29" text-anchor="middle" fill="#111" font-size="10" font-weight="bold">T</text>
+          <rect x="208" y="146" width="34" height="18" fill="#4da6ff" opacity="0.85" rx="3"/>
+          <text x="225" y="159" text-anchor="middle" fill="#111" font-size="10" font-weight="bold">CT</text>
+          <circle cx="130" cy="90" r="22" fill="#b08aff" opacity="0.55"/>
+          <text x="130" y="94" text-anchor="middle" fill="#111" font-size="11" font-weight="bold">HUB</text>
+          <rect x="190" y="24" width="42" height="22" fill="#ff8a4d" opacity="0.9" rx="3"/>
+          <text x="211" y="39" text-anchor="middle" fill="#111" font-size="10" font-weight="bold">A</text>
+          <rect x="28" y="138" width="42" height="22" fill="#5aa6ff" opacity="0.9" rx="3"/>
+          <text x="49" y="153" text-anchor="middle" fill="#111" font-size="10" font-weight="bold">B</text>
+          <path d="M52 25 L112 84 M148 96 L205 34 M130 112 L49 138 M130 112 L205 138" fill="none" stroke="#d7a86e" stroke-width="4" opacity="0.8"/>
+        </svg>
+      </div>
+    </div>
+  </div>
+
+  <div class="option" data-choice="mechanic-first" onclick="toggleSelect(this)">
+    <div class="letter">C</div>
+    <div class="content">
+      <h3>机制先行</h3>
+      <p>每张图围绕一个招牌机制生长：水道、纵向枢纽、穿射墙网。辨识度最高，但容易出现一条路线设计过度、另一条没人走。</p>
+      <div class="mockup">
+        <svg viewBox="0 0 260 180" width="100%" height="140" role="img" aria-label="机制驱动结构示意">
+          <rect x="5" y="5" width="250" height="170" rx="6" fill="#1d242c" stroke="#3a414d"/>
+          <rect x="18" y="16" width="34" height="18" fill="#ffb84d" opacity="0.85" rx="3"/>
+          <text x="35" y="29" text-anchor="middle" fill="#111" font-size="10" font-weight="bold">T</text>
+          <rect x="208" y="146" width="34" height="18" fill="#4da6ff" opacity="0.85" rx="3"/>
+          <text x="225" y="159" text-anchor="middle" fill="#111" font-size="10" font-weight="bold">CT</text>
+          <rect x="190" y="24" width="44" height="22" fill="#ff8a4d" opacity="0.9" rx="3"/>
+          <text x="212" y="39" text-anchor="middle" fill="#111" font-size="10" font-weight="bold">A</text>
+          <rect x="28" y="138" width="44" height="22" fill="#5aa6ff" opacity="0.9" rx="3"/>
+          <text x="50" y="153" text-anchor="middle" fill="#111" font-size="10" font-weight="bold">B</text>
+          <rect x="45" y="78" width="170" height="14" fill="#4d9fd6" opacity="0.75" rx="4"/>
+          <path d="M52 25 H120 V70 H170 V35 H188" fill="none" stroke="#d7a86e" stroke-width="4" opacity="0.8"/>
+          <path d="M52 155 H120 V110 H170 V145 H188" fill="none" stroke="#d7a86e" stroke-width="4" opacity="0.8"/>
+          <path d="M35 95 H45 M215 95 H225" stroke="#d7a86e" stroke-width="4" opacity="0.9"/>
+          <path d="M52 25 H120 V80" fill="none" stroke="#6ad1a8" stroke-width="3" stroke-dasharray="5 4"/>
+        </svg>
+      </div>
+    </div>
+  </div>
+</div>
+
+<p class="subtitle">选定原型后，我会继续把三张图各自的路线、点位和招牌机制画出来。</p>

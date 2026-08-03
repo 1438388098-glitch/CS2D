@@ -9,6 +9,10 @@ import { killEntity } from './combat.js';
 import { getMap } from './map.js';
 import { MAPS } from './config.js';
 import { setMuted, isMuted, setAudioContext, startAmbient } from './audio.js';
+import './modes.js';
+import { majorAction } from './modes.js';
+import { initLan, hostStartMatchNow } from './lan.js';
+import { openMapEditor, closeMapEditor, saveEditorMap, playEditorMapNow } from './map-editor.js';
 
 const canvas = document.getElementById('game');
 const game = createGame();
@@ -44,6 +48,7 @@ async function boot() {
   initUi(document, canvas, game);
   initUiDom(game);
   initInput(game, canvas);
+  initLan(game);
   resizeCanvas(game, canvas);
 
   canvas.addEventListener('mousedown', (e) => {
@@ -115,6 +120,13 @@ window.GAME = {
 };
 
 window.__game = game;
+window.__majorAction = (a) => majorAction(game, a);
+window.__openMapEditor = (g) => openMapEditor(g);
+window.__closeMapEditor = closeMapEditor;
+window.__saveEditorMap = saveEditorMap;
+window.__playEditorMap = playEditorMapNow;
+window.__lanStart = hostStartMatchNow;
+
 window.__cs2d = {
   get game() { return game; },
   get state() { return { state: game.state, diff: game.opts.diff, mapId: game.opts.mapId, round: game.round, score: game.score }; }

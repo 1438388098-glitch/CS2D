@@ -21,8 +21,13 @@ export function moveFactor(w, ent) {
   } else if (spd > 10) {
     key = 'walk';
   }
-  const v = b.move[key];
-  return v !== undefined ? v : DEFAULTS.move[key];
+  let v = b.move[key];
+  if (v === undefined) v = DEFAULTS.move[key];
+  // S3 微观增强：急停质量（bot 急停时移动散布惩罚减免，H11 专用）
+  if (ent.bot && spd <= 10 && ent.aiParams && ent.aiParams.counterStrafe !== undefined) {
+    v *= ent.aiParams.counterStrafe;
+  }
+  return v;
 }
 
 export function effectiveSpread(w, ent) {

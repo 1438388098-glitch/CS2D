@@ -38,7 +38,7 @@ try {
   const mapSel = await cdp.eval(`JSON.stringify([...document.querySelectorAll('select option')].map(o=>o.textContent.trim().slice(0,8)).slice(0,8))`);
   pass('map options: ' + mapSel);
 
-  const startClick = await cdp.eval(`(()=>{const b=[...document.querySelectorAll('button')].find(b=>/\u5f00\u59cb|start/i.test(b.textContent));if(!b)return false;b.click();return true})()`);
+      const startClick = await cdp.eval(`(()=>{const b=document.getElementById('startBtn');if(!b)return false;b.click();return true})()`);
   pass('click start: ' + startClick);
   await new Promise((r) => setTimeout(r, 1800));
 

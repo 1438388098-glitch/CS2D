@@ -212,7 +212,9 @@ export function botActions(e, game, dt) {
     // 智能射击模式（拟合人类 CS）：
     // - 中远距（>350px）单发 tap：连发散布 28px(600px处) 远超命中半径 15px，只有首发命中，故每发都重置散布
     // - 近距（<=350px）连发：命中角度大（>2.5°），连发散布可接受
-    const tap = wB && (wB.kind === 'rifle' || wB.kind === 'smg') && (e.shotStreak || 0) >= 1 && distB > 350;
+    // S3 微观增强：连发散布控制（spreadCtrl<1 时更早进入单发 tap，H11 专用）
+    const sc = e.aiParams && e.aiParams.spreadCtrl !== undefined ? e.aiParams.spreadCtrl : 1;
+    const tap = wB && (wB.kind === 'rifle' || wB.kind === 'smg') && (e.shotStreak || 0) >= 1 && distB > 350 * sc;
     if (tap) {
       e.fireCd = Math.max(e.fireCd, 0.22);
       e.shotStreak = 0;

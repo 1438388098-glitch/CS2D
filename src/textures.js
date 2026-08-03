@@ -1,5 +1,6 @@
 import { TILE } from './config.js';
 import { getMap } from './map.js';
+const mapTile = () => getMap()?.tile || TILE;
 
 // ===== 真实纹理素材（ambientCG CC0）=====
 const TEX_SRC = {
@@ -266,41 +267,41 @@ export function initTextures(map) {
     for (let y = 0; y < grid.length; y++) {
       for (let x = 0; x < grid[y].length; x++) {
         const c = grid[y][x];
-        const px = x * TILE, py = y * TILE;
+        const px = x * mapTile(), py = y * mapTile();
         if (c === 'a' || c === 'b') {
           t.fillStyle = c === 'a' ? 'rgba(255,120,70,0.16)' : 'rgba(70,150,255,0.16)';
-          t.fillRect(px, py, TILE, TILE);
+          t.fillRect(px, py, mapTile(), mapTile());
         }
         if (c === '#') {
-          t.drawImage(wallTex, px, py, TILE, TILE);
+          t.drawImage(wallTex, px, py, mapTile(), mapTile());
           // 伪立体：顶部亮 顶部高光、底部阴影
           t.fillStyle = 'rgba(255,255,255,0.10)';
-          t.fillRect(px, py, TILE, 2);
+          t.fillRect(px, py, mapTile(), 2);
           t.fillStyle = 'rgba(0,0,0,0.30)';
-          t.fillRect(px, py + TILE - 4, TILE, 4);
+          t.fillRect(px, py + mapTile() - 4, mapTile(), 4);
         }
         if (c === 'C') {
-          t.drawImage(crateTex, px, py, TILE, TILE);
+          t.drawImage(crateTex, px, py, mapTile(), mapTile());
           t.fillStyle = 'rgba(0,0,0,0.35)';
-          t.fillRect(px, py + TILE - 3, TILE, 3);
+          t.fillRect(px, py + mapTile() - 3, mapTile(), 3);
         }
-        if (c === '~') t.drawImage(waterTex, px, py, TILE, TILE);
-        if (c === '=') t.drawImage(thinWallTex, px, py, TILE, TILE);
-        if (c === '≈') t.drawImage(deepWaterTex, px, py, TILE, TILE);
+        if (c === '~') t.drawImage(waterTex, px, py, mapTile(), mapTile());
+        if (c === '=') t.drawImage(thinWallTex, px, py, mapTile(), mapTile());
+        if (c === '≈') t.drawImage(deepWaterTex, px, py, mapTile(), mapTile());
         if (c === '^') {
-          t.drawImage(platformTex, px, py, TILE, TILE);
+          t.drawImage(platformTex, px, py, mapTile(), mapTile());
           // 升台立体：顶面亮条 + 侧面渐变 + 底部投影
           t.fillStyle = 'rgba(255,255,255,0.16)';
-          t.fillRect(px + 2, py + 2, TILE - 4, 3);
-          const g = t.createLinearGradient(0, py + TILE - 8, 0, py + TILE);
+          t.fillRect(px + 2, py + 2, mapTile() - 4, 3);
+          const g = t.createLinearGradient(0, py + mapTile() - 8, 0, py + mapTile());
           g.addColorStop(0, 'rgba(0,0,0,0)');
           g.addColorStop(1, 'rgba(0,0,0,0.5)');
           t.fillStyle = g;
-          t.fillRect(px, py + TILE - 8, TILE, 8);
+          t.fillRect(px, py + mapTile() - 8, mapTile(), 8);
         }
         if (c === 'o') {
           // 油桶：瓦片 3/4 大小 + 高光 + 警示条 + 投影
-          const ox = px + 3, oy = py + 3, os = TILE * 0.8;
+          const ox = px + 3, oy = py + 3, os = mapTile() * 0.8;
           t.fillStyle = 'rgba(0,0,0,0.4)';
           t.beginPath();
           t.ellipse(ox + os / 2, oy + os - 3, os * 0.42, os * 0.14, 0, 0, Math.PI * 2);
@@ -318,7 +319,7 @@ export function initTextures(map) {
     for (let y = 0; y < grid.length; y++) {
       for (let x = 0; x < grid[y].length; x++) {
         const c = grid[y][x];
-        const px = x * TILE, py = y * TILE;
+        const px = x * mapTile(), py = y * mapTile();
         const nb = {
           u: y > 0 ? grid[y - 1][x] : '#',
           d: y < grid.length - 1 ? grid[y + 1][x] : '#',
@@ -330,27 +331,27 @@ export function initTextures(map) {
         // 墙基阴影：实体瓦片与地板交界
         if ((c === '#' || c === 'C') && !isSolid(nb.d)) {
           t.fillStyle = 'rgba(0,0,0,0.45)';
-          t.fillRect(px, py + TILE - 2, TILE, 2);
+          t.fillRect(px, py + mapTile() - 2, mapTile(), 2);
         }
         // 水岸线：水与陆地交界（画在水侧）
         if (isWater(c) && !isWater(nb.d)) {
           t.fillStyle = 'rgba(200,230,255,0.35)';
-          t.fillRect(px, py + TILE - 3, TILE, 3);
+          t.fillRect(px, py + mapTile() - 3, mapTile(), 3);
         }
         if (isWater(c) && !isWater(nb.u)) {
           t.fillStyle = 'rgba(255,255,255,0.18)';
-          t.fillRect(px, py, TILE, 1);
+          t.fillRect(px, py, mapTile(), 1);
         }
         // 薄墙框架：外框深色线（辨识木板墙）
         if (c === '=') {
           t.strokeStyle = 'rgba(45,42,38,0.75)';
           t.lineWidth = 1.5;
-          t.strokeRect(px + 0.5, py + 0.5, TILE - 1, TILE - 1);
+          t.strokeRect(px + 0.5, py + 0.5, mapTile() - 1, mapTile() - 1);
         }
         // 高台与地板交界
         if (c === '^' && !isSolid(nb.d)) {
           t.fillStyle = 'rgba(0,0,0,0.5)';
-          t.fillRect(px, py + TILE - 3, TILE, 3);
+          t.fillRect(px, py + mapTile() - 3, mapTile(), 3);
         }
       }
     }
@@ -359,11 +360,11 @@ export function initTextures(map) {
     for (let y = 1; y < grid.length; y++) {
       for (let x = 0; x < grid[y].length; x++) {
         if (grid[y][x] === '#') {
-          const g = t.createLinearGradient(0, y * TILE + TILE - 4, 0, y * TILE + TILE + 6);
+          const g = t.createLinearGradient(0, y * mapTile() + mapTile() - 4, 0, y * mapTile() + mapTile() + 6);
           g.addColorStop(0, 'rgba(0,0,0,0.28)');
           g.addColorStop(1, 'rgba(0,0,0,0)');
           t.fillStyle = g;
-          t.fillRect(x * TILE, y * TILE + TILE - 4, TILE, 10);
+          t.fillRect(x * mapTile(), y * mapTile() + mapTile() - 4, mapTile(), 10);
         }
       }
     }
@@ -405,7 +406,7 @@ export function initTextures(map) {
       if (dc !== '.') continue;
       if (rnd() > 0.5) continue;
       const kind = th.deco[Math.floor(rnd() * th.deco.length)];
-      drawDeco(t, kind, dx * TILE, dy * TILE, rnd);
+      drawDeco(t, kind, dx * mapTile(), dy * mapTile(), rnd);
       placed++;
     }
     // 6. 站点标记（色带 + 大字 + 边框增强辨识）

@@ -1,0 +1,62 @@
+﻿<h2>官方比赛图不是“三根直线”</h2>
+<p class="subtitle">先看官方 radar 的真实结构：空间由不规则房间、连接段和控制区组成，A/B 点分离，掩体和墙体就是路线本身。</p>
+
+<div class="cards">
+  <div class="card">
+    <div class="card-image"><img src="/files/de_dust2_radar_psd.png" alt="de_dust2 radar" style="width:100%;display:block;border-radius:6px"></div>
+    <div class="card-body">
+      <h3>de_dust2</h3>
+      <p>不对称双翼：A/B 在两端，T/CT 出生区对角，中路是复杂控制区，不是一条直道。</p>
+    </div>
+  </div>
+  <div class="card">
+    <div class="card-image"><img src="/files/de_mirage_radar_psd.png" alt="de_mirage radar" style="width:100%;display:block;border-radius:6px"></div>
+    <div class="card-body">
+      <h3>de_mirage</h3>
+      <p>密集房间群：小房间、转角、多层枪线交错，路线多但每个交火点都很短。</p>
+    </div>
+  </div>
+  <div class="card">
+    <div class="card-image"><img src="/files/de_inferno_radar_psd.png" alt="de_inferno radar" style="width:100%;display:block;border-radius:6px"></div>
+    <div class="card-body">
+      <h3>de_inferno</h3>
+      <p>建筑分区：狭窄入口、站点纵深、外围连接复杂，适合防守方建立层层站位。</p>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <h3>官方图的共同规律</h3>
+  <ul>
+    <li>A/B 点由不同建筑或控制区分隔，不会站在一个大厅同时看到两个点。</li>
+    <li>T/CT 出生区通常在对角，双方到 A/B 的时间差被控制在 1-2 秒内。</li>
+    <li>中路不是一条走廊，而是多个交叉视角组成的小型控制区。</li>
+    <li>每个点只有 2-3 个主要入口，入口前有开阔区、掩体和道具位。</li>
+    <li>墙体密集且形状不规则，房间、转角、凹位、高台共同构成枪线。</li>
+  </ul>
+</div>
+
+<h2>三张新图采用哪种整体策略？</h2>
+<div class="options">
+  <div class="option" data-choice="one-arch" onclick="toggleSelect(this)">
+    <div class="letter">A</div>
+    <div class="content">
+      <h3>统一双翼骨架</h3>
+      <p>三张图都用“双翼 + 中路控制”的官方原型，只在细节上做变体。平衡最容易，但辨识度有限。</p>
+    </div>
+  </div>
+  <div class="option" data-choice="three-arch" onclick="toggleSelect(this)">
+    <div class="letter">B</div>
+    <div class="content">
+      <h3>三图各用一种官方骨架（推荐）</h3>
+      <p>分别参考 dust2 的双翼、mirage 的房间群、inferno 的建筑纵深。差异化最强，也最接近成熟比赛图的多样性。</p>
+    </div>
+  </div>
+  <div class="option" data-choice="common-patterns" onclick="toggleSelect(this)">
+    <div class="letter">C</div>
+    <div class="content">
+      <h3>只提炼共同规律</h3>
+      <p>不照搬任何一张官方图，按“对角出生、双点分离、控制区、多入口、高掩体密度”自由重设计。</p>
+    </div>
+  </div>
+</div>

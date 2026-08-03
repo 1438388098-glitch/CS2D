@@ -1,0 +1,47 @@
+﻿<h2>地图设计方向：先确认改造范围</h2>
+<p class="subtitle">当前实测问题集中在开放占比过高、T/CT 到点时间失衡、有效掩体不足。先决定这一轮改到什么深度。</p>
+
+<div class="options">
+  <div class="option" data-choice="redesign-all" onclick="toggleSelect(this)">
+    <div class="letter">A</div>
+    <div class="content">
+      <h3>三图结构重做（推荐）</h3>
+      <p>保留三张图的主题与招牌机制，重排路线、站点、出生点和掩体密度。目标是 T/CT 到点时间差压在 ±1.5 秒内，每点有 2-3 个明确入口。</p>
+    </div>
+  </div>
+  <div class="option" data-choice="fix-worst" onclick="toggleSelect(this)">
+    <div class="letter">B</div>
+    <div class="content">
+      <h3>先修最严重的两张图</h3>
+      <p>优先重做 canal 和 dust2，metro 只做小修。改动更集中，但三图质量标准不会一次拉齐。</p>
+    </div>
+  </div>
+  <div class="option" data-choice="metrics-first" onclick="toggleSelect(this)">
+    <div class="letter">C</div>
+    <div class="content">
+      <h3>指标工具先行</h3>
+      <p>先把地图质量验收指标和可视化编辑器做扎实，再逐图改造。进度慢一点，但之后扩图有标准可循。</p>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <h3>当前关键数据</h3>
+  <table>
+    <thead>
+      <tr>
+        <th>地图</th>
+        <th>开放占比</th>
+        <th>墙体/100开放格</th>
+        <th>有效掩体/100开放格</th>
+        <th>T/CT到点最大差</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr><td>dust2</td><td>65.7%</td><td>51.9</td><td>4.7</td><td>CT 先到 5.3s</td></tr>
+      <tr><td>canal</td><td>86.1%</td><td>16.9</td><td>3.5</td><td>CT 先到 7.0s</td></tr>
+      <tr><td>metro</td><td>43.7%</td><td>127.7</td><td>4.3</td><td>CT 先到 2.0s</td></tr>
+    </tbody>
+  </table>
+  <p class="subtitle">有效掩体只算 C/D/o/高台等不可穿或可交互掩体，薄墙不计入。</p>
+</div>

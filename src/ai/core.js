@@ -9,7 +9,7 @@ import { report, query, MSG } from '../info.js';
 import { clamp, rand, angDiff, angNorm, viewCap } from '../utils.js';
 import { styleOf } from './shared.js';
 import { findVisibleEnemy } from './perception.js';
-import { botObjective } from './decisions.js';
+import { botObjective, ctReactsTo } from './decisions.js';
 import { botActions } from './actions.js';
 
 export function updateBots(game, dt) {
@@ -28,6 +28,13 @@ export function updateBots(game, dt) {
 }
 
 function botThink(e, game, dt) {
+  if (e.peekT > 0) e.peekT -= dt;
+  if (e.tradeBoost > 0) e.tradeBoost -= dt;
+  // S3 补枪加速（H11 专用）：队友 0.5s 内阵亡（KILL 消息）→ 瞄准速度提升 tradeSpeed 倍
+  if (e.aiParams && e.aiParams.tradeSpeed !== undefined && e.tradeBoost <= 0) {
+    const killInfo = query(game, e);
+    if (killInfo && killInfo.type === 'kill' && killInfo.age < 0.5) e.tradeBoost = 1.0;
+  }
   const d = e.aiParams || diffOf(game);
   if (e.dead) return;
   if (game.freezeT > 0) {
@@ -130,8 +137,10 @@ function botThink(e, game, dt) {
     const err = (d.spreadMult * (0.5 + td / 900) + weapon.spread * 0.3) * (Math.PI / 180);
     const diff = angDiff(wantAng, e.angle);
     // 甩枪 + 微调（拟合人类瞄准）：大角度快速转向，小角度精细逼近
+    // S3 补枪加速：tradeBoost 期间角速度 ×(1 + tradeBoost*(tradeSpeed-1))
+    const tradeMul = e.tradeBoost > 0 && d.tradeSpeed !== undefined ? (1 + e.tradeBoost * (d.tradeSpeed - 1)) : 1;
     const flick = Math.abs(diff) > 0.4 ? 6 : 1;
-    e.angle = angNorm(e.angle + clamp(diff, -d.aimSpeed * flick * dt, d.aimSpeed * flick * dt));
+    e.angle = angNorm(e.angle + clamp(diff, -d.aimSpeed * flick * dt * tradeMul, d.aimSpeed * flick * dt * tradeMul));
     // 攻坚判定：T 接近攻击点且未安弹时进入突击模式（移动中开火 + zigzag）
     const atkCs = e.team === 't' ? (game.tAttackSite === 'A' ? getMap().sites.A : getMap().sites.B) : null;
     const assaulting = !!(atkCs && !(game.bomb && game.bomb.planted) && !e.hasBomb &&
@@ -195,6 +204,17 @@ function botThink(e, game, dt) {
   }
   const obj = botObjective(e, game);
   if (obj) {
+    // H11 战术协同（intel 模式）：进点末段（<420px）全员同步封烟+闪光强打
+    if (e.aiParams && e.aiParams.intel && e.weapons && e.weapons.nades && obj.nade) {
+      const smokeNow = e.weapons.nades.smoke > 0 && rand() < dt * 3;
+      const flashNow = e.weapons.nades.flash > 0 && rand() < dt * 2.5;
+      if (smokeNow || flashNow) {
+        e.slot = smokeNow ? 'nade:smoke' : 'nade:flash';
+        throwGrenade(e, game);
+        e.slot = 'primary';
+        e.lastNadeT = game.roundTime;
+      }
+    }
     // 投掷推进（net nade 动作 / 基因 nadeUse）：进点前沿移动丢闪清点
     if (obj.nade && e.weapons && e.weapons.nades && e.weapons.nades.flash > 0 && rand() < dt * 1.5 && game.roundTime - (e.lastNadeT || 0) > 8) {
       e.slot = 'nade:flash';
@@ -211,12 +231,18 @@ function botThink(e, game, dt) {
       const pkNear = Math.hypot(obj.x - e.x, obj.y - e.y) < 260;
       const pkTrigger = obj.peek || (d.peekChance !== undefined && pkNear && rand() < d.peekChance * dt * 4);
       if (pkTrigger && pkNear) {
+        e.peekT = 0.25; // S3 探身标记：combat.js 探身精度减免
         const pkDir = Math.sin(game.time * 2.4 + e.anchorIdx * 1.9) > 0 ? 1 : -1;
         e.vx = Math.cos(e.angle + Math.PI / 2 * pkDir) * weapon.speed * 235 * 0.6;
         e.vy = Math.sin(e.angle + Math.PI / 2 * pkDir) * weapon.speed * 235 * 0.6;
         e.path = null;
         if (e.repathT > 0.9) e.repathT = 0.5;
       } else {
+        // S3 预瞄提前枪（H11 专用）：接近目标（转角/门口）时概率朝目标方向提前开火
+        if (d.prefireChance !== undefined && pkNear && !e.reloading && rand() < d.prefireChance * dt * 3) {
+          e.angle = angNorm(Math.atan2(obj.y - e.y, obj.x - e.x));
+          e.trigger = true;
+        }
         if (e.path === null) {
           if (e.repathT <= 0) {
             pathTo(e, obj.x, obj.y);
@@ -234,7 +260,7 @@ function botThink(e, game, dt) {
         (freshMem ? 0 : Math.sin(game.time * 3.2 + e.anchorIdx * 1.3) * 0.95));
     }
   }
-  if (e.lastKnown && !e.aimTarget && !e.hasBomb) {
+  if (e.lastKnown && !e.aimTarget && !e.hasBomb && (e.team !== 'ct' || ctReactsTo(e, game, e.lastKnown.x, e.lastKnown.y))) {
     const lk = e.lastKnown;
     const lkd = Math.hypot(e.x - lk.x, e.y - lk.y);
     if (e.lastKnownT < 3 && lkd > 70 && lkd < 700) {
@@ -249,7 +275,7 @@ function botThink(e, game, dt) {
   // 队内情报探查（共享黑板）：队友目击/枪声/受击/击杀 → 前往模糊位置侦察（信息衰减）
   if (!e.lastKnown && !e.aimTarget && !e.hasBomb && (e.team === 'ct' || game.roundTime > 12)) {
     const info = query(game, e);
-    if (info && info.age < 4) {
+    if (info && info.age < 4 && (e.team !== 'ct' || ctReactsTo(e, game, info.x, info.y))) {
       const d2 = Math.hypot(info.x - e.x, info.y - e.y);
       if (d2 > 60 && d2 < 800) {
         if (e.path === null && e.repathT <= 0) { pathTo(e, info.x, info.y); e.repathT = 1.0; }

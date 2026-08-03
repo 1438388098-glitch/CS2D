@@ -5,6 +5,8 @@ import { rand } from '../utils.js';
 export function botBuyAll(game) {
   for (const e of game.entities) {
     if (!e.bot) continue;
+    // S3 经济纪律（H11 专用）：ecoDiscipline>1 更严苛存钱（更早放弃起枪），<1 更激进
+    const eco = e.aiParams && e.aiParams.ecoDiscipline !== undefined ? e.aiParams.ecoDiscipline : 1;
     const pistolRound = game.round === 1 || game.round === 13;
     if (pistolRound) {
       if (e.money >= WEAPONS.p250.price) {
@@ -23,7 +25,7 @@ export function botBuyAll(game) {
     const fullArmor = PRICES.ARMOR + PRICES.HELM;
     // 经济纪律：钱不足以起全甲步枪时存钱（只买 P250），避免无甲冲锋枪送死
     const rifleCost = WEAPONS[rifle].price + PRICES.ARMOR;
-    if (e.money < rifleCost - 200) {
+    if (e.money < (rifleCost - 200) * eco) {
       if (e.weapons.primary !== 'p250' && e.money >= WEAPONS.p250.price) {
         e.weapons.primary = 'p250';
         e.slot = 'primary';

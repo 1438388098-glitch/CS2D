@@ -1,4 +1,5 @@
-import { ROUND, ECONOMY, MAX_PARTICLES, resolveDiff } from './config.js';
+import { ROUND, ECONOMY, MAX_PARTICLES, resolveDiff, MAP_AI } from './config.js';
+import { addMoney, clearEquipment } from './economy.js';
 import { getMap, loadMap, findMapById, collideCircle, los, pathTo, tileAt } from './map.js';
 import { createEntity, spawnEntity, weaponDef, ammoFor } from './entities.js';
 import { fireWeapon, startReload, finishReload, pickupWeapon, RECOIL_RECOVER } from './combat.js';
@@ -10,7 +11,8 @@ import { ctx, seedWorld } from './ctx.js';
 import { getMode } from './registry.js';
 import { clamp, lerp, rand, angDiff } from './utils.js';
 import { pressed, getBindLabel } from './keymap.js';
-import { initInfo, prune } from './info.js';
+import { initInfo, prune, intelBroadcast } from './info.js';
+import { initOppModel } from './ai/oppmodel.js';
 
 const emit = (evt, p) => ctx.bus.emit(evt, p);
 
@@ -39,6 +41,7 @@ export function createGame(opts = {}) {
     playerKills: [],
     mapW: 2400, mapH: 1800, canvasW: 1280, canvasH: 720,
     opts: { team: 'ct', diff: 'normal', bots: 4, sound: true, mapId: 'dust2' },
+    noRoundEnd: false,
     input: { keys: {}, mouse: { x: 0, y: 0, down: false, rdown: false, wasDown: false }, lastMouse: { x: 0, y: 0 } },
     ui: null,
     layers: null,
@@ -76,17 +79,37 @@ export function startMatch(game) {
   const fresh = createGame();
   fresh.opts = game.opts;
   fresh.opts.diffParams = resolveDiff(game.opts.diff, game.opts.hellLevel);
+  fresh.mode = game.opts.mode || null;
+  fresh.noRoundEnd = false;
   fresh.ui = game.ui;
   fresh.layers = game.layers;
   fresh.canvasW = game.canvasW;
   fresh.input = game.input;
   fresh.onMapChanged = game.onMapChanged;
+  fresh.lan = game.lan;
   Object.assign(game, fresh);
+  game.mapAi = MAP_AI[game.opts.mapId] || null;
   // 世界种子：整局随机流可复现（回放/调试/训练一致性）；可传 game.seed 固定复现
   if (game.seed === null) game.seed = Math.floor(Math.random() * 0x7fffffff);
   seedWorld(game.seed);
   initInfo(game);
+  initOppModel(game);
   game.over = false;
+  for (const k of ['br', 'rogue', 'boss', 'major', 'bossShots']) delete game[k];
+  const modeDef = game.mode ? getMode(game.mode) : null;
+  if (modeDef && modeDef.start) {
+    modeDef.start(game);
+  } else {
+    setupMatchEntities(game);
+    startRound(game);
+  }
+  if (ui) {
+    emit('objtextShow');
+    emit('flash', { opacity: 0 });
+  }
+}
+
+export function setupMatchEntities(game) {
   loadMap(findMapById(game.opts.mapId || 'dust2'));
   game.mapW = getMap().W;
   game.mapH = getMap().H;
@@ -100,11 +123,6 @@ export function startMatch(game) {
     game.entities.push(createEntity('t', true));
     game.entities.push(createEntity('ct', true));
   }
-  startRound(game);
-  if (ui) {
-    emit('objtextShow');
-    emit('flash', { opacity: 0 });
-  }
 }
 
 function spawnRound(game) {
@@ -115,11 +133,28 @@ function spawnRound(game) {
   }
   assignRoles(game);
   botBuyAll(game);
+  // H11 信息优势（intel 模式）：回合初获知 CT 防守分布（角色+锚点），供弱侧选择与预瞄
+  game.h11Intel = null;
+  game.h11T = null;
+  const h11T = game.entities.find((e) => e.bot && e.team === 't' && e.aiParams && e.aiParams.intel);
+  if (h11T) {
+    game.h11T = h11T;
+    const intel = { roles: [], anchors: [] };
+    for (const e of game.entities) {
+      if (e.bot && e.team === 'ct' && !e.dead) {
+        const hold = e.role === 'a' ? getMap().holds.A : (e.role === 'b' ? getMap().holds.B : null);
+        intel.roles.push({ role: e.role, x: hold ? hold.anchors[(e.anchorIdx || 0) % hold.anchors.length].x : e.x, y: hold ? hold.anchors[(e.anchorIdx || 0) % hold.anchors.length].y : e.y });
+      }
+    }
+    game.h11Intel = intel;
+  }
   const tBots = game.entities.filter((e) => e.team === 't');
   for (const e of tBots) e.hasBomb = false;
   if (tBots.length) {
     const carrier = tBots[Math.floor(rand() * tBots.length)];
     carrier.hasBomb = true;
+    carrier.role = game.tAttackSite;
+    carrier.rushMode = game.tRush;
   }
   game.bomb = null;
   game.smokes.length = 0;
@@ -151,15 +186,11 @@ export function startRound(game) {
   if (swapRound) {
     for (const e of game.entities) {
       e.team = e.team === 'ct' ? 't' : 'ct';
-      e.weapons.primary = null;
-      e.weapons.nades = { he: 0, flash: 0, smoke: 0 };
-      e.weapons.kit = false;
-      e.armor = 0;
-      e.helmet = false;
-      e.hasBomb = false;
-      e.ammoMap = {};
-      e.reserveMap = {};
+      clearEquipment(e);
+      e.money = ECONOMY.START_MONEY;
     }
+    game.lossStreakT = 0;
+    game.lossStreakCT = 0;
     emit('toast', { text: '阵营已交换！' });
   }
   game.state = 'BUY';
@@ -176,7 +207,7 @@ export function startRound(game) {
   updateBombHud(game);
 }
 
-export function endRound(game, winner, reason) {
+export function endRound(game, winner, reason, winType) {
   if (game.state === 'END') return;
   game.state = 'END';
   game.endedT = 6.5;
@@ -184,15 +215,23 @@ export function endRound(game, winner, reason) {
   game.winHistory.push(winner === 't' ? 'T' : winner === 'ct' ? 'C' : 'D');
   if (winner) {
     game.score[winner === 't' ? 'T' : 'CT']++;
+    const loser = winner === 't' ? 'ct' : 't';
+    const lossKey = loser === 't' ? 'lossStreakT' : 'lossStreakCT';
+    const winKey = winner === 't' ? 'lossStreakT' : 'lossStreakCT';
+    const lossStreak = game[lossKey] || 0;
+    const reward = winType === 'bomb' || winType === 'defuse' ? ECONOMY.WIN_BOMB_MONEY : ECONOMY.WIN_MONEY;
+    const bonus = ECONOMY.LOSS_BONUS[Math.min(lossStreak, ECONOMY.LOSS_BONUS.length - 1)];
     for (const e of game.entities) {
       if (e.team === winner) {
         e.lossStreak = 0;
-        e.money = clamp(e.money + ECONOMY.WIN_MONEY, 0, ECONOMY.MONEY_CAP);
+        addMoney(e, reward);
       } else {
-        e.money = clamp(e.money + ECONOMY.LOSS_BONUS[Math.min(e.lossStreak || 0, 3)], 0, ECONOMY.MONEY_CAP);
-        e.lossStreak = (e.lossStreak || 0) + 1;
+        e.lossStreak = lossStreak + 1;
+        addMoney(e, bonus);
       }
     }
+    game[winKey] = 0;
+    game[lossKey] = lossStreak + 1;
   }
   const text = winner === 't' ? 'TERRORISTS WIN' : (winner === 'ct' ? 'COUNTER-TERRORISTS WIN' : 'DRAW');
   const col = winner === 't' ? '#ffb545' : (winner === 'ct' ? '#5ab0ff' : '#888');
@@ -258,13 +297,13 @@ export function update(game, dt) {
   game.dt = dt;
   game.time += dt;
   if (game.over) return;
-  // ④ 模式钩子（registerMode 注册的模式在此驱动，如 deathmatch/感染模式等）
+  let modeDef = null;
   if (game.mode) {
-    const mode = typeof game.mode === 'string' ? getMode(game.mode) : game.mode;
-    if (mode && mode.update) mode.update(game, dt);
+    modeDef = typeof game.mode === 'string' ? getMode(game.mode) : game.mode;
+    if (modeDef && modeDef.update) modeDef.update(game, dt);
     if (game.over) return;
   }
-  if (game.state === 'MENU') return;
+  if (game.state === 'MENU' || game.state === 'MAJOR' || game.state === 'EDITOR') return;
   if (game.ui && game.ui.isPaused()) return;
   updateTimers(game, dt);
   if (game.state === 'END') {
@@ -272,7 +311,9 @@ export function update(game, dt) {
     return;
   }
   updatePlayer(game, dt);
-  updateBots(game, dt);
+  if (modeDef && modeDef.customBots) updateCustomBots(game, dt);
+  else updateBots(game, dt);
+
   updateGrenades(game, dt);
   for (const e of game.entities) {
     if (e.dead) continue;
@@ -284,7 +325,7 @@ export function update(game, dt) {
     e.y += e.vy * dt;
     collideCircle(e);
     const prevH = e.height;
-    e.height = curTile === '^' ? 1 : 0;
+    e.height = curTile === '^' ? 1 : curTile === 'R' ? 0.5 : 0;
     if (prevH === 1 && e.height === 0) e.stunT = 0.4;
     if (e.stunT > 0) e.stunT = Math.max(0, e.stunT - dt);
     e.vx *= Math.max(0, 1 - 7 * dt);
@@ -372,6 +413,12 @@ export function update(game, dt) {
   }
 }
 
+function updateCustomBots(game, dt) {
+  if (modeBotsUpdate) modeBotsUpdate(game, dt);
+}
+
+let modeBotsUpdate = null;
+export function setCustomBotsUpdater(fn) { modeBotsUpdate = fn; }
 function updateCam(game, dt) {
   let camTarget = game.player;
   if (game.player && game.player.dead) {
@@ -404,7 +451,7 @@ function updateTimers(game, dt) {
       if (game.bomb && game.bomb.planted) {
         explodeBomb(game);
       } else {
-        endRound(game, 'ct', '时间耗尽');
+        endRound(game, 'ct', '时间耗尽', 'timeout');
       }
     }
   } else if (game.state === 'END') {
@@ -471,7 +518,7 @@ function updatePlayer(game, dt) {
   p.crouched = pressed(keys, 'crouch');
   p.scoped = mouse.rdown && p.slot === 'primary' && p.weapons.primary === 'awp';
   game.zoom = p.scoped ? 1.7 : 1;
-  const curSpd = spd * (walk ? 0.55 : 1) * (p.scoped ? 0.5 : 1) * (p.crouched ? 0.5 : 1);
+  const curSpd = spd * (walk ? 0.55 : 1) * (p.scoped ? 0.5 : 1) * (p.crouched ? 0.5 : 1) * (p.speedMult || 1);
   const moving = len > 0 && game.freezeT <= 0;
   p.vx = ax * curSpd;
   p.vy = ay * curSpd;

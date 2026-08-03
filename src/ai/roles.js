@@ -16,34 +16,65 @@ export function assignRoles(game) {
   // 角色分配（阵容：突破/辅助/狙击/绕后/步枪）
   assignArchetypes(tBots, game.seed || 1);
   assignArchetypes(cBots, (game.seed || 1) + 7);
+  const tRoles = [];
+  const tn = tBots.length;
+  const tMainN = Math.max(2, Math.ceil(tn * 0.6));
+  const tMidN = tn >= 4 ? 1 : 0;
+  const tOtherN = Math.max(0, tn - tMainN - tMidN);
+  for (let i = 0; i < tn; i++) {
+    tRoles.push(i < tMainN ? game.tAttackSite : i < tMainN + tOtherN ? (game.tAttackSite === 'A' ? 'B' : 'A') : 'mid');
+  }
+  for (let i = tRoles.length - 1; i > 0; i--) {
+    const j = Math.floor(ctx.rand() * (i + 1));
+    const t = tRoles[i];
+    tRoles[i] = tRoles[j];
+    tRoles[j] = t;
+  }
   for (let i = 0; i < tBots.length; i++) {
     const e = tBots[i];
-    e.role = game.tAttackSite;
-    e.rushMode = game.tRush;
-    e.vanguard = i < 2;
+    e.role = tRoles[i];
+    e.rushMode = game.tRush && e.role === game.tAttackSite;
+    e.vanguard = i < 2 && e.role === game.tAttackSite;
     e.objCache = null;
     e.objAt = 0;
     e.guardPoint = null;
     e.igl = i === 0;
   }
+  const cRoles = [];
+  const cN = cBots.length;
+  const cA = Math.max(1, Math.round(cN * 0.4));
+  const cB = Math.max(1, Math.round(cN * 0.4));
+  const cM = Math.max(0, cN - cA - cB);
+  for (let i = 0; i < cN; i++) {
+    cRoles.push(i < cA ? 'a' : i < cA + cB ? 'b' : 'mid');
+  }
+  for (let i = cRoles.length - 1; i > 0; i--) {
+    const j = Math.floor(ctx.rand() * (i + 1));
+    const t = cRoles[i];
+    cRoles[i] = cRoles[j];
+    cRoles[j] = t;
+  }
+  const siteCount = { a: 0, b: 0, mid: 0 };
   for (let i = 0; i < cBots.length; i++) {
     const e = cBots[i];
-    // CT 守点分配：结合玩家(敌方)近期击杀位置偏好做反制（对手建模）
-    let kA = 0, kB = 0;
-    const ks = (game.playerKills || []).slice(-6);
-    for (const k of ks) {
-      const sA = getMap().sites.A, sB = getMap().sites.B;
-      if (Math.hypot(k.x - sA.cx, k.y - sA.cy) < Math.hypot(k.x - sB.cx, k.y - sB.cy)) kA++; else kB++;
-    }
-    const biasA = kA > kB;
-    const r = ctx.rand();
-    if (biasA && ctx.rand() < 0.6) e.role = 'a';
-    else if (!biasA && ctx.rand() < 0.6) e.role = 'b';
-    else e.role = r < 0.4 ? 'a' : (r < 0.8 ? 'b' : 'mid');
-    e.anchorIdx = Math.floor(ctx.rand() * 4);
+    e.role = cRoles[i];
+    e.anchorIdx = e.role === 'mid' ? 0 : siteCount[e.role]++;
     e.objCache = null;
     e.objAt = 0;
     e.igl = i === 0;
+    e.ctRoamer = false;
+  }
+  const midIdx = cBots.findIndex((e) => e.role === 'mid');
+  if (midIdx >= 0) {
+    cBots[midIdx].ctRoamer = true;
+  } else {
+    let roamer = cBots[0];
+    for (const e of cBots) {
+      const pa = e.personality ? e.personality.aggression : 0.65;
+      const pb = roamer && roamer.personality ? roamer.personality.aggression : 0.65;
+      if (pa > pb) roamer = e;
+    }
+    if (roamer) roamer.ctRoamer = true;
   }
 }
 

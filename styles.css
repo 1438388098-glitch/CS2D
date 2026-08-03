@@ -212,6 +212,7 @@ td.money{color:var(--gold);font-family:var(--f-num)}
 #buy .buy-head{display:flex;justify-content:space-between;align-items:center;padding:14px 20px;border-bottom:1px solid var(--line-1);position:sticky;top:0;background:var(--bg-1b);z-index:2}
 #buy .buy-head h2{font-size:18px;letter-spacing:4px;color:#fff}
 #buy .buy-head .cash{color:var(--gold);font-size:18px;font-weight:800;font-family:var(--f-num)}
+#buy .buy-eco{padding:6px 20px;border-bottom:1px solid var(--line-1);background:var(--bg-1b);color:var(--txt-2);font-size:11px;letter-spacing:1px}
 .buy-wrap{display:flex;gap:0}
 .buy-cats{flex:none;width:96px;border-right:1px solid var(--line-1);padding:14px 8px;display:flex;flex-direction:column;gap:4px}
 .buy-cat{display:flex;align-items:center;gap:7px;padding:8px 10px;background:transparent;border:1px solid transparent;border-radius:var(--r-s);color:var(--txt-2);font-size:12px;cursor:pointer;font-family:var(--f-cn);transition:all var(--dur-s) var(--ease);letter-spacing:1px}
@@ -358,3 +359,62 @@ td.money{color:var(--gold);font-family:var(--f-num)}
 .check-row input{width:16px;height:16px;accent-color:var(--accent,#ffb545)}
 #tutorialOverlay .tutorial-panel{max-width:440px}
 #tutorialOverlay .ctrl-list div{padding:5px 0;font-size:13px}
+/* ---------- Modes ---------- */
+.modes-strip { flex: 0 0 100%; max-width: 1040px; margin: 0 auto 14px; }
+.mode-cards { display: flex; flex-wrap: wrap; gap: 8px; }
+.mode-card {
+  flex: 1 1 110px; min-height: 58px; border: 1px solid var(--line-1); border-radius: 6px;
+  background: rgba(20,24,29,.72); color: var(--txt-1); padding: 8px 10px; text-align: left; cursor: pointer;
+  display: flex; flex-direction: column; gap: 3px; transition: border-color .12s, transform .12s, background .12s;
+}
+.mode-card b { font-size: 13px; letter-spacing: .5px; }
+.mode-card small { color: var(--txt-2); font-size: 11px; }
+.mode-card:hover { border-color: var(--accent); transform: translateY(-1px); }
+.mode-card.sel { border-color: var(--accent); background: rgba(255,138,42,.12); color: #fff; box-shadow: inset 0 0 0 1px rgba(255,138,42,.25); }
+.mode-settings { margin-top: 10px; min-height: 28px; }
+.mode-settings select, .mode-settings input { background: #151a20; color: #fff; border: 1px solid var(--line-2); border-radius: 4px; padding: 6px 8px; }
+.mode-hint { color: var(--txt-2); font-size: 12px; }
+
+#modeHud {
+  position: fixed; left: 50%; top: 46px; transform: translateX(-50%); z-index: 30; pointer-events: none;
+  min-width: 280px; max-width: 640px; background: rgba(10,13,17,.82); border: 1px solid rgba(255,255,255,.14);
+  border-radius: 8px; padding: 8px 12px; text-align: center; color: #fff; font-size: 12px;
+  box-shadow: 0 8px 24px rgba(0,0,0,.35);
+}
+#modeHud .mh-title { font-weight: 700; font-size: 13px; letter-spacing: 1px; color: var(--gold); margin-bottom: 4px; }
+#modeHud .mh-line { color: var(--txt-1); line-height: 1.5; }
+
+#majorPanel, #lanPanel, #editorOverlay { z-index: 50; }
+.major-panel { width: min(1080px, 94vw); max-height: 88vh; overflow: auto; }
+.major-status { font-size: 14px; margin-bottom: 12px; color: var(--txt-1); }
+.m-user { color: var(--gold); }
+.major-rounds { display: flex; gap: 14px; overflow-x: auto; padding-bottom: 12px; }
+.major-round { min-width: 190px; display: flex; flex-direction: column; gap: 8px; }
+.mr-label { color: var(--txt-2); font-weight: 700; letter-spacing: 2px; }
+.mr-card { background: rgba(18,22,27,.86); border: 1px solid var(--line-1); border-radius: 6px; padding: 8px; }
+.mr-card.cur { border-color: var(--accent); }
+.mr-card.user { box-shadow: inset 0 0 0 1px rgba(255,210,122,.35); }
+.mr-team { display: flex; justify-content: space-between; align-items: center; color: var(--txt-1); font-size: 12px; padding: 3px 0; }
+.mr-team.win { color: var(--gold); font-weight: 700; }
+.mr-team b { font-family: var(--f-num); }
+.mr-act { display: flex; gap: 6px; margin-top: 4px; }
+.major-champ { margin-top: 14px; color: var(--gold); font-size: 18px; font-weight: 700; text-align: center; letter-spacing: 1px; }
+.major-actions { margin-top: 12px; justify-content: center; }
+
+.lan-panel { width: min(480px, 92vw); }
+.lan-actions { gap: 8px; flex-wrap: wrap; }
+.lan-status { margin-top: 10px; color: var(--txt-1); font-size: 12px; min-height: 20px; }
+
+.editor-panel { width: min(1100px, 96vw); height: 90vh; display: flex; flex-direction: column; }
+.editor-head { flex: 0 0 auto; }
+.editor-palette { display: flex; flex-wrap: wrap; gap: 4px; margin: 8px 0; }
+.ed-pal-btn { width: 34px; height: 30px; border-radius: 4px; border: 1px solid rgba(255,255,255,.2); color: rgba(0,0,0,.7); font-weight: 700; cursor: pointer; }
+.ed-pal-btn.sel { outline: 2px solid var(--gold); outline-offset: 1px; }
+.editor-actions { gap: 6px; flex-wrap: wrap; margin-top: 6px; }
+#editorJson { width: 100%; height: 64px; background: #0b0d10; color: #c9d3de; border: 1px solid var(--line-2); border-radius: 4px; font: 11px Consolas, monospace; margin-top: 6px; }
+#editorCanvas { width: 100%; flex: 1 1 auto; min-height: 0; background: #101318; border-radius: 6px; border: 1px solid var(--line-2); image-rendering: pixelated; touch-action: none; }
+@media (max-width: 900px) { .modes-strip { max-width: 100%; } .mode-card { flex-basis: 150px; } }
+
+.cyber-pick { display: flex; align-items: center; gap: 8px; margin-top: 8px; font-size: 12px; }
+.cyber-pick label { width: 58px; color: var(--txt-2); }
+.cyber-pick select, .cyber-pick input { flex: 1; min-width: 0; }

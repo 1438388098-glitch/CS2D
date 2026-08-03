@@ -21,10 +21,13 @@ function initBonus() {
 // 同 genome + 同 seed → 严格相同结果（回放/对比/断点续训前提）
 // spec 专项塑形（地狱阶梯 H4-H7）：
 //   { save: 保枪纪律奖励(残局劣势存活), eco: 经济纪律奖励(买甲), flash: 闪光配合奖励, rotate: 转点反制奖励 }
-export function runEval(genome, mapId = 'dust2', rounds = EVAL_ROUNDS, seed = 0, spec = null) {
+// opponent：指定 CT 对手参数（H11 军备竞赛：对手 = H1-H10 挡位参数），null → normal 基线
+// tExtras：T 队 aiParams 扩展（H11：{ oppModel, netWeights } 决策网络 + 对手建模）
+export function runEval(genome, mapId = 'dust2', rounds = EVAL_ROUNDS, seed = 0, spec = null, opponent = null, tExtras = null) {
   initBonus();
   seedWorld(seed);
-  const params = decodeGenome(genome);
+  const decoded = decodeGenome(genome);
+  const params = tExtras ? { ...decoded, ...tExtras } : decoded;
   const g = createGame({ team: 'ct', diff: 'normal', bots: 5, mapId });
   g.seed = seed;
   g.ui = null;
@@ -32,7 +35,7 @@ export function runEval(genome, mapId = 'dust2', rounds = EVAL_ROUNDS, seed = 0,
   g.player.bot = true;
   for (const e of g.entities) {
     if (e.team === 't' && e.bot) e.aiParams = params;
-    if (e.team === 'ct') e.aiParams = null;
+    if (e.team === 'ct') e.aiParams = opponent;
   }
   g.buyTime = 0.3;
   g.freezeT = 0.2;

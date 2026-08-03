@@ -1,4 +1,5 @@
 import { ROUND, ECONOMY } from './config.js';
+import { addMoney } from './economy.js';
 import { inSite, los, getMap } from './map.js';
 import { applyDamage } from './combat.js';
 import { endRound, spawnParticle } from './game.js';
@@ -44,7 +45,7 @@ export function plantBomb(e, game) {
     e.hasBomb = false;
     game.bomb = { x: e.x, y: e.y, dropped: false, planted: true, site: s.label, timer: ROUND.BOMB_FUSE, defusing: false, defuseT: 0 };
     e.plants++;
-    e.money = clamp(e.money + ECONOMY.PLANT_MONEY, 0, ECONOMY.MONEY_CAP);
+    addMoney(e, ECONOMY.PLANT_MONEY);
     emit('sysfeed', { text: 'Bomb has been planted at ' + (s.label === 'A' ? 'A' : 'B') });
     emit('sfx', { name: 'bombPlanted', vol: 0.9, x: e.x, y: e.y, game });
   }
@@ -69,10 +70,10 @@ export function defuseBomb(e, game) {
     e.defuseT = 0;
     game.bomb = null;
     e.defuses++;
-    if (!e.bot) e.money = clamp(e.money + ECONOMY.DEFUSE_MONEY, 0, ECONOMY.MONEY_CAP);
+    addMoney(e, ECONOMY.DEFUSE_MONEY);
     emit('sysfeed', { text: 'Bomb has been defused!' });
     emit('sfx', { name: 'win', vol: 0.8, x: e.x, y: e.y, game });
-    endRound(game, 'ct', '拆弹成功');
+    endRound(game, 'ct', '拆弹成功', 'defuse');
   }
 }
 
@@ -100,5 +101,5 @@ export function explodeBomb(game) {
     const dmg = 700 * (1 - d / 620);
     if (dmg > 0) applyDamage(e, dmg, { killer: null, weapon: 'bomb', head: false }, game);
   }
-  endRound(game, 't', '炸弹爆炸');
+  endRound(game, 't', '炸弹爆炸', 'bomb');
 }

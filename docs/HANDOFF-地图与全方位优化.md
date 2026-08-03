@@ -181,5 +181,5 @@
 - A3/A4：三图招牌区落地；可破坏木箱 `D` 全链路完成。
 - B1-B5：受击反馈、击杀环、后坐力曲线、新手引导、观战小地图姓名、粒子池均完成。
 - C1/C2：AI 打箱决策完成；平衡趋势 dust2 53-69%、canal 44-59%、metro 39-55%，未较原基线恶化。
-- D1：`npm run check`、`npm test`、audio-patch、hell-battle、smoke-test、timing、cover-scan 全部通过。
+- D1：`npm run check`、`npm test`、audio-patch、hell-battle、smoke-test、timing、cover-scan、`test/cdp-test.mjs`、`test/cdp-maps.mjs` 全部通过。
 - D2：设计文档与交接文档已更新，本交接文档状态置为已完成（归档）。

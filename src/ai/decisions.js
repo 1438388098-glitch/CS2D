@@ -4,6 +4,45 @@ import { getMap, nearestSite } from '../map.js';
 import { rand, clamp } from '../utils.js';
 import { logAct, styleOf } from './shared.js';
 import { dqnFromJSON } from '../dqn.js';
+import { oppAimPoint, initOppModel } from './oppmodel.js';
+import { query, queryAll } from '../info.js';
+const CT_HOLD_RADIUS = 380;
+
+export function ctMySite(e, game) {
+  const m = getMap();
+  if (e.role === 'a') return m.sites.A;
+  if (e.role === 'b') return m.sites.B;
+  return null;
+}
+
+export function ctIsRoamer(e) {
+  return e.ctRoamer === true || e.role === 'mid';
+}
+
+export function ctReactsTo(e, game, x, y) {
+  const s = ctMySite(e, game);
+  if (ctIsRoamer(e)) return true;
+  if (!s) return true;
+  return Math.hypot(x - s.cx, y - s.cy) < CT_HOLD_RADIUS ||
+    Math.hypot(x - e.x, y - e.y) < 260;
+}
+function ctHotSite(game) {
+  const m = getMap();
+  let hot = null, best = 0;
+  for (const k of ['A', 'B']) {
+    const s = m.sites[k];
+    if (!s) continue;
+    let score = 0;
+    for (const o of game.entities) {
+      if (o.team !== 't' || o.dead) continue;
+      const d = Math.hypot(o.x - s.cx, o.y - s.cy);
+      if (d < 420) score += 1.6 - d / 420;
+      if (o.lastShot > game.time * 1000 - 2200 && d < 600) score += 1.0;
+    }
+    if (score > best) { best = score; hot = k; }
+  }
+  return best >= 2.0 ? hot : null;
+}
 
 // ===== 决策网络（DQN 推理层，H8-H10 地狱级）=====
 // 宏观动作空间：hold 守点 / push 进攻 / rotate 转点 / nade 投掷推进 / save 保枪 / peek 探身
@@ -152,7 +191,11 @@ function retreatPoint(e, game) {
 }
 
 function entryPoint(cs, game) {
-  const sp = getMap().spawns.t[0];
+  const m = getMap();
+  const key = cs && (cs.label === 'A' || cs.label === 'B') ? cs.label : (cs === m.sites.A ? 'A' : 'B');
+  const realEntry = m.entries && m.entries[key];
+  if (realEntry) return { x: realEntry.x, y: realEntry.y };
+  const sp = m.spawns.t[0];
   if (!sp) return { x: cs.cx - 380, y: cs.cy };
   const dx = cs.cx - sp.x, dy = cs.cy - sp.y;
   const len = Math.hypot(dx, dy) || 1;
@@ -174,8 +217,31 @@ export function botObjectiveRaw(e, game) {
       return { x: game.player.x + rand(-80, 80), y: game.player.y + rand(-80, 80) };
     }
   }
+  if (e.team === 't') {
+    // H11 信息优势：intel 模式回合初选择防守薄弱侧进攻（弱点透视级决策，用户授权 B 方案）
+    if (e.aiParams && e.aiParams.intel && game.h11Intel && game.roundTime < 2 && !(game.bomb && game.bomb.planted)) {
+      const def = game.h11Intel.roles;
+      const cntA = def.filter((r) => r.role === 'a').length;
+      const cntB = def.filter((r) => r.role === 'b').length;
+      const weak = cntA < cntB ? 'A' : (cntB < cntA ? 'B' : game.tAttackSite);
+      if (weak !== game.tAttackSite && game.roundTime < 2) {
+        game.tAttackSite = weak;
+        game.tSwitchedAt = game.roundTime;
+        logAct(game, e, 'intel', '防守分布→选弱侧 ' + weak);
+      }
+    }
+    // H11 战术协同（intel 模式）：回合初全员同步 rush 攻击点（打先手，避免慢推进被逐个击破）
+    if (e.aiParams && e.aiParams.intel && game.roundTime < 1 && !(game.bomb && game.bomb.planted) && !e.hasBomb) {
+      const cs = game.tAttackSite === 'A' ? getMap().sites.A : getMap().sites.B;
+      logAct(game, e, 'syncrush', '同步 rush ' + game.tAttackSite + ' 点');
+      return { x: cs.cx + rand(-140, 140), y: cs.cy + rand(-80, 80), nade: true };
+    }
+  }
   if (e.team === 'ct') {
-    if (planted) return { x: game.bomb.x, y: game.bomb.y };
+    if (planted) {
+      const retakeAng = (e.anchorIdx || 0) * 1.7;
+      return { x: game.bomb.x + Math.cos(retakeAng) * 45, y: game.bomb.y + Math.sin(retakeAng) * 45 };
+    }
     const ctAlive = game.entities.filter((o) => o.team === 'ct' && !o.dead && o !== e).length;
     const tAlive = game.entities.filter((o) => o.team === 't' && !o.dead).length;
     // 残局劣势保枪（风险偏好：莽的 bot 不保）
@@ -184,12 +250,28 @@ export function botObjectiveRaw(e, game) {
       return retreatPoint(e, game);
     }
     // 听枪回防（全角色生效，不再只限 a/b 守点）
-    const now = game.time * 1000;
-    for (const o of game.entities) {
-      if (o.team === 't' && !o.dead && now - o.lastShot < BOT_AI.HEAR_TTL) {
-        if (Math.hypot(o.x - e.x, o.y - e.y) < BOT_AI.HEAR_RADIUS) return { x: o.x, y: o.y };
+    const hotSite = ctHotSite(game);
+    const mySiteKey = ctMySite(e, game);
+    const myKey = mySiteKey ? mySiteKey.label : null;
+    if (hotSite && hotSite !== myKey) {
+      const hot = getMap().sites[hotSite];
+      const defendersHere = game.entities.filter((o) => o.team === 'ct' && !o.dead && o !== e && o.role === (myKey ? myKey.toLowerCase() : 'x')).length;
+      if (ctIsRoamer(e) || defendersHere >= 1) {
+        logAct(game, e, 'rotate', 'hot ' + hotSite);
+        return { x: hot.cx + rand(-80, 80), y: hot.cy + rand(-60, 60) };
       }
     }
+    const now = game.time * 1000;
+    let heard = null;
+    for (const o of game.entities) {
+      if (o.team === 't' && !o.dead && now - o.lastShot < BOT_AI.HEAR_TTL) {
+        const d = Math.hypot(o.x - e.x, o.y - e.y);
+        if (d < BOT_AI.HEAR_RADIUS && (!heard || d < heard.d)) {
+          heard = { x: o.x, y: o.y, d };
+        }
+      }
+    }
+    if (heard && ctReactsTo(e, game, heard.x, heard.y)) return { x: heard.x, y: heard.y };
     // 决策网络（H8-H10）：常规守点/前压由网络拍板，反应层（保枪/听枪）保持优先
     const nAct = netAct(e, game);
     if (nAct) {
@@ -197,7 +279,7 @@ export function botObjectiveRaw(e, game) {
       if (no) { logAct(game, e, nAct, 'net'); return no; }
     }
     // 前压侦察：IGL 拍板（game.ctPush），攻击性 bot 更积极，其余随队
-    if (game.ctPush && rand() < 0.8 * st.p.aggression) {
+    if (game.ctPush && ctIsRoamer(e) && rand() < 0.8 * st.p.aggression) {
       const sp = getMap().spawns.t[0];
       if (sp) {
         const dx = sp.x - e.x, dy = sp.y - e.y;
@@ -206,9 +288,10 @@ export function botObjectiveRaw(e, game) {
         return { x: e.x + dx / len * 380 + rand(-90, 90), y: e.y + dy / len * 380 + rand(-90, 90) };
       }
     }
-    if (getMap().highPoints && getMap().highPoints.length && e.role === 'a' && !planted && e.highPointT <= 0 && rand() < 0.18) {
+    const siteHighs = (getMap().highPoints || []).filter((hp) => hp.site === (e.role === 'a' ? 'A' : e.role === 'b' ? 'B' : 'mid'));
+    if (siteHighs.length && (e.role === 'a' || e.role === 'b') && !planted && e.highPointT <= 0 && rand() < 0.18) {
       e.highIdx = (e.highIdx || 0) + 1;
-      const hp = getMap().highPoints[e.highIdx % getMap().highPoints.length];
+      const hp = siteHighs[e.highIdx % siteHighs.length];
       e.highPointT = 8;
       return { x: hp.x, y: hp.y, face: hp.face };
     }
@@ -218,6 +301,8 @@ export function botObjectiveRaw(e, game) {
       return { x: p.x, y: p.y, face: Math.atan2(hold.entry.y - p.y, hold.entry.x - p.x) };
     }
     // mid：守 T 主攻方向的对侧点（5 人全守，避免中心游走送死）
+    const ctMidSpawn = getMap().spawns.ct[0];
+    if (ctMidSpawn) return { x: ctMidSpawn.x + rand(-90, 90), y: ctMidSpawn.y + rand(-90, 90) };
     const m2 = game.tAttackSite === 'A' ? getMap().holds.B : getMap().holds.A;
     return { x: m2.anchors[0].x, y: m2.anchors[0].y };
   }
@@ -231,8 +316,11 @@ export function botObjectiveRaw(e, game) {
     }
     const site2 = game.bomb.site === 'A' ? getMap().sites.A : getMap().sites.B;
     if (e.guardPointSite !== game.bomb.site || e.guardPoint === null) {
-      // 守弹目标围绕炸弹实际位置（而非站点中心），确保能打断拆弹
-      e.guardPoint = { x: game.bomb.x + rand(-130, 130), y: game.bomb.y + rand(-130, 130) };
+      const guardIdx = e.anchorIdx || 0;
+      const guardAlive = Math.max(1, game.entities.filter((o) => o.team === 't' && !o.dead).length);
+      const guardAng = guardIdx / guardAlive * Math.PI * 2 + (e.igl ? 0.6 : 0);
+      const guardR = 115 + (guardIdx % 2) * 55;
+      e.guardPoint = { x: game.bomb.x + Math.cos(guardAng) * guardR, y: game.bomb.y + Math.sin(guardAng) * guardR };
       e.guardPointSite = game.bomb.site;
     }
     return e.guardPoint;
@@ -265,8 +353,18 @@ export function botObjectiveRaw(e, game) {
       y: planter.y + Math.sin(ang) * 100 + Math.sin(ang + Math.PI / 2 * e.coverSide) * 80
     };
   }
-  if (e.role === 'mid') return { x: getMap().W / 2 + rand(-80, 80), y: getMap().H / 2 + rand(-80, 80) };
+  if (e.role === 'mid') {
+    const midPt = getMap().mid;
+    if (midPt) return { x: midPt.x + rand(-60, 60), y: midPt.y + rand(-60, 60) };
+    return { x: getMap().W / 2 + rand(-80, 80), y: getMap().H / 2 + rand(-80, 80) };
+  }
   const cs = game.tAttackSite === 'A' ? getMap().sites.A : getMap().sites.B;
+  if ((e.role === 'A' || e.role === 'B') && e.role !== game.tAttackSite && !(game.bomb && game.bomb.planted) && game.roundTime < 45) {
+    const otherSite = getMap().sites[e.role];
+    const otherEntry = getMap().entries && getMap().entries[e.role];
+    logAct(game, e, 'default', 'other ' + e.role);
+    return { x: (otherEntry ? otherEntry.x : otherSite.cx) + rand(-80, 80), y: (otherEntry ? otherEntry.y : otherSite.cy) + rand(-60, 60) };
+  }
   const tAlive2 = game.entities.filter((o) => o.team === 't' && !o.dead && o !== e).length;
   const ctAlive2 = game.entities.filter((o) => o.team === 'ct' && !o.dead).length;
   // 残局劣势保枪（风险偏好：莽的 bot 不保）
@@ -287,6 +385,14 @@ export function botObjectiveRaw(e, game) {
   if (nActT) {
     const no = netObjective(e, game, nActT);
     if (no) { logAct(game, e, nActT, 'net'); return no; }
+  }
+  // S3 对手建模预瞄（H11 专用）：进点前优先前往 CT 历史站位质心（合法情报）
+  if (e.aiParams && e.aiParams.oppModel) {
+    const aim = oppAimPoint(game, e.x, e.y, 700);
+    if (aim && Math.hypot(aim.x - e.x, aim.y - e.y) > 60 && Math.hypot(aim.x - e.x, aim.y - e.y) < 500) {
+      logAct(game, e, 'preaim', '对手建模预瞄');
+      return { x: aim.x, y: aim.y, peek: true };
+    }
   }
   if (e.rushMode || st.arch.aggression > 1.2) return { x: cs.cx + rand(-120, 120), y: cs.cy + rand(-60, 60) };
   // 协同集结：存活人数不足时全员到齐即进点（修复 1v1/2v2 死等 3 人的发呆）；人多时凑 3 人同步

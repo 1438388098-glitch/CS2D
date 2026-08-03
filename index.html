@@ -15,6 +15,7 @@
   <div id="deathflash"></div>
   <div id="flash"></div>
 
+  <div id="modeHud" style="display:none"></div>
   <div id="hud-root" style="display:none">
     <div id="hud-top">
       <div class="ht-main">
@@ -89,6 +90,19 @@
         <p>平面反恐精英 · 5V5 战术竞技</p>
       </div>
       <div class="menu-body">
+<div class="modes-strip">
+          <div id="modeSel" class="mode-cards">
+            <button class="mode-card sel" data-mode="classic"><b>经典爆破</b><small>5v5 拆包</small></button>
+            <button class="mode-card" data-mode="major"><b>Major 锦标赛</b><small>选队冲击冠军</small></button>
+            <button class="mode-card" data-mode="br"><b>大逃杀</b><small>PUBG 式缩圈</small></button>
+            <button class="mode-card" data-mode="rogue"><b>肉鸽地下城</b><small>随机枪械词条</small></button>
+            <button class="mode-card" data-mode="boss"><b>Boss 战</b><small>弹幕与二阶段</small></button>
+            <button class="mode-card" data-mode="cyber"><b>赛博斗螿螿</b><small>下注观战机器人</small></button>
+            <button class="mode-card" data-mode="lan"><b>局域网对战</b><small>双人同图</small></button>
+            <button class="mode-card" data-mode="editor"><b>地图编辑</b><small>绘制自定义图</small></button>
+          </div>
+          <div id="modeSettings" class="mode-settings"></div>
+        </div>
         <div class="menu-col maps-col">
           <h3>选择地图</h3>
           <div id="mapSel" class="map-cards">
@@ -218,6 +232,7 @@
   <div class="ov" id="buy">
     <div class="panel buy-panel">
       <div class="buy-head"><h2>购买装备</h2><div class="cash" id="buyCash">$0</div></div>
+      <div class="buy-eco" id="buyEco"></div>
       <div class="buy-wrap">
         <div class="buy-cats" id="buyCats"></div>
         <div class="buy-grid" id="buyGrid"></div>
@@ -248,6 +263,50 @@
     </div>
   </div>
 
+  <div class="ov" id="majorPanel" style="display:none">
+    <div class="panel major-panel">
+      <h3>Major 锦标赛</h3>
+      <div id="majorBracket" class="major-bracket"></div>
+      <div class="row major-actions">
+        <button class="btn" id="majorSim">模拟本轮</button>
+        <button class="btn" id="majorMenu">返回主菜单</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="ov" id="lanPanel" style="display:none">
+    <div class="panel lan-panel">
+      <h3>局域网对战</h3>
+      <div class="row"><label>玩家名</label><input id="lanName" maxlength="12" value="玩家"></div>
+      <div class="row"><label>房间码</label><input id="lanRoom" maxlength="8" placeholder="房主创建后自动生成"></div>
+      <div class="row lan-actions">
+        <button class="btn" id="lanHostBtn">创建房间</button>
+        <button class="btn" id="lanJoinBtn">加入房间</button>
+        <button class="btn primary" id="lanStartBtn" disabled>等待玩家</button>
+      </div>
+      <div id="lanStatus" class="lan-status">请创建房间或输入房间码加入</div>
+    </div>
+  </div>
+
+  <div class="ov" id="editorOverlay" style="display:none">
+    <div class="panel editor-panel">
+      <div class="editor-head">
+        <h3>局域网对战</h3>
+        <div id="editorPalette" class="editor-palette"></div>
+        <div class="row editor-actions">
+          <button class="btn small" id="editorSave">保存</button>
+          <button class="btn small" id="editorLoad">读取</button>
+          <button class="btn small" id="editorExport">导出</button>
+          <button class="btn primary small" id="editorPlay">试玩</button>
+          <button class="btn small" id="editorClose">关闭</button>
+        </div>
+        <div id="editorStatus" class="lan-status"></div>
+        <textarea id="editorJson" spellcheck="false" placeholder="地图 JSON 可在此粘贴并读取"></textarea>
+      </div>
+      <canvas id="editorCanvas" width="960" height="600"></canvas>
+    </div>
+  </div>
+
   <div class="ov" id="end">
     <div class="panel end-panel">
       <div class="final" id="endFinal"></div>
@@ -258,6 +317,7 @@
       <div class="end-bars" id="endBars"></div>
       <div id="endStats"></div>
       <button class="btn primary" id="againBtn" style="margin-top:16px">再战一局</button>
+      <button class="btn primary" id="majorNextBtn" style="margin-top:16px;display:none">返回 Major 战报</button>
       <button class="btn" id="endMenuBtn">返回主菜单</button>
     </div>
   </div>

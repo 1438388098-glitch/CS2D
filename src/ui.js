@@ -1,4 +1,4 @@
-import { WEAPONS, PRICES, MAPS } from './config.js';
+﻿import { WEAPONS, PRICES, MAPS, ECONOMY } from './config.js';
 import { ctx } from './ctx.js';
 import { ACTIONS, getBindLabel, getBindCodes, bind, resetBinds } from './keymap.js';
 
@@ -21,6 +21,7 @@ export function initUi(documentRef, canvasRef, gameRef) {
   game.ui = createUiApi();
   bindBus();
   bindMenu();
+  bindModeMenu();
   bindOverlays();
   bindSettings();
   setBusVolumeHook(setBusVolume);
@@ -128,6 +129,8 @@ function createUiApi() {
       el('menu') && el('menu').classList.add('show');
       stopAmbient();
       game.state = 'MENU'; game.over = false; const ot = el('objtext'); if (ot) ot.style.display = 'none'; uiHideBanner();
+      hideModePanels();
+      renderModeSettings();
     },
     hideMenu: () => el('menu') && el('menu').classList.remove('show'),
     hideEnd: () => el('end') && el('end').classList.remove('show'),
@@ -161,6 +164,8 @@ function createUiApi() {
     refreshScoreboard: () => { if (sbOpen) renderScoreboard(game); },
     isScoreboardOpen: () => sbOpen,
     showMatchEnd: (win, score, kd, mvp, stats) => {
+      const majorNext = el('majorNextBtn');
+      if (majorNext) majorNext.style.display = game.opts && game.opts.mode === 'major' ? 'inline-flex' : 'none';
       const f = el('endFinal');
       if (!f) return;
       f.textContent = win ? '胜利' : '败北';
@@ -397,6 +402,12 @@ export function renderBuyMenu(gameRef) {
   const p = gameRef.player;
   el('buyCash').textContent = '$' + p.money;
   el('buyTime').textContent = Math.max(0, gameRef.buyTime).toFixed(1) + 's';
+  const ecoEl = el('buyEco');
+  if (ecoEl) {
+    const streakKey = p.team === 't' ? 'lossStreakT' : 'lossStreakCT';
+    const streak = gameRef[streakKey] || 0;
+    ecoEl.textContent = '连败补偿 ' + String.fromCharCode(36) + ECONOMY.LOSS_BONUS[Math.min(streak, ECONOMY.LOSS_BONUS.length - 1)] + ' · 当前 ' + streak + ' 连败';
+  }
   // 分类竖列
   const cats = el('buyCats');
   cats.innerHTML = '';
@@ -592,6 +603,7 @@ function renderScoreboard(gameRef) {
 import { setMuted, initAudio, uiSfx, setBusVolume, stopAmbient } from './audio.js';
 import { startMatch } from './game.js';
 import { buyItem } from './economy.js';
+import { MAJOR_TEAMS, majorAction, CYBER_ROSTER, cyberCoins, cyberChance, cyberPayout } from './modes.js';
 
 let lastHoverT = 0;
 
@@ -600,6 +612,96 @@ function uiHover() {
   if (now - lastHoverT < 40) return;
   lastHoverT = now;
   uiSfx('hover', 0.12);
+}
+
+function hideModePanels() {
+  for (const id of ['majorPanel', 'lanPanel', 'editorOverlay']) {
+    const p = el(id);
+    if (p) p.style.display = 'none';
+  }
+  const mh = el('modeHud');
+  if (mh) mh.style.display = 'none';
+}
+
+function renderModeSettings() {
+  const box = el('modeSettings');
+  if (!box) return;
+  const mode = game.opts.mode || 'classic';
+  if (mode === 'major') {
+let html = '<div class="mode-hint">选择你的 Major 战队：</div><select id="majorTeamSel">';
+    for (const t of MAJOR_TEAMS) {
+html += '<option value="' + t.id + '"' + (game.opts.teamMajor === t.id ? ' selected' : '') + '>' + t.tag + ' · ' + t.name + ' · 强度 ' + t.rating + '</option>';
+    }
+    html += '</select>';
+    box.innerHTML = html;
+    const sel = el('majorTeamSel');
+    if (sel) {
+      if (!game.opts.teamMajor) game.opts.teamMajor = MAJOR_TEAMS[0].id;
+      sel.value = game.opts.teamMajor;
+      sel.onchange = () => { game.opts.teamMajor = sel.value; };
+    }
+  } else if (mode === 'lan') {
+box.innerHTML = '<div class="mode-hint">房主创建房间，另一台设备输入房间码加入；连接后由房主开赛。</div>';
+  } else if (mode === 'editor') {
+box.innerHTML = '<div class="mode-hint">点击“开始”进入地图编辑器：左侧选择图块，画布绘制，右侧可保存/导出/试玩。</div>';
+  } else if (mode === 'br') {
+box.innerHTML = '<div class="mode-hint">随机荒岛、随机空投、毒圈缩圈，活到最后即吃鸡。</div>';
+  } else if (mode === 'rogue') {
+box.innerHTML = '<div class="mode-hint">每张地图和每波武器/词条都随机；清波获得强化。</div>';
+  } else if (mode === 'boss') {
+box.innerHTML = '<div class="mode-hint">Boss 有弹幕、召唤和狂暴二阶段，击败后领取奖励。</div>';
+  } else if (mode === 'cyber') {
+    const opts = game.opts.cyber = game.opts.cyber || {};
+    const coins = cyberCoins();
+    if (!opts.leftId) opts.leftId = CYBER_ROSTER[0].id;
+    if (!opts.rightId) opts.rightId = CYBER_ROSTER[1].id;
+    if (!opts.bet) opts.bet = Math.min(100, coins);
+    if (!opts.side) opts.side = 'left';
+    const optHtml = (selId) => CYBER_ROSTER.map((c) => '<option value="' + c.id + '"' + (c.id === selId ? ' selected' : '') + '>' + c.name + ' ? ' + c.hp + 'HP ? ?' + c.atk + ' ? ?' + c.spd + '</option>').join('');
+    box.innerHTML = '<div class="mode-hint">余额 ' + coins + ' 螿螿币 · 选择双方并下注，强手赔率低、弱手赔率高。</div>' +
+      '<div class="cyber-pick"><label>左方</label><select id="cyberLeft">' + optHtml(opts.leftId) + '</select></div>' +
+      '<div class="cyber-pick"><label>右方</label><select id="cyberRight">' + optHtml(opts.rightId) + '</select></div>' +
+      '<div class="cyber-pick"><label>下注金额</label><input id="cyberBet" type="number" min="1" max="' + coins + '" value="' + opts.bet + '"></div>' +
+      '<div class="cyber-pick"><label>押注方</label><select id="cyberSide"><option value="left"' + (opts.side === 'left' ? ' selected' : '') + '>左方</option><option value="right"' + (opts.side === 'right' ? ' selected' : '') + '>右方</option></select></div>' +
+      '<div id="cyberOdds" class="mode-hint"></div>';
+    const leftSel = el('cyberLeft'), rightSel = el('cyberRight'), betIn = el('cyberBet'), sideSel = el('cyberSide');
+    const oddsEl = el('cyberOdds');
+    const renderOdds = () => {
+      if (!oddsEl) return;
+      const l = CYBER_ROSTER.find((c) => c.id === opts.leftId) || CYBER_ROSTER[0];
+      const r = CYBER_ROSTER.find((c) => c.id === opts.rightId) || CYBER_ROSTER[1];
+      const bet = Math.max(1, Math.floor(Number(opts.bet) || 100));
+      if (l.id === r.id) { oddsEl.textContent = '请选择两只不同的螿螿'; return; }
+      const ch = opts.side === 'left' ? cyberChance(l, r) : 1 - cyberChance(l, r);
+      const payout = cyberPayout(bet, ch);
+      oddsEl.textContent = '胜率 ' + Math.round(ch * 100) + '% ? 赔率 ' + (0.88 / Math.max(ch, 0.2)).toFixed(2) + 'x ? 预期返还 ' + payout + ' 螿螿币';
+    };
+    if (leftSel) leftSel.onchange = () => { opts.leftId = leftSel.value; renderOdds(); };
+    if (rightSel) rightSel.onchange = () => { opts.rightId = rightSel.value; renderOdds(); };
+    if (betIn) betIn.onchange = () => { opts.bet = Math.max(1, Math.floor(Number(betIn.value) || 100)); renderOdds(); };
+    if (sideSel) sideSel.onchange = () => { opts.side = sideSel.value; renderOdds(); };
+    renderOdds();
+  } else {
+    box.innerHTML = '';
+  }
+}
+
+function bindModeMenu() {
+  const modeSel = el('modeSel');
+  if (!modeSel) return;
+  for (const c of modeSel.children) {
+    c.onclick = (e) => {
+      game.opts.mode = c.getAttribute('data-mode');
+      for (const cc of modeSel.children) cc.classList.toggle('sel', cc === c);
+      try { localStorage.setItem('cs2d_mode', game.opts.mode); } catch (err) { /* no storage */ }
+      renderModeSettings();
+      e.currentTarget.blur();
+    };
+  }
+  const savedMode = (() => { try { return localStorage.getItem('cs2d_mode'); } catch (err) { return null; } })();
+  if (savedMode) game.opts.mode = savedMode;
+  for (const c of modeSel.children) c.classList.toggle('sel', c.getAttribute('data-mode') === game.opts.mode);
+  renderModeSettings();
 }
 
 function bindMenu() {
@@ -679,6 +781,18 @@ function bindMenu() {
   }
   startBtn.onclick = (e) => {
     initAudio();
+    if (game.opts.mode === 'editor') {
+      if (window.__openMapEditor) window.__openMapEditor(game);
+      e.currentTarget.blur();
+      return;
+    }
+    if (game.opts.mode === 'lan') {
+      const p = el('lanPanel');
+      if (p) p.style.display = 'flex';
+      el('menu') && el('menu').classList.remove('show');
+      e.currentTarget.blur();
+      return;
+    }
     startMatch(game);
     if (tut && tut.checked && !tutorialShown) {
       const o = el('tutorialOverlay');
@@ -696,6 +810,21 @@ function bindOverlays() {
   el('quitBtn').onclick = (e) => { game.ui.unpause(); game.ui.showMenu(); e.currentTarget.blur(); };
   el('againBtn').onclick = (e) => { game.ui.hideEnd(); startMatch(game); e.currentTarget.blur(); };
   el('endMenuBtn').onclick = (e) => { game.ui.hideEnd(); game.ui.showMenu(); e.currentTarget.blur(); };
+  const majorSim = el('majorSim');
+  if (majorSim) majorSim.onclick = () => { majorAction(game, 'simRound'); };
+  const majorMenu = el('majorMenu');
+  if (majorMenu) majorMenu.onclick = () => { majorAction(game, 'menu'); };
+  const majorNextBtn = el('majorNextBtn');
+  if (majorNextBtn) majorNextBtn.onclick = () => { majorAction(game, 'next'); };
+  const lanStartBtn = el('lanStartBtn');
+  if (lanStartBtn && window.__lanStart) lanStartBtn.onclick = () => window.__lanStart();
+  const editorClose = el('editorClose');
+  if (editorClose && window.__closeMapEditor) editorClose.onclick = () => window.__closeMapEditor();
+  const editorPlay = el('editorPlay');
+  if (editorPlay && window.__playEditorMap) editorPlay.onclick = () => window.__playEditorMap();
+  const editorSave = el('editorSave');
+  if (editorSave && window.__saveEditorMap) editorSave.onclick = () => window.__saveEditorMap();
+
   const tutorialOverlay = el('tutorialOverlay');
   const tutorialClose = el('tutorialClose');
   if (tutorialOverlay) {

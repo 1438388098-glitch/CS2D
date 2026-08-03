@@ -1,6 +1,6 @@
 // Timing 校准工具：测量 T→A/B、CT→A/B、CT 回防时间（px 距离 / 235px/s）
 import { MAPS, TILE } from '../src/config.js';
-import { loadMap, getMap, aStar } from '../src/map.js';
+import { loadMap, getMap, aStar, nearestWalkable } from '../src/map.js';
 
 const SPEED = 235; // 跑步基准（px/s）
 
@@ -15,6 +15,7 @@ function centerOf(grid, ch) {
 }
 
 function distTime(sx, sy, tx, ty) {
+  const tile = getMap()?.tile || TILE;
   const path = aStar(sx, sy, tx, ty);
   if (!path || !path.length) return null;
   let d = 0;
@@ -23,7 +24,7 @@ function distTime(sx, sy, tx, ty) {
     const dy = path[i].y - path[i - 1].y;
     d += Math.hypot(dx, dy);
   }
-  return d * TILE / SPEED;
+  return d * tile / SPEED;
 }
 
 function run(mapId) {
@@ -38,7 +39,9 @@ function run(mapId) {
   for (const k of ['A', 'B']) {
     const s = sites[k];
     if (!s) continue;
-    const tx = Math.round(s.cx / TILE), ty = Math.round(s.cy / TILE);
+    const tile = getMap()?.tile || TILE;
+    const st = nearestWalkable(s.cx, s.cy);
+    const tx = st.x, ty = st.y;
     out['T→' + k] = distTime(t.x, t.y, tx, ty);
     out['CT→' + k] = distTime(c.x, c.y, tx, ty);
     out['T先到' + k] = out['T→' + k] !== null && out['CT→' + k] !== null

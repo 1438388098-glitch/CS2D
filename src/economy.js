@@ -1,7 +1,29 @@
-import { WEAPONS, PRICES } from './config.js';
+import { WEAPONS, PRICES, ECONOMY } from './config.js';
 import { ctx } from './ctx.js';
 
 const emit = (evt, p) => ctx.bus.emit(evt, p);
+export function killRewardFor(weapon) {
+  if (weapon === 'knife') return ECONOMY.KILL_MONEY_KNIFE;
+  if (weapon === 'awp') return ECONOMY.KILL_MONEY_AWP;
+  return ECONOMY.KILL_MONEY;
+}
+
+export function addMoney(e, amount) {
+  e.money = Math.max(0, Math.min(ECONOMY.MONEY_CAP, e.money + amount));
+}
+
+export function clearEquipment(e) {
+  e.weapons.primary = null;
+  e.weapons.secondary = null;
+  e.weapons.nades = { he: 0, flash: 0, smoke: 0 };
+  e.weapons.kit = false;
+  e.armor = 0;
+  e.helmet = false;
+  e.hasBomb = false;
+  e.ammoMap = {};
+  e.reserveMap = {};
+  e.slot = 'secondary';
+}
 
 export function buyItem(game, what) {
   const p = game.player;

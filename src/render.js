@@ -3,6 +3,7 @@ import { weaponDef } from './entities.js';
 import { getMap, getGrid } from './map.js';
 import { gunLen, FONT } from './render-utils.js';
 import { clamp, rand } from './utils.js';
+const mapTile = () => getMap()?.tile || TILE;
 import { ARCHETYPES } from './persona.js';
 
 let ctx = null;
@@ -45,6 +46,7 @@ export function render(game) {
   drawEntities(game);
   drawSmokes(game);
   drawParticles(game);
+  drawBossShots(game);
   drawTracers(game);
   ctx.restore();
 }
@@ -55,15 +57,15 @@ function drawWaterOverlay(game) {
   const grid = getGrid();
   if (!grid || !grid.length) return;
   const now = performance.now() / 1000;
-  const x0 = Math.max(0, Math.floor((game.camX - game.canvasW / game.zoom / 2) / TILE) - 1);
-  const y0 = Math.max(0, Math.floor((game.camY - game.canvasH / game.zoom / 2) / TILE) - 1);
-  const x1 = Math.min(grid[0].length, Math.ceil((game.camX + game.canvasW / game.zoom / 2) / TILE) + 1);
-  const y1 = Math.min(grid.length, Math.ceil((game.camY + game.canvasH / game.zoom / 2) / TILE) + 1);
+  const x0 = Math.max(0, Math.floor((game.camX - game.canvasW / game.zoom / 2) / mapTile()) - 1);
+  const y0 = Math.max(0, Math.floor((game.camY - game.canvasH / game.zoom / 2) / mapTile()) - 1);
+  const x1 = Math.min(grid[0].length, Math.ceil((game.camX + game.canvasW / game.zoom / 2) / mapTile()) + 1);
+  const y1 = Math.min(grid.length, Math.ceil((game.camY + game.canvasH / game.zoom / 2) / mapTile()) + 1);
   ctx.save();
   for (let y = y0; y < y1; y++) {
     for (let x = x0; x < x1; x++) {
       if (grid[y][x] !== '~') continue;
-      const px = x * TILE, py = y * TILE;
+      const px = x * mapTile(), py = y * mapTile();
       const seed = (x * 7 + y * 13) % 17;
       const off = (now * 14 + seed * 5) % 30;
       ctx.fillStyle = 'rgba(220,240,255,0.20)';
@@ -89,16 +91,16 @@ function drawBombSiteMarks(game) {
 function drawCrates(game) {
   if (!game.crates || !game.crates.length) return;
   for (const c of game.crates) {
-    const px = c.x - TILE / 2, py = c.y - TILE / 2;
+    const px = c.x - mapTile() / 2, py = c.y - mapTile() / 2;
     ctx.fillStyle = 'rgba(0,0,0,0.42)';
-    ctx.fillRect(px + 3, py + TILE - 4, TILE, 4);
+    ctx.fillRect(px + 3, py + mapTile() - 4, mapTile(), 4);
     ctx.fillStyle = c.hp > 1 ? 'rgba(118,88,54,0.96)' : 'rgba(104,76,48,0.96)';
-    ctx.fillRect(px, py, TILE, TILE);
+    ctx.fillRect(px, py, mapTile(), mapTile());
     ctx.fillStyle = 'rgba(255,255,255,0.12)';
-    ctx.fillRect(px, py, TILE, 3);
+    ctx.fillRect(px, py, mapTile(), 3);
     ctx.strokeStyle = 'rgba(56,40,24,0.9)';
     ctx.lineWidth = 2;
-    ctx.strokeRect(px + 1, py + 1, TILE - 2, TILE - 2);
+    ctx.strokeRect(px + 1, py + 1, mapTile() - 2, mapTile() - 2);
     if (c.hp <= 1) {
       ctx.strokeStyle = 'rgba(34,24,14,0.9)';
       ctx.lineWidth = 1.5;
@@ -183,9 +185,74 @@ function drawGrenades(game) {
   }
 }
 
+function drawCricketEntity(e) {
+  const col = e.color || '#ffd75e';
+  const pct = clamp(e.hp / e.maxHp, 0, 1);
+  ctx.save();
+  ctx.translate(e.x, e.y);
+  ctx.fillStyle = 'rgba(0,0,0,0.35)';
+  ctx.beginPath();
+  ctx.ellipse(0, 5, 14, 7, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.strokeStyle = col;
+  ctx.lineWidth = 1.6;
+  const wa = Math.sin(performance.now() / 300) * 3;
+  ctx.beginPath();
+  ctx.moveTo(0, -12);
+  ctx.lineTo(9 + wa, -23);
+  ctx.moveTo(0, -12);
+  ctx.lineTo(-9 + wa, -23);
+  ctx.stroke();
+  ctx.rotate(e.angle);
+  ctx.fillStyle = 'rgba(0,0,0,0.2)';
+  ctx.beginPath();
+  ctx.ellipse(0, 0, 15, 18, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = col;
+  ctx.beginPath();
+  ctx.ellipse(0, 0, 12, 16, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = '#1d222a';
+  ctx.beginPath();
+  ctx.arc(0, -13, 8, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = '#fff';
+  ctx.beginPath();
+  ctx.arc(3, -15, 2.4, 0, Math.PI * 2);
+  ctx.arc(-3, -15, 2.4, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.strokeStyle = 'rgba(255,255,255,0.25)';
+  ctx.lineWidth = 2;
+  for (let i = -1; i <= 1; i++) {
+    ctx.beginPath();
+    ctx.moveTo(i * 5, 2);
+    ctx.lineTo(i * 8, 13);
+    ctx.stroke();
+  }
+  ctx.strokeStyle = 'rgba(0,0,0,0.6)';
+  ctx.lineWidth = 3;
+  ctx.beginPath();
+  ctx.arc(0, 0, 22, 0, Math.PI * 2);
+  ctx.stroke();
+  ctx.strokeStyle = pct > 0.5 ? '#7be36a' : pct > 0.25 ? '#ffd75e' : '#ff5d5d';
+  ctx.beginPath();
+  ctx.arc(0, 0, 22, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * pct);
+  ctx.stroke();
+  ctx.restore();
+  ctx.save();
+  ctx.globalAlpha = 0.9;
+  ctx.font = "11px 'Segoe UI','Microsoft YaHei',sans-serif";
+  ctx.textAlign = 'center';
+  ctx.fillStyle = col;
+  ctx.fillText(e.name, e.x, e.y - 32);
+  ctx.restore();
+}
+
 function drawEntities(game) {
   for (const e of game.entities) {
     if (e.dead) continue;
+    if (e.boss) { drawBossEntity(e); continue; }
+    if (e.cricket) { drawCricketEntity(e); continue; }
     const isP = e === game.player;
     const darkCol = e.team === 'ct' ? '#4d9bff' : '#ffa03d';
     ctx.save();
@@ -380,6 +447,60 @@ function drawParticles(game) {
     }
   }
 }
+function drawBossEntity(e) {
+  const pulse = 0.55 + 0.45 * Math.sin(performance.now() / 240);
+  ctx.save();
+  ctx.translate(e.x, e.y);
+  ctx.fillStyle = "rgba(0,0,0,0.4)";
+  ctx.beginPath();
+  ctx.ellipse(0, 10, 30, 15, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.strokeStyle = "rgba(210,60,255," + (0.5 + 0.4 * pulse) + ")";
+  ctx.lineWidth = 4;
+  ctx.beginPath();
+  ctx.arc(0, 0, 34, 0, Math.PI * 2);
+  ctx.stroke();
+  ctx.rotate(e.angle);
+  ctx.fillStyle = "#2b0b33";
+  ctx.beginPath();
+  ctx.ellipse(0, 0, 26, 34, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = "#d04ad6";
+  ctx.beginPath();
+  ctx.arc(0, -8, 11, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = "#ff4d8d";
+  ctx.fillRect(-12, -18, 24, 5);
+  ctx.fillStyle = "#ffd27a";
+  ctx.fillRect(14, -6, 22, 4);
+  ctx.restore();
+  const hpPct = Math.max(0, e.hp / (e.maxHp || 1));
+  ctx.fillStyle = "rgba(0,0,0,0.6)";
+  ctx.fillRect(e.x - 38, e.y - 48, 76, 7);
+  ctx.fillStyle = "#d04ad6";
+  ctx.fillRect(e.x - 37, e.y - 47, 74 * hpPct, 5);
+  ctx.fillStyle = "#ffd0f0";
+  ctx.font = "12px 'Segoe UI','Microsoft YaHei',sans-serif";
+  ctx.textAlign = "center";
+  ctx.fillText(e.name, e.x, e.y - 56);
+}
+
+function drawBossShots(game) {
+  if (!game.bossShots || !game.bossShots.length) return;
+  for (const s of game.bossShots) {
+    const a = Math.min(1, s.life);
+    ctx.fillStyle = "rgba(255,70,170," + a + ")";
+    ctx.beginPath();
+    ctx.arc(s.x, s.y, s.size, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = "rgba(255,220,90," + a * 0.7 + ")";
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.arc(s.x, s.y, s.size + 4, 0, Math.PI * 2);
+    ctx.stroke();
+  }
+}
+
 function drawTracers(game) {
   for (const t of game.tracers) {
     const a = clamp(t.life / 0.09, 0, 1);

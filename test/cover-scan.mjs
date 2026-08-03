@@ -3,13 +3,14 @@ import { MAPS, TILE } from '../src/config.js';
 import { loadMap, getMap } from '../src/map.js';
 
 const COVER_R = Math.round(470 / TILE); // 约 12 瓦片
-const isCover = (c) => c === 'C' || c === '^' || c === '=' || c === 'o';
+const isCover = (c) => c === 'C' || c === '^' || c === '=' || c === 'o' || c === 'D' || c === '#';
 const isWalk = (c) => c === '.' || c === 'a' || c === 'b' || c === 't' || c === 'c' || c === '~' || c === '≈';
 
 for (const m of ['dust2', 'canal', 'metro']) {
   loadMap(MAPS.find((x) => x.id === m));
   const map = getMap();
   const g = map.grid;
+  const COVER_R = Math.round(470 / (map.tile || TILE));
   const exposed = [];
   for (let y = 1; y < g.length - 1; y++) {
     for (let x = 1; x < g[y].length - 1; x++) {

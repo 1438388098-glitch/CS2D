@@ -539,3 +539,6 @@ src/audio/
 ### 14.6 AI 与平衡（C）
 - AI 新增“打掉木箱再架枪”决策：目标附近有可命中木箱时优先射击木箱。
 - 平衡复测趋势：dust2 53-69%、canal 44-59%、metro 39-55%；原基线 dust2/canal 75%，本次改动未恶化。
+### 14.7 浏览器验证（D1）
+- `test/cdp-test.mjs` PASS：菜单、开局、Canvas、输入、射击、小地图渲染正常。
+- `test/cdp-maps.mjs` PASS：dust2/canal/metro 三图均能开局并渲染小地图。

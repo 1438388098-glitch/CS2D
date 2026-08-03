@@ -4,7 +4,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import zlib from 'node:zlib';
 import { MAPS, TILE } from '../src/config.js';
-import { loadMap, getMap, aStar } from '../src/map.js';
+import { loadMap, getMap, aStar, nearestWalkable } from '../src/map.js';
 
 const SPEED = 235;
 const LONG_RUN = 12;
@@ -113,13 +113,14 @@ function centerOf(grid, ch) {
 }
 
 function distTime(sx, sy, tx, ty) {
+  const tile = getMap()?.tile || TILE;
   const p = aStar(sx, sy, tx, ty);
   if (!p || !p.length) return null;
   let d = 0;
   for (let i = 1; i < p.length; i++) {
     d += Math.hypot(p[i].x - p[i - 1].x, p[i].y - p[i - 1].y);
   }
-  return Math.round(d * TILE / SPEED * 10) / 10;
+  return Math.round(d * tile / SPEED * 10) / 10;
 }
 
 function analyzeCs2d(id) {
@@ -134,7 +135,9 @@ function analyzeCs2d(id) {
   for (const key of ['A', 'B']) {
     const s = map.sites[key];
     if (!s) continue;
-    const tx = Math.round(s.cx / TILE), ty = Math.round(s.cy / TILE);
+    const tile = getMap()?.tile || TILE;
+    const st = nearestWalkable(s.cx, s.cy);
+    const tx = st.x, ty = st.y;
     out.dist['T->' + key] = distTime(t.x, t.y, tx, ty);
     out.dist['CT->' + key] = distTime(c.x, c.y, tx, ty);
   }

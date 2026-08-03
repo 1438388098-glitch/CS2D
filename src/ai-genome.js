@@ -1,7 +1,8 @@
 import { clamp } from './utils.js';
 
-// 13 维基因组：0-9 战斗参数（S1 兼容），10-12 策略参数（S2 新增）
-export const GENOME_SIZE = 13;
+// 19 维基因组：0-9 战斗参数（S1 兼容）、10-12 策略参数（S2）、13-18 微观战斗增强（H11 军备竞赛 S3）
+// 新维度默认值 = 中性（1.0 或 0）→ H1-H10 旧基因不填新位时行为不变
+export const GENOME_SIZE = 19;
 
 export function randomGenome() {
   const g = new Array(GENOME_SIZE);
@@ -24,7 +25,14 @@ export function decodeGenome(g) {
     riskT: 0.3 + v(9, 0.5) * 1.2,
     rushChance: 0.1 + v(10, 0.35) * 0.6,
     rotateChance: 0.2 + v(11, 0.45) * 0.6,
-    saveChance: 0.2 + v(12, 0.55) * 0.8
+    saveChance: 0.2 + v(12, 0.55) * 0.8,
+    // S3 微观战斗增强（默认中性：peekSkill/counterStrafe/spreadCtrl=1.0, prefire/trade=0）
+    peekSkill: 0.6 + v(13, 1.0) * 0.4,
+    counterStrafe: 0.5 + v(14, 1.0) * 0.5,
+    prefireChance: v(15, 0) * 0.6,
+    ecoDiscipline: 0.4 + v(16, 0.75) * 0.8,
+    tradeSpeed: 1.0 + v(17, 0) * 1.5,
+    spreadCtrl: 0.5 + v(18, 1.0) * 1.0
   };
 }
 

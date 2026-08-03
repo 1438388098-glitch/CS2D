@@ -1,5 +1,6 @@
 import { WEAPONS, ECONOMY, DIFF, diffOf, MAX_DECALS, TILE } from './config.js';
-import { passableTolerant, collideCircle, los, tileAt, getGrid } from './map.js';
+import { killRewardFor, addMoney, clearEquipment } from './economy.js';
+import { passableTolerant, collideCircle, los, tileAt, getGrid, getMap } from './map.js';
 import { weaponDef, wkey, ammoFor, reserveFor } from './entities.js';
 import { ctx } from './ctx.js';
 import { clamp, rand, angDiff, viewCap } from './utils.js';
@@ -11,6 +12,7 @@ import { throwGrenade } from './grenades.js';
 import { effectiveSpread, registerShot, updateShotStreak, headshotChance } from './ballistic.js';
 
 const emit = (evt, p) => ctx.bus.emit(evt, p);
+const mapTile = () => getMap()?.tile || TILE;
 
 export const RECOIL_RECOVER = 2.2;
 
@@ -72,6 +74,11 @@ export function fireWeapon(e, game) {
   let spread = effectiveSpread(w, e);
   registerShot(e);
   if (e.bot) spread *= (e.aiParams || diffOf(game)).spreadMult;
+  if (e.bot && game.mapAi) spread *= e.team === 'ct' ? game.mapAi.ctSpread : game.mapAi.tSpread;
+  // S3 微观增强：探身对枪精度（探身状态 peekT>0 时散布减免，H11 专用）
+  if (e.bot && e.peekT > 0 && e.aiParams && e.aiParams.peekSkill !== undefined) {
+    spread *= e.aiParams.peekSkill;
+  }
   let moveSpread = 0;
   const recoilSpread = e.recoil * 0.6;
   if (w.kind === 'sniper') {
@@ -83,7 +90,7 @@ export function fireWeapon(e, game) {
     const spreadAngle = (spread + moveSpread + recoilSpread) * (rand() * 2 - 1) * (Math.PI / 180);
     fireRay(e, game, e.angle + spreadAngle, w, w.dmg, pellets > 1);
   }
-  if (w.mag > 0) e.ammoMap[k] -= 1;
+  if (w.mag > 0 && !e.infiniteAmmo) e.ammoMap[k] -= 1;
   if (e === game.player) game.stats.shots++;
   e.recoil = clamp(e.recoil + (w.kind === 'sniper' ? 0.09 : (w.kind === 'pistol' ? 0.14 : 0.11)), 0, 2.4);
   e.fireCd = 60 / w.rpm;
@@ -153,7 +160,7 @@ function fireRay(e, game, ang, w, dmg, isPellet) {
     const dx = o.x - ox, dy = o.y - oy;
     const along = dx * cos + dy * sin;
     // 低打高：高台目标有效半径缩小 25%（精度惩罚下沉到命中几何，与 aimTarget 无关，玩家/AI 统一生效）
-    const effRad = (o.height === 1 && e.height === 0) ? (o.rad + 2) * 0.75 : o.rad + 2;
+    const effRad = (o.height >= 0.75 && e.height < 0.5) ? (o.rad + 2) * 0.75 : o.rad + 2;
     if (along < 0 || along > range + o.rad) continue;
     const perp = Math.abs(dx * sin - dy * cos);
     if (perp < effRad && (best === null || along < best.t)) best = { t: along, ent: o, perp };
@@ -176,7 +183,7 @@ function fireRay(e, game, ang, w, dmg, isPellet) {
       continue;
     }
     inWall = false;
-    if (c === 'C' && e.height === 1) continue;
+    if (c === 'C' && e.height >= 0.75) continue;
     if (c === 'D') { hitCrateByShot(game, px, py, e); wallT = s * 6; break; }
     // 深水挡弹（spec 4.3：水下隐蔽 + 弹丸被水阻挡）；浅水 ~ 可穿透
     if (c === '≈') { wallT = s * 6; break; }
@@ -201,7 +208,7 @@ function fireRay(e, game, ang, w, dmg, isPellet) {
     if (e === game.player) game.stats.hits++;
     // 爆头由瞄准精度驱动（中心命中/近距离/精密武器 → 概率更高），不再纯随机
     const head = !isPellet && rand() < headshotChance(w, hit, best.perp, best.t);
-    let finalDmg = dmg;
+    let finalDmg = dmg * (e.dmgMult || 1);
     finalDmg *= penMult;
     const dd = best.t;
     if (w.kind === 'pistol' || w.kind === 'smg') {
@@ -239,14 +246,14 @@ function fireRay(e, game, ang, w, dmg, isPellet) {
 
 export function barrelAt(game, px, py) {
   if (!game.barrels) return null;
-  const tx = Math.floor(px / TILE), ty = Math.floor(py / TILE);
+  const tx = Math.floor(px / mapTile()), ty = Math.floor(py / mapTile());
   for (const b of game.barrels) if (b.tx === tx && b.ty === ty) return b;
   return null;
 }
 
 export function crateAt(game, px, py) {
   if (!game.crates) return null;
-  const tx = Math.floor(px / TILE), ty = Math.floor(py / TILE);
+  const tx = Math.floor(px / mapTile()), ty = Math.floor(py / mapTile());
   for (const c of game.crates) if (c.tx === tx && c.ty === ty) return c;
   return null;
 }
@@ -381,7 +388,7 @@ export function killEntity(v, killer, weapon, head, game) {
   const wname = WEAPONS[weapon] ? WEAPONS[weapon].name : (weapon === 'bomb' ? '炸弹' : (weapon === 'grenade' ? '手雷' : (weapon === 'barrel' ? '油桶' : '战术刀')));
   if (killer && killer !== v) {
     killer.kills++;
-    killer.money = clamp(killer.money + ECONOMY.KILL_MONEY, 0, ECONOMY.MONEY_CAP);
+    addMoney(killer, killRewardFor(weapon));
     for (const o of game.entities) {
       if (o !== killer && o.team === killer.team && !o.dead) {
         if (v.lastDmgFrom === o && (game.time * 1000 - v.lastDmgT) < 6000) o.assists++;
@@ -432,7 +439,8 @@ export function killEntity(v, killer, weapon, head, game) {
       life: 45
     });
   }
-  checkRoundEnd(game);
+  clearEquipment(v);
+  if (!game.noRoundEnd) checkRoundEnd(game);
 }
 
 export function pickupWeapon(e, game) {
@@ -521,8 +529,8 @@ function checkRoundEnd(game) {
   const tAlive = game.entities.filter((e) => e.team === 't' && !e.dead).length;
   const cAlive = game.entities.filter((e) => e.team === 'ct' && !e.dead).length;
   if (tAlive === 0 && cAlive === 0) { endRound(game, null, '同归于尽'); return; }
-  if (tAlive === 0) { endRound(game, 'ct', '恐怖分子全灭'); return; }
-  if (cAlive === 0) { endRound(game, 't', '反恐精英全灭'); return; }
+  if (tAlive === 0) { endRound(game, 'ct', '恐怖分子全灭', 'elimination'); return; }
+  if (cAlive === 0) { endRound(game, 't', '反恐精英全灭', 'elimination'); return; }
 }
 
 export function tickDrops(game, dt) {
