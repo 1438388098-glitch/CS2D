@@ -5,6 +5,7 @@ import { los, getMap } from './map.js';
 import { clamp } from './utils.js';
 import { crosshairSpreadPx, shouldDrawFpsSpreadCrosshair } from './crosshair.js';
 import { getBindLabel } from './keymap.js';
+import { fogEnabled } from './fog.js';
 
 let ctx = null;
 let layers = null;
@@ -155,10 +156,12 @@ export function renderMinimap(game) {
   if (canSee) lastMiniUpdate = now;
 
   if (p && !p.dead) {
+    // 视野圈：迷雾开启时对应真实可见半径，否则 300px 战术圈
+    const vRadius = fogEnabled(game) ? 560 : 300;
     mctx.strokeStyle = 'rgba(255,255,255,0.12)';
     mctx.lineWidth = 1;
     mctx.beginPath();
-    mctx.arc(ox + p.x * s, oy + p.y * s, 300 * s, 0, Math.PI * 2);
+    mctx.arc(ox + p.x * s, oy + p.y * s, vRadius * s, 0, Math.PI * 2);
     mctx.stroke();
   }
 
@@ -191,6 +194,16 @@ export function renderMinimap(game) {
     }
   }
 
+  // 烟雾区：灰斑覆盖对应区域，提升战术可读性
+  if (game.smokes && game.smokes.length) {
+    mctx.fillStyle = 'rgba(170,175,185,0.5)';
+    for (const sm of game.smokes) {
+      const sr = Math.max(4, sm.r * s);
+      mctx.beginPath();
+      mctx.arc(ox + sm.x * s, oy + sm.y * s, sr, 0, Math.PI * 2);
+      mctx.fill();
+    }
+  }
   if (game.crates) {
     mctx.fillStyle = 'rgba(158,116,64,0.95)';
     for (const c of game.crates) {
