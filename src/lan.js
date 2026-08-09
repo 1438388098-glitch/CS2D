@@ -3,6 +3,13 @@
 let ws = null;
 let game = null;
 let heartbeat = null;
+let reconnectTimer = null;
+let reconnectAttempts = 0;
+let closedByUser = false;
+
+export function reconnectDelayMs(attempt) {
+  return attempt * 3000;
+}
 
 function $(id) { return typeof document !== 'undefined' ? document.getElementById(id) : null; }
 
@@ -22,15 +29,31 @@ function send(msg) {
   if (ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(msg));
 }
 
-function connect(gameRef, role, room, name) {
+function clearReconnectTimer() {
+  if (reconnectTimer) {
+    clearTimeout(reconnectTimer);
+    reconnectTimer = null;
+  }
+}
+
+function connect(gameRef, role, room, name, isReconnect = false) {
+  clearReconnectTimer();
+  if (ws) {
+    ws._suppressReconnect = true;
+    try { ws.close(); } catch (err) { /* ignore */ }
+    ws = null;
+  }
+  if (!isReconnect) reconnectAttempts = 0;
+  closedByUser = false;
   game = gameRef;
-  if (ws) { try { ws.close(); } catch (err) { /* ignore */ } }
   const proto = location.protocol === 'https:' ? 'wss' : 'ws';
-  ws = new WebSocket(proto + '://' + location.host + '/ws?room=' + encodeURIComponent(room) + '&role=' + role);
-  ws.onopen = () => {
+  const socket = new WebSocket(proto + '://' + location.host + '/ws?room=' + encodeURIComponent(room) + '&role=' + role);
+  socket._suppressReconnect = false;
+  ws = socket;
+  socket.onopen = () => {
     send({ type: 'hello', role, room, name: name || (role === 'host' ? '房主' : '玩家') });
   };
-  ws.onmessage = (ev) => {
+  socket.onmessage = (ev) => {
     let msg;
     try { msg = JSON.parse(ev.data); } catch (err) { return; }
     if (msg.type === 'welcome') {
@@ -83,17 +106,25 @@ function connect(gameRef, role, room, name) {
       applyRemote(msg);
     }
   };
-  ws.onclose = () => {
+  socket.onclose = () => {
+    if (socket._suppressReconnect) return;
     if (heartbeat) { clearInterval(heartbeat); heartbeat = null; }
+    if (game && game.lan) game.lan.connected = false;
     if (game && game.lan && game.lan.hostLeft) {
       setStatus('房主已离开，请返回主菜单重新建房');
       showHostLeftRecovery();
     } else {
-      setStatus('局域网连接已断开');
+      if (!closedByUser && reconnectAttempts < 3) {
+        reconnectAttempts++;
+        setStatus('连接断开，' + (reconnectAttempts * 3) + ' 秒后自动重连（' + reconnectAttempts + '/3）…');
+        reconnectTimer = setTimeout(() => connect(game, role, room, name, true), reconnectDelayMs(reconnectAttempts));
+      } else {
+        setStatus(closedByUser ? '局域网连接已关闭' : '局域网连接已断开');
+      }
     }
     setConn('');
   };
-  ws.onerror = () => setStatus('连接失败，请确认在同一局域网且服务已启动');
+  socket.onerror = () => setStatus('连接失败，正在自动重连…');
 }
 
 function showHostLeftRecovery() {
@@ -208,8 +239,13 @@ export function initLan(gameRef) {
 }
 
 export function closeLan() {
+  closedByUser = true;
+  clearReconnectTimer();
+  reconnectAttempts = 0;
   if (heartbeat) { clearInterval(heartbeat); heartbeat = null; }
-  if (ws) { try { ws.close(); } catch (err) { /* ignore */ } }
+  if (ws) {
+    ws._suppressReconnect = true;
+    try { ws.close(); } catch (err) { /* ignore */ } }
   ws = null;
 }
 
