@@ -2,11 +2,11 @@
 // 消息类型：目击 SIGHT / 受击 DMG / 枪声 SHOT / 击杀 KILL
 // 公平性：只传播 bot 自己感知到的信息；通信半径限制（落单队友收不到远处情报）；
 // 信息衰减：消息越老，坐标越模糊（人类"大概在那个方向"），且置信度随时间下降
-import { BOT_AI } from './config.js';
-import { ctx } from './ctx.js';
-import { rand } from './utils.js';
+import {BOT_AI} from './config.js';
+;
+import {rand} from './utils.js';
 
-export const MSG = { SIGHT: 'sight', DMG: 'dmg', SHOT: 'shot', KILL: 'kill' };
+export const MSG = { SIGHT: 'sight', DMG: 'dmg', SHOT: 'shot', KILL: 'kill', FOCUS: 'focus' };
 
 const MAX_MSG = 24;
 const REPORT_COOLDOWN = 1.0;
@@ -42,7 +42,8 @@ export function report(game, e, type, x, y) {
     type, x, y,
     t: game.time,
     srcX: e.x, srcY: e.y,
-    intel
+    intel,
+    igl: !!e.igl
   });
 }
 
@@ -53,16 +54,23 @@ export function query(game, e) {
   const b = board(game, e.team);
   let best = null;
   for (const m of b) {
-    const ageLimit = m.intel ? 30 : MAX_AGE;
+    const ageLimit = m.intel ? 30 : (m.type === MSG.FOCUS ? 5 : MAX_AGE);
     const age = game.time - m.t;
     if (age > ageLimit) continue;
     // 通信半径：消息源离自己太远则收不到（intel 模式无限）
     if (!m.intel) {
       const d = Math.hypot(m.srcX - e.x, m.srcY - e.y);
-      if (d > (BOT_AI.COM_RADIUS || 1200)) continue;
+      // 空间门控：基础通信半径缩小，且来源在自身背后时更短（减少全队"隔墙透视"定位感）
+      const radius = m.igl ? Math.max(900, Math.hypot(game.mapW || 2400, game.mapH || 1800) * 0.3) : Math.max(BOT_AI.COM_RADIUS || 700, Math.hypot(game.mapW || 2400, game.mapH || 1800) * 0.24);
+      if (d > radius) continue;
+      if (d > 420) {
+        const toSrc = Math.atan2(m.srcY - e.y, m.srcX - e.x);
+        const faceDot = Math.cos(e.angle - toSrc);
+        if (faceDot < -0.3) continue;
+      }
     }
     // 价值分：越新越高，目击 > 枪声 > 受击 > 击杀（对防守方 kill 优先级高）
-    const prio = m.type === MSG.SIGHT ? 4 : (m.type === MSG.SHOT ? 3 : (m.type === MSG.DMG ? 2 : 1));
+    const prio = m.type === MSG.FOCUS ? 6 : (m.type === MSG.SIGHT ? 4 : (m.type === MSG.SHOT ? 3 : (m.type === MSG.DMG ? 2 : 1)));
     const score = prio * 10 - age;
     if (!best || score > best.score) best = { m, score };
   }
