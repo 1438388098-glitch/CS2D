@@ -6,6 +6,7 @@ import { logAct, styleOf } from './shared.js';
 import { dqnFromJSON } from '../dqn.js';
 import { oppAimPoint, initOppModel } from './oppmodel.js';
 import { query, queryAll } from '../info.js';
+import { shouldRetakeBomb, shouldRushDefuser, shouldRetreatWithoutBomb, pickPlantSite, shouldEscortCarrier } from './rules.js';
 const CT_HOLD_RADIUS = 380;
 
 export function ctMySite(e, game) {
@@ -202,6 +203,19 @@ function entryPoint(cs, game) {
   return { x: cs.cx - dx / len * 380, y: cs.cy - dy / len * 380 };
 }
 
+function plantSiteEval(e, game, label) {
+  const s = getMap().sites[label];
+  if (!s) return null;
+  const coverPts = ((getMap().clearPoints || []).filter((p) => p.site === label).length +
+    (getMap().highPoints || []).filter((hp) => hp.site === label).length);
+  const enemyNear = game.entities.filter((o) => o.team === 'ct' && !o.dead && Math.hypot(o.x - s.cx, o.y - s.cy) < 420).length;
+  return {
+    dist: Math.hypot(e.x - s.cx, e.y - s.cy),
+    cover: Math.min(2, coverPts * 0.45),
+    enemyNear
+  };
+}
+
 export function botObjectiveRaw(e, game) {
   const planted = !!(game.bomb && game.bomb.planted);
   const st = styleOf(e);
@@ -239,6 +253,14 @@ export function botObjectiveRaw(e, game) {
   }
   if (e.team === 'ct') {
     if (planted) {
+      const retakeTime = (game.roundDur || 115) - (game.roundTime || 0);
+      const retakeDist = Math.hypot(e.x - game.bomb.x, e.y - game.bomb.y);
+      const ctAliveNow = game.entities.filter((o) => o.team === 'ct' && !o.dead).length;
+      const tAliveNow = game.entities.filter((o) => o.team === 't' && !o.dead).length;
+      if (!shouldRetakeBomb(e, true, retakeDist, retakeTime, ctAliveNow, tAliveNow)) {
+        logAct(game, e, 'retreat', 'skip retake');
+        return retreatPoint(e, game);
+      }
       const retakeAng = (e.anchorIdx || 0) * 1.7;
       return { x: game.bomb.x + Math.cos(retakeAng) * 45, y: game.bomb.y + Math.sin(retakeAng) * 45 };
     }
@@ -308,6 +330,14 @@ export function botObjectiveRaw(e, game) {
   }
   if (planted) {
     if (game.bomb.defusing) {
+      const distToBomb = Math.hypot(e.x - game.bomb.x, e.y - game.bomb.y);
+      const defuseTime = (game.roundDur || 115) - (game.roundTime || 0);
+      if (shouldRushDefuser(e, true, distToBomb, defuseTime)) {
+        const defuser = game.entities.find((o) => o.team === 'ct' && !o.dead && o.defuseT > 0);
+        const target = defuser || { x: game.bomb.x, y: game.bomb.y };
+        logAct(game, e, 'defuse-stop', 'rush defuser');
+        return { x: target.x, y: target.y };
+      }
       for (const ce of game.entities) {
         if (ce.team === 'ct' && !ce.dead && Math.hypot(ce.x - game.bomb.x, ce.y - game.bomb.y) < 80) {
           return { x: ce.x, y: ce.y };
@@ -327,7 +357,14 @@ export function botObjectiveRaw(e, game) {
   }
   if (game.bomb && game.bomb.dropped) return { x: game.bomb.x, y: game.bomb.y };
   if (e.hasBomb) {
-    const cs = game.tAttackSite === 'A' ? getMap().sites.A : getMap().sites.B;
+    let cs = game.tAttackSite === 'A' ? getMap().sites.A : getMap().sites.B;
+    const siteA = plantSiteEval(e, game, 'A');
+    const siteB = plantSiteEval(e, game, 'B');
+    const pickedSite = pickPlantSite(e, siteA, siteB, (game.roundDur || 115) - (game.roundTime || 0));
+    if (pickedSite) {
+      cs = getMap().sites[pickedSite];
+      logAct(game, e, 'plant', 'pick ' + pickedSite);
+    }
     // 残局时间管理：回合末期距点过远则保枪放弃安弹
     if (game.roundTime > (game.roundDur || 115) - 18 && Math.hypot(e.x - cs.cx, e.y - cs.cy) > 650) {
       return retreatPoint(e, game);
@@ -339,6 +376,20 @@ export function botObjectiveRaw(e, game) {
     const alliesIn = game.entities.filter((o) => o.bot && o.team === 't' && !o.dead && o !== e && Math.hypot(o.x - cs.cx, o.y - cs.cy) < 300).length;
     if (alliesIn < 1) return entryPoint(cs, game);
     return { x: cs.cx, y: cs.cy };
+  }
+  const tEnemyLate = game.entities.filter((o) => o.team === 'ct' && !o.dead).length;
+  const tAliveLate = game.entities.filter((o) => o.team === 't' && !o.dead).length;
+  if (shouldRetreatWithoutBomb(e, game.roundTime || 0, tEnemyLate, tAliveLate, game.roundDur || 115)) {
+    logAct(game, e, 'retreat', 'late no bomb');
+    return retreatPoint(e, game);
+  }
+  if (!e.hasBomb && !planted) {
+    const carrier = game.entities.find((o) => o.bot && o.team === 't' && !o.dead && o.hasBomb);
+    const csCarry = game.tAttackSite === 'A' ? getMap().sites.A : getMap().sites.B;
+    if (carrier && csCarry && shouldEscortCarrier(e, Math.hypot(e.x - carrier.x, e.y - carrier.y), Math.hypot(carrier.x - csCarry.cx, carrier.y - csCarry.cy), game.roundTime || 0)) {
+      logAct(game, e, 'escort', 'guard carrier');
+      return { x: carrier.x + Math.cos((e.anchorIdx || 0) * 1.9) * 110, y: carrier.y + Math.sin((e.anchorIdx || 0) * 1.9) * 110 };
+    }
   }
   let planter = null;
   for (const pe of game.entities) {
@@ -371,6 +422,13 @@ export function botObjectiveRaw(e, game) {
   if (tAlive2 === 0 && ctAlive2 >= 2 && rand() < (e.aiParams || diffOf(game)).saveChance * (1 - st.p.riskT * 0.5)) {
     logAct(game, e, 'retreat', '1v' + ctAlive2 + ' 保枪');
     return retreatPoint(e, game);
+  }
+  if (tAlive2 === 0 && ctAlive2 === 1 && !e.hasBomb && !planted && game.roundTime > 30) {
+    const ctSpawnHunt = getMap().spawns.ct[0];
+    if (ctSpawnHunt) {
+      logAct(game, e, 'hunt', '1v1 ct half');
+      return { x: ctSpawnHunt.x, y: ctSpawnHunt.y };
+    }
   }
   // 绕后角色（lurk）：回合前期绕到 CT 半场侧翼（出生点周边蹲点），中期回归攻击点
   if (st.arch.lurk && game.roundTime < 40 && !(game.bomb && game.bomb.planted)) {

@@ -62,4 +62,24 @@ export function headshotChance(w, ent, perp, dist) {
   return clamp(base * aim * far, 0.03, 0.85);
 }
 
+export function distanceFalloff(w, dist) {
+  if (w && w.falloff) {
+    const f = w.falloff;
+    if (dist <= f.start) return 1;
+    if (dist >= f.end) return f.min;
+    return 1 - (1 - f.min) * (dist - f.start) / (f.end - f.start);
+  }
+  const defs = {
+    pistol: { start: 500, end: 900, min: 0.75 },
+    smg: { start: 450, end: 850, min: 0.7 },
+    rifle: { start: 700, end: 1200, min: 0.7 },
+    sniper: { start: 900, end: 1400, min: 0.95 },
+    shotgun: { start: 300, end: 700, min: 0.5 }
+  };
+  const d = defs[w && w.kind] || { start: Infinity, end: Infinity, min: 1 };
+  if (dist <= d.start) return 1;
+  if (dist >= d.end) return d.min;
+  return 1 - (1 - d.min) * (dist - d.start) / (d.end - d.start);
+}
+
 function clamp(v, a, b) { return v < a ? a : (v > b ? b : v); }

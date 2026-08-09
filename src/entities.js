@@ -34,12 +34,14 @@ export function createEntity(team, bot) {
   };
 }
 
-export function spawnEntity(e, spawnList) {
+export function spawnEntity(e, spawnList, preferIdx) {
   if (!spawnList || spawnList.length === 0) {
     console.warn('spawnEntity: spawn list empty for team ' + e.team);
     return;
   }
-  const s = spawnList[Math.floor(ctx.rand() * spawnList.length)];
+  const s = preferIdx !== undefined
+    ? spawnList[preferIdx % spawnList.length]
+    : spawnList[Math.floor(ctx.rand() * spawnList.length)];
   e.x = s.x;
   e.y = s.y;
   e.vx = 0; e.vy = 0; e.dead = false; e.hp = 100;

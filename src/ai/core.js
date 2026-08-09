@@ -9,7 +9,7 @@ import { report, query, MSG } from '../info.js';
 import { clamp, rand, angDiff, angNorm, viewCap } from '../utils.js';
 import { styleOf } from './shared.js';
 import { findVisibleEnemy } from './perception.js';
-import { shouldSaveForEco, shouldRepositionOnIntel, shouldPushLatePlant } from './rules.js';
+import { shouldSaveForEco, shouldRepositionOnIntel, shouldPushLatePlant, shouldThrowUtility } from './rules.js';
 import { botObjective, ctReactsTo } from './decisions.js';
 import { botActions } from './actions.js';
 
@@ -263,6 +263,27 @@ function botThink(e, game, dt) {
       const flashNow = e.weapons.nades.flash > 0 && rand() < dt * 2.5;
       if (smokeNow || flashNow) {
         e.slot = smokeNow ? 'nade:smoke' : 'nade:flash';
+        throwGrenade(e, game);
+        e.slot = 'primary';
+        e.lastNadeT = game.roundTime;
+      }
+    }
+    const tUtilitySite = e.team === 't' && !(game.bomb && game.bomb.planted)
+      ? (game.tAttackSite === 'A' ? getMap().sites.A : getMap().sites.B)
+      : null;
+    if (tUtilitySite && e.weapons && e.weapons.nades) {
+      const distToSite = Math.hypot(e.x - tUtilitySite.cx, e.y - tUtilitySite.cy);
+      const enNear = game.entities.filter((o) => o.team === 'ct' && !o.dead).length;
+      const nades = e.weapons.nades;
+      const roundTime = game.roundTime || 0;
+      const smokeNow = shouldThrowUtility(e, 'smoke', nades.smoke || 0, distToSite, roundTime, enNear) &&
+        rand() < dt * 0.8 && game.roundTime - (e.lastNadeT || 0) > 6;
+      const flashNow = shouldThrowUtility(e, 'flash', nades.flash || 0, distToSite, roundTime, enNear) &&
+        rand() < dt * 1.5 && game.roundTime - (e.lastNadeT || 0) > 5;
+      const heNow = shouldThrowUtility(e, 'he', nades.he || 0, distToSite, roundTime, enNear) &&
+        rand() < dt * 1.2 && game.roundTime - (e.lastNadeT || 0) > 5;
+      if (smokeNow || flashNow || heNow) {
+        e.slot = smokeNow ? 'nade:smoke' : (flashNow ? 'nade:flash' : 'nade:he');
         throwGrenade(e, game);
         e.slot = 'primary';
         e.lastNadeT = game.roundTime;
