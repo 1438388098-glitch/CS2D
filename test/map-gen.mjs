@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
-import { createBuilder, buildDust2, buildCanal, buildMetro, buildForge } from '../src/map-gen.js';
+import { createBuilder, buildDust2, buildCanal, buildMetro, buildForge, buildHarbor } from '../src/map-gen.js';
+import { loadMap } from '../src/map.js';
 
 function countChar(rows, ch) {
   let count = 0;
@@ -50,7 +51,8 @@ const generatedMaps = [
   { name: 'dust2', rows: buildDust2().rows(), w: 60, h: 42 },
   { name: 'canal', rows: buildCanal().rows(), w: 64, h: 46 },
   { name: 'metro', rows: buildMetro().rows(), w: 58, h: 42 },
-  { name: 'forge', rows: buildForge().rows(), w: 80, h: 52 }
+  { name: 'forge', rows: buildForge().rows(), w: 80, h: 52 },
+  { name: 'harbor', rows: buildHarbor().rows(), w: 72, h: 48 }
 ];
 
 for (const map of generatedMaps) {
@@ -68,6 +70,9 @@ for (const map of generatedMaps) {
   assert.ok(hasChar(map.rows, '^'), `${map.name} should contain high ground`);
   assert.ok(countChar(map.rows, 'a') > 0, `${map.name} should have walkable A site area`);
   assert.ok(countChar(map.rows, 'b') > 0, `${map.name} should have walkable B site area`);
+  const diag = loadMap({ id: map.name, name: map.name, rows: map.rows, tile: 16 });
+  assert.equal(diag.unreachable.length, 0, `${map.name} should have no unreachable walkable tiles`);
+  assert.ok(diag.walkableCount > 1000, `${map.name} should have enough walkable space`);
 }
 
 console.log('map-gen: all PASS');

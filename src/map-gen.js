@@ -200,3 +200,35 @@ export function buildForge() {
   b.spawn('c', 73, 46, 5, 2);
   return b;
 }
+
+export function buildHarbor() {
+  const b = createBuilder(72, 48);
+  border(b);
+  b.corridor(1, 2, 70, 5);          // top pier
+  b.corridor(1, 20, 70, 6);         // mid boulevard
+  b.corridor(1, 38, 70, 7);         // lower docks
+  b.corridor(3, 2, 7, 44);          // west spine
+  b.corridor(31, 2, 8, 44);         // central spine
+  b.corridor(58, 2, 7, 44);         // east spine
+  for (let x = 18; x <= 29; x++) for (let y = 14; y <= 17; y++) b.tile(x, y, '~');
+  for (let x = 42; x <= 53; x++) for (let y = 29; y <= 32; y++) b.tile(x, y, '~');
+  b.corridor(20, 7, 3, 19);         // water lane
+  b.corridor(44, 8, 3, 37);         // water lane
+  b.corridor(1, 26, 70, 2);         // dry mid catwalk
+  b.site('A', 59, 4, 11, 6);
+  b.site('B', 4, 39, 12, 6);
+  b.tile(65, 5, '^'); b.tile(66, 5, '^'); b.tile(65, 6, '^'); b.tile(66, 6, '^');
+  b.tile(5, 41, '^'); b.tile(6, 41, '^'); b.tile(5, 42, '^'); b.tile(6, 42, '^');
+  b.tile(64, 9, '='); b.tile(65, 9, '='); b.tile(70, 7, '=');
+  b.tile(3, 41, '='); b.tile(17, 41, '='); b.tile(9, 45, '=');
+  b.boxes(61, 6, 2, 2); b.boxes(67, 8, 2, 2); b.boxes(62, 10, 2, 1);
+  b.boxes(6, 40, 2, 2); b.boxes(13, 42, 2, 2); b.boxes(8, 44, 2, 1);
+  b.boxes(36, 23, 2, 2); b.boxes(8, 22, 2, 2); b.boxes(60, 23, 2, 2);
+  b.boxes(21, 21, 2, 2); b.boxes(48, 21, 2, 2);
+  b.crate(34, 5); b.crate(35, 5); b.crate(38, 25); b.crate(12, 25);
+  b.crate(64, 3); b.crate(7, 38);
+  b.tile(35, 21, 'o'); b.tile(49, 20, 'o'); b.tile(15, 38, 'o'); b.tile(55, 38, 'o');
+  b.spawn('t', 62, 43, 6, 2);
+  b.spawn('c', 4, 3, 6, 2);
+  return b;
+}
