@@ -187,6 +187,12 @@ export function render3dNext(game) {
       wallPipes: mapGroup ? mapGroup.children.filter((o) => o.name === 'wallPipes').length : 0,
       wallConduits: mapGroup ? mapGroup.children.filter((o) => o.name === 'wallConduits').length : 0
     };
+    const groundModelStats = {
+      groundSeams: mapGroup ? mapGroup.children.filter((o) => String(o.name || '').indexOf('groundSeams') === 0).length : 0,
+      groundCurbs: mapGroup ? mapGroup.children.filter((o) => String(o.name || '').indexOf('groundCurbs') === 0).length : 0,
+      drainGrills: mapGroup ? mapGroup.children.filter((o) => o.name === 'drainGrills').length : 0,
+      sitePlates: mapGroup ? mapGroup.children.filter((o) => o.name === 'siteCornerBolts').length : 0
+    };
     const dpr = game.dpr || 1;
     const cssW = canvasRef.width / dpr;
     const cssH = canvasRef.height / dpr;
@@ -219,6 +225,7 @@ export function render3dNext(game) {
       decalObjects: decalPointMeshes.size,
       mapCullSafe,
       mapModelStats,
+      groundModelStats,
       drawCalls: renderer && renderer.info && renderer.info.render ? renderer.info.render.calls : 0
     };
   } catch (err) {
@@ -422,6 +429,7 @@ function buildMapScene(map, layers) {
   addInstancedWallCaps(mapGroup, T, grid, tile, counts.wall, counts.thin, capMat);
   addInstancedWallBases(mapGroup, T, grid, tile, counts.wall, counts.thin);
   addInstancedWallDetail(mapGroup, T, grid, tile, counts.wall, counts.thin);
+  addGroundDetail(mapGroup, T, grid, tile, w, h);
   addInstancedSites(mapGroup, T, grid, tile);
   addSiteMarkers(mapGroup, T, map, tile);
   addInstancedDecos(mapGroup, T, layers && layers.decos, tile);
@@ -627,6 +635,40 @@ function addInstancedBoxes(group, T, name, count, geometry, material, fill) {
     }
   }
   group.add(mesh);
+
+  const boltMat = new T.MeshStandardMaterial({
+    color: 0x2a3138,
+    roughness: 0.5,
+    metalness: 0.46
+  });
+  const boltCount = Math.min(96, count * 4);
+  const boltGeo = new T.BoxGeometry(tile * 0.06, tile * 0.028, tile * 0.06);
+  const boltMesh = new T.InstancedMesh(boltGeo, boltMat, boltCount);
+  boltMesh.name = 'siteCornerBolts';
+  boltMesh.frustumCulled = false;
+  boltMesh.receiveShadow = true;
+  let boltI = 0;
+  for (let ty = 0; ty < grid.length && boltI < boltCount; ty++) {
+    const row = grid[ty] || [];
+    for (let tx = 0; tx < row.length && boltI < boltCount; tx++) {
+      const c = row[tx];
+      if (c !== 'a' && c !== 'b') continue;
+      const cx = tx * tile + tile / 2;
+      const cz = ty * tile + tile / 2;
+      const offsets = [-tile * 0.38, tile * 0.38];
+      for (const ox of offsets) {
+        for (const oz of offsets) {
+          if (boltI >= boltCount) break;
+          setInstanceTransform(T, boltMesh, boltI, cx + ox, 0.03, cz + oz, 1, 1, 1, 0, 0, 0);
+          boltI++;
+        }
+      }
+    }
+  }
+  if (boltI) {
+    boltMesh.count = boltI;
+    group.add(boltMesh);
+  }
 }
 
 function addInstancedWallCaps(group, T, grid, tile, wallCount, thinCount, material) {
@@ -771,6 +813,131 @@ function addInstancedWallDetail(group, T, grid, tile, wallCount, thinCount) {
   addPipes(thinCount, true);
   addConduits(wallCount, false);
   addConduits(thinCount, true);
+}
+
+function addGroundDetail(group, T, grid, tile, w, h) {
+  if (!grid || !grid.length || !THREE) return;
+  const seamMat = new T.MeshBasicMaterial({
+    color: 0x11151a,
+    transparent: true,
+    opacity: 0.22,
+    depthWrite: false
+  });
+  const rowStep = 2;
+  const horizontalCount = Math.max(0, Math.floor((grid.length - 1) / rowStep));
+  if (horizontalCount) {
+    const geo = new T.BoxGeometry(1, tile * 0.018, tile * 0.035);
+    const mesh = new T.InstancedMesh(geo, seamMat, horizontalCount);
+    mesh.name = 'groundSeamsX';
+    mesh.frustumCulled = false;
+    mesh.receiveShadow = true;
+    let i = 0;
+    for (let ty = rowStep; ty < grid.length && i < horizontalCount; ty += rowStep) {
+      const row = grid[ty] || [];
+      const width = Math.max(1, row.length) * tile;
+      setInstanceTransform(T, mesh, i, width / 2, 0.012, ty * tile, width, 1, 1, 0, 0, 0);
+      i++;
+    }
+    group.add(mesh);
+  }
+  const maxRowWidth = Math.max(...grid.map((row) => (row || []).length));
+  const verticalCount = Math.max(0, Math.floor((maxRowWidth - 1) / rowStep));
+  if (verticalCount) {
+    const geo = new T.BoxGeometry(tile * 0.035, tile * 0.018, 1);
+    const mesh = new T.InstancedMesh(geo, seamMat, verticalCount);
+    mesh.name = 'groundSeamsZ';
+    mesh.frustumCulled = false;
+    mesh.receiveShadow = true;
+    let i = 0;
+    for (let tx = rowStep; tx < maxRowWidth && i < verticalCount; tx += rowStep) {
+      setInstanceTransform(T, mesh, i, tx * tile, 0.012, h / 2, 1, 1, h, 0, 0, 0);
+      i++;
+    }
+    group.add(mesh);
+  }
+
+  const curbMat = new T.MeshStandardMaterial({
+    color: 0x3a414a,
+    roughness: 0.88,
+    metalness: 0.12
+  });
+  const solidAt = (tx, ty) => {
+    const c = tileToChar(grid, tx, ty);
+    return c === '#' || c === '=' || c === 'C' || c === 'o' || c === '^' || c === 'R';
+  };
+  const addCurbs = (vertical) => {
+    const perSolid = vertical ? 2 : 2;
+    const total = Math.min(4800, (grid.length * maxRowWidth) * perSolid);
+    const geo = vertical
+      ? new T.BoxGeometry(tile * 0.085, tile * 0.032, tile * 1.04)
+      : new T.BoxGeometry(tile * 1.04, tile * 0.032, tile * 0.085);
+    const mesh = new T.InstancedMesh(geo, curbMat, total);
+    mesh.name = vertical ? 'groundCurbsZ' : 'groundCurbsX';
+    mesh.frustumCulled = false;
+    mesh.castShadow = true;
+    mesh.receiveShadow = true;
+    let i = 0;
+    for (let ty = 0; ty < grid.length && i < total; ty++) {
+      const row = grid[ty] || [];
+      for (let tx = 0; tx < row.length && i < total; tx++) {
+        if (!solidAt(tx, ty)) continue;
+        if (!vertical) {
+          if (!solidAt(tx, ty - 1)) {
+            setInstanceTransform(T, mesh, i, tx * tile + tile / 2, tile * 0.02, ty * tile, 1, 1, 1, 0, 0, 0);
+            i++;
+          }
+          if (!solidAt(tx, ty + 1)) {
+            setInstanceTransform(T, mesh, i, tx * tile + tile / 2, tile * 0.02, (ty + 1) * tile, 1, 1, 1, 0, 0, 0);
+            i++;
+          }
+        } else {
+          if (!solidAt(tx - 1, ty)) {
+            setInstanceTransform(T, mesh, i, tx * tile, tile * 0.02, ty * tile + tile / 2, 1, 1, 1, 0, 0, 0);
+            i++;
+          }
+          if (!solidAt(tx + 1, ty)) {
+            setInstanceTransform(T, mesh, i, (tx + 1) * tile, tile * 0.02, ty * tile + tile / 2, 1, 1, 1, 0, 0, 0);
+            i++;
+          }
+        }
+      }
+    }
+    if (i) {
+      mesh.count = i;
+      group.add(mesh);
+    }
+    return i;
+  };
+  const curbX = addCurbs(false);
+  const curbZ = addCurbs(true);
+  void curbX;
+  void curbZ;
+
+  const drainCount = Math.min(24, Math.max(1, Math.ceil(grid.length * maxRowWidth / 900)));
+  const drainMat = new T.MeshStandardMaterial({
+    color: 0x1c2126,
+    roughness: 0.92,
+    metalness: 0.18
+  });
+  const drainGeo = new T.BoxGeometry(tile * 0.42, tile * 0.014, tile * 0.42);
+  const drainMesh = new T.InstancedMesh(drainGeo, drainMat, drainCount);
+  drainMesh.name = 'drainGrills';
+  drainMesh.frustumCulled = false;
+  drainMesh.receiveShadow = true;
+  let drainI = 0;
+  for (let ty = 0; ty < grid.length && drainI < drainCount; ty++) {
+    const row = grid[ty] || [];
+    for (let tx = 0; tx < row.length && drainI < drainCount; tx++) {
+      const c = row[tx];
+      if (c !== 'a' && c !== 'b' && c !== '~') continue;
+      setInstanceTransform(T, drainMesh, drainI, tx * tile + tile / 2, 0.02, ty * tile + tile / 2, 1, 1, 1, 0, 0, 0);
+      drainI++;
+    }
+  }
+  if (drainI) {
+    drainMesh.count = drainI;
+    group.add(drainMesh);
+  }
 }
 
 function setInstanceTransform(T, mesh, index, x, y, z, sx, sy, sz, rx, ry, rz) {

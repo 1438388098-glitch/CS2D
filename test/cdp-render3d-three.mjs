@@ -82,6 +82,11 @@ try {
   } else {
     pass('wall model detail present: ' + JSON.stringify(backend.stats.mapModelStats));
   }
+  if (!backend || !backend.stats || !backend.stats.groundModelStats || backend.stats.groundModelStats.groundSeams < 1 || backend.stats.groundModelStats.groundCurbs < 1 || backend.stats.groundModelStats.drainGrills < 1 || backend.stats.groundModelStats.sitePlates < 1) {
+    fail('three.js ground model detail missing: ' + JSON.stringify(backend && backend.stats && backend.stats.groundModelStats));
+  } else {
+    pass('ground model detail present: ' + JSON.stringify(backend.stats.groundModelStats));
+  }
 
   await cdp.eval(`(()=>{const g=window.__cs2d&&window.__cs2d.game;if(!g||!g.player)return false;g.decals.push({type:'corpse',x:g.player.x+96,y:g.player.y+48,angle:0.7,team:'t',life:60});return true})()`);
   await sleep(500);
@@ -151,6 +156,11 @@ try {
     fail('wall model detail missing after map switch: ' + JSON.stringify(switched && switched.stats && switched.stats.mapModelStats));
   } else {
     pass('wall model detail after map switch: ' + JSON.stringify(switched.stats.mapModelStats));
+  }
+  if (!switched || !switched.stats || !switched.stats.groundModelStats || switched.stats.groundModelStats.groundSeams < 1 || switched.stats.groundModelStats.groundCurbs < 1 || switched.stats.groundModelStats.drainGrills < 1 || switched.stats.groundModelStats.sitePlates < 1) {
+    fail('ground model detail missing after map switch: ' + JSON.stringify(switched && switched.stats && switched.stats.groundModelStats));
+  } else {
+    pass('ground model detail after map switch: ' + JSON.stringify(switched.stats.groundModelStats));
   }
   if (!switched || !switched.stats || switched.stats.mapCullSafe < 1) {
     fail('instanced map meshes not frustum-safe after map switch: ' + JSON.stringify(switched));
