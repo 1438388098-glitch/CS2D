@@ -207,8 +207,13 @@ function leave(ws) {
   if (!ws.room) return;
   const r = rooms.get(ws.room);
   if (r) {
+    const wasHost = r.host === ws;
     r.clients.delete(ws);
     if (r.host === ws) r.host = null;
+    if (wasHost) {
+      // 房主离开：通知剩余玩家重新建房，避免对方空等
+      broadcast(ws.room, { type: 'hostLeft', count: r.clients.size, clients: [...r.clients].map((c) => ({ role: c.role, name: c.name })) }, ws);
+    }
     broadcast(ws.room, { type: 'peer', count: r.clients.size, clients: [...r.clients].map((c) => ({ role: c.role, name: c.name })) }, ws);
     if (r.clients.size === 0) rooms.delete(ws.room);
   }

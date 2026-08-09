@@ -38,14 +38,30 @@ function connect(gameRef, role, room, name) {
       Object.assign(game.lan, { role, room, ws, connected: true, peerCount: msg.count || 1 });
       setStatus(role === 'host' ? '房间 ' + room + ' 已创建，等待玩家加入…' : '已加入房间 ' + room + '，等待房主开赛…');
       setConn('wait');
-      if (role === 'host') $('lanStartBtn').textContent = '等待玩家加入';
+      if (role === 'host') {
+        const sb = $('lanStartBtn');
+        if (sb) sb.textContent = '等待玩家加入';
+      }
     } else if (msg.type === 'peer') {
       game.lan.peerCount = msg.count || 1;
+      if (game.lan.role === 'host' && msg.clients) {
+        const guest = msg.clients.find((c) => c.role !== 'host');
+        if (guest) game.lan.remoteName = guest.name;
+      }
       setStatus('房间 ' + room + ' · 在线 ' + msg.count + ' 人：' + (msg.clients || []).map((c) => c.name + '(' + (c.role === 'host' ? '房主' : '玩家') + ')').join('、'));
       if (game.lan.role === 'host' && msg.count >= 2) {
         setConn('ready');
-        $('lanStartBtn').textContent = '开始局域网对战';
+        const sb = $('lanStartBtn');
+        if (sb) sb.textContent = '开始局域网对战';
       }
+    } else if (msg.type === 'hostLeft') {
+      // 房主离开：引导玩家返回主菜单重新建房
+      setStatus('房主已离开，请返回主菜单重新建房');
+      setConn('');
+      const sb = $('lanStartBtn');
+      if (sb) sb.textContent = '房主已离开';
+      game.lan.connected = false;
+      try { if (ws) ws.close(); } catch (err) { /* ignore */ }
     } else if (msg.type === 'start') {
       Object.assign(game.opts, {
         mode: 'lan', seed: msg.seed, mapId: msg.mapId, team: msg.team,
@@ -54,9 +70,10 @@ function connect(gameRef, role, room, name) {
       game.seed = msg.seed;
       game.mode = 'lan';
       game.lan = game.lan || {};
-      game.lan.role = msg.guestRole === 'guest' ? 'guest' : 'host';
+      // 双方各收到 start 广播：仅首次赋值，防止 host 侧 role 被广播的 guestRole 覆盖
+      if (!game.lan.role) game.lan.role = msg.guestRole === 'guest' ? 'guest' : 'host';
       game.lan.remoteTeam = msg.remoteTeam;
-      game.lan.remoteName = msg.hostName;
+      if (!game.lan.remoteName) game.lan.remoteName = msg.hostName;
       const panel = $('lanPanel');
       if (panel) panel.style.display = 'none';
       startMatch(game);
