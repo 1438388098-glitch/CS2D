@@ -2,6 +2,7 @@ import {createGame, startMatch, update, skipSpectatedRound} from './game.js';
 import {initTextures, preloadTextures} from './textures.js';
 import {initRenderer, render} from './render.js';
 import {initRenderer3d, render3d, fpsCameraEntity} from './render3d.js';
+import {initRenderer3dNext, render3dNext, render3dNextReady, disposeRenderer3dNext} from './render3d-next.js';
 import {updateFpsUi, getAudioPrefs} from './ui.js';
 import {initHud, renderHud, renderCrosshair, renderMinimap, renderLens, toggleMiniZoom, isMiniZoomed, setMiniZoom} from './hud.js';
 import {initUi, setMutedFnExposed, setMenuBackgroundFromLayer, refreshMapPreviews, syncMapCards} from './ui.js';
@@ -30,6 +31,8 @@ function reloadMapLayers() {
   game.layers = initTextures(getMap());
   initRenderer(canvas, game.layers);
   initRenderer3d(canvas, game.layers);
+  disposeRenderer3dNext();
+  initRenderer3dNext(canvas, game.layers);
   initHud(canvas, game.layers);
   if (game.layers) setMenuBackgroundFromLayer(game.opts.mapId, game.layers.staticLayer, game.layers.W, game.layers.H);
   startAmbient(game.opts.mapId);
@@ -124,7 +127,16 @@ function startLoop() {
         if (game.over) break;
       }
       const tR0 = performance.now();
-      if (game.viewMode === 'fps' && fpsCameraEntity(game)) render3d(game); else render(game);
+      if (game.viewMode === 'fps' && fpsCameraEntity(game)) {
+        if (render3dNextReady()) {
+          render3dNext(game);
+          if (game._render3dBackend === 'legacy') render3d(game);
+        } else {
+          render3d(game);
+        }
+      } else {
+        render(game);
+      }
       const renderMs = performance.now() - tR0;
       frameMsEma = frameMsEma * 0.9 + renderMs * 0.1;
       game._renderScale = scaleCur;
@@ -195,6 +207,9 @@ window.__lanStart = hostStartMatchNow;
 window.__cs2d = {
   get game() { return game; },
   get state() { return { state: game.state, diff: game.opts.diff, mapId: game.opts.mapId, round: game.round, score: game.score }; },
+  render3d: {
+    get backend() { return render3dNextReady() ? 'next' : 'legacy'; }
+  },
   audio: {
     getBusVolume,
     setBusVolume,

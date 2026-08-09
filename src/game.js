@@ -762,7 +762,7 @@ function updatePlayerAim(game, dt) {
     // 标准 FPS 增量瞄准：指针锁定后仅消费 movementX/Y，鼠标停→朝向停，
     // 鼠标动→转动 yaw/pitch；观战同样作用于 _specAngle
     const dx = game._mlookDx || 0;
-    const dy = game._mlookDy || 0;
+    const dy = 0;
     game._mlookDx = 0;
     game._mlookDy = 0;
     if (game.state !== 'BUY' && game.state !== 'LIVE') return;
@@ -773,13 +773,13 @@ function updatePlayerAim(game, dt) {
     if (p2 && !p2.dead) {
       const scopeMul = p2.scoped ? 0.35 : 1;
       p2.angle += dx * sens * scopeMul;
-      p2.pitch = clamp((p2.pitch || 0) - dy * sensY * scopeMul * yDir, -FPS_PITCH_LIMIT, FPS_PITCH_LIMIT);
+      p2.pitch = 0;
     } else {
       if (game._specAngle == null) game._specAngle = game.player ? game.player.angle : 0;
       if (game._specPitch == null) game._specPitch = game.player ? (game.player.pitch || 0) : 0;
       if (dx || dy) game._specManual = game.time;
       game._specAngle += dx * sens;
-      game._specPitch = clamp(game._specPitch - dy * sensY * yDir, -FPS_PITCH_LIMIT, FPS_PITCH_LIMIT);
+      game._specPitch = 0;
     }
     return;
   }
