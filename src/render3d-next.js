@@ -211,6 +211,7 @@ export function render3dNext(game) {
     const renderMs = performance.now() - renderT0;
     const ctx = canvasRef.getContext('2d');
     if (ctx) ctx.drawImage(renderer.domElement, 0, 0, canvasRef.width, canvasRef.height);
+    if (ctx) drawFpsHud(ctx, game, THREE);
     game._renderStats = {
       total: renderMs,
       render3dBackend: 'next',
@@ -232,12 +233,142 @@ export function render3dNext(game) {
       mapCullSafe,
       mapModelStats,
       groundModelStats,
+      fpsHud: game._fpsHudStats || { teamBars: 0, siteMarkers: 0, bombMarkers: 0, damageNumbers: 0 },
       drawCalls: renderer && renderer.info && renderer.info.render ? renderer.info.render.calls : 0
     };
   } catch (err) {
     console.error('[render3d-next] frame error:', err);
     if (game) game._render3dBackend = 'legacy';
   }
+}
+
+function drawFpsHud(ctx, game, T) {
+  if (!ctx || !camera || !T || !game) return;
+  const map = getMap();
+  const ent = fpsCameraEntity(game);
+  if (!ent) return;
+  const tile = (map && map.tile) || 16;
+  const cw = canvasRef.width || 1;
+  const ch = canvasRef.height || 1;
+  camera.updateMatrixWorld(true);
+  camera.matrixWorldInverse.copy(camera.matrixWorld).invert();
+  const stats = { teamBars: 0, siteMarkers: 0, bombMarkers: 0, damageNumbers: 0 };
+  const project = (wx, wy, wz) => {
+    const v = new T.Vector3(wx, wy, wz).project(camera);
+    if (v.z > 1 || v.z < -1) return null;
+    return { x: (v.x * 0.5 + 0.5) * cw, y: (-v.y * 0.5 + 0.5) * ch, z: v.z };
+  };
+  const onScreen = (p) => !!(p && p.x > -24 && p.x < cw + 24 && p.y > -24 && p.y < ch + 24);
+  const edgePoint = (wx, wy, wz) => {
+    const cs = new T.Vector3(wx, wy, wz).applyMatrix4(camera.matrixWorldInverse);
+    let ax = cs.x;
+    let ay = -cs.y;
+    const len = Math.max(0.0001, Math.hypot(ax, ay));
+    ax /= len;
+    ay /= len;
+    if (cs.z > 0) {
+      ax = -ax;
+      ay = -ay;
+    }
+    const margin = 42;
+    const kx = ax === 0 ? cw / 2 : (cw / 2 - margin) / Math.abs(ax);
+    const ky = ay === 0 ? ch / 2 : (ch / 2 - margin) / Math.abs(ay);
+    const k = Math.min(kx, ky);
+    return { x: cw / 2 + ax * k, y: ch / 2 + ay * k };
+  };
+  ctx.save();
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+
+  if (map && map.sites) {
+    const keys = ['A', 'B'];
+    for (const key of keys) {
+      const s = map.sites[key];
+      if (!s) continue;
+      const cx = (s.x0 + s.x1) / 2;
+      const cz = (s.y0 + s.y1) / 2;
+      const p = project(cx, tile * 0.3, cz);
+      const target = onScreen(p) ? p : edgePoint(cx, tile * 0.3, cz);
+      const color = key === 'A' ? 'rgba(255,138,74,0.9)' : 'rgba(90,168,255,0.9)';
+      ctx.fillStyle = color;
+      ctx.strokeStyle = 'rgba(255,255,255,0.75)';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.arc(target.x, target.y, 15, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+      ctx.fillStyle = '#0b0e12';
+      ctx.font = 'bold 16px sans-serif';
+      ctx.fillText(key, target.x, target.y + 0.5);
+      stats.siteMarkers++;
+    }
+  }
+
+  for (const e of game.entities || []) {
+    if (e === ent || e.dead || e.team !== ent.team) continue;
+    const ex = e.x || 0;
+    const ey = e.y || 0;
+    const p = project(ex, groundElevationAt(ex, ey) + tile * 1.72, ey);
+    if (!onScreen(p)) continue;
+    const bw = Math.min(110, cw * 0.1);
+    const bh = 7;
+    ctx.fillStyle = 'rgba(8,12,16,0.62)';
+    ctx.fillRect(p.x - bw / 2 - 2, p.y - bh / 2 - 2, bw + 4, bh + 4);
+    ctx.fillStyle = e.team === 't' ? '#e0a35a' : '#4f9dd8';
+    ctx.fillRect(p.x - bw / 2, p.y - bh / 2, bw, bh);
+    ctx.fillStyle = '#0c1014';
+    ctx.fillRect(p.x - bw / 2 + 1, p.y - bh / 2 + 1, bw * Math.max(0, Math.min(1, (e.hp || 0) / 100)) - 2, bh - 2);
+    ctx.fillStyle = '#ffffff';
+    ctx.font = 'bold 12px sans-serif';
+    ctx.fillText(String(Math.max(0, Math.round(e.hp || 0))), p.x, p.y + bh + 10);
+    stats.teamBars++;
+  }
+
+  if (game.bomb) {
+    const b = game.bomb;
+    const bx = b.x || 0;
+    const by = b.y || 0;
+    const byWorld = groundElevationAt(bx, by) + tile * 0.9;
+    const p = project(bx, byWorld, by);
+    const target = onScreen(p) ? p : edgePoint(bx, byWorld, by);
+    ctx.fillStyle = '#ff4b3a';
+    ctx.strokeStyle = 'rgba(255,255,255,0.85)';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(target.x, target.y - 14);
+    ctx.lineTo(target.x + 11, target.y);
+    ctx.lineTo(target.x, target.y + 14);
+    ctx.lineTo(target.x - 11, target.y);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+    ctx.fillStyle = '#0b0e12';
+    ctx.font = 'bold 11px sans-serif';
+    ctx.fillText('B', target.x, target.y + 1);
+    if (b.planted) {
+      ctx.fillStyle = 'rgba(255,245,220,0.95)';
+      ctx.font = 'bold 13px sans-serif';
+      ctx.fillText(Math.max(0, b.time || 0).toFixed(1), target.x, target.y + 28);
+    }
+    stats.bombMarkers++;
+  }
+
+  for (const pop of game.dmgPops || []) {
+    const ex = pop.x || 0;
+    const ey = pop.y || 0;
+    const p = project(ex, groundElevationAt(ex, ey) + tile * (0.8 + Math.max(0, 0.8 - (pop.t || 0)) * 0.3), ey);
+    if (!onScreen(p)) continue;
+    ctx.fillStyle = pop.head ? '#ffb84d' : '#ff5f4d';
+    ctx.strokeStyle = 'rgba(8,10,14,0.9)';
+    ctx.lineWidth = 3;
+    ctx.font = 'bold 20px sans-serif';
+    ctx.strokeText(String(pop.dmg || 0), p.x, p.y);
+    ctx.fillText(String(pop.dmg || 0), p.x, p.y);
+    stats.damageNumbers++;
+  }
+
+  ctx.restore();
+  game._fpsHudStats = stats;
 }
 
 function fpsCameraEntity(game) {

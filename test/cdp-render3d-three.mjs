@@ -66,6 +66,15 @@ try {
     pass('detailed viewmodel rendered: ' + JSON.stringify(vmStats));
   }
   await cdp.eval(`(()=>{const g=window.__cs2d&&window.__cs2d.game;const p=g&&g.player;if(!g||!p)return false;p.fireCd=0;p.lastSlot=null;p.reloading=false;p.reloadT=0;p.scoped=false;g.scopeT=0;return true})()`);
+  await cdp.eval(`(()=>{const g=window.__cs2d&&window.__cs2d.game;const p=g&&g.player;if(!g||!p)return false;const fx=Math.cos(p.angle||0)*120,fy=Math.sin(p.angle||0)*120;const mate=g.entities&&g.entities.find((e)=>e!==p&&e.team===p.team&&!e.dead);if(mate){mate.x=p.x+fx;mate.y=p.y+fy;mate.hp=77;}g.dmgPops.push({x:p.x+fx,y:p.y+fy,dmg:34,head:true,t:0.6});g.bomb={x:p.x+fx,y:p.y+fy,planted:true,time:18};return true})()`);
+  await sleep(400);
+  const hudStats = await cdp.eval(`(()=>{const g=window.__cs2d&&window.__cs2d.game;return g&&g._renderStats&&g._renderStats.fpsHud?g._renderStats.fpsHud:null})()`);
+  if (!hudStats || hudStats.teamBars < 1 || hudStats.siteMarkers < 1 || hudStats.bombMarkers < 1 || hudStats.damageNumbers < 1) {
+    fail('three.js fps hud missing: ' + JSON.stringify(hudStats));
+  } else {
+    pass('fps hud rendered: ' + JSON.stringify(hudStats));
+  }
+  await cdp.eval(`(()=>{const g=window.__cs2d&&window.__cs2d.game;if(!g)return false;g.dmgPops=[];g.bomb=null;return true})()`);
   if (!backend || !backend.stats || backend.stats.bakedGround !== 1) {
     fail('three.js baked ground layer missing: ' + JSON.stringify(backend && backend.stats));
   } else {
