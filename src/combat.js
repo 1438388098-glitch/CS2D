@@ -387,9 +387,13 @@ export function applyDamage(v, dmg, opt, game) {
     v.lastDmgFrom = opt.killer;
     v.lastDmgT = game.time * 1000;
   }
-  if (game.viewMode === 'fps' && game.player && (v === game.player || (opt.killer && opt.killer === game.player)) && game.opts.hitstop !== false) {
+  // 命中停顿：FPS 全量命中停顿；2D 模式仅致命/爆头轻微停顿（增强打击感，避免持续卡顿）
+  if (game.player && (v === game.player || (opt.killer && opt.killer === game.player)) && game.opts.hitstop !== false) {
     const killerWeaponKind = typeof opt.weapon === 'object' ? opt.weapon.kind : (WEAPONS[opt.weapon] ? WEAPONS[opt.weapon].kind : opt.weapon);
-    game.hitPauseT = Math.max(game.hitPauseT || 0, head ? 0.08 : (killerWeaponKind === 'sniper' ? 0.12 : (killerWeaponKind === 'grenade' ? 0.1 : 0.05)));
+    const amt = head ? 0.08 : (killerWeaponKind === 'sniper' ? 0.12 : (killerWeaponKind === 'grenade' ? 0.1 : 0.05));
+    const is2d = game.viewMode !== 'fps';
+    const scaled = is2d ? (head || v.hp <= 0 ? amt * 0.6 : 0) : amt;
+    game.hitPauseT = Math.max(game.hitPauseT || 0, scaled);
   }
   game.dmgPops.push({ x: v.x, y: v.y, dmg: hpLoss, head: !!head, t: 0.8 });
   if (game.dmgPops.length > 12) game.dmgPops.shift();
