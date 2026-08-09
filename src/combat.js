@@ -367,6 +367,7 @@ export function applyDamage(v, dmg, opt, game) {
       game.hitMarkT = head ? 0.35 : 0.22;
       game.hitFlashT = Math.max(game.hitFlashT || 0, head ? 0.22 : 0.14);
       if (head) game.headshotT = 0.25;
+      recordHitOutline(game, v, head);
       // 伤害报告统计（本回合造成的实际 HP 损失）
       game.player.dmgGiven = (game.player.dmgGiven || 0) + hpLoss;
       if (head) game.player.dmgHeads = (game.player.dmgHeads || 0) + 1;
@@ -401,6 +402,13 @@ export function applyDamage(v, dmg, opt, game) {
     v.highPointT -= 2;
     if (v.highPointT <= 0) { v.objCache = null; v.path = null; }
   }
+}
+
+export function recordHitOutline(game, target, head) {
+  if (!game || !target || target === game.player) return;
+  game.hitOutlines = game.hitOutlines || [];
+  game.hitOutlines.push({ target, team: target.team, head: !!head, t: head ? 0.45 : 0.3 });
+  if (game.hitOutlines.length > 8) game.hitOutlines.shift();
 }
 
 export function killEntity(v, killer, weapon, head, game) {

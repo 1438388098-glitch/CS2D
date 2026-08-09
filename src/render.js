@@ -48,6 +48,7 @@ export function render(game) {
   drawDrops(game);
   drawGrenades(game);
   drawEntities(game);
+  drawHitOutlines(game);
   drawLaser(game);
   drawSmokes(game);
   drawParticles(game);
@@ -58,6 +59,30 @@ export function render(game) {
 }
 
 // 2D 伤害数字：命中处上浮淡出（描黑边可读），与 3D 的 B3 反馈一致
+function drawHitOutlines(game) {
+  const marks = game.hitOutlines || [];
+  if (!marks.length) return;
+  ctx.save();
+  ctx.lineCap = 'round';
+  for (const ho of marks) {
+    const e = ho.target;
+    if (!e || e.dead || ho.t <= 0) continue;
+    const alpha = clamp(ho.t / (ho.head ? 0.45 : 0.3), 0, 1);
+    const col = e.team === 'ct' ? '77,180,255' : '255,170,80';
+    ctx.strokeStyle = 'rgba(' + col + ',' + (0.18 * alpha) + ')';
+    ctx.lineWidth = 7;
+    ctx.beginPath();
+    ctx.ellipse(e.x, e.y, 18, 18, 0, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.strokeStyle = 'rgba(' + col + ',' + (0.92 * alpha) + ')';
+    ctx.lineWidth = 2.5;
+    ctx.beginPath();
+    ctx.ellipse(e.x, e.y, 18, 18, 0, 0, Math.PI * 2);
+    ctx.stroke();
+  }
+  ctx.restore();
+}
+
 function drawDmgPops2D(game) {
   const pops = game.dmgPops;
   if (!pops || !pops.length) return;
