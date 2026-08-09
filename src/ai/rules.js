@@ -79,3 +79,13 @@ export function shouldEscortCarrier(e, distToCarrier, carrierToSite, roundTime, 
   if (e.bomb && e.bomb.planted) return false;
   return roundTime < earlyUntil && carrierToSite <= closeSite && distToCarrier > 120 && distToCarrier < closeCarrier;
 }
+
+export function shouldThrowUtility(e, kind, count, distToSite, roundTime, enAlive = 0) {
+  if (!e || e.dead || count <= 0) return false;
+  if (!['smoke', 'flash', 'he'].includes(kind)) return false;
+  if (roundTime <= 0 || roundTime >= 115) return false;
+  if (e.bomb && e.bomb.planted) return false;
+  if (kind === 'smoke') return roundTime > 8 && distToSite >= 220 && distToSite <= 850;
+  if (kind === 'flash') return enAlive > 0 && distToSite >= 80 && distToSite <= 650;
+  return enAlive > 0 && distToSite >= 60 && distToSite <= 520;
+}

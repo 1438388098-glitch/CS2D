@@ -11,6 +11,7 @@ import {
   shouldUnstuck,
   pickPlantSite,
   shouldEscortCarrier,
+  shouldThrowUtility,
   shouldRushPlant
 } from '../src/ai/rules.js';
 
@@ -104,5 +105,15 @@ assert.equal(shouldEscortCarrier({ team: 't', hasBomb: true }, 200, 180, 12), fa
 assert.equal(shouldEscortCarrier({ team: 'ct' }, 200, 180, 12), false, 'CT should not use T escort rule');
 assert.equal(shouldEscortCarrier({ team: 't', dead: true }, 200, 180, 12), false, 'dead bot cannot escort');
 assert.equal(shouldEscortCarrier({ team: 't', bomb: { planted: true } }, 200, 180, 12), false, 'planted bomb should end escort behavior');
+
+assert.equal(shouldThrowUtility({ team: 't' }, 'smoke', 1, 400, 20), true, 'smoke should be thrown on entry approach');
+assert.equal(shouldThrowUtility({ team: 't' }, 'smoke', 1, 100, 20), false, 'smoke is wasted at very close range');
+assert.equal(shouldThrowUtility({ team: 't' }, 'smoke', 1, 400, 6), false, 'early round smoke should be saved');
+assert.equal(shouldThrowUtility({ team: 't' }, 'flash', 1, 300, 20, 2), true, 'flash with enemy contact should be thrown');
+assert.equal(shouldThrowUtility({ team: 't' }, 'flash', 1, 300, 20, 0), false, 'flash should be saved without enemy contact');
+assert.equal(shouldThrowUtility({ team: 't' }, 'he', 1, 250, 20, 1), true, 'HE should punish known close enemy');
+assert.equal(shouldThrowUtility({ team: 't' }, 'he', 0, 250, 20, 1), false, 'empty utility slot should not throw');
+assert.equal(shouldThrowUtility({ team: 't', bomb: { planted: true } }, 'smoke', 1, 400, 20), false, 'pre-plant utility rule should not apply after planting');
+assert.equal(shouldThrowUtility({ team: 't' }, 'molotov', 1, 400, 20), false, 'unknown utility kind should be rejected');
 
 console.log('ai-rules: all PASS');
