@@ -45,9 +45,10 @@ export function updateGrenades(game, dt) {
           if (e.dead) continue;
           if (g.owner && e.team === g.owner.team) continue;
           const d = Math.hypot(e.x - g.x, e.y - g.y);
-          if (d >= 260) continue;
+          if (d >= 320) continue;
           if (!los(game, g.x, g.y, e.x, e.y)) continue;
-          const dmg = 95 * (1 - d / 260);
+          // 中心 100、边缘 0 的线性衰减，比原来 260px/95 覆盖更大、边缘威胁更低
+          const dmg = 100 * (1 - d / 320) * ((g.owner && g.owner.nadeMult) || 1);
           if (dmg > 0) applyDamage(e, dmg, { killer: g.owner || null, weapon: 'grenade', head: false }, game);
         }
       } else if (g.kind === 'flash') {
