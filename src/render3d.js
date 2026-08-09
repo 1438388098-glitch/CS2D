@@ -856,6 +856,35 @@ function drawTeammateMarkers(F) {
   }
 }
 
+// 敌人标记：视野内敌人头顶显示红菱形，遮挡时降透明度，方便 3D 模式快速发现目标。
+function drawEnemyMarkers(F) {
+  const g = F.g;
+  const p = g.player;
+  if (!p || g.viewMode !== 'fps' || !g._fpsEntityMarkers) return;
+  const t = F.cctx;
+  for (const m of g._fpsEntityMarkers) {
+    if (m.team === p.team) continue;
+    const sx = m.nx * F.iw;
+    const sy = m.ny * F.ih;
+    if (sx < 6 || sx > F.iw - 6 || sy < 6 || sy > F.ih - 6) continue;
+    const a = m.isKiller ? 1 : (m.occluded ? 0.32 : 0.72);
+    t.save();
+    t.globalAlpha = a;
+    t.strokeStyle = m.isKiller ? '#ffd34d' : '#ff5040';
+    t.lineWidth = m.isKiller ? 2.4 : 1.8;
+    t.shadowColor = 'rgba(255,50,40,0.7)';
+    t.shadowBlur = m.isKiller ? 10 : 5;
+    t.beginPath();
+    t.moveTo(sx, sy - 8);
+    t.lineTo(sx + 6.5, sy - 1);
+    t.lineTo(sx, sy + 6);
+    t.lineTo(sx - 6.5, sy - 1);
+    t.closePath();
+    t.stroke();
+    t.restore();
+  }
+}
+
 function drawSprites(F, zbuf, alive, p) {
   updateFpsMarkers(F, zbuf);
   const sprites = [];
@@ -874,6 +903,7 @@ function drawSprites(F, zbuf, alive, p) {
   drawLaser(F, alive, p);
   drawSpectatePlate(F); // D3 观战名牌（排序绘制后手画，始终可见）
   drawTeammateMarkers(F);
+  drawEnemyMarkers(F);
 }
 
 // ===== B3 伤害数字（combat.js 的 game.dmgPops：上浮淡出，描黑边可读）=====
