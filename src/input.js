@@ -3,11 +3,27 @@ import { initAudio, setMuted, uiSfx } from './audio.js';
 import { isMiniZoomed } from './hud.js';
 import { matches } from './keymap.js';
 import { setPlayerOrder } from './ai.js';
-import { applyDevicePixelRatio } from './render-utils.js';
 
 let lastWheelT = 0;
+let fpsCanvas = null;
 
 const VIEW_MODES = ['top', 'follow', 'fps'];
+
+export function fpsCursorStyle(game) {
+  return game && game.viewMode === 'fps' && (game.state === 'BUY' || game.state === 'LIVE') ? 'none' : '';
+}
+
+export function syncFpsCursor(game) {
+  if (!fpsCanvas || typeof fpsCanvas.style === 'undefined') return;
+  fpsCanvas.style.cursor = fpsCursorStyle(game);
+}
+
+export function requestFpsPointerLock(game) {
+  if (!game || game.viewMode !== 'fps' || !fpsCanvas || typeof fpsCanvas.requestPointerLock !== 'function') return;
+  if (game.state !== 'BUY' && game.state !== 'LIVE') return;
+  if (typeof document !== 'undefined' && document.pointerLockElement) return;
+  try { fpsCanvas.requestPointerLock(); } catch (err) { /* 锁请求被浏览器拒绝时继续增量瞄准 */ }
+}
 
 export function setViewMode(game, mode) {
   game.viewMode = VIEW_MODES.includes(mode) ? mode : 'top';
@@ -15,6 +31,8 @@ export function setViewMode(game, mode) {
   if (game.viewMode !== 'fps' && typeof document !== 'undefined' && document.pointerLockElement) {
     document.exitPointerLock();
   }
+  syncFpsCursor(game);
+  if (game.viewMode === 'fps') requestFpsPointerLock(game);
 }
 
 export function toggleViewMode(game) {
@@ -23,6 +41,8 @@ export function toggleViewMode(game) {
 
 export function initInput(game, canvasRef) {
   try { const v = localStorage.getItem('cs2d_viewmode'); if (VIEW_MODES.includes(v)) game.viewMode = v; } catch (err) {}
+  fpsCanvas = canvasRef;
+  syncFpsCursor(game);
   const keys = game.input.keys;
   const mouse = game.input.mouse;
   const windowRef = window;
@@ -90,8 +110,12 @@ export function initInput(game, canvasRef) {
 
   windowRef.addEventListener('mousemove', (e) => {
     if (game.viewMode === 'fps') {
-      // 标准 FPS 增量瞄准：累积 movementX（普通 mousemove 即可，无需指针锁定）
-      game._mlookDx = (game._mlookDx || 0) + (e.movementX || 0);
+      // 标准 FPS 增量瞄准：pointer lock 下累积 X/Y 位移，游戏循环统一消费一次
+      const pointerLocked = typeof document !== 'undefined' && document.pointerLockElement === fpsCanvas;
+      if (pointerLocked) {
+        game._mlookDx = (game._mlookDx || 0) + (e.movementX || 0);
+        game._mlookDy = (game._mlookDy || 0) + (e.movementY || 0);
+      }
     }
     // 同时记录绝对位置（俯视/跟随瞄准与 HUD 使用）
     const r = canvasRef.getBoundingClientRect();
@@ -112,8 +136,8 @@ export function initInput(game, canvasRef) {
       const mx = e.clientX - r.left;
       const my = e.clientY - r.top;
       const onMini = mx > cw - mmW - 12 && my < mmH + 10;
-      // FPS 为绝对瞄准（同跟随视角），不再请求指针锁定；点击画布即开火
       if (!onMini) mouse.down = true;
+      if (!onMini && game.viewMode === 'fps' && (game.state === 'BUY' || game.state === 'LIVE')) requestFpsPointerLock(game);
       if (game.player && game.player.dead && game.state !== 'END') {
         if (game.cyber && !game.cyber.ended) {
           const bots = game.entities.filter((ee) => ee.bot && !ee.dead);
@@ -138,6 +162,10 @@ export function initInput(game, canvasRef) {
   canvasRef.addEventListener('contextmenu', (e) => e.preventDefault(), false);
 
   document.addEventListener('pointerlockchange', () => {
+    if (!document.pointerLockElement && game.viewMode === 'fps') {
+      game._mlookDx = 0;
+      game._mlookDy = 0;
+    }
     // Esc 解锁兜底自动暂停（记分板开着时也暂停：Chrome 吞 Esc keydown，否则会落入未锁定未暂停的"裸奔"状态）
     if (!document.pointerLockElement && game.viewMode === 'fps' &&
         (game.state === 'BUY' || game.state === 'LIVE') &&
@@ -148,6 +176,8 @@ export function initInput(game, canvasRef) {
 
   windowRef.addEventListener('blur', () => {
     for (const k in keys) keys[k] = false;
+    game._mlookDx = 0;
+    game._mlookDy = 0;
     mouse.down = false;
     mouse.rdown = false;
     mouse.wasDown = false;
@@ -158,6 +188,8 @@ export function initInput(game, canvasRef) {
   document.addEventListener('visibilitychange', () => {
     if (!document.hidden) return;
     for (const k in keys) keys[k] = false;
+    game._mlookDx = 0;
+    game._mlookDy = 0;
     mouse.down = false;
     mouse.rdown = false;
     mouse.wasDown = false;
@@ -185,10 +217,13 @@ export function resizeCanvas(game, canvasRef) {
   const dpr = window.devicePixelRatio || 1;
   const w = window.innerWidth;
   const h = window.innerHeight;
-  const res = applyDevicePixelRatio(canvasRef, dpr, w, h);
-  game.canvasW = res.cssW;
-  game.canvasH = res.cssH;
-  game.dpr = res.dpr;
+  canvasRef.width = Math.round(w * dpr);
+  canvasRef.height = Math.round(h * dpr);
+  canvasRef.style.width = w + 'px';
+  canvasRef.style.height = h + 'px';
+  game.canvasW = w;
+  game.canvasH = h;
+  game.dpr = dpr;
 }
 
 export function switchWeapon(e, slot) {

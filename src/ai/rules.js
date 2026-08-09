@@ -40,13 +40,6 @@ export function shouldRotateToHot(e, hotSite, dist, timeLeft, planted = false, m
   return timeLeft > minTime && dist > far;
 }
 
-export function shouldRepositionOnIntel(e, intelAge, distToHome, planted = false, maxAge = 6, farHome = 700) {
-  if (!e || e.team !== 'ct' || e.dead) return false;
-  if (planted) return false;
-  if (distToHome < farHome) return false;
-  return intelAge > maxAge;
-}
-
 export function shouldKeepPath(e, startX, startY, x, y, minProgress = 30) {
   if (!e || !e.path || e.pathI >= e.path.length) return false;
   return Math.hypot(x - startX, y - startY) >= minProgress;

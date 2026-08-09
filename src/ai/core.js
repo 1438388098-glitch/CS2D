@@ -9,7 +9,7 @@ import { report, query, MSG } from '../info.js';
 import { clamp, rand, angDiff, angNorm, viewCap } from '../utils.js';
 import { styleOf } from './shared.js';
 import { findVisibleEnemy } from './perception.js';
-import { shouldSaveForEco, shouldRepositionOnIntel, shouldPushLatePlant, shouldThrowUtility } from './rules.js';
+import { shouldSaveForEco } from './rules.js';
 import { botObjective, ctReactsTo } from './decisions.js';
 import { botActions } from './actions.js';
 
@@ -203,22 +203,6 @@ function botThink(e, game, dt) {
     }
     return;
   }
-  if (e.team === 't' && shouldPushLatePlant(e, game.roundTime || 0, game.roundDur || 115)) {
-    const plantSite = game.tAttackSite === 'A' ? getMap().sites.A : getMap().sites.B;
-    if (plantSite) {
-      e.trigger = false;
-      e.latePlantPush = true;
-      if (e.path === null && e.repathT <= 0) {
-        pathTo(e, plantSite.cx, plantSite.cy);
-        e.repathT = 1.2;
-      }
-      if (e.path) {
-        e.angle = angNorm(Math.atan2(plantSite.cy - e.y, plantSite.cx - e.x));
-        followPath(e, dt, weapon.speed * 235);
-        return;
-      }
-    }
-  }
   if (e.team === 't' && shouldSaveForEco(e, e.money || 0, (e.weapons && (e.weapons.primary === 'ak' || e.weapons.primary === 'm4' || e.weapons.primary === 'awp')) ? 2 : 0, game.roundTime || 0, game.roundDur || 115)) {
     e.trigger = false;
     e.ecoRetreat = true;
@@ -238,23 +222,6 @@ function botThink(e, game, dt) {
       }
     }
   }
-  const ctHold = e.role === 'a' ? getMap().holds.A : e.role === 'b' ? getMap().holds.B : null;
-  const ctHome = ctHold && ctHold.anchors && ctHold.anchors.length ? ctHold.anchors[0] : (getMap().spawns.ct && getMap().spawns.ct[0]);
-  const intelAge = e.lastKnown && e.lastKnownT < 99 ? e.lastKnownT : 99;
-  const distHome = ctHome ? Math.hypot(e.x - ctHome.x, e.y - ctHome.y) : 0;
-  if (ctHome && shouldRepositionOnIntel(e, intelAge, distHome, !!(game.bomb && game.bomb.planted))) {
-    e.trigger = false;
-    e.repositionOnIntel = true;
-    if (e.path === null && e.repathT <= 0) {
-      pathTo(e, ctHome.x, ctHome.y);
-      e.repathT = 1.2;
-    }
-    if (e.path) {
-      e.angle = angNorm(Math.atan2(ctHome.y - e.y, ctHome.x - e.x));
-      followPath(e, dt, weapon.speed * 235);
-      return;
-    }
-  }
   const obj = botObjective(e, game);
   if (obj) {
     // H11 战术协同（intel 模式）：进点末段（<420px）全员同步封烟+闪光强打
@@ -263,27 +230,6 @@ function botThink(e, game, dt) {
       const flashNow = e.weapons.nades.flash > 0 && rand() < dt * 2.5;
       if (smokeNow || flashNow) {
         e.slot = smokeNow ? 'nade:smoke' : 'nade:flash';
-        throwGrenade(e, game);
-        e.slot = 'primary';
-        e.lastNadeT = game.roundTime;
-      }
-    }
-    const tUtilitySite = e.team === 't' && !(game.bomb && game.bomb.planted)
-      ? (game.tAttackSite === 'A' ? getMap().sites.A : getMap().sites.B)
-      : null;
-    if (tUtilitySite && e.weapons && e.weapons.nades) {
-      const distToSite = Math.hypot(e.x - tUtilitySite.cx, e.y - tUtilitySite.cy);
-      const enNear = game.entities.filter((o) => o.team === 'ct' && !o.dead).length;
-      const nades = e.weapons.nades;
-      const roundTime = game.roundTime || 0;
-      const smokeNow = shouldThrowUtility(e, 'smoke', nades.smoke || 0, distToSite, roundTime, enNear) &&
-        rand() < dt * 0.8 && game.roundTime - (e.lastNadeT || 0) > 6;
-      const flashNow = shouldThrowUtility(e, 'flash', nades.flash || 0, distToSite, roundTime, enNear) &&
-        rand() < dt * 1.5 && game.roundTime - (e.lastNadeT || 0) > 5;
-      const heNow = shouldThrowUtility(e, 'he', nades.he || 0, distToSite, roundTime, enNear) &&
-        rand() < dt * 1.2 && game.roundTime - (e.lastNadeT || 0) > 5;
-      if (smokeNow || flashNow || heNow) {
-        e.slot = smokeNow ? 'nade:smoke' : (flashNow ? 'nade:flash' : 'nade:he');
         throwGrenade(e, game);
         e.slot = 'primary';
         e.lastNadeT = game.roundTime;

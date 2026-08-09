@@ -6,7 +6,7 @@ import { BOT_AI } from './config.js';
 import { ctx } from './ctx.js';
 import { rand } from './utils.js';
 
-export const MSG = { SIGHT: 'sight', DMG: 'dmg', SHOT: 'shot', KILL: 'kill', FOCUS: 'focus' };
+export const MSG = { SIGHT: 'sight', DMG: 'dmg', SHOT: 'shot', KILL: 'kill' };
 
 const MAX_MSG = 24;
 const REPORT_COOLDOWN = 1.0;
@@ -53,7 +53,7 @@ export function query(game, e) {
   const b = board(game, e.team);
   let best = null;
   for (const m of b) {
-    const ageLimit = m.intel ? 30 : (m.type === MSG.FOCUS ? 5 : MAX_AGE);
+    const ageLimit = m.intel ? 30 : MAX_AGE;
     const age = game.time - m.t;
     if (age > ageLimit) continue;
     // 通信半径：消息源离自己太远则收不到（intel 模式无限）
@@ -62,7 +62,7 @@ export function query(game, e) {
       if (d > (BOT_AI.COM_RADIUS || 1200)) continue;
     }
     // 价值分：越新越高，目击 > 枪声 > 受击 > 击杀（对防守方 kill 优先级高）
-    const prio = m.type === MSG.FOCUS ? 6 : (m.type === MSG.SIGHT ? 4 : (m.type === MSG.SHOT ? 3 : (m.type === MSG.DMG ? 2 : 1)));
+    const prio = m.type === MSG.SIGHT ? 4 : (m.type === MSG.SHOT ? 3 : (m.type === MSG.DMG ? 2 : 1));
     const score = prio * 10 - age;
     if (!best || score > best.score) best = { m, score };
   }
