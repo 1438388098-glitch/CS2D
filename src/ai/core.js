@@ -168,7 +168,10 @@ function botThink(e, game, dt) {
     // S3 补枪加速：tradeBoost 期间角速度 ×(1 + tradeBoost*(tradeSpeed-1))
     const tradeMul = e.tradeBoost > 0 && d.tradeSpeed !== undefined ? (1 + e.tradeBoost * (d.tradeSpeed - 1)) : 1;
     const flick = Math.abs(diff) > 0.4 ? 6 : 1;
-    e.angle = angNorm(e.angle + clamp(diff, -d.aimSpeed * flick * dt * tradeMul, d.aimSpeed * flick * dt * tradeMul));
+    // 狙击开镜精细瞄准：开镜后降低甩枪速度与瞄准角速度（拟合人类开镜瞄准，避免瞬瞄秒杀）
+    const scopeAim = e.scoped ? 0.7 : 1;
+    const flickEff = (weapon && weapon.kind === 'sniper' && e.scoped) ? Math.min(flick, 3) : flick;
+    e.angle = angNorm(e.angle + clamp(diff, -d.aimSpeed * flickEff * dt * tradeMul * scopeAim, d.aimSpeed * flickEff * dt * tradeMul * scopeAim));
     // 攻坚判定：T 接近攻击点且未安弹时进入突击模式（移动中开火 + zigzag）
     const atkCs = e.team === 't' ? (game.tAttackSite === 'A' ? getMap().sites.A : getMap().sites.B) : null;
     const assaulting = !!(atkCs && !(game.bomb && game.bomb.planted) && !e.hasBomb &&
