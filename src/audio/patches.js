@@ -79,7 +79,9 @@ function pitch() { return 1 + (rand() - 0.5) * 0.08; } // ±4%
 // 武器音色 ---------------------------------------------------------------
 export function buildShot(ac, env) {
   // env: {out, vol, variant, lp}
-  const v = env.vol;
+  // 枪声曾因源节点增益过低而几乎听不到。这里在合成器内统一提升瞬态电平，
+  // 同时保留距离衰减、低通和声像链，避免只是把 sfx bus 拉满导致其它音效过载。
+  const v = Math.min(2.4, Math.max(0.15, env.vol * 3.2));
   const lp = env.lp;
   const guard = env.guard;
   const pr = pitch();
