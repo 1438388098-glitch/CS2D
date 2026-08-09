@@ -1,6 +1,7 @@
 import { registerMap } from './registry.js';
 import { startMatch } from './game.js';
 import { loadMap, getMap, aStar, nearestWalkable } from './map.js';
+import { OFFICIAL_MAPS } from './official-maps.js';
 
 let game = null;
 let ed = null;
@@ -426,6 +427,7 @@ function bindButtons() {
   const validate = $('editorValidate'); if (validate) validate.onclick = () => validateMap();
   const resize = $('editorResize'); if (resize) resize.onclick = () => resizeMap();
   const brushSel = $('editorBrush'); if (brushSel) { brushSel.value = String(ed.brush || 1); brushSel.onchange = () => { ed.brush = Math.max(1, Math.min(4, parseInt(brushSel.value, 10) || 1)); }; }
+  const tpl = $('editorTemplate'); if (tpl) { tpl.value = ''; tpl.onchange = () => loadTemplate(tpl.value); }
   const tools = {
     paint: 'editorToolPaint', fill: 'editorToolFill', rect: 'editorToolRect', line: 'editorToolLine', pick: 'editorToolPick'
   };
@@ -437,6 +439,21 @@ function bindButtons() {
   }
   const play = $('editorPlay'); if (play) play.onclick = () => playEditorMap();
   const close = $('editorClose'); if (close) close.onclick = () => closeEditor();
+}
+
+// 载入官方图作为编辑模板（网格/出生点/爆破点/高台全部带入）
+function loadTemplate(id) {
+  if (!id) return;
+  const def = OFFICIAL_MAPS[id];
+  if (!def || !def.rows) { status('模板不存在'); return; }
+  pushHistory();
+  ed.rows = def.rows.slice();
+  if (canvas) canvas.style.aspectRatio = def.rows[0].length + ' / ' + def.rows.length;
+  const w = $('editorW'), h = $('editorH');
+  if (w) w.value = def.rows[0].length;
+  if (h) h.value = def.rows.length;
+  drawEditor();
+  status('已载入模板：' + (def.name || id));
 }
 
 function resizeMap() {
