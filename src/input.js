@@ -3,6 +3,7 @@ import { initAudio, setMuted, uiSfx } from './audio.js';
 import { isMiniZoomed } from './hud.js';
 import { matches } from './keymap.js';
 import { setPlayerOrder } from './ai.js';
+import { applyDevicePixelRatio } from './render-utils.js';
 
 let lastWheelT = 0;
 
@@ -184,13 +185,10 @@ export function resizeCanvas(game, canvasRef) {
   const dpr = window.devicePixelRatio || 1;
   const w = window.innerWidth;
   const h = window.innerHeight;
-  canvasRef.width = Math.round(w * dpr);
-  canvasRef.height = Math.round(h * dpr);
-  canvasRef.style.width = w + 'px';
-  canvasRef.style.height = h + 'px';
-  game.canvasW = w;
-  game.canvasH = h;
-  game.dpr = dpr;
+  const res = applyDevicePixelRatio(canvasRef, dpr, w, h);
+  game.canvasW = res.cssW;
+  game.canvasH = res.cssH;
+  game.dpr = res.dpr;
 }
 
 export function switchWeapon(e, slot) {
