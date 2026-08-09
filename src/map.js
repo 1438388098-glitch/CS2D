@@ -657,6 +657,19 @@ export function pathTo(e, tx, ty) {
   e.lastSample = { x: e.x, y: e.y };
 }
 
+// 纯地图视线（无烟雾）：路径平滑/短接用，仅判断地形遮挡
+export function clearLos(ax, ay, bx, by) {
+  const d = Math.hypot(bx - ax, by - ay);
+  if (d < 1) return true;
+  const steps = Math.ceil(d / 8);
+  for (let i = 0; i <= steps; i++) {
+    const x = ax + (bx - ax) * i / steps;
+    const y = ay + (by - ay) * i / steps;
+    if (losBlocked(x, y)) return false;
+  }
+  return true;
+}
+
 export function followPath(e, dt, speed, skip = 0, scan = 0) {
   if (skip > 48) { e.path = null; e.pathI = 0; return false; }
   if (!MAP || !e.path || e.pathI >= e.path.length) { e.path = null; return false; }
@@ -669,6 +682,32 @@ export function followPath(e, dt, speed, skip = 0, scan = 0) {
     e.pathI++;
     if (e.pathI >= e.path.length) { e.path = null; return false; }
     return followPath(e, dt, speed, skip + 1, scan);
+  }
+  // 路径短接（string pulling）：当前位置能直线看到更远的路点则跳过中间点，
+  // 减少 4 连通 A* 的阶梯/贴墙角抖动。跳过只做前进方向收紧，绝不改路径终点语义。
+  if (e.path.length - e.pathI > 1) {
+    let skipped = false;
+    for (let i = e.pathI + 1; i < e.path.length; i++) {
+      const nw = e.path[i];
+      const nx = nw.x * tileSize() + tileSize() / 2, ny = nw.y * tileSize() + tileSize() / 2;
+      if (clearLos(e.x, e.y, nx, ny)) {
+        e.pathI = i;
+        skipped = true;
+      } else break;
+    }
+    if (skipped) {
+      const nwp = e.path[e.pathI];
+      e.vx = (nwp.x * tileSize() + tileSize() / 2 - e.x) / Math.max(1, Math.hypot(nwp.x * tileSize() + tileSize() / 2 - e.x, nwp.y * tileSize() + tileSize() / 2 - e.y)) * speed * (e.walking ? 0.55 : 1);
+      e.vy = (nwp.y * tileSize() + tileSize() / 2 - e.y) / Math.max(1, Math.hypot(nwp.x * tileSize() + tileSize() / 2 - e.x, nwp.y * tileSize() + tileSize() / 2 - e.y)) * speed * (e.walking ? 0.55 : 1);
+      e.moving = true;
+      e.angle = Math.atan2(nwp.y * tileSize() + tileSize() / 2 - e.y, nwp.x * tileSize() + tileSize() / 2 - e.x);
+      const moved2 = Math.hypot(e.x - (e.lastSample ? e.lastSample.x : e.x), e.y - (e.lastSample ? e.lastSample.y : e.y));
+      if (shouldKeepPath(e, e.lastSample ? e.lastSample.x : e.x, e.lastSample ? e.lastSample.y : e.y, e.x, e.y)) {
+        e.stuckT = Math.max(0, (e.stuckT || 0) - dt);
+        e.lastSample = { x: e.x, y: e.y };
+      }
+      return true;
+    }
   }
   const spd = speed * (e.walking ? 0.55 : 1);
   e.vx = dx / d * spd;
