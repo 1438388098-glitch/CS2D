@@ -18,7 +18,7 @@ function noiseBurst(ac, env) {
   g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
   src.connect(f); f.connect(g); g.connect(out);
   src.start(t); src.stop(t + dur + 0.05);
-  wrapTail(src, [src, f, g]);
+  wrapTail(src, [src, f, g], null, env.guard);
 }
 
 // 振荡器下落：type 波形，频率 f0→f1 指数滑落
@@ -35,7 +35,7 @@ function oscDrop(ac, env) {
   g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
   o.connect(g); g.connect(out);
   o.start(t); o.stop(t + dur + 0.05);
-  wrapTail(o, [o, g]);
+  wrapTail(o, [o, g], null, env.guard);
 }
 
 // 双 tick（click）：两段极短噪声/正弦
@@ -53,7 +53,7 @@ function tick(ac, env) {
     g.gain.exponentialRampToValueAtTime(0.0001, t + dt + 0.02);
     o.connect(g); g.connect(out);
     o.start(t + dt); o.stop(t + dt + 0.03);
-    wrapTail(o, [o, g]);
+    wrapTail(o, [o, g], null, env.guard);
   }
 }
 
@@ -70,7 +70,7 @@ function seqTones(ac, env) {
     g.gain.exponentialRampToValueAtTime(0.0001, t + Math.max(0.08, step * 2.2));
     o.connect(g); g.connect(out);
     o.start(t); o.stop(t + Math.max(0.1, step * 2.5));
-    wrapTail(o, [o, g]);
+    wrapTail(o, [o, g], null, env.guard);
   }
 }
 

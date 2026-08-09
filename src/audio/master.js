@@ -122,13 +122,23 @@ export function sfx(name, vol, x, y, game, wid, mat) {
       wetIn.connect(out);
       tails.push(...rev.nodes, dry, wetIn);
     }
-    const env = { out: chain, vol: v, lp: lp ? lp.frequency.value : 3000, mapId: g && g.mapId, wid, mat };
+    let tailGuard = null;
+    if (tails.length) {
+      tailGuard = {
+        pending: 0,
+        cleanup() {
+          for (const n of tails) { try { n.disconnect(); } catch (e) { /* 宸叉柇 */ } }
+        }
+      };
+    }
+    const env = { out: chain, vol: v, lp: lp ? lp.frequency.value : 3000, mapId: g && g.mapId, wid, mat, guard: tailGuard };
     if (name === 'shot' || name === 'awp' || name === 'pistol' || name === 'shotgun') {
       const variant = GUN_BY_WID[wid] || (name === 'awp' ? 'sniper' : name === 'shotgun' ? 'shotgun' : name === 'pistol' ? 'pistol' : 'rifle');
       buildShot(ac, { ...env, variant });
     } else {
       buildSfx(ac, env);
     }
+    if (tailGuard && tailGuard.pending === 0) tailGuard.cleanup();
   } catch (e) { /* 音频异常忽略 */ }
 }
 

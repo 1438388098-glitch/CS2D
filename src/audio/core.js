@@ -52,11 +52,18 @@ export function throttle(name, ms) {
 }
 
 // 节点图生命周期：所有 patch 把创建节点收进 list，source 播完统一断开
-export function wrapTail(src, nodes) {
+export function wrapTail(src, nodes, onEnd, guard) {
   try {
+    if (guard) guard.pending = (guard.pending || 0) + 1;
     src.onended = () => {
       for (const n of nodes) { try { n.disconnect(); } catch (e) { /* 已断开 */ } }
       src.onended = null;
+      if (guard) {
+        guard.pending -= 1;
+        if (guard.pending <= 0 && typeof guard.cleanup === 'function') guard.cleanup();
+      } else if (typeof onEnd === 'function') {
+        onEnd();
+      }
     };
   } catch (e) { /* 无 onended 环境 */ }
 }
