@@ -715,7 +715,9 @@ box.innerHTML = '<div class="mode-hint">点击“开始”进入地图编辑器�
     const oppHtml = OPPONENTS.map((o) => '<option value="' + o.name + '"' + (game.opts.duelOpponent === o.name ? ' selected' : '') + '>' + o.name + ' · ' + o.tag + ' · ' + o.rating + '</option>').join('');
     if (!game.opts.duelMap) game.opts.duelMap = DUEL_MAPS[0].id;
     const mapHtml = DUEL_MAPS.map((m) => '<option value="' + m.id + '"' + (game.opts.duelMap === m.id ? ' selected' : '') + '>' + m.name + ' · ' + m.tagline + '</option>').join('');
-    box.innerHTML = '<div class="mode-hint">单挑模式：1v1 九局五胜（BO9），使用专用小图。</div><div class="duel-pick"><label>地图</label><select id="duelMapSel">' + mapHtml + '</select></div><div class="duel-pick"><label>对手</label><select id="duelOppSel">' + oppHtml + '</select></div><div class="duel-stats">总战绩 ' + stats.played + ' 场 · ' + stats.w + '胜 ' + stats.l + '负 · 连胜 ' + stats.streak + ' · 最佳 ' + stats.bestStreak + '</div>' + (vsHtml ? '<div class="mode-hint">对阵记录</div>' + vsHtml : '') + '<div class="mode-hint">最近 5 场</div>' + hist + '<button class="btn small" id="duelResetBtn">重置战绩</button>';
+    if (!game.opts.duelDiff) game.opts.duelDiff = 'hard';
+    const diffHtml = [['easy', '简单'], ['normal', '普通'], ['hard', '困难'], ['hell', '地狱']].map(([v, l]) => '<option value="' + v + '"' + (game.opts.duelDiff === v ? ' selected' : '') + '>' + l + '</option>').join('');
+    box.innerHTML = '<div class="mode-hint">单挑模式：1v1 九局五胜（BO9），使用专用小图。</div><div class="duel-pick"><label>地图</label><select id="duelMapSel">' + mapHtml + '</select></div><div class="duel-pick"><label>对手</label><select id="duelOppSel">' + oppHtml + '</select></div><div class="duel-pick"><label>难度</label><select id="duelDiffSel">' + diffHtml + '</select></div><div class="duel-stats">总战绩 ' + stats.played + ' 场 · ' + stats.w + '胜 ' + stats.l + '负 · 连胜 ' + stats.streak + ' · 最佳 ' + stats.bestStreak + '</div>' + (vsHtml ? '<div class="mode-hint">对阵记录</div>' + vsHtml : '') + '<div class="mode-hint">最近 5 场</div>' + hist + '<button class="btn small" id="duelResetBtn">重置战绩</button>';
     const mapSel2 = el('duelMapSel');
     if (mapSel2) {
       mapSel2.value = game.opts.duelMap;
@@ -725,6 +727,11 @@ box.innerHTML = '<div class="mode-hint">点击“开始”进入地图编辑器�
     if (sel) {
       sel.value = game.opts.duelOpponent;
       sel.onchange = () => { game.opts.duelOpponent = sel.value; };
+    }
+    const diffSel = el('duelDiffSel');
+    if (diffSel) {
+      diffSel.value = game.opts.duelDiff;
+      diffSel.onchange = () => { game.opts.duelDiff = diffSel.value; };
     }
     const resetBtn = el('duelResetBtn');
     if (resetBtn) resetBtn.onclick = () => { if (window.confirm('确定重置单挑战绩？')) { resetDuel(); renderModeSettings(); } };

@@ -112,15 +112,19 @@ function duelStart(game) {
   const opp = pickOpponent(game.opts.duelOpponent);
   game.duelMatch = { settled: false, opp };
   game.opts.bots = 1;
-  game.opts.diff = 'hard';
-  game.opts.diffParams = teamDiffParams({ rating: opp.rating });
+  // 难度档：easy/normal/hard/hell 缩放对手 rating（影响 AI 参数），默认困难
+  const diffMult = { easy: 0.7, normal: 0.85, hard: 1.0, hell: 1.15 };
+  const mult = diffMult[game.opts.duelDiff] || 1.0;
+  const effRating = Math.round(Math.min(99, Math.max(55, opp.rating * mult)));
+  game.opts.diff = game.opts.duelDiff === 'hell' ? 'hell' : 'hard';
+  game.opts.diffParams = teamDiffParams({ rating: effRating });
   game.noRoundEnd = false;
   setupMatchEntities(game);
   game.entities = game.entities.filter((e) => !(e.bot && e.team === game.opts.team));
   const enemy = game.entities.find((e) => e.bot && e.team !== game.opts.team);
   if (enemy) {
     enemy.name = opp.name;
-    enemy.aiParams = { ...teamDiffParams({ rating: opp.rating }) };
+    enemy.aiParams = { ...teamDiffParams({ rating: effRating }) };
   }
   startRound(game);
 }
