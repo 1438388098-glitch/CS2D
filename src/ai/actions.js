@@ -7,6 +7,7 @@ import { throwGrenade } from '../grenades.js';
 import { plantBomb, pickupBomb, defuseBomb } from '../bomb.js';
 import { angNorm, rand } from '../utils.js';
 import { emit, logAct, styleOf } from './shared.js';
+import { shouldAttemptDefuse } from './rules.js';
 
 function hearSplash(e, game) {
   const s = game.lastSplash;
@@ -154,7 +155,14 @@ export function botActions(e, game, dt) {
           break;
         }
       }
-      if (!enemiesNear && e.aimTarget === null) {
+      if (!enemiesNear && e.aimTarget === null && shouldAttemptDefuse(
+        e,
+        true,
+        Math.hypot(e.x - game.bomb.x, e.y - game.bomb.y),
+        game.bomb.timer || 0,
+        !!(e.weapons && e.weapons.kit),
+        game.entities.filter((o) => o.team === 't' && !o.dead).length
+      )) {
         defuseBomb(e, game);
       } else if (e.defuseT > 0) {
         e.defuseT = 0;
