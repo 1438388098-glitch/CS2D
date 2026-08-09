@@ -51,6 +51,9 @@ let dropMeshes = new Map();
 let grenadeMeshes = new Map();
 let smokeMeshes = [];
 let particleMeshes = [];
+let shellMeshes = [];
+let shockwaveMeshes = [];
+let splashMeshes = [];
 let corpseMeshes = new Map();
 let decalPointMeshes = new Map();
 let viewmodelKey = '';
@@ -92,6 +95,9 @@ function disposeRenderer() {
   grenadeMeshes = new Map();
   smokeMeshes = [];
   particleMeshes = [];
+  shellMeshes = [];
+  shockwaveMeshes = [];
+  splashMeshes = [];
   corpseMeshes = new Map();
   decalPointMeshes = new Map();
   viewmodelKey = '';
@@ -194,6 +200,7 @@ export function render3dNext(game) {
       drainGrills: mapGroup ? mapGroup.children.filter((o) => o.name === 'drainGrills').length : 0,
       sitePlates: mapGroup ? mapGroup.children.filter((o) => o.name === 'siteCornerBolts').length : 0
     };
+    const effectObjects = shellMeshes.length + shockwaveMeshes.length + splashMeshes.length + particleMeshes.length + smokeMeshes.length;
     const dpr = game.dpr || 1;
     const cssW = canvasRef.width / dpr;
     const cssH = canvasRef.height / dpr;
@@ -233,6 +240,8 @@ export function render3dNext(game) {
       mapCullSafe,
       mapModelStats,
       groundModelStats,
+      effectObjects,
+      smokeVolumes: smokeMeshes.length,
       fpsHud: game._fpsHudStats || { teamBars: 0, siteMarkers: 0, bombMarkers: 0, damageNumbers: 0 },
       drawCalls: renderer && renderer.info && renderer.info.render ? renderer.info.render.calls : 0
     };
@@ -399,6 +408,9 @@ function disposeAllDynamic() {
   for (const mesh of grenadeMeshes.values()) disposeObject(mesh);
   for (const mesh of smokeMeshes) disposeObject(mesh);
   for (const mesh of particleMeshes) disposeObject(mesh);
+  for (const mesh of shellMeshes) disposeObject(mesh);
+  for (const mesh of shockwaveMeshes) disposeObject(mesh);
+  for (const mesh of splashMeshes) disposeObject(mesh);
   for (const mesh of corpseMeshes.values()) disposeObject(mesh);
   for (const mesh of decalPointMeshes.values()) disposeObject(mesh);
   entityMeshes = new Map();
@@ -406,6 +418,9 @@ function disposeAllDynamic() {
   grenadeMeshes = new Map();
   smokeMeshes = [];
   particleMeshes = [];
+  shellMeshes = [];
+  shockwaveMeshes = [];
+  splashMeshes = [];
   corpseMeshes = new Map();
   decalPointMeshes = new Map();
 }
@@ -1600,16 +1615,17 @@ function updateBomb(game) {
 
 function updateSmokes(game) {
   if (!dynamicGroup || !THREE) return;
-  const wanted = Math.min(game.smokes ? game.smokes.length : 0, 40);
+  const source = game.smokes || [];
+  const wanted = Math.min(source.length * 3, 120);
   while (smokeMeshes.length < wanted) {
     const sprite = new THREE.Sprite(new THREE.SpriteMaterial({
       map: makeGlowTexture(),
       color: 0x8b9894,
       transparent: true,
-      opacity: 0.45,
+      opacity: 0.34,
       depthWrite: false
     }));
-    sprite.name = 'smoke';
+    sprite.name = 'smokeVolume';
     smokeMeshes.push(sprite);
     dynamicGroup.add(sprite);
   }
@@ -1620,19 +1636,117 @@ function updateSmokes(game) {
   }
   const tile = (getMap() && getMap().tile) || 16;
   for (let i = 0; i < wanted; i++) {
-    const smoke = game.smokes[i];
+    const smoke = source[Math.floor(i / 3)];
     const s = smokeMeshes[i];
+    if (!smoke) continue;
+    const layer = i % 3;
     const pulse = 0.7 + Math.sin((game.time || 0) * 2.1 + i * 1.3) * 0.08;
-    s.position.set(smoke.x || 0, groundElevationAt(smoke.x || 0, smoke.y || 0) + tile * (0.7 + pulse * 0.25), smoke.y || 0);
-    const scale = ((smoke.r || tile * 3) * 0.012 + 0.6) * tile;
+    const ox = layer === 1 ? Math.sin((game.time || 0) * 1.7 + i * 0.7) * tile * 0.26 : layer === 2 ? Math.cos(i * 1.1) * tile * 0.34 : 0;
+    const oz = layer === 1 ? Math.cos((game.time || 0) * 1.4 + i * 0.5) * tile * 0.24 : layer === 2 ? Math.sin(i * 0.8) * tile * 0.31 : 0;
+    s.position.set((smoke.x || 0) + ox, groundElevationAt(smoke.x || 0, smoke.y || 0) + tile * (0.45 + layer * 0.42 + pulse * 0.22), (smoke.y || 0) + oz);
+    const scale = ((smoke.r || tile * 3) * 0.012 + 0.6) * tile * (1 + layer * 0.34);
     s.scale.set(scale, scale, 1);
-    s.material.opacity = Math.min(0.62, 0.35 + (smoke.life || 1) * 0.02);
+    s.material.opacity = Math.min(0.56, 0.16 + layer * 0.12 + (smoke.life || 1) * 0.02);
   }
 }
 
 function updateParticles(game) {
   if (!dynamicGroup || !THREE) return;
-  const wanted = Math.min(game.particles ? game.particles.length : 0, 80);
+  const all = game.particles || [];
+  const shells = all.filter((p) => p && p.kind === 'shell').slice(0, 40);
+  const booms = all.filter((p) => p && p.kind === 'boom').slice(0, 24);
+  const splashes = all.filter((p) => p && (p.kind === 'splash' || p.kind === 'water')).slice(0, 32);
+  const others = all.filter((p) => !p || (p.kind !== 'shell' && p.kind !== 'boom' && p.kind !== 'splash' && p.kind !== 'water')).slice(0, 80);
+  const tile = (getMap() && getMap().tile) || 16;
+
+  while (shellMeshes.length < shells.length) {
+    const mesh = new THREE.Mesh(
+      new THREE.BoxGeometry(tile * 0.11, tile * 0.035, tile * 0.11),
+      new THREE.MeshLambertMaterial({ color: 0xc99a3f })
+    );
+    mesh.name = 'shell';
+    mesh.castShadow = true;
+    shellMeshes.push(mesh);
+    dynamicGroup.add(mesh);
+  }
+  for (let i = shellMeshes.length - 1; i >= shells.length; i--) {
+    const mesh = shellMeshes.pop();
+    dynamicGroup.remove(mesh);
+    disposeObject(mesh);
+  }
+  for (let i = 0; i < shells.length; i++) {
+    const p = shells[i];
+    const mesh = shellMeshes[i];
+    mesh.visible = true;
+    mesh.position.set(p.x || 0, groundElevationAt(p.x || 0, p.y || 0) + tile * 0.05, p.y || 0);
+    mesh.rotation.set((p.spin || 0) + i, 0, 0);
+  }
+
+  while (shockwaveMeshes.length < booms.length) {
+    const ring = new THREE.Mesh(
+      new THREE.RingGeometry(0.42, 0.58, 32),
+      new THREE.MeshBasicMaterial({
+        color: 0xffb45a,
+        transparent: true,
+        opacity: 0.9,
+        blending: THREE.AdditiveBlending,
+        depthWrite: false,
+        side: THREE.DoubleSide
+      })
+    );
+    ring.name = 'shockwave';
+    ring.rotation.x = -Math.PI / 2;
+    ring.renderOrder = 7;
+    shockwaveMeshes.push(ring);
+    dynamicGroup.add(ring);
+  }
+  for (let i = shockwaveMeshes.length - 1; i >= booms.length; i--) {
+    const mesh = shockwaveMeshes.pop();
+    dynamicGroup.remove(mesh);
+    disposeObject(mesh);
+  }
+  for (let i = 0; i < booms.length; i++) {
+    const p = booms[i];
+    const ring = shockwaveMeshes[i];
+    ring.visible = true;
+    ring.position.set(p.x || 0, groundElevationAt(p.x || 0, p.y || 0) + tile * 0.04, p.y || 0);
+    const life = Math.max(0.01, p.life || 0.3);
+    const grow = 1 + (0.8 - life) * 8;
+    const size = ((p.size || 160) / 12) * tile * 0.08 * grow;
+    ring.scale.set(size, size, 1);
+    ring.material.opacity = Math.max(0, Math.min(0.9, life * 1.8));
+  }
+
+  while (splashMeshes.length < splashes.length) {
+    const cone = new THREE.Mesh(
+      new THREE.ConeGeometry(tile * 0.18, tile * 0.44, 8),
+      new THREE.MeshBasicMaterial({
+        color: 0x65c8ff,
+        transparent: true,
+        opacity: 0.7,
+        depthWrite: false
+      })
+    );
+    cone.name = 'splash';
+    splashMeshes.push(cone);
+    dynamicGroup.add(cone);
+  }
+  for (let i = splashMeshes.length - 1; i >= splashes.length; i--) {
+    const mesh = splashMeshes.pop();
+    dynamicGroup.remove(mesh);
+    disposeObject(mesh);
+  }
+  for (let i = 0; i < splashes.length; i++) {
+    const p = splashes[i];
+    const cone = splashMeshes[i];
+    cone.visible = true;
+    cone.position.set(p.x || 0, groundElevationAt(p.x || 0, p.y || 0) + tile * 0.14, p.y || 0);
+    cone.rotation.set(0, 0, (p.spin || 0) + i * 0.4);
+    cone.scale.setScalar(Math.max(0.2, (p.life || 0.3) * 1.8));
+    cone.material.opacity = Math.max(0, Math.min(0.8, (p.life || 0.3) * 1.6));
+  }
+
+  const wanted = others.length;
   while (particleMeshes.length < wanted) {
     const sprite = new THREE.Sprite(new THREE.SpriteMaterial({
       map: makeGlowTexture(),
@@ -1650,9 +1764,8 @@ function updateParticles(game) {
     dynamicGroup.remove(s);
     if (s.material) s.material.dispose();
   }
-  const tile = (getMap() && getMap().tile) || 16;
   for (let i = 0; i < wanted; i++) {
-    const p = game.particles[i];
+    const p = others[i];
     const s = particleMeshes[i];
     const col = p.kind === 'blood' ? 0x9a2d2d : p.kind === 'spark' ? 0xffd25a : p.kind === 'fire' ? 0xff7a35 : p.kind === 'water' || p.kind === 'splash' ? 0x65c8ff : 0xc9b28a;
     s.material.color.setHex(col);

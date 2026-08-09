@@ -74,7 +74,15 @@ try {
   } else {
     pass('fps hud rendered: ' + JSON.stringify(hudStats));
   }
-  await cdp.eval(`(()=>{const g=window.__cs2d&&window.__cs2d.game;if(!g)return false;g.dmgPops=[];g.bomb=null;return true})()`);
+  await cdp.eval(`(()=>{const g=window.__cs2d&&window.__cs2d.game;const p=g&&g.player;if(!g||!p)return false;const fx=Math.cos(p.angle||0)*80,fy=Math.sin(p.angle||0)*80;g.particles.push({kind:'shell',x:p.x+fx,y:p.y+fy,spin:1.2,life:0.5});g.particles.push({kind:'boom',x:p.x+fx,y:p.y+fy,size:160,life:0.5});g.particles.push({kind:'splash',x:p.x+fx,y:p.y+fy,life:0.4,size:3});g.smokes=[{x:p.x+fx,y:p.y+fy,r:80,life:8}];g.dmgPops=[];g.bomb=null;return true})()`);
+  await sleep(400);
+  const fxStats = await cdp.eval(`(()=>{const g=window.__cs2d&&window.__cs2d.game;const c=window.__cs2d;return {backend:c&&c.render3d&&c.render3d.backend,gameBackend:g&&g._render3dBackend,effects:g&&g._renderStats?g._renderStats.effectObjects:0,smoke:g&&g._renderStats?g._renderStats.smokeVolumes:0}})()`);
+  if (!fxStats || fxStats.backend !== 'next' || fxStats.gameBackend !== 'next' || fxStats.effects < 5 || fxStats.smoke < 3) {
+    fail('three.js effects/smoke volumes missing: ' + JSON.stringify(fxStats));
+  } else {
+    pass('effects and smoke volumes rendered: ' + JSON.stringify(fxStats));
+  }
+  await cdp.eval(`(()=>{const g=window.__cs2d&&window.__cs2d.game;if(!g)return false;g.particles=[];g.smokes=[];return true})()`);
   if (!backend || !backend.stats || backend.stats.bakedGround !== 1) {
     fail('three.js baked ground layer missing: ' + JSON.stringify(backend && backend.stats));
   } else {
