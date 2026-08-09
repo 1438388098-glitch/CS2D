@@ -232,3 +232,34 @@ export function buildHarbor() {
   b.spawn('c', 4, 3, 6, 2);
   return b;
 }
+
+export function buildBazaar() {
+  const b = createBuilder(66, 44);
+  border(b);
+  b.corridor(1, 2, 64, 4);          // north arcade
+  b.corridor(1, 20, 64, 5);         // central market
+  b.corridor(1, 38, 64, 4);         // south arcade
+  b.corridor(3, 2, 6, 40);          // west spine
+  b.corridor(29, 2, 6, 40);         // center spine
+  b.corridor(57, 2, 6, 40);         // east spine
+  b.corridor(12, 7, 4, 30);         // stall lane
+  b.corridor(42, 7, 4, 30);         // spice lane
+  b.corridor(18, 10, 3, 25);        // rug lane
+  b.corridor(46, 10, 3, 25);        // lantern lane
+  b.site('A', 57, 4, 7, 5);
+  b.site('B', 3, 38, 9, 5);
+  b.tile(60, 6, '^'); b.tile(61, 6, '^'); b.tile(5, 41, '^'); b.tile(6, 41, '^');
+  b.boxes(12, 8, 2, 2); b.boxes(21, 12, 2, 2); b.boxes(34, 8, 2, 2);
+  b.boxes(43, 12, 2, 2); b.boxes(52, 8, 2, 2); b.boxes(16, 22, 2, 2);
+  b.boxes(25, 23, 2, 2); b.boxes(38, 22, 2, 2); b.boxes(49, 23, 2, 2);
+  b.boxes(8, 32, 2, 2); b.boxes(24, 33, 2, 2); b.boxes(40, 32, 2, 2);
+  b.boxes(54, 33, 2, 2); b.boxes(12, 39, 2, 2); b.boxes(33, 39, 2, 2);
+  b.crate(15, 11); b.crate(44, 11); b.crate(22, 21); b.crate(41, 21);
+  b.crate(10, 35); b.crate(52, 35);
+  b.tile(14, 21, '='); b.tile(32, 21, '='); b.tile(50, 21, '=');
+  b.tile(15, 21, '='); b.tile(33, 21, '='); b.tile(51, 21, '=');
+  b.tile(20, 10, 'o'); b.tile(47, 10, 'o'); b.tile(7, 26, 'o'); b.tile(57, 26, 'o');
+  b.spawn('t', 57, 41, 6, 2);
+  b.spawn('c', 3, 3, 6, 2);
+  return b;
+}
