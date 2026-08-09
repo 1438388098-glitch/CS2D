@@ -3,6 +3,7 @@
 import { getMap, groundElevationAt } from './map.js';
 import { themeOf } from './textures.js';
 import { WEAPONS } from './config.js';
+import { weaponDef, wkey, ammoFor, reserveFor } from './entities.js';
 
 export function tileToChar(grid, tx, ty) {
   if (!grid || !grid.length) return '#';
@@ -59,6 +60,8 @@ let layersRef = null;
 let cameraLight = null;
 let cameraFill = null;
 let bounceLight = null;
+let environmentTexture = null;
+let mapIdentityStats = null;
 let entityMeshes = new Map();
 let dropMeshes = new Map();
 let grenadeMeshes = new Map();
@@ -121,6 +124,7 @@ function disposeRenderer() {
   cameraLight = null;
   cameraFill = null;
   bounceLight = null;
+  mapIdentityStats = null;
   mapKey = '';
   entityMeshes = new Map();
   dropMeshes = new Map();
@@ -133,6 +137,11 @@ function disposeRenderer() {
   corpseMeshes = new Map();
   decalPointMeshes = new Map();
   viewmodelKey = '';
+  if (environmentTexture) {
+    try { environmentTexture.dispose(); } catch (err) { /* ignore */ }
+    environmentTexture = null;
+  }
+  environmentTexture = null;
   clearResourceCaches();
   webglHealthy = true;
 }
@@ -253,11 +262,27 @@ export function render3dNext(game) {
     const effectObjects = shellMeshes.length + shockwaveMeshes.length + splashMeshes.length + particleMeshes.length + smokeMeshes.length;
     const dpr = Math.min(2, Math.max(1, game.dpr || 1));
     const quality = renderQualityFor(game);
+    const perf = performanceBudgetFor(game);
     const cssW = canvasRef.width / dpr;
     const cssH = canvasRef.height / dpr;
+    const sizeValid = !!(canvasRef.width > 1 && canvasRef.height > 1 && isFinite(cssW) && isFinite(cssH) && cssW > 1 && cssH > 1);
+    if (!sizeValid) {
+      game._render3dBackend = 'legacy';
+      game._renderStability = { webglHealthy, sizeValid: false, strikes: game._renderHealthStrikes || 0 };
+      return;
+    }
     const scale = game._renderScale >= 0.5 && game._renderScale <= 1 ? game._renderScale : 1;
     const w = Math.max(320, Math.min(1920, Math.floor(cssW * scale * quality)));
     const h = Math.max(180, Math.min(1080, Math.floor(cssH * scale * quality)));
+    if (cameraLight && cameraLight.shadow.mapSize.x !== perf.shadowMapSize) {
+      cameraLight.shadow.mapSize.set(perf.shadowMapSize, perf.shadowMapSize);
+      cameraLight.shadow.map = null;
+    }
+    if (renderer && renderer.shadowMap && THREE) {
+      const shadowType = perf.shadowType === 'PCFSoft' ? THREE.PCFSoftShadowMap : THREE.PCFShadowMap;
+      if (renderer.shadowMap.type !== shadowType) renderer.shadowMap.type = shadowType;
+    }
+    game._perfBudget = perf;
     renderer.setPixelRatio(Math.min(dpr, 2, quality * 2));
     renderer.setSize(w, h, false);
     camera.aspect = w / h;
@@ -296,15 +321,23 @@ export function render3dNext(game) {
       smokeVolumes: smokeMeshes.length,
       weatherPoints: weatherPoints ? weatherPoints.geometry.attributes.position.count : 0,
       weatherKind: weatherKey || 'none',
+      renderSize: { width: w, height: h, cssWidth: Math.floor(cssW), cssHeight: Math.floor(cssH) },
+      renderScale: scale,
       atmosphere,
       lighting: {
-        shadowMapSize: cameraLight ? cameraLight.shadow.mapSize.x : 0,
+        shadowMapSize: perf.shadowMapSize,
         shadowFrustum: cameraLight ? cameraLight.shadow.camera.right - cameraLight.shadow.camera.left : 0,
         shadowType: renderer && renderer.shadowMap ? renderer.shadowMap.type : 0,
         bounceLight: bounceLight ? 1 : 0,
         contactAO: 1
       },
-      fpsHud: game._fpsHudStats || { teamBars: 0, siteMarkers: 0, bombMarkers: 0, damageNumbers: 0 },
+      fpsHud: game._fpsHudStats || { teamBars: 0, siteMarkers: 0, bombMarkers: 0, damageNumbers: 0, roundTimer: 0, bombTimer: 0, ammoHud: 0, statusLines: 0 },
+      performance: perf,
+      mapIdentity: mapIdentityStats || { spawnMarkers: 0, flags: 0, namePlate: 0 },
+      smokeRenderMode: 'cloud',
+      viewmodelSway: game._viewmodelSway || { swayX: 0, swayY: 0, recoil: 0, scopeT: 0 },
+      audioSpatial: game._audioSpatial || null,
+      stability: { webglHealthy, sizeValid: true, strikes: game._renderHealthStrikes || 0 },
       drawCalls: renderer && renderer.info && renderer.info.render ? renderer.info.render.calls : 0,
       quality,
       pixelRatio: renderer.getPixelRatio(),
@@ -444,7 +477,95 @@ function drawFpsHud(ctx, game, T) {
   }
 
   ctx.restore();
+  drawMatchOverlay(ctx, game, ent, cw, ch, stats);
   game._fpsHudStats = stats;
+}
+
+function hudClock(seconds) {
+  const v = Math.max(0, Number.isFinite(seconds) ? seconds : 0);
+  const m = Math.floor(v / 60);
+  const s = Math.floor(v % 60);
+  return m + ':' + String(s).padStart(2, '0');
+}
+
+function drawMatchOverlay(ctx, game, ent, cw, ch, stats) {
+  if (!ctx || !game || !ent) return;
+  const score = game.score || {};
+  const round = game.round || 0;
+  const planted = !!(game.bomb && game.bomb.planted);
+  const timer = planted ? (game.bomb.timer || 0) : Math.max(0, (game.roundDur || 115) - (game.roundTime || 0));
+  const phase = game.freezeT > 0 ? 'FREEZE' : game.buyTime > 0 ? 'BUY' : planted ? 'BOMB' : (game.state || 'LIVE');
+  ctx.save();
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+
+  const barW = Math.min(320, Math.max(250, cw * 0.22));
+  const barH = 78;
+  const barX = (cw - barW) / 2;
+  ctx.fillStyle = 'rgba(8,12,16,0.68)';
+  ctx.fillRect(barX, 10, barW, barH);
+  ctx.strokeStyle = 'rgba(220,225,235,0.34)';
+  ctx.lineWidth = 1;
+  ctx.strokeRect(barX, 10, barW, barH);
+  ctx.fillStyle = '#f4f0e8';
+  ctx.font = 'bold 17px sans-serif';
+  ctx.fillText((score.T || 0) + ' : ' + (score.CT || 0) + '  R' + round, cw / 2, 31);
+  ctx.fillStyle = planted ? '#ff6a58' : '#d9e3ed';
+  ctx.font = 'bold 13px sans-serif';
+  ctx.fillText(phase, cw / 2, 53);
+  ctx.fillStyle = '#f4f0e8';
+  ctx.fillText('TIME ' + hudClock(timer), cw / 2, 74);
+  stats.roundTimer = 1;
+  if (planted) {
+    ctx.fillStyle = '#ff4b3a';
+    ctx.fillText('BOMB ' + Math.max(0, game.bomb.timer || 0).toFixed(1), cw / 2, 96);
+    stats.bombTimer = 1;
+  }
+
+  const w = weaponDef(ent);
+  const ammo = w && w.mag > 0 ? ammoFor(ent) : 0;
+  const reserve = w && w.mag > 0 ? reserveFor(ent) : 0;
+  const label = w && w.name ? w.name : wkey(ent);
+  const bottomW = Math.min(330, Math.max(250, cw * 0.26));
+  const bottomX = 18;
+  const bottomY = ch - 88;
+  ctx.fillStyle = 'rgba(8,12,16,0.68)';
+  ctx.fillRect(bottomX, bottomY, bottomW, 70);
+  ctx.strokeStyle = 'rgba(220,225,235,0.30)';
+  ctx.strokeRect(bottomX, bottomY, bottomW, 70);
+  ctx.textAlign = 'left';
+  ctx.fillStyle = '#f4f0e8';
+  ctx.font = 'bold 14px sans-serif';
+  ctx.fillText(String(label || 'knife').toUpperCase(), bottomX + 12, bottomY + 15);
+  ctx.fillStyle = '#ffd88a';
+  ctx.font = 'bold 30px sans-serif';
+  ctx.fillText(String(ammo) + (w && w.mag > 0 ? ' / ' + reserve : ''), bottomX + 12, bottomY + 40);
+  ctx.fillStyle = '#f4f0e8';
+  ctx.font = 'bold 12px sans-serif';
+  const hpPct = Math.max(0, Math.min(1, (ent.hp || 0) / 100));
+  const armPct = Math.max(0, Math.min(1, (ent.armor || 0) / 100));
+  ctx.fillText('HP', bottomX + 12, bottomY + 58);
+  ctx.fillStyle = ent.hp > 40 ? '#58c26a' : '#ff5f4d';
+  ctx.fillRect(bottomX + 34, bottomY + 53, 92 * hpPct, 8);
+  ctx.fillStyle = '#8fb9e8';
+  ctx.fillText('ARMOR', bottomX + 134, bottomY + 58);
+  ctx.fillRect(bottomX + 176, bottomY + 53, 70 * armPct, 8);
+  stats.ammoHud = 1;
+
+  const rightW = Math.min(190, Math.max(150, cw * 0.15));
+  const rightX = cw - rightW - 16;
+  const rightY = ch - 56;
+  ctx.fillStyle = 'rgba(8,12,16,0.68)';
+  ctx.fillRect(rightX, rightY, rightW, 42);
+  ctx.textAlign = 'right';
+  ctx.fillStyle = '#f4f0e8';
+  ctx.font = 'bold 14px sans-serif';
+  ctx.fillText('$' + Math.max(0, Math.round(ent.money || 0)), rightX + rightW - 12, rightY + 21);
+  ctx.fillStyle = ent.hasBomb ? '#ffb84d' : 'rgba(220,225,235,0.75)';
+  ctx.font = '11px sans-serif';
+  ctx.fillText(ent.hasBomb ? 'BOMB CARRIER' : (ent.helmet ? 'HELMET' : (ent.armor > 0 ? 'ARMOR' : 'NO ARMOR')), rightX + rightW - 12, rightY + 33);
+  stats.statusLines = 1;
+  ctx.restore();
 }
 
 function fpsCameraEntity(game) {
@@ -530,6 +651,24 @@ function renderQualityFor(game) {
   let q = (typeof game.renderQuality === 'number' && isFinite(game.renderQuality)) ? game.renderQuality : 1;
   q = Math.max(0.55, Math.min(1, q));
   return q;
+}
+
+function performanceBudgetFor(game) {
+  const q = renderQualityFor(game);
+  return {
+    shadowMapSize: q >= 0.9 ? 2048 : q >= 0.72 ? 1024 : 512,
+    shadowType: q >= 0.72 ? 'PCFSoft' : 'PCF',
+    particleCaps: {
+      shell: Math.max(12, Math.round(40 * q)),
+      boom: Math.max(8, Math.round(24 * q)),
+      splash: Math.max(10, Math.round(32 * q)),
+      other: Math.max(32, Math.round(80 * q))
+    },
+    dynamicEntityCap: Math.max(10, Math.round(24 * q)),
+    smokeCap: Math.max(18, Math.round(120 * q)),
+    weatherPoints: Math.max(90, Math.round(260 * q)),
+    tracerPoints: Math.max(96, Math.round(240 * q))
+  };
 }
 
 function updateFrameHealth(game, ctx) {
@@ -627,6 +766,154 @@ function updateLighting(map, game) {
   atmosphere.sunIntensity = cameraLight.intensity;
 }
 
+function buildPbrEnvironment(map) {
+  if (!scene || !THREE || typeof document === 'undefined') return;
+  if (scene.environment) {
+    try { scene.environment.dispose(); } catch (err) { /* ignore */ }
+    scene.environment = null;
+  }
+  if (environmentTexture) {
+    try { environmentTexture.dispose(); } catch (err) { /* ignore */ }
+    environmentTexture = null;
+  }
+  const theme = themeOf((map && map.id) || 'dust2');
+  const sky = theme.sky || {};
+  const atmo = theme.atmo || {};
+  const canvas = document.createElement('canvas');
+  canvas.width = 64;
+  canvas.height = 32;
+  const ctx = canvas.getContext('2d');
+  const grad = ctx.createLinearGradient(0, 0, 0, 32);
+  grad.addColorStop(0, sky.top || '#182838');
+  grad.addColorStop(0.55, sky.horizon || '#52606b');
+  grad.addColorStop(1, '#252a2d');
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, 0, 64, 32);
+  const sun = sky.sun || [255, 214, 150];
+  ctx.fillStyle = 'rgba(' + sun[0] + ',' + sun[1] + ',' + sun[2] + ',0.95)';
+  ctx.beginPath();
+  ctx.arc(48, 8, 5, 0, Math.PI * 2);
+  ctx.fill();
+  const tex = new THREE.CanvasTexture(canvas);
+  if (THREE.SRGBColorSpace) tex.colorSpace = THREE.SRGBColorSpace;
+  tex.mapping = THREE.EquirectangularReflectionMapping;
+  scene.environment = tex;
+  environmentTexture = tex;
+  if (scene.environmentIntensity !== undefined) {
+    scene.environmentIntensity = 0.55 + (atmo.haze || 0.5) * 0.3;
+  }
+}
+
+function applyPbrProfile(group, map) {
+  if (!group) return;
+  const theme = themeOf((map && map.id) || 'dust2');
+  const atmo = theme.atmo || {};
+  const haze = atmo.haze || 0.5;
+  const roughScale = 0.88 + haze * 0.2;
+  const metalBoost = map && map.id === 'metro' ? 0.08 : map && map.id === 'blast' ? 0.05 : 0.02;
+  const envIntensity = 0.45 + haze * 0.25;
+  group.traverse((o) => {
+    if (!o.isMesh || !o.material) return;
+    const mats = Array.isArray(o.material) ? o.material : [o.material];
+    for (const mat of mats) {
+      if (!mat || !mat.isMeshStandardMaterial) continue;
+      mat.envMapIntensity = envIntensity;
+      mat.roughness = Math.min(1, Math.max(0.12, mat.roughness * roughScale));
+      mat.metalness = Math.min(1, mat.metalness + metalBoost);
+    }
+  });
+}
+
+function addMapIdentity(group, T, map, tile) {
+  if (!group || !T || !map) return;
+  mapIdentityStats = { spawnMarkers: 0, flags: 0, namePlate: 0 };
+  const spawns = map.spawns || {};
+  const tSpawns = (spawns.t || []).slice(0, 8);
+  const ctSpawns = (spawns.ct || []).slice(0, 8);
+  const allSpawns = [...tSpawns.map((s) => ({ ...s, team: 't' })), ...ctSpawns.map((s) => ({ ...s, team: 'ct' }))];
+  if (allSpawns.length) {
+    const mat = new T.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.16, depthWrite: false, side: T.DoubleSide });
+    const mesh = new T.InstancedMesh(new T.RingGeometry(tile * 0.52, tile * 0.72, 20), mat, allSpawns.length);
+    mesh.name = 'spawnMarkers';
+    mesh.frustumCulled = false;
+    for (let i = 0; i < allSpawns.length; i++) {
+      const s = allSpawns[i];
+      setInstanceTransform(T, mesh, i, s.x || 0, tile * 0.015, s.y || 0, 1, 1, 1, -Math.PI / 2, 0, 0);
+      mesh.setColorAt(i, new T.Color(s.team === 't' ? 0xe0a35a : 0x4f9dd8));
+    }
+    group.add(mesh);
+    mapIdentityStats.spawnMarkers = allSpawns.length;
+  }
+
+  const flags = new T.Group();
+  flags.name = 'mapFlags';
+  const specs = [
+    { team: 't', pos: tSpawns[0], color: '#e0a35a' },
+    { team: 'ct', pos: ctSpawns[0], color: '#4f9dd8' }
+  ];
+  for (const spec of specs) {
+    if (!spec.pos) continue;
+    const pole = new T.Mesh(
+      new T.CylinderGeometry(tile * 0.025, tile * 0.035, tile * 1.4, 6),
+      new T.MeshStandardMaterial({ color: 0x333b43, roughness: 0.5, metalness: 0.38 })
+    );
+    pole.position.set(spec.pos.x, tile * 0.7, spec.pos.y);
+    pole.castShadow = true;
+    const cv = document.createElement('canvas');
+    cv.width = 128;
+    cv.height = 64;
+    const ctx = cv.getContext('2d');
+    ctx.fillStyle = spec.color;
+    ctx.fillRect(0, 0, 128, 64);
+    ctx.fillStyle = 'rgba(255,255,255,0.85)';
+    ctx.font = 'bold 40px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(spec.team.toUpperCase(), 64, 34);
+    const tex = new T.CanvasTexture(cv);
+    if (T.SRGBColorSpace) tex.colorSpace = T.SRGBColorSpace;
+    const flag = new T.Mesh(
+      new T.PlaneGeometry(tile * 0.72, tile * 0.38),
+      new T.MeshBasicMaterial({ map: tex, side: T.DoubleSide, transparent: true, opacity: 0.92 })
+    );
+    flag.position.set(spec.pos.x + tile * 0.42, tile * 0.86, spec.pos.y);
+    flag.rotation.y = -0.12;
+    flags.add(pole, flag);
+  }
+  if (flags.children.length) {
+    group.add(flags);
+    mapIdentityStats.flags = flags.children.length / 2;
+  }
+
+  const cv = document.createElement('canvas');
+  cv.width = 256;
+  cv.height = 64;
+  const ctx = cv.getContext('2d');
+  const grad = ctx.createLinearGradient(0, 0, 256, 0);
+  grad.addColorStop(0, 'rgba(16,20,24,0.88)');
+  grad.addColorStop(0.5, 'rgba(28,34,40,0.86)');
+  grad.addColorStop(1, 'rgba(16,20,24,0.88)');
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, 0, 256, 64);
+  ctx.strokeStyle = map.accent || '#d6a95f';
+  ctx.lineWidth = 5;
+  ctx.strokeRect(4, 4, 248, 56);
+  ctx.fillStyle = map.accent || '#d6a95f';
+  ctx.font = 'bold 34px sans-serif';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(String((map.id || 'CS2D').toUpperCase()), 128, 35);
+  const tex = new T.CanvasTexture(cv);
+  if (T.SRGBColorSpace) tex.colorSpace = T.SRGBColorSpace;
+  const sprite = new T.Sprite(new T.SpriteMaterial({ map: tex, transparent: true, opacity: 0.92, depthWrite: false }));
+  sprite.name = 'mapNamePlate';
+  sprite.position.set(map.W / 2, tile * 5.4, map.H / 2);
+  sprite.scale.set(tile * 7, tile * 1.75, 1);
+  sprite.renderOrder = 5;
+  group.add(sprite);
+  mapIdentityStats.namePlate = 1;
+}
+
 function buildMapScene(map, layers) {
   if (!mapGroup || !scene || !THREE || !map) return;
   const T = THREE;
@@ -635,6 +922,7 @@ function buildMapScene(map, layers) {
   const w = map.W || grid.length * tile;
   const h = map.H || (grid.length ? grid[0].length * tile : 0);
 
+  buildPbrEnvironment(map);
   buildSky(map);
 
   const baked = layers && layers.staticLayer;
@@ -749,6 +1037,8 @@ function buildMapScene(map, layers) {
   addInstancedSites(mapGroup, T, grid, tile);
   addSiteMarkers(mapGroup, T, map, tile);
   addInstancedDecos(mapGroup, T, layers && layers.decos, tile);
+  addMapIdentity(mapGroup, T, map, tile);
+  applyPbrProfile(mapGroup, map);
 }
 
 function scanMapCounts(grid, tile) {
@@ -1601,7 +1891,14 @@ function buildWeather(map, theme) {
   }
   weatherKey = key;
   if (!kind) return;
-  const count = 260;
+  const count = performanceBudgetFor({ renderQuality: 1 }).weatherPoints;
+  weatherPoints = makeWeatherPoints(map, theme, count);
+  dynamicGroup.add(weatherPoints);
+}
+
+function makeWeatherPoints(map, theme, count) {
+  const T = THREE;
+  const weather = theme.weather || {};
   const positions = new Float32Array(count * 3);
   const rangeW = Math.max(900, map.W * 0.65);
   const rangeH = Math.max(700, map.H * 0.55);
@@ -1610,21 +1907,21 @@ function buildWeather(map, theme) {
     positions[i * 3 + 1] = 0.8 + ((i * 91) % 70) / 70 * (map.tile || 16) * 2.2;
     positions[i * 3 + 2] = ((i * 257 + Math.cos(i * 11) * 577) % rangeH + rangeH) % rangeH - rangeH / 2;
   }
-  const geo = new THREE.BufferGeometry();
-  geo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+  const geo = new T.BufferGeometry();
+  geo.setAttribute('position', new T.BufferAttribute(positions, 3));
   const color = weather.color || [180, 180, 180];
-  const mat = new THREE.PointsMaterial({
-    color: new THREE.Color(color[0] / 255, color[1] / 255, color[2] / 255),
+  const mat = new T.PointsMaterial({
+    color: new T.Color(color[0] / 255, color[1] / 255, color[2] / 255),
     size: 3,
     transparent: true,
     opacity: 0.45,
     depthWrite: false,
     sizeAttenuation: true
   });
-  weatherPoints = new THREE.Points(geo, mat);
-  weatherPoints.name = 'weather:' + kind;
-  weatherPoints.frustumCulled = false;
-  dynamicGroup.add(weatherPoints);
+  const points = new T.Points(geo, mat);
+  points.name = 'weather:' + (theme.weather && theme.weather.kind || 'none');
+  points.frustumCulled = false;
+  return points;
 }
 
 function updateDynamicNext(game) {
@@ -1645,6 +1942,15 @@ function updateWeather(game) {
   if (!map) return;
   const tile = map.tile || 16;
   const theme = themeOf(map.id);
+  const budget = performanceBudgetFor(game);
+  if (weatherPoints.geometry.attributes.position.count !== budget.weatherPoints) {
+    const next = makeWeatherPoints(map, theme, budget.weatherPoints);
+    dynamicGroup.remove(weatherPoints);
+    weatherPoints.geometry.dispose();
+    weatherPoints.material.dispose();
+    weatherPoints = next;
+    dynamicGroup.add(weatherPoints);
+  }
   const weather = theme.weather || {};
   const kind = weather.kind || 'dust';
   const speed = (weather.wind && weather.wind[0]) || 0.3;
@@ -1683,12 +1989,21 @@ function updateViewmodelNext(game) {
   const scopeT = Math.max(0, Math.min(1, (game.scopeT || 0) * (p.scoped ? 1 : 0)));
   const switchY = switching ? 0.26 * tile + Math.sin((p.fireCd || 0) * 12) * 0.05 * tile : 0;
   const switchRot = switching ? Math.cos((p.fireCd || 0) * 10) * 0.45 : 0;
+  const bob = p.bobPhase || 0;
+  const idleX = Math.sin((game.time || 0) * 1.35) * tile * 0.007;
+  const idleY = Math.sin((game.time || 0) * 1.7 + 1.2) * tile * 0.006;
+  const moveX = p.walking ? Math.sin(bob * 2) * tile * 0.016 : 0;
+  const moveY = p.walking ? -Math.abs(Math.cos(bob * 2)) * tile * 0.014 : 0;
+  const swayX = (moveX + idleX) * (1 - scopeT);
+  const swayY = (moveY + idleY) * (1 - scopeT) + (p.crouched ? tile * 0.035 : 0);
+  const swayRotZ = ((p.walking ? Math.sin(bob * 2) * 0.025 : Math.sin((game.time || 0) * 0.7) * 0.008)) * (1 - scopeT);
   viewmodelGroup.position.set(
-    0.26 * tile + scopeT * 0.38 * tile,
-    -0.18 * tile + recoil * 0.018 * tile + (reloading ? Math.sin(reloadT * 22) * 0.02 * tile : 0) - switchY + scopeT * 0.12 * tile,
+    0.26 * tile + scopeT * 0.38 * tile + swayX,
+    -0.18 * tile + recoil * 0.018 * tile + (reloading ? Math.sin(reloadT * 22) * 0.02 * tile : 0) - switchY + scopeT * 0.12 * tile + swayY,
     -0.48 * tile - scopeT * 0.12 * tile
   );
-  viewmodelGroup.rotation.set(reloading ? Math.sin(reloadT * 10) * 0.12 : recoil * 0.14, scopeT * 0.38 + switchRot, recoil * 0.08 + scopeT * 0.16);
+  viewmodelGroup.rotation.set(reloading ? Math.sin(reloadT * 10) * 0.12 : recoil * 0.14, scopeT * 0.38 + switchRot, recoil * 0.08 + scopeT * 0.16 + swayRotZ);
+  game._viewmodelSway = { swayX, swayY, recoil, scopeT, bob };
   const muzzle = viewmodelGroup.getObjectByName('muzzle');
   if (muzzle) {
     muzzle.visible = (p.muzzleT || 0) > 0;
@@ -1707,9 +2022,13 @@ function updateViewmodelNext(game) {
 function updateEntities(game) {
   if (!dynamicGroup || !THREE) return;
   const cam = fpsCameraEntity(game);
+  const budget = performanceBudgetFor(game);
   const seen = new Set();
+  let visibleCount = 0;
   for (const e of game.entities || []) {
     if (e === cam || e.dead) continue;
+    if (visibleCount >= budget.dynamicEntityCap) break;
+    visibleCount++;
     seen.add(e);
     let group = entityMeshes.get(e);
     if (!group) {
@@ -1906,10 +2225,10 @@ function updateBomb(game) {
 function updateSmokes(game) {
   if (!dynamicGroup || !THREE) return;
   const source = game.smokes || [];
-  const wanted = Math.min(source.length * 3, 120);
+  const wanted = Math.min(source.length * 3, performanceBudgetFor(game).smokeCap);
   while (smokeMeshes.length < wanted) {
     const sprite = new THREE.Sprite(new THREE.SpriteMaterial({
-      map: makeGlowTexture(),
+      map: makeCloudTexture(),
       color: 0x8b9894,
       transparent: true,
       opacity: 0.34,
@@ -1935,7 +2254,8 @@ function updateSmokes(game) {
     const oz = layer === 1 ? Math.cos((game.time || 0) * 1.4 + i * 0.5) * tile * 0.24 : layer === 2 ? Math.sin(i * 0.8) * tile * 0.31 : 0;
     s.position.set((smoke.x || 0) + ox, groundElevationAt(smoke.x || 0, smoke.y || 0) + tile * (0.45 + layer * 0.42 + pulse * 0.22), (smoke.y || 0) + oz);
     const scale = ((smoke.r || tile * 3) * 0.012 + 0.6) * tile * (1 + layer * 0.34);
-    s.scale.set(scale, scale, 1);
+    s.scale.set(scale, scale * 0.82, 1);
+    s.material.rotation = (game.time || 0) * 0.05 + i * 0.37;
     s.material.opacity = Math.min(0.56, 0.16 + layer * 0.12 + (smoke.life || 1) * 0.02);
   }
 }
@@ -1943,10 +2263,11 @@ function updateSmokes(game) {
 function updateParticles(game) {
   if (!dynamicGroup || !THREE) return;
   const all = game.particles || [];
-  const shells = all.filter((p) => p && p.kind === 'shell').slice(0, 40);
-  const booms = all.filter((p) => p && p.kind === 'boom').slice(0, 24);
-  const splashes = all.filter((p) => p && (p.kind === 'splash' || p.kind === 'water')).slice(0, 32);
-  const others = all.filter((p) => !p || (p.kind !== 'shell' && p.kind !== 'boom' && p.kind !== 'splash' && p.kind !== 'water')).slice(0, 80);
+  const caps = performanceBudgetFor(game).particleCaps;
+  const shells = all.filter((p) => p && p.kind === 'shell').slice(0, caps.shell);
+  const booms = all.filter((p) => p && p.kind === 'boom').slice(0, caps.boom);
+  const splashes = all.filter((p) => p && (p.kind === 'splash' || p.kind === 'water')).slice(0, caps.splash);
+  const others = all.filter((p) => !p || (p.kind !== 'shell' && p.kind !== 'boom' && p.kind !== 'splash' && p.kind !== 'water')).slice(0, caps.other);
   const tile = (getMap() && getMap().tile) || 16;
 
   while (shellMeshes.length < shells.length) {
@@ -2078,7 +2399,7 @@ function updateTracers(game) {
     }
     return;
   }
-  const needed = Math.max(64, tracers.length * 6);
+  const needed = Math.max(performanceBudgetFor(game).tracerPoints, tracers.length * 6);
   if (!lines || lines.geometry.attributes.position.array.length < needed) {
     if (lines) {
       dynamicGroup.remove(lines);
@@ -2300,6 +2621,34 @@ function makeGlowTexture() {
     g.addColorStop(1, 'rgba(255,255,255,0)');
     ctx.fillStyle = g;
     ctx.fillRect(0, 0, 64, 64);
+    const tex = new THREE.CanvasTexture(cv);
+    glowCache.set(key, tex);
+  }
+  return glowCache.get(key);
+}
+
+function makeCloudTexture() {
+  const key = 'cloud';
+  if (!glowCache.has(key)) {
+    const cv = document.createElement('canvas');
+    cv.width = 128;
+    cv.height = 128;
+    const ctx = cv.getContext('2d');
+    const g = ctx.createRadialGradient(64, 64, 4, 64, 64, 62);
+    g.addColorStop(0, 'rgba(220,224,222,0.82)');
+    g.addColorStop(0.42, 'rgba(174,182,178,0.62)');
+    g.addColorStop(0.78, 'rgba(118,128,124,0.28)');
+    g.addColorStop(1, 'rgba(80,90,86,0)');
+    ctx.fillStyle = g;
+    ctx.fillRect(0, 0, 128, 128);
+    ctx.fillStyle = 'rgba(225,228,225,0.16)';
+    for (let i = 0; i < 42; i++) {
+      const x = (i * 29 + Math.sin(i * 7) * 11) % 128;
+      const y = (i * 53 + Math.cos(i * 5) * 13) % 128;
+      ctx.beginPath();
+      ctx.arc(x, y, 3 + (i % 5), 0, Math.PI * 2);
+      ctx.fill();
+    }
     const tex = new THREE.CanvasTexture(cv);
     glowCache.set(key, tex);
   }

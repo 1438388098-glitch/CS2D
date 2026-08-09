@@ -25,6 +25,7 @@ function makeNode(type) {
     delayTime: { value: .2 },
     pan: { value: 0 },
     buffer: null,
+    playbackRate: { value: 1 },
     loop: false,
     onended: null,
     disconnected: false,
@@ -47,7 +48,7 @@ const mockAC = {
   createStereoPanner: () => makeNode('panner'),
   createDelay: () => makeNode('delay'),
   createDynamicsCompressor: () => makeNode('comp'),
-  createBuffer: () => ({ getChannelData: () => new Float32Array(44100) }),
+  createBuffer: () => ({ getChannelData: () => new Float32Array(44100), duration: 1 }),
   destination: makeNode('dest')
 };
 

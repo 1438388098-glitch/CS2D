@@ -17,7 +17,11 @@ if (srv.exitCode !== null) {
   process.exit(1);
 }
 
-const { proc, port } = launchBrowser({ port: DBG_PORT, profile: 'C:/Users/20579/AppData/Local/Temp/opencode/cdp-profile-three' });
+const { proc, port } = launchBrowser({
+  port: DBG_PORT,
+  profile: 'C:/Users/20579/AppData/Local/Temp/opencode/cdp-profile-three',
+  flags: ['--autoplay-policy=no-user-gesture-required']
+});
 let ok = true;
 const fail = (m) => { ok = false; console.log('  FAIL: ' + m); };
 const pass = (m) => console.log('  PASS: ' + m);
@@ -62,6 +66,17 @@ try {
   } else {
     pass('soft shadow/bounce/contact AO active: ' + JSON.stringify(backend.stats.lighting));
   }
+  const spatial = await cdp.eval(`(()=>{const g=window.__cs2d&&window.__cs2d.game;return g&&g._audioSpatial})()`);
+  if (!spatial || spatial.listener !== 1 || spatial.panner !== 1 || spatial.synced !== 1) {
+    fail('three.js spatial audio listener not synced: ' + JSON.stringify(spatial));
+  } else {
+    pass('spatial audio listener synced: ' + JSON.stringify(spatial));
+  }
+  if (!backend || !backend.stats || !backend.stats.performance || backend.stats.performance.shadowMapSize < 512 || backend.stats.performance.dynamicEntityCap < 10 || backend.stats.performance.smokeCap < 18 || backend.stats.renderSize.width < 320 || backend.stats.stability.webglHealthy !== true) {
+    fail('three.js performance/stability guards missing: ' + JSON.stringify(backend && backend.stats));
+  } else {
+    pass('performance budget and render stability active: ' + JSON.stringify(backend.stats.performance));
+  }
   const settingsApplied = await cdp.eval(`(()=>{const q=document.getElementById('renderQualitySel');const d=document.getElementById('dprSel');if(!q||!d)return false;q.value='60';q.dispatchEvent(new Event('input',{bubbles:true}));d.value='100';d.dispatchEvent(new Event('input',{bubbles:true}));return true})()`);
   await sleep(400);
   const settingsState = await cdp.eval(`(()=>{const g=window.__cs2d&&window.__cs2d.game;const s=g&&g._renderStats;return {quality:s&&s.quality,renderQuality:g&&g.renderQuality,dprLimit:g&&g.dprLimit}})()`);
@@ -90,22 +105,28 @@ try {
   } else {
     pass('detailed viewmodel rendered: ' + JSON.stringify(vmStats));
   }
+  const swayState = await cdp.eval(`(()=>{const g=window.__cs2d&&window.__cs2d.game;const s=g&&g._renderStats;return {sway:s&&s.viewmodelSway,stability:s&&s.stability}})()`);
+  if (!swayState || !swayState.sway || !Number.isFinite(swayState.sway.swayX) || swayState.sway.scopeT < 0 || swayState.stability.webglHealthy !== true) {
+    fail('three.js viewmodel sway/stability missing: ' + JSON.stringify(swayState));
+  } else {
+    pass('viewmodel sway and stability active: ' + JSON.stringify(swayState.sway));
+  }
   await cdp.eval(`(()=>{const g=window.__cs2d&&window.__cs2d.game;const p=g&&g.player;if(!g||!p)return false;p.fireCd=0;p.lastSlot=null;p.reloading=false;p.reloadT=0;p.scoped=false;g.scopeT=0;return true})()`);
   await cdp.eval(`(()=>{const g=window.__cs2d&&window.__cs2d.game;const p=g&&g.player;if(!g||!p)return false;const fx=Math.cos(p.angle||0)*120,fy=Math.sin(p.angle||0)*120;const mate=g.entities&&g.entities.find((e)=>e!==p&&e.team===p.team&&!e.dead);if(mate){mate.x=p.x+fx;mate.y=p.y+fy;mate.hp=77;}g.dmgPops.push({x:p.x+fx,y:p.y+fy,dmg:34,head:true,t:0.6});g.bomb={x:p.x+fx,y:p.y+fy,planted:true,time:18};return true})()`);
   await sleep(400);
   const hudStats = await cdp.eval(`(()=>{const g=window.__cs2d&&window.__cs2d.game;return g&&g._renderStats&&g._renderStats.fpsHud?g._renderStats.fpsHud:null})()`);
-  if (!hudStats || hudStats.teamBars < 1 || hudStats.siteMarkers < 1 || hudStats.bombMarkers < 1 || hudStats.damageNumbers < 1) {
+  if (!hudStats || hudStats.teamBars < 1 || hudStats.siteMarkers < 1 || hudStats.bombMarkers < 1 || hudStats.damageNumbers < 1 || hudStats.roundTimer !== 1 || hudStats.bombTimer !== 1 || hudStats.ammoHud !== 1 || hudStats.statusLines !== 1) {
     fail('three.js fps hud missing: ' + JSON.stringify(hudStats));
   } else {
     pass('fps hud rendered: ' + JSON.stringify(hudStats));
   }
   await cdp.eval(`(()=>{const g=window.__cs2d&&window.__cs2d.game;const p=g&&g.player;if(!g||!p)return false;const fx=Math.cos(p.angle||0)*80,fy=Math.sin(p.angle||0)*80;g.particles.push({kind:'shell',x:p.x+fx,y:p.y+fy,spin:1.2,life:0.5});g.particles.push({kind:'boom',x:p.x+fx,y:p.y+fy,size:160,life:0.5});g.particles.push({kind:'splash',x:p.x+fx,y:p.y+fy,life:0.4,size:3});g.smokes=[{x:p.x+fx,y:p.y+fy,r:80,life:8}];g.dmgPops=[];g.bomb=null;return true})()`);
   await sleep(400);
-  const fxStats = await cdp.eval(`(()=>{const g=window.__cs2d&&window.__cs2d.game;const c=window.__cs2d;return {backend:c&&c.render3d&&c.render3d.backend,gameBackend:g&&g._render3dBackend,effects:g&&g._renderStats?g._renderStats.effectObjects:0,smoke:g&&g._renderStats?g._renderStats.smokeVolumes:0}})()`);
-  if (!fxStats || fxStats.backend !== 'next' || fxStats.gameBackend !== 'next' || fxStats.effects < 5 || fxStats.smoke < 3) {
+  const fxStats = await cdp.eval(`(()=>{const g=window.__cs2d&&window.__cs2d.game;const c=window.__cs2d;const s=g&&g._renderStats;return {backend:c&&c.render3d&&c.render3d.backend,gameBackend:g&&g._render3dBackend,effects:s?s.effectObjects:0,smoke:s?s.smokeVolumes:0,mode:s?s.smokeRenderMode:'none'}})()`);
+  if (!fxStats || fxStats.backend !== 'next' || fxStats.gameBackend !== 'next' || fxStats.effects < 5 || fxStats.smoke < 3 || fxStats.mode !== 'cloud') {
     fail('three.js effects/smoke volumes missing: ' + JSON.stringify(fxStats));
   } else {
-    pass('effects and smoke volumes rendered: ' + JSON.stringify(fxStats));
+    pass('effects and cloud smoke volumes rendered: ' + JSON.stringify(fxStats));
   }
   await cdp.eval(`(()=>{const g=window.__cs2d&&window.__cs2d.game;if(!g)return false;g.particles=[];g.smokes=[];return true})()`);
   if (!backend || !backend.stats || backend.stats.bakedGround !== 1) {
@@ -127,6 +148,11 @@ try {
     fail('three.js map props missing: ' + JSON.stringify(backend && backend.stats));
   } else {
     pass('map props present: ' + backend.stats.mapObjects);
+  }
+  if (!backend || !backend.stats || !backend.stats.mapIdentity || backend.stats.mapIdentity.spawnMarkers < 1 || backend.stats.mapIdentity.namePlate !== 1) {
+    fail('three.js map identity props missing: ' + JSON.stringify(backend && backend.stats && backend.stats.mapIdentity));
+  } else {
+    pass('map identity props present: ' + JSON.stringify(backend.stats.mapIdentity));
   }
   if (!backend || !backend.stats || !backend.stats.mapModelStats || backend.stats.mapModelStats.wallSkirts < 1 || backend.stats.mapModelStats.wallPipes < 1 || backend.stats.mapModelStats.wallConduits < 1) {
     fail('three.js wall model detail missing: ' + JSON.stringify(backend && backend.stats && backend.stats.mapModelStats));
@@ -223,11 +249,16 @@ try {
   } else {
     pass('map atmosphere/weather synced after switch: ' + JSON.stringify({ atmosphere: switched.stats.atmosphere, weatherKind: switched.stats.weatherKind, weatherPoints: switched.stats.weatherPoints }));
   }
+  if (!switched || !switched.stats || !switched.stats.mapIdentity || switched.stats.mapIdentity.spawnMarkers < 1 || switched.stats.mapIdentity.namePlate !== 1 || !switched.stats.performance || switched.stats.performance.shadowMapSize < 512) {
+    fail('map identity/performance missing after switch: ' + JSON.stringify(switched && switched.stats));
+  } else {
+    pass('map identity/performance synced after switch: ' + JSON.stringify(switched.stats.mapIdentity));
+  }
 
   await cdp.eval(`(()=>{const g=window.__cs2d&&window.__cs2d.game;if(!g)return false;g.tracers=Array.from({length:80},(_,i)=>({x1:100+i*2,y1:100+i,x2:100+i,y2:120+i}));return true})()`);
   await sleep(400);
   const stress = await cdp.eval(`(()=>{const g=window.__cs2d&&window.__cs2d.game;const c=window.__cs2d;return {backend:c&&c.render3d&&c.render3d.backend,gameBackend:g&&g._render3dBackend,stats:g&&g._renderStats}})()`);
-  if (!stress || stress.backend !== 'next' || stress.gameBackend !== 'next' || !stress.stats || stress.stats.drawCalls < 1) {
+  if (!stress || stress.backend !== 'next' || stress.gameBackend !== 'next' || !stress.stats || stress.stats.drawCalls < 1 || stress.stats.stability.webglHealthy !== true || !stress.stats.renderSize || stress.stats.renderSize.width < 320) {
     fail('tracer buffer stress fell back: ' + JSON.stringify(stress));
   } else {
     pass('tracer buffer stress keeps next backend: ' + JSON.stringify(stress));

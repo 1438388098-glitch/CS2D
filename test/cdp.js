@@ -19,6 +19,7 @@ export function launchBrowser(opts = {}) {
   if (!exe) throw new Error('no edge/chrome found (set CDP_BROWSER)');
   const port = opts.port || Number(env.CDP_PORT) || 9223;
   const profile = opts.profile || env.CDP_PROFILE || 'C:/Users/20579/AppData/Local/Temp/opencode/cdp-profile';
+  const extraFlags = opts.flags || [];
   const proc = spawn(exe, [
     `--remote-debugging-port=${port}`,
     '--headless=new',
@@ -26,6 +27,7 @@ export function launchBrowser(opts = {}) {
     '--no-first-run',
     '--window-size=1600,900',
     `--user-data-dir=${profile}`,
+    ...extraFlags,
     'about:blank'
   ], { stdio: 'ignore', detached: true });
   return { proc, port };

@@ -12,7 +12,7 @@ import {killEntity} from './combat.js';
 import {getMap, loadMap, findMapById} from './map.js';
 import { installChosenFourthMap } from './4th-map-candidates.js';
 import {MAPS} from './config.js';
-import {isMuted, setAudioContext, startAmbient, initAudio, getBusVolume, setBusVolume} from './audio.js';
+import {isMuted, setAudioContext, startAmbient, initAudio, getBusVolume, setBusVolume, syncSpatialAudio} from './audio.js';
 import './modes.js';
 import {nextRenderScale} from './render-scale.js';
 import {initCareerUi} from './career-ui.js';
@@ -139,6 +139,7 @@ function startLoop() {
       }
       const tR0 = performance.now();
       smoothRemote(game, FIXED);
+      syncSpatialAudio(game);
       if (game.viewMode === 'fps' && fpsCameraEntity(game)) {
         if (render3dNextReady()) {
           render3dNext(game);

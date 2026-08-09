@@ -5,71 +5,71 @@ import {rand} from '../utils.js';
 // 噪声突发：bandpass 滤波白噪，指数衰减
 function noiseBurst(ac, env) {
   const { out, vol, dur, freq, q, type, at } = env;
-  const t = ac.currentTime + (at || 0);
   const src = noiseSrc();
   const f = ac.createBiquadFilter();
   f.type = type || 'bandpass';
   f.frequency.value = freq;
   f.Q.value = q || 1;
   const g = ac.createGain();
-  g.gain.value = 0.0001;
-  g.gain.setValueAtTime(0.0001, t);
-  g.gain.linearRampToValueAtTime(vol, t + 0.003);
+  g.gain.value = vol;
+  const t = ac.currentTime + (at ? 0.04 : 0) + (at || 0);
   g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
   src.connect(f); f.connect(g); g.connect(out);
-  src.start(t); src.stop(t + dur + 0.05);
+  if (at) src.start(t); else src.start();
+  src.stop(t + dur + 0.05);
   wrapTail(src, [src, f, g], null, env.guard);
 }
 
 // 振荡器下落：type 波形，频率 f0→f1 指数滑落
 function oscDrop(ac, env) {
   const { out, vol, dur, type, f0, f1, at } = env;
-  const t = ac.currentTime + (at || 0);
   const o = ac.createOscillator();
   o.type = type || 'sine';
+  const t = ac.currentTime + (at ? 0.04 : 0) + (at || 0);
   o.frequency.setValueAtTime(f0, t);
   o.frequency.exponentialRampToValueAtTime(Math.max(1, f1), t + dur);
   const g = ac.createGain();
-  g.gain.value = 0.0001;
-  g.gain.setValueAtTime(vol, t);
+  g.gain.value = vol;
   g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
   o.connect(g); g.connect(out);
-  o.start(t); o.stop(t + dur + 0.05);
+  if (at) o.start(t); else o.start();
+  o.stop(t + dur + 0.05);
   wrapTail(o, [o, g], null, env.guard);
 }
 
 // 双 tick（click）：两段极短噪声/正弦
 function tick(ac, env) {
   const { out, vol, f1, f2, at } = env;
-  const t = ac.currentTime + (at || 0);
+  const t = ac.currentTime + (at ? 0.04 : 0) + (at || 0);
   for (const [f, dt] of [[f1, 0], [f2, f2 ? 0.012 : 0]]) {
     if (!f) continue;
     const o = ac.createOscillator();
     o.type = 'square';
     o.frequency.value = f;
     const g = ac.createGain();
-    g.gain.value = 0.0001;
-    g.gain.setValueAtTime(vol, t + dt);
+    g.gain.value = vol;
     g.gain.exponentialRampToValueAtTime(0.0001, t + dt + 0.02);
     o.connect(g); g.connect(out);
-    o.start(t + dt); o.stop(t + dt + 0.03);
+    if (dt) o.start(t + dt); else o.start();
+    o.stop(t + dt + 0.03);
     wrapTail(o, [o, g], null, env.guard);
   }
 }
 
 function seqTones(ac, env) {
   const { out, vol, notes, step } = env;
+  const base = ac.currentTime;
   for (let i = 0; i < notes.length; i++) {
     const o = ac.createOscillator();
     o.type = 'triangle';
     o.frequency.value = notes[i];
     const g = ac.createGain();
-    const t = ac.currentTime + i * step;
-    g.gain.value = 0.0001;
-    g.gain.setValueAtTime(vol, t);
+    const t = base + i * step;
+    g.gain.value = vol;
     g.gain.exponentialRampToValueAtTime(0.0001, t + Math.max(0.08, step * 2.2));
     o.connect(g); g.connect(out);
-    o.start(t); o.stop(t + Math.max(0.1, step * 2.5));
+    if (i > 0) o.start(t); else o.start();
+    o.stop(t + Math.max(0.1, step * 2.5));
     wrapTail(o, [o, g], null, env.guard);
   }
 }
@@ -77,41 +77,51 @@ function seqTones(ac, env) {
 function pitch() { return 1 + (rand() - 0.5) * 0.08; } // ±4%
 
 // 武器音色 ---------------------------------------------------------------
+const SHOT_PROFILE = {
+  ak: { dur: 0.36, f0: 165, f1: 55, high: 2100, noise: 0.9, body: 0.8 },
+  rifle: { dur: 0.34, f0: 185, f1: 70, high: 2200, noise: 0.85, body: 0.7 },
+  smg: { dur: 0.3, f0: 240, f1: 95, high: 3100, noise: 0.82, body: 0.55 },
+  sniper: { dur: 0.5, f0: 92, f1: 28, high: 1400, noise: 0.9, body: 1 },
+  pistol: { dur: 0.32, f0: 300, f1: 120, high: 3200, noise: 0.82, body: 0.5 },
+  shotgun: { dur: 0.46, f0: 130, f1: 45, high: 1600, noise: 0.88, body: 0.62 },
+  knife: { dur: 0.28, f0: 1400, f1: 900, high: 2800, noise: 0.7, body: 0.3 }
+};
+
+function makeShotBuffer(ac, variant) {
+  const p = SHOT_PROFILE[variant] || SHOT_PROFILE.rifle;
+  const sr = ac.sampleRate || 44100;
+  const len = Math.ceil(sr * p.dur);
+  const buf = ac.createBuffer(1, len, sr);
+  const d = buf.getChannelData(0);
+  const bodyRate = variant === 'sniper' ? 4 : 5.5;
+  const tailRate = variant === 'sniper' ? 4.2 : 8.5;
+  for (let i = 0; i < len; i++) {
+    const t = i / sr;
+    const noise = Math.random() * 2 - 1;
+    const freq = p.f0 + (p.f1 - p.f0) * Math.min(1, t * 2.6);
+    const body = Math.sin(Math.PI * 2 * freq * t) * Math.exp(-t * bodyRate) * p.body;
+    const high = Math.sin(Math.PI * 2 * (p.high - (p.high - p.f1) * Math.min(1, t * 7)) * t) * Math.exp(-t * 22) * (variant === 'sniper' ? 0.06 : 0.16);
+    const crack = Math.sin(Math.PI * 2 * (p.high + 700) * t) * Math.exp(-t * 42) * (variant === 'knife' ? 0.28 : 0.1);
+    const attack = Math.min(1, t * 900);
+    const tail = Math.exp(-t * tailRate);
+    d[i] = Math.tanh((noise * p.noise + body + high + crack) * attack * tail * 0.62);
+  }
+  return buf;
+}
+
 export function buildShot(ac, env) {
   // env: {out, vol, variant, lp}
-  // 枪声曾因源节点增益过低而几乎听不到。这里在合成器内统一提升瞬态电平，
-  // 同时保留距离衰减、低通和声像链，避免只是把 sfx bus 拉满导致其它音效过载。
-  const v = Math.min(2.4, Math.max(0.15, env.vol * 3.2));
-  const lp = env.lp;
-  const guard = env.guard;
-  const pr = pitch();
-  if (env.variant === 'ak') {
-    noiseBurst(ac, { out: env.out, vol: v * 0.9, dur: 0.13 / pr, freq: Math.min(lp, 2400), q: 0.8, type: 'lowpass', guard });
-    oscDrop(ac, { out: env.out, vol: v * 0.8, dur: 0.12 / pr, type: 'square', f0: 165 * pr, f1: 55 * pr, guard });
-    oscDrop(ac, { out: env.out, vol: v * 0.3, dur: 0.05 / pr, type: 'square', f0: 2100 * pr, f1: 900 * pr, guard });
-  } else if (env.variant === 'rifle') {
-    noiseBurst(ac, { out: env.out, vol: v * 0.85, dur: 0.1 / pr, freq: Math.min(lp, 2600), q: 1, type: 'lowpass', guard });
-    oscDrop(ac, { out: env.out, vol: v * 0.7, dur: 0.09 / pr, type: 'square', f0: 185 * pr, f1: 70 * pr, guard });
-    oscDrop(ac, { out: env.out, vol: v * 0.28, dur: 0.045 / pr, type: 'square', f0: 2200 * pr, f1: 1100 * pr, guard });
-  } else if (env.variant === 'smg') {
-    noiseBurst(ac, { out: env.out, vol: v * 0.8, dur: 0.055 / pr, freq: Math.min(lp, 3200), q: 1.2, type: 'lowpass', guard });
-    oscDrop(ac, { out: env.out, vol: v * 0.55, dur: 0.05 / pr, type: 'square', f0: 240 * pr, f1: 95 * pr, guard });
-    oscDrop(ac, { out: env.out, vol: v * 0.35, dur: 0.03 / pr, type: 'square', f0: 3100 * pr, f1: 1800 * pr, guard });
-  } else if (env.variant === 'sniper') {
-    noiseBurst(ac, { out: env.out, vol: v * 0.9, dur: 0.32 / pr, freq: Math.min(lp, 900), q: 0.7, type: 'lowpass', guard });
-    oscDrop(ac, { out: env.out, vol: v, dur: 0.3 / pr, type: 'sine', f0: 92 * pr, f1: 28 * pr, guard });
-    tick(ac, { out: env.out, vol: v * 0.5, f1: 1400, f2: 900, at: 0.22 / pr, guard });
-  } else if (env.variant === 'pistol') {
-    noiseBurst(ac, { out: env.out, vol: v * 0.85, dur: 0.05 / pr, freq: Math.min(lp, 3200), q: 1.4, type: 'bandpass', guard });
-    oscDrop(ac, { out: env.out, vol: v * 0.5, dur: 0.05 / pr, type: 'sine', f0: 300 * pr, f1: 120 * pr, guard });
-  } else if (env.variant === 'shotgun') {
-    for (let i = 0; i < 3; i++) {
-      noiseBurst(ac, { out: env.out, vol: v * 0.7 / (1 + i * 0.5), dur: (0.18 - i * 0.04) / pr, freq: Math.min(lp, 1800 - i * 300), q: 1, type: 'lowpass', at: i * 0.02, guard });
-    }
-    oscDrop(ac, { out: env.out, vol: v * 0.5, dur: 0.2 / pr, type: 'sine', f0: 130 * pr, f1: 45 * pr, guard });
-  } else if (env.variant === 'knife') {
-    noiseBurst(ac, { out: env.out, vol: v * 0.5, dur: 0.1, freq: 1400, q: 6, type: 'bandpass', guard });
-  }
+  const buf = makeShotBuffer(ac, env.variant || 'rifle');
+  const src = ac.createBufferSource();
+  src.buffer = buf;
+  src.playbackRate.value = pitch();
+  const g = ac.createGain();
+  g.gain.value = Math.min(1.5, Math.max(0.12, env.vol * 1.6));
+  src.connect(g);
+  g.connect(env.out);
+  src.start();
+  src.stop(ac.currentTime + buf.duration / src.playbackRate.value + 0.08);
+  wrapTail(src, [src, g], null, env.guard);
 }
 
 // 通用音效 ---------------------------------------------------------------

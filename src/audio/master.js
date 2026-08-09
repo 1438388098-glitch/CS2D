@@ -76,6 +76,14 @@ const REVERB_BY_MAP = {
   blast: { delay: 0.28, fb: 0.34, wet: 0.30 }
 };
 
+function setAudioParam(param, value, t) {
+  if (!param) return;
+  try {
+    if (typeof param.setValueAtTime === 'function') param.setValueAtTime(value, t);
+    else param.value = value;
+  } catch (e) { /* ignore */ }
+}
+
 function buildReverb(ac, mapId) {
   const p = REVERB_BY_MAP[mapId] || REVERB_BY_MAP.dust2;
   const delay = ac.createDelay(1);
@@ -104,11 +112,11 @@ export function sfx(name, vol, x, y, game, wid, mat) {
       const lis = g.player;
       const dx = x - lis.x, dy = y - lis.y;
       const dist = Math.hypot(dx, dy);
-      if (g.viewMode === 'fps') {
-        // FPS 3D 声场：以视野朝向为基准——横向偏移→左右声像，背后声音更闷更轻（简化 HRTF）
-        const cosA = Math.cos(lis.angle), sinA = Math.sin(lis.angle);
-        const depth = dx * cosA + dy * sinA;
-        const perp = -dx * sinA + dy * cosA;
+    if (g.viewMode === 'fps') {
+      // FPS 3D 声场：以视野朝向为基准——横向偏移→左右声像，背后声音更闷更轻（简化 HRTF）
+      const cosA = Math.cos(lis.angle), sinA = Math.sin(lis.angle);
+      const depth = dx * cosA + dy * sinA;
+      const perp = -dx * sinA + dy * cosA;
         dv = clamp(1 - dist / 1400, 0.1, 1);
         pan = clamp(perp / 300, -1, 1);
         if (depth < 0) dv *= 0.55; // 背后：音量衰减（低通随 dv 同步收窄，见下方 lp）
@@ -122,7 +130,28 @@ export function sfx(name, vol, x, y, game, wid, mat) {
     let chain = out;
     const tails = [];
     let panner = null;
-    if (ac.createStereoPanner) {
+    const hasPos = x !== undefined && y !== undefined;
+    const listener = g && g.player && !g.player.dead;
+    const distToListener = listener && hasPos ? Math.hypot(x - g.player.x, y - g.player.y) : 0;
+    const useSpatialPanner = hasPos && distToListener > 24;
+    if (useSpatialPanner && ac.createPanner) {
+      panner = ac.createPanner();
+      panner.panningModel = 'HRTF';
+      panner.distanceModel = 'inverse';
+      panner.refDistance = 1;
+      panner.maxDistance = 4000;
+      panner.rolloffFactor = 0;
+      panner.coneInnerAngle = 360;
+      panner.coneOuterAngle = 360;
+      panner.coneOuterGain = 1;
+      const eyeY = g && g.viewMode === 'fps' ? 24 : 14;
+      setAudioParam(panner.positionX, x, t);
+      setAudioParam(panner.positionY, eyeY, t);
+      setAudioParam(panner.positionZ, y, t);
+      panner.connect(out);
+      chain = panner;
+      tails.push(panner);
+    } else if (ac.createStereoPanner) {
       panner = ac.createStereoPanner();
       panner.pan.value = pan;
       panner.connect(out);
@@ -190,6 +219,42 @@ export function sfx(name, vol, x, y, game, wid, mat) {
 }
 
 // UI 音效：走 UI bus、无定位
+export function syncSpatialAudio(game) {
+  resumeAudio();
+  if (!isAudioReady()) return false;
+  const ac = getAc();
+  const g = game || (gameProvider && gameProvider());
+  const stats = { listener: 0, panner: 0, synced: 0 };
+  if (!ac || !g || !g.player || !ac.listener) return false;
+  stats.listener = 1;
+  stats.panner = typeof ac.createPanner === 'function' ? 1 : 0;
+  const p = g.player;
+  const t = ac.currentTime || 0;
+  const eye = (g.viewMode === 'fps' ? 24 : 14);
+  try {
+    const L = ac.listener;
+    if (L.positionX && L.positionY && L.positionZ) {
+      setAudioParam(L.positionX, p.x || 0, t);
+      setAudioParam(L.positionY, eye, t);
+      setAudioParam(L.positionZ, p.y || 0, t);
+      setAudioParam(L.forwardX, Math.cos(p.angle || 0), t);
+      setAudioParam(L.forwardY, 0, t);
+      setAudioParam(L.forwardZ, Math.sin(p.angle || 0), t);
+      setAudioParam(L.upX, 0, t);
+      setAudioParam(L.upY, 1, t);
+      setAudioParam(L.upZ, 0, t);
+    } else if (typeof L.setPosition === 'function') {
+      L.setPosition(p.x || 0, eye, p.y || 0);
+      L.setOrientation(Math.cos(p.angle || 0), 0, Math.sin(p.angle || 0), 0, 1, 0);
+    }
+    stats.synced = 1;
+    if (game) game._audioSpatial = stats;
+    return true;
+  } catch (e) {
+    return false;
+  }
+}
+
 export function uiSfx(name, vol) {
   resumeAudio();
   if (!isAudioReady() || muted) return;
