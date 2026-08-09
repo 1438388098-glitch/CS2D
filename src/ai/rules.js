@@ -89,3 +89,12 @@ export function shouldThrowUtility(e, kind, count, distToSite, roundTime, enAliv
   if (kind === 'flash') return enAlive > 0 && distToSite >= 80 && distToSite <= 650;
   return enAlive > 0 && distToSite >= 60 && distToSite <= 520;
 }
+
+export function shouldAttemptDefuse(e, planted, dist, timeLeft, kit, enAlive = 1, safeRadius = 420, kitTime = 5, normalTime = 10) {
+  if (!e || e.team !== 'ct' || !planted) return false;
+  if (e.dead || e.defusing) return false;
+  const need = kit ? kitTime : normalTime;
+  if (timeLeft < need + 1) return false;
+  if (dist <= safeRadius) return true;
+  return enAlive <= 2 && timeLeft >= need + 8;
+}

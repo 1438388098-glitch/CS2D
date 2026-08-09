@@ -12,6 +12,7 @@ import {
   pickPlantSite,
   shouldEscortCarrier,
   shouldThrowUtility,
+  shouldAttemptDefuse,
   shouldRushPlant
 } from '../src/ai/rules.js';
 
@@ -115,5 +116,14 @@ assert.equal(shouldThrowUtility({ team: 't' }, 'he', 1, 250, 20, 1), true, 'HE s
 assert.equal(shouldThrowUtility({ team: 't' }, 'he', 0, 250, 20, 1), false, 'empty utility slot should not throw');
 assert.equal(shouldThrowUtility({ team: 't', bomb: { planted: true } }, 'smoke', 1, 400, 20), false, 'pre-plant utility rule should not apply after planting');
 assert.equal(shouldThrowUtility({ team: 't' }, 'molotov', 1, 400, 20), false, 'unknown utility kind should be rejected');
+
+assert.equal(shouldAttemptDefuse({ team: 'ct' }, true, 100, 15, false), true, 'near CT should commit to defuse when enough time remains');
+assert.equal(shouldAttemptDefuse({ team: 'ct' }, true, 700, 30, true), true, 'kit CT with extra time can push from range in small clutch');
+assert.equal(shouldAttemptDefuse({ team: 'ct' }, true, 700, 30, false, 3), false, 'slow defuser should not sprint from range while multiple enemies remain');
+assert.equal(shouldAttemptDefuse({ team: 'ct' }, true, 100, 10, false), false, 'defuse should require time beyond the 10s action');
+assert.equal(shouldAttemptDefuse({ team: 'ct' }, true, 100, 5, true), false, 'kit defuse should also leave a small safety margin');
+assert.equal(shouldAttemptDefuse({ team: 'ct' }, false, 100, 15, false), false, 'unplanted bomb should not trigger defuse');
+assert.equal(shouldAttemptDefuse({ team: 't' }, true, 100, 15, false), false, 'T should not use CT defuse rule');
+assert.equal(shouldAttemptDefuse({ team: 'ct', defusing: true }, true, 100, 15, false), false, 'already defusing CT should stay on bomb');
 
 console.log('ai-rules: all PASS');
