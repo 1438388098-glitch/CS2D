@@ -12,6 +12,7 @@ const els = {};
 let buyOpen = false;
 let sbOpen = false;
 let paused = false;
+let cyberConfirmArmed = false;
 
 function el(id) {
   return doc ? doc.getElementById(id) : null;
@@ -644,6 +645,9 @@ function hideModePanels() {
 function renderModeSettings() {
   const box = el('modeSettings');
   if (!box) return;
+  cyberConfirmArmed = false;
+  const startBtn = el('startBtn');
+  if (startBtn && startBtn.textContent !== '开 始 比 赛') startBtn.textContent = '开 始 比 赛';
   const mode = game.opts.mode || 'classic';
   if (mode === 'major') {
     if (!Array.isArray(MAJOR_TEAMS) || !MAJOR_TEAMS.length) {
@@ -687,9 +691,16 @@ box.innerHTML = '<div class="mode-hint">点击“开始”进入地图编辑器�
       '<div class="cyber-pick"><label>\u5730\u56fe</label><select id="cyberMap">' + mapHtml + '</select></div>' +
       '<div class="cyber-pick"><label>\u4e0b\u6ce8\u91d1\u989d</label><input id="cyberBet" type="number" min="1" max="' + Math.max(1, Math.floor(coins * 0.25)) + '" value="' + opts.bet + '"></div>' +
       '<div class="cyber-pick"><label>\u62bc\u6ce8\u65b9</label><select id="cyberSide"><option value="left"' + (opts.side === 'left' ? ' selected' : '') + '>\u5de6\u65b9</option><option value="right"' + (opts.side === 'right' ? ' selected' : '') + '>\u53f3\u65b9</option></select></div>' +
-      '<div id="cyberOdds" class="mode-hint"></div><div class="mode-hint">\u6700\u8fd1\u8bb0\u5f55</div>' + histHtml;
+      '<div id="cyberOdds" class="mode-hint"></div><div id="cyberConfirmHint" class="mode-hint">\u70b9\u51fb\u201c\u5f00\u59cb\u6bd4\u8d5b\u201d\u540e\uff0c\u518d\u6b21\u70b9\u51fb\u786e\u8ba4\u4e0b\u6ce8\u3002</div><div class="mode-hint">\u6700\u8fd1\u8bb0\u5f55</div>' + histHtml;
     const leftSel = el('cyberLeft'), rightSel = el('cyberRight'), mapSel = el('cyberMap'), betIn = el('cyberBet'), sideSel = el('cyberSide');
     const oddsEl = el('cyberOdds');
+    const resetCyberConfirm = () => {
+      cyberConfirmArmed = false;
+      const sb = el('startBtn');
+      if (sb) sb.textContent = '开 始 比 赛';
+      const hintEl = el('cyberConfirmHint');
+      if (hintEl) hintEl.textContent = '点击“开始比赛”后，再次点击确认下注。';
+    };
     const renderOdds = () => {
       if (!oddsEl) return;
       const l = CYBER_ROSTER.find((c) => c.id === opts.leftId) || CYBER_ROSTER[0];
@@ -700,11 +711,11 @@ box.innerHTML = '<div class="mode-hint">点击“开始”进入地图编辑器�
       const payout = cyberPayout(bet, ch);
       oddsEl.textContent = '\u80dc\u7387 ' + Math.round(ch * 100) + '% \u00b7 \u8d54\u7387 ' + (0.88 / Math.max(ch, 0.2)).toFixed(2) + 'x \u00b7 \u9884\u671f\u8fd4\u8fd8 ' + payout + ' \u86d0\u86d0\u5e01';
     };
-    if (leftSel) leftSel.onchange = () => { opts.leftId = leftSel.value; renderOdds(); };
-    if (rightSel) rightSel.onchange = () => { opts.rightId = rightSel.value; renderOdds(); };
-    if (mapSel) mapSel.onchange = () => { opts.mapId = mapSel.value; };
-    if (betIn) betIn.onchange = () => { const cap = Math.max(1, Math.floor(coins * 0.25)); opts.bet = Math.min(cap, Math.max(1, Math.floor(Number(betIn.value) || 100))); renderOdds(); };
-    if (sideSel) sideSel.onchange = () => { opts.side = sideSel.value; renderOdds(); };
+    if (leftSel) leftSel.onchange = () => { opts.leftId = leftSel.value; resetCyberConfirm(); renderOdds(); };
+    if (rightSel) rightSel.onchange = () => { opts.rightId = rightSel.value; resetCyberConfirm(); renderOdds(); };
+    if (mapSel) mapSel.onchange = () => { opts.mapId = mapSel.value; resetCyberConfirm(); };
+    if (betIn) betIn.onchange = () => { const cap = Math.max(1, Math.floor(coins * 0.25)); opts.bet = Math.min(cap, Math.max(1, Math.floor(Number(betIn.value) || 100))); resetCyberConfirm(); renderOdds(); };
+    if (sideSel) sideSel.onchange = () => { opts.side = sideSel.value; resetCyberConfirm(); renderOdds(); };
     renderOdds();
   } else if (mode === 'duel') {
     const stats = getStats();
@@ -862,6 +873,39 @@ function bindMenu() {
       el('menu') && el('menu').classList.remove('show');
       e.currentTarget.blur();
       return;
+    }
+    if (game.opts.mode === 'cyber') {
+      const opts = game.opts.cyber = game.opts.cyber || {};
+      const coins = cyberCoins();
+      const cap = Math.max(1, Math.floor(coins * 0.25));
+      const rawBet = el('cyberBet') ? Number(el('cyberBet').value) : Number(opts.bet);
+      const bet = Math.max(1, Math.min(cap, Math.floor(rawBet) || 100));
+      const left = CYBER_ROSTER.find((c) => c.id === opts.leftId);
+      const right = CYBER_ROSTER.find((c) => c.id === opts.rightId);
+      if (!left || !right || left.id === right.id) {
+        showToast('请选择两支不同战队');
+        uiSfx('error', 0.4);
+        e.currentTarget.blur();
+        return;
+      }
+      if (coins < 1) {
+        showToast('蛐蛐币不足，结算后会触发破产保护');
+        uiSfx('error', 0.4);
+        e.currentTarget.blur();
+        return;
+      }
+      opts.bet = bet;
+      const side = opts.side === 'left' ? left.tag : right.tag;
+      if (!cyberConfirmArmed) {
+        cyberConfirmArmed = true;
+        startBtn.textContent = '再次点击确认 · 押 ' + side + ' ' + bet + ' 蛐蛐币';
+        const hintEl = el('cyberConfirmHint');
+        if (hintEl) hintEl.textContent = '已预备下注，再次点击上方按钮确认开局；修改下注参数会取消确认。';
+        uiSfx('confirm', 0.6);
+        e.currentTarget.blur();
+        return;
+      }
+      cyberConfirmArmed = false;
     }
     startMatch(game);
     if (tut && tut.checked && !tutorialShown) {
