@@ -663,3 +663,6 @@ if (errors.length) {
   process.exit(1);
 }
 process.exit(0);
+  game.noRoundEnd = true;
+  game.noRoundEnd = false;
+  game.noRoundEnd = false;

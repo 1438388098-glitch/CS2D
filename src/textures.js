@@ -349,6 +349,18 @@ export function initTextures(map) {
           t.fillStyle = c === 'a' ? 'rgba(255,120,70,0.16)' : 'rgba(70,150,255,0.16)';
           t.fillRect(px, py, mapTile(), mapTile());
         }
+        // 出生区地面标记：T（t）暖色 / CT（c）冷色，一眼区分双方出生方向
+        if (c === 't') {
+          t.fillStyle = 'rgba(255,150,60,0.20)';
+          t.fillRect(px, py, mapTile(), mapTile());
+          t.fillStyle = 'rgba(255,200,120,0.5)';
+          t.fillRect(px + 2, py + mapTile() - 5, mapTile() - 4, 3);
+        } else if (c === 'c') {
+          t.fillStyle = 'rgba(70,140,255,0.20)';
+          t.fillRect(px, py, mapTile(), mapTile());
+          t.fillStyle = 'rgba(140,190,255,0.5)';
+          t.fillRect(px + 2, py + mapTile() - 5, mapTile() - 4, 3);
+        }
         if (c === '#') {
           t.drawImage(wallTex, px, py, mapTile(), mapTile());
           // 伪立体：顶部亮 顶部高光、底部阴影
