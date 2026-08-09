@@ -33,6 +33,7 @@ let ctx = null;       // 主画布 2d context
 let layers = null;    // 纹理图层（initTextures 返回）
 let cv = null, cctx = null;
 let iw = 0, ih = 0;   // 离屏画布逻辑尺寸
+let skyCv = null, skyCtx = null, skyCvKey = ''; // WebGL 路径的天空画布缓存
 
 // A2 切枪滑动动画（模块级，跨帧维持）
 let vmSwap = { key: '', t: 0, lastT: 0 };
@@ -152,6 +153,7 @@ export function initRenderer3d(canvas, layersRef) {
   cctx = cv.getContext('2d');
   cctx.imageSmoothingEnabled = false;
   iw = ih = 0;
+  skyCv = null; skyCtx = null; skyCvKey = '';
   pxImg = null; px32 = null; texPixMap = null;
   glInitTried = false;
 }
@@ -362,8 +364,7 @@ export function render3d(game) {
   if (gl3dReady()) {
     glResize(iw, ih);
     glBegin(F);
-    drawSky(F);            // 画到 2D 天空 canvas（cv）
-    glSky(F, cv, skySignature(F)); // 天空上传为纹理 + 全屏 quad（z=1 最远）
+    glSky(F, skyCanvasFor(F), skySignature(F)); // 天空缓存画布上传为纹理 + 全屏 quad（z=1 最远）
     drawFloorPixels(F);    // 内部 glFloorRow 分支
     drawGroundQuads(F);    // 内部 glGroundQuad 分支
     drawWalls(F, zbuf);    // 内部 glWallColumn 分支 + zbuf
@@ -461,8 +462,7 @@ function ensureSkyLayer(F) {
 }
 
 // 天空盒：顶部→地平线渐变 + 太阳光晕 + 确定性云团（避免纯色天花板压抑感）
-function drawSky(F) {
-  const t = F.cctx;
+function drawSkyTo(F, t) {
   const { iw, ih, horizon } = F;
   const sky = F.theme.sky || FALLBACK_THEME.sky;
   const sun = sky.sun || [255, 217, 160];
@@ -502,6 +502,25 @@ function drawSky(F) {
   grad.addColorStop(1, 'rgb(' + near.join(',') + ')');
   t.fillStyle = grad;
   t.fillRect(0, horizon, iw, ih - horizon);
+}
+
+function drawSky(F) {
+  drawSkyTo(F, F.cctx);
+}
+
+function skyCanvasFor(F) {
+  const key = skySignature(F);
+  if (!skyCv) skyCv = document.createElement('canvas');
+  if (skyCv.width !== F.iw || skyCv.height !== F.ih || skyCvKey !== key) {
+    skyCv.width = F.iw;
+    skyCv.height = F.ih;
+    if (!skyCtx) skyCtx = skyCv.getContext('2d');
+    skyCtx.setTransform(1, 0, 0, 1, 0, 0);
+    skyCtx.clearRect(0, 0, F.iw, F.ih);
+    drawSkyTo(F, skyCtx);
+    skyCvKey = key;
+  }
+  return skyCv;
 }
 
 // ===== A1 纹理地板（WebGL：透视校正行 quad；回退：CPU 像素直写 2×2 降采样）=====
@@ -1408,7 +1427,9 @@ function collectSmokes(F, out) {
     const depth = dx * F.cos + dy * F.sin;
     if (depth < NEAR || depth > F.fogMax) continue;
     const perp = -dx * F.sin + dy * F.cos;
-    const alpha = clamp(sm.life / 2, 0, 1) * clamp((sm.r - 20) / 40, 0.3, 1);
+    const lifeA = clamp(sm.life / 2, 0, 1);
+    const fogA = clamp(1 - (depth / F.fogMax) * 0.8, 0.35, 1);
+    const alpha = lifeA * clamp((sm.r - 20) / 100, 0.25, 0.5) * fogA;
     out.push({ depth, perp, cv: smokeCanvas(F.g, sm.r), sw: 2 * sm.r, sh: 2 * sm.r, baseH: F.eyeH - sm.r, alpha });
   }
 }
@@ -1423,10 +1444,10 @@ function smokeCanvas(game, r) {
     c.width = size; c.height = size;
     const t = c.getContext('2d');
     const grad = t.createRadialGradient(size / 2, size / 2, size * 0.15, size / 2, size / 2, size / 2);
-    grad.addColorStop(0, 'rgba(206,208,211,0.96)');
-    grad.addColorStop(0.75, 'rgba(190,193,197,0.94)');
-    grad.addColorStop(0.95, 'rgba(150,155,161,0.55)');
-    grad.addColorStop(1, 'rgba(120,124,130,0)');
+    grad.addColorStop(0, 'rgba(150,151,156,0.72)');
+    grad.addColorStop(0.45, 'rgba(126,128,134,0.58)');
+    grad.addColorStop(0.8, 'rgba(96,100,108,0.34)');
+    grad.addColorStop(1, 'rgba(72,76,84,0)');
     t.fillStyle = grad;
     t.fillRect(0, 0, size, size);
     cache = game._smokeCv = { key, cv: c };
