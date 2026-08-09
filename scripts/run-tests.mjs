@@ -17,6 +17,7 @@ const skipFiles = new Set([
 ]);
 
 const args = process.argv.slice(2);
+const listMode = args.includes('--list');
 const filter = args.find((arg) => !arg.startsWith('-')) || null;
 
 let tests = fs.readdirSync(testDir)
@@ -27,6 +28,13 @@ let tests = fs.readdirSync(testDir)
 
 if (filter) {
   tests = tests.filter((name) => name.includes(filter));
+}
+
+if (listMode) {
+  for (const name of tests) {
+    console.log(name);
+  }
+  process.exit(0);
 }
 
 if (tests.length === 0) {
