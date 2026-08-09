@@ -1,12 +1,22 @@
 // 战术目标层：CT 守点/回防/前压/保枪、T 进点/装弹/守弹/转点/绕后、玩家指令服从
-import { BOT_AI, DIFF, diffOf } from '../config.js';
-import { getMap, nearestSite } from '../map.js';
-import { rand, clamp } from '../utils.js';
-import { logAct, styleOf } from './shared.js';
-import { dqnFromJSON } from '../dqn.js';
-import { oppAimPoint, initOppModel } from './oppmodel.js';
-import { query, queryAll } from '../info.js';
+import {BOT_AI, diffOf} from '../config.js';
+import {getMap, nearestSite, inSite, los} from '../map.js';
+import {weaponDef, ammoFor} from '../entities.js';
+import {rand, clamp} from '../utils.js';
+import {logAct, styleOf, canFinishDefuse, aliveCount, hasGoodGun, redistributeTLanes} from './shared.js';
+import {dqnFromJSON} from '../dqn.js';
+import {oppAimPoint} from './oppmodel.js';
+import {shouldRetakeBomb, shouldRushDefuser, shouldRetreatWithoutBomb, pickPlantSite, shouldEscortCarrier, shouldPushLatePlant, shouldRushPlant} from './rules.js';
+;
 const CT_HOLD_RADIUS = 380;
+
+export function spreadPoint(e, cx, cy, rMin = 70, rMax = 190) {
+  const idx = e.spreadIdx !== undefined ? e.spreadIdx : (e.laneIdx !== undefined ? e.laneIdx : (e.anchorIdx || 0));
+  const r = rMin + (idx % 3) * ((rMax - rMin) / 2);
+  const side = idx % 2 ? 1 : -1;
+  const ang = Math.atan2(cy - e.y, cx - e.x) + Math.PI / 2 * side + (idx % 3) * 0.45;
+  return { x: cx + Math.cos(ang) * r, y: cy + Math.sin(ang) * r };
+}
 
 export function ctMySite(e, game) {
   const m = getMap();
@@ -424,31 +434,66 @@ export function botObjectiveRaw(e, game) {
       y: planter.y + Math.sin(ang) * 100 + Math.sin(ang + Math.PI / 2 * e.coverSide) * 80
     };
   }
+  if (game.roundPlan && game.roundPlan.plantPriority && !e.hasBomb && !planted && !(game.bomb && game.bomb.dropped) && e.netLane === undefined) {
+    const carrier = game.entities.find((o) => o.bot && o.team === 't' && !o.dead && o.hasBomb);
+    if (carrier) {
+      logAct(game, e, 'eco', 'protect carrier');
+      return spreadPoint(e, carrier.x, carrier.y, 70, 160);
+    }
+  }
   if (e.role === 'mid') {
     const midPt = getMap().mid;
-    if (midPt) return { x: midPt.x + rand(-60, 60), y: midPt.y + rand(-60, 60) };
-    return { x: getMap().W / 2 + rand(-80, 80), y: getMap().H / 2 + rand(-80, 80) };
+    const midHoldUntil = game.roundPlan && game.roundPlan.mid ? 20 : 12;
+    if (midPt && game.roundTime < midHoldUntil) return spreadPoint(e, midPt.x, midPt.y, 55, 140);
+    const csMid = game.tAttackSite === 'A' ? getMap().sites.A : getMap().sites.B;
+    return spreadPoint(e, csMid.cx, csMid.cy, 110, 240);
   }
   const cs = game.tAttackSite === 'A' ? getMap().sites.A : getMap().sites.B;
-  if ((e.role === 'A' || e.role === 'B') && e.role !== game.tAttackSite && !(game.bomb && game.bomb.planted) && game.roundTime < 45) {
+  // 回合初分路行进：主攻/侧翼按 role 分道（A 大 / A 小 / B 隧 / 中路），避免全员挤中路走廊
+  if (e.routePoint && !e.hasBomb && !e.rushMode && e.netLane === undefined && game.roundTime < 12 && Math.hypot(e.x - e.routePoint.x, e.y - e.routePoint.y) > 220) {
+    const rp = e.routePoint;
+    logAct(game, e, 'route', '分路 ' + e.role + ' (' + Math.round(rp.x) + ',' + Math.round(rp.y) + ')');
+    return { x: rp.x, y: rp.y };
+  }
+  const tPlanNow = game.roundPlan;
+  if (tPlanNow && tPlanNow.fake && e.role !== game.tAttackSite && e.role !== 'mid' && !(game.bomb && game.bomb.planted) && e.netLane === undefined) {
+    if (game.roundTime < 16) {
+      const otherSite = getMap().sites[e.role];
+      const otherEntry = getMap().entries && getMap().entries[e.role];
+      logAct(game, e, 'fake', 'fake ' + e.role);
+      const fakeTarget = otherEntry ? otherEntry : otherSite;
+      return { ...spreadPoint(e, fakeTarget.x, fakeTarget.y, 80, 180), nade: true };
+    }
+    logAct(game, e, 'fake', 'rotate ' + game.tAttackSite);
+    return entryPoint(cs, game, e);
+  }
+  if ((e.role === 'A' || e.role === 'B') && e.role !== game.tAttackSite && !(game.bomb && game.bomb.planted) && game.roundTime < 45 && e.netLane === undefined) {
+    if (tPlanNow && tPlanNow.split && game.roundTime > 22) {
+      logAct(game, e, 'split', 'converge ' + game.tAttackSite);
+      return entryPoint(cs, game, e);
+    }
     const otherSite = getMap().sites[e.role];
     const otherEntry = getMap().entries && getMap().entries[e.role];
     logAct(game, e, 'default', 'other ' + e.role);
-    return { x: (otherEntry ? otherEntry.x : otherSite.cx) + rand(-80, 80), y: (otherEntry ? otherEntry.y : otherSite.cy) + rand(-60, 60) };
+    const defaultTarget = otherEntry ? otherEntry : otherSite;
+    return spreadPoint(e, defaultTarget.x, defaultTarget.y, 80, 180);
   }
   const tAlive2 = game.entities.filter((o) => o.team === 't' && !o.dead && o !== e).length;
-  const ctAlive2 = game.entities.filter((o) => o.team === 'ct' && !o.dead).length;
-  // 残局劣势保枪（风险偏好：莽的 bot 不保）
-  if (tAlive2 === 0 && ctAlive2 >= 2 && rand() < (e.aiParams || diffOf(game)).saveChance * (1 - st.p.riskT * 0.5)) {
+  const ctAlive2 = aliveCount(game, 'ct');
+  // 残局劣势保枪（风险偏好：莽的 bot 不保；经济维度：有好枪更值得保，手枪局拼枪）
+  const dSv2 = e.aiParams || diffOf(game);
+  const goodGun2 = hasGoodGun(e);
+  if (tAlive2 === 0 && ctAlive2 >= 2 && e.netLane === undefined && rand() < dSv2.saveChance * (goodGun2 ? 1.2 : 0.55) * (1 - st.p.riskT * 0.5)) {
     logAct(game, e, 'retreat', '1v' + ctAlive2 + ' 保枪');
     return retreatPoint(e, game);
   }
   // 绕后角色（lurk）：回合前期绕到 CT 半场侧翼（出生点周边蹲点），中期回归攻击点
-  if (st.arch.lurk && game.roundTime < 40 && !(game.bomb && game.bomb.planted)) {
+  // sneak 标记：静步摸点（0.55 速 + 脚步半径减半 + 移动散布更低，隐蔽换取速度）
+  if (st.arch.lurk && game.roundTime < 40 && !(game.bomb && game.bomb.planted) && e.netLane === undefined) {
     const ctSpawn = getMap().spawns.ct[0];
     if (ctSpawn) {
       logAct(game, e, 'lurk', '绕后至 CT 半场');
-      return { x: ctSpawn.x + rand(-150, 150), y: ctSpawn.y + rand(-150, 150) };
+      return { x: ctSpawn.x + rand(-150, 150), y: ctSpawn.y + rand(-150, 150), sneak: true };
     }
   }
   // 决策网络（H8-H10）：进攻节奏由网络拍板（进入点/转点/投掷/保枪/探身）

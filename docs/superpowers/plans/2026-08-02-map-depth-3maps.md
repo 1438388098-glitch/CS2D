@@ -24,7 +24,7 @@
 
 ### Step 1: 写失败测试（fixture 地图存在 + 新瓦片语义）
 
-- [ ] 创建 `test/map-fixture.js`：
+- [x] 创建 `test/map-fixture.js`：
 
 ```js
 export const MECH_TEST_ROWS = (() => {
@@ -49,7 +49,7 @@ export function installMechTestMap() {
 
 （`registerMap` 从 `../src/registry.js` import；本图布局：x1-7 T 区 / x12 竖薄墙 / x13-18 靶区 / y12-17 浅水深水带（x1-9 浅水、x14-20 深水）/ x9 高台竖列 / x14 油桶。）
 
-- [ ] `test/selftest.js` 顶部（import 区后、`const game = createGame();` 前）加：
+- [x] `test/selftest.js` 顶部（import 区后、`const game = createGame();` 前）加：
 
 ```js
 import { installMechTestMap } from './map-fixture.js';
@@ -64,7 +64,7 @@ Expected: FAIL（`registerMap` undefined——fixture 还没 import registry；`
 
 ### Step 3: 实现 map-gen.js + map.js
 
-- [ ] `src/map-gen.js` 的 createBuilder api 里加（`spawn` 方法之后、`rows()` 之前）：
+- [x] `src/map-gen.js` 的 createBuilder api 里加（`spawn` 方法之后、`rows()` 之前）：
 
 ```js
     tile(x, y, ch) {
@@ -72,7 +72,7 @@ Expected: FAIL（`registerMap` undefined——fixture 还没 import registry；`
     },
 ```
 
-- [ ] `src/map.js`：
+- [x] `src/map.js`：
   - `walkableTile(rows, tx, ty)`（82-85 行）返回条件追加 `c === '~' || c === '≈' || c === '^'`。
   - `walkable(tx, ty)`（158-163 行）追加同样条件。
   - `walkable` 之后新增：
@@ -123,7 +123,7 @@ export function tileAt(x, y) {
 Run: `node --check src/map-gen.js; node --check src/map.js; node --check test/map-fixture.js`
 Expected: 无输出（全部通过）
 
-- [ ] 在 `test/selftest.js` 的测试区块（`const errors = []` 之后）加机制基础用例（**先写测试**）：
+- [x] 在 `test/selftest.js` 的测试区块（`const errors = []` 之后）加机制基础用例（**先写测试**）：
 
 ```js
 {
@@ -143,7 +143,7 @@ Expected: 无输出（全部通过）
 Run: `node test/selftest.js`
 Expected: FAIL（`pathable is not a function` 或 tileAt 未导出——在实现前）
 
-- [ ] 实现 Step 3 后重跑：`node test/selftest.js` Expected: PASS（全部用例含新基础用例）
+- [x] 实现 Step 3 后重跑：`node test/selftest.js` Expected: PASS（全部用例含新基础用例）
 
 ### Step 5: 提交（如 git 可用）
 
@@ -163,7 +163,7 @@ git commit -m "feat(map): 瓦片语义拆分 walkable/pathable + 新增薄墙/�
 
 ### Step 1: 写失败测试
 
-- [ ] `test/selftest.js` 基础用例之后加：
+- [x] `test/selftest.js` 基础用例之后加：
 
 ```js
 {
@@ -205,7 +205,7 @@ Run: `node test/selftest.js` Expected: FAIL（子弹被薄墙完全阻挡，dmgW
 
 ### Step 2: 实现 combat.js fireRay 穿透
 
-- [ ] `src/combat.js` fireRay（139-156 行）的墙扫描循环改为：
+- [x] `src/combat.js` fireRay（139-156 行）的墙扫描循环改为：
 
 ```js
   let wallT = range;
@@ -230,20 +230,20 @@ Run: `node test/selftest.js` Expected: FAIL（子弹被薄墙完全阻挡，dmgW
   }
 ```
 
-- [ ] 命中伤害（167-178 行之间）加穿透衰减——`let finalDmg = dmg;` 之后加：
+- [x] 命中伤害（167-178 行之间）加穿透衰减——`let finalDmg = dmg;` 之后加：
 
 ```js
     finalDmg *= penMult;
 ```
 
-- [ ] `src/combat.js` 顶部 import 区确认有 `tileAt`（从 `./map.js`），`addDecal` 与 `emit` 已在本文件存在（applyDamage/registerShot 用），`hitBarrelByShot` 在 Task 5 实现——先加空壳（本任务先通过穿射测试，Task 5 填实）：
+- [x] `src/combat.js` 顶部 import 区确认有 `tileAt`（从 `./map.js`），`addDecal` 与 `emit` 已在本文件存在（applyDamage/registerShot 用），`hitBarrelByShot` 在 Task 5 实现——先加空壳（本任务先通过穿射测试，Task 5 填实）：
 
 ```js
 // 占位：Task 5 实现
 export function hitBarrelByShot(game, px, py, shooter) {}
 ```
 
-- [ ] `src/audio.js` switch 内加（仿 `case 'hit'` 风格）：
+- [x] `src/audio.js` switch 内加（仿 `case 'hit'` 风格）：
 
 ```js
       case 'penetrate': {
@@ -281,7 +281,7 @@ git commit -m "feat(combat): 薄墙穿射 - 穿透衰减0.7/面 + 弹孔 + 穿�
 
 ### Step 1: 写失败测试
 
-- [ ] `test/selftest.js` 加：
+- [x] `test/selftest.js` 加：
 
 ```js
 {
@@ -308,14 +308,14 @@ Run: `node test/selftest.js` Expected: FAIL（`b.height` undefined、无 stun �
 
 ### Step 2: 实现
 
-- [ ] `src/entities.js` createEntity 返回值加字段（`decT: 0` 之后）：
+- [x] `src/entities.js` createEntity 返回值加字段（`decT: 0` 之后）：
 
 ```js
     height: 0, stunT: 0, splashCd: 0, highPointT: 0, highIdx: 0,
     prefireT: 0, prefireX: 0, prefireY: 0, prefireCount: 0, barrelT: 0, botThreatT: 0,
 ```
 
-- [ ] `src/game.js` 实体移动循环（247-254 行 `e.vy += e.vy * dt;` 之后、`collideCircle(e);` 之后）插入：
+- [x] `src/game.js` 实体移动循环（247-254 行 `e.vy += e.vy * dt;` 之后、`collideCircle(e);` 之后）插入：
 
 ```js
     const curTile = tileAt(e.x, e.y);
@@ -339,9 +339,9 @@ Run: `node test/selftest.js` Expected: FAIL（`b.height` undefined、无 stun �
 
 （注意：`game.js` 需确认 import `tileAt`、`rand`；`rand` 已在 game.js 使用则确认 import 来源；`createGame` 加 `lastSplash: null` 字段。）
 
-- [ ] `src/game.js` 顶部 import 从 `./map.js` 补 `tileAt`（`getMap, loadMap, findMapById, collideCircle, los, pathTo` 已有则并列追加）。
+- [x] `src/game.js` 顶部 import 从 `./map.js` 补 `tileAt`（`getMap, loadMap, findMapById, collideCircle, los, pathTo` 已有则并列追加）。
 
-- [ ] `src/combat.js`：
+- [x] `src/combat.js`：
   - `fireWeapon`（45 行）开头加：
 
 ```js
@@ -354,7 +354,7 @@ Run: `node test/selftest.js` Expected: FAIL（`b.height` undefined、无 stun �
   if (e.aimTarget && e.aimTarget.height === 1 && e.height === 0) spread *= 1.25;
 ```
 
-- [ ] `src/map.js` `los(game, ax, ay, bx, by)` 签名加第 6 参数 `optH`，墙采样判定（216 行 `if (!passableTolerant(x, y)) return false;`）改为：
+- [x] `src/map.js` `los(game, ax, ay, bx, by)` 签名加第 6 参数 `optH`，墙采样判定（216 行 `if (!passableTolerant(x, y)) return false;`）改为：
 
 ```js
     if (losBlocked(x, y, optH)) return false;
@@ -381,7 +381,7 @@ los 末尾（烟雾检查循环之后、`return true;` 之前）加深水隐蔽�
   if (tgtw && !obsw) return false;
 ```
 
-- [ ] los 调用点全部传观察者高度：
+- [x] los 调用点全部传观察者高度：
   - `src/ai.js` 506、533、580 行的 `los(game, e.x, e.y, o.x, o.y)` → `los(game, e.x, e.y, o.x, o.y, e.height)`（580 行在 findVisibleEnemy）
   - `src/game.js` 433 行玩家 aim → `los(game, p.x, p.y, o.x, o.y, p.height)`
   - `src/ai.js` 其他 los 调用点（grep `los(game,` 全量确认后逐一传 `e.height`；combat.js 106 行 expRad 暴露检查**不传**——声音暴露不受高度影响）
@@ -412,7 +412,7 @@ git commit -m "feat(map): 高台物理 height/落台硬直/低打高惩罚/高�
 
 ### Step 1: 写失败测试
 
-- [ ] `test/selftest.js` 加：
+- [x] `test/selftest.js` 加：
 
 ```js
 {
@@ -454,7 +454,7 @@ Run: `node test/selftest.js` Expected: FAIL（lastSplash 未定义；减速未�
 
 ### Step 2: 实现
 
-- [ ] 涉水减速——`src/game.js` 实体循环（Task 3 插入的溅水块之前）加：
+- [x] 涉水减速——`src/game.js` 实体循环（Task 3 插入的溅水块之前）加：
 
 ```js
     if (curTile === '~' || curTile === '≈') { e.vx *= 0.6; e.vy *= 0.6; }
@@ -462,7 +462,7 @@ Run: `node test/selftest.js` Expected: FAIL（lastSplash 未定义；减速未�
 
 （Task 3 的溅水块已广播 lastSplash + splash 音效 + 粒子；`splashCd` 字段已在 entities.js 加。）
 
-- [ ] `src/audio.js` 加 `splash` case（仿 `case 'step'` 风格，更亮）：
+- [x] `src/audio.js` 加 `splash` case（仿 `case 'step'` 风格，更亮）：
 
 ```js
       case 'splash': {
@@ -474,7 +474,7 @@ Run: `node test/selftest.js` Expected: FAIL（lastSplash 未定义；减速未�
       }
 ```
 
-- [ ] 深水挡弹验证：fireRay 瓦片分类中 `≈` 不在放行集（`.` `a` `b` `t` `c` `~` `^`）→ 进阻挡分支——无需额外代码；跑测试确认即可。
+- [x] 深水挡弹验证：fireRay 瓦片分类中 `≈` 不在放行集（`.` `a` `b` `t` `c` `~` `^`）→ 进阻挡分支——无需额外代码；跑测试确认即可。
 
 ### Step 3: 跑测试确认通过
 
@@ -499,7 +499,7 @@ git commit -m "feat(map): 水机制 - 涉水减速/溅水声广播/深水隐蔽�
 
 ### Step 1: 写失败测试
 
-- [ ] `test/selftest.js` 加：
+- [x] `test/selftest.js` 加：
 
 ```js
 {
@@ -525,7 +525,7 @@ Run: `node test/selftest.js` Expected: FAIL（hitBarrelByShot 是空壳，桶不
 
 ### Step 2: 实现
 
-- [ ] `src/combat.js` 把 Task 2 的空壳替换为：
+- [x] `src/combat.js` 把 Task 2 的空壳替换为：
 
 ```js
 export function barrelAt(game, px, py) {
@@ -568,7 +568,7 @@ export function explodeBarrel(game, b, shooter) {
 
 （import：`TILE` 从 `./config.js`、`getGrid` 从 `./map.js`——确认现有 import 区，缺则补。）
 
-- [ ] `src/game.js` createGame（`game.entities` 初始化附近）加：
+- [x] `src/game.js` createGame（`game.entities` 初始化附近）加：
 
 ```js
   game.barrels = (getMap() ? getMap().barrels : []).map((b) => ({ ...b }));
@@ -598,7 +598,7 @@ git commit -m "feat(combat): 油桶系统 - 2发引爆/AOE伤害/爆炸巨响广
 
 ### Step 1: 写失败测试（存在性 + 冒烟）
 
-- [ ] `test/selftest.js` 加：
+- [x] `test/selftest.js` 加：
 
 ```js
 {
@@ -629,7 +629,7 @@ Run: `node test/selftest.js` Expected: FAIL（字段存在但 hearSplash 未实�
 
 ### Step 2: 实现 ai.js
 
-- [ ] `src/ai.js` 顶部（`botActions` 定义之前）加：
+- [x] `src/ai.js` 顶部（`botActions` 定义之前）加：
 
 ```js
 function hearSplash(e, game) {
@@ -643,7 +643,7 @@ function hearSplash(e, game) {
 }
 ```
 
-- [ ] `botActions(e, game, dt)` 开头（`if (e.dead) return;` 之后）加：
+- [x] `botActions(e, game, dt)` 开头（`if (e.dead) return;` 之后）加：
 
 ```js
   hearSplash(e, game);
@@ -652,7 +652,7 @@ function hearSplash(e, game) {
   if (e.botThreatT > 0) e.botThreatT -= dt;
 ```
 
-- [ ] CT 预瞄穿射（botActions 中 `if (e.team === 'ct' && game.bomb && game.bomb.planted)` 块**之前**加）：
+- [x] CT 预瞄穿射（botActions 中 `if (e.team === 'ct' && game.bomb && game.bomb.planted)` 块**之前**加）：
 
 ```js
   if (e.team === 'ct' && !(game.bomb && game.bomb.planted) && getMap().penPoints && getMap().penPoints.length && e.weapons.primary && !e.reloading) {
@@ -674,7 +674,7 @@ function hearSplash(e, game) {
   }
 ```
 
-- [ ] 高台占位——`botObjectiveRaw` 的 CT 分支（`if (e.role === 'a' || e.role === 'b')` 检查**之前**）加：
+- [x] 高台占位——`botObjectiveRaw` 的 CT 分支（`if (e.role === 'a' || e.role === 'b')` 检查**之前**）加：
 
 ```js
     if (getMap().highPoints && getMap().highPoints.length && e.role === 'a' && !planted && e.highPointT <= 0 && Math.random() < 0.02) {
@@ -684,7 +684,7 @@ function hearSplash(e, game) {
     }
 ```
 
-- [ ] 油桶利用/规避——`botActions` 末尾（fire 循环之前）加：
+- [x] 油桶利用/规避——`botActions` 末尾（fire 循环之前）加：
 
 ```js
   if (e.aimTarget && e.barrelT <= 0 && Math.random() < 0.4 && (e.weapons.primary || e.weapons.secondary)) {
@@ -709,7 +709,7 @@ function hearSplash(e, game) {
   }
 ```
 
-- [ ] `src/combat.js` applyDamage 内（对 bot 的受击处理处，可放在函数末尾返回前）加：
+- [x] `src/combat.js` applyDamage 内（对 bot 的受击处理处，可放在函数末尾返回前）加：
 
 ```js
   if (v.bot && v.highPointT > 0) {
@@ -748,7 +748,7 @@ git commit -m "feat(ai): 全机制适配 - 溅水声警觉/薄墙预瞄/高台�
 
 ### Step 1: 写失败测试（三图注册 + 诊断）
 
-- [ ] `test/selftest.js` 加：
+- [x] `test/selftest.js` 加：
 
 ```js
 {
@@ -773,7 +773,7 @@ Run: `node test/selftest.js` Expected: FAIL（snow 仍在）
 
 ### Step 2: 实现三图
 
-- [ ] `src/map-gen.js` 删除 buildSnow/buildDepot，重写 buildDust2/buildCanal/buildMetro 为以下实现（已含连通性与机制分布设计，实施时用 Task 1 的连通性诊断校验，若有 unreachable 格微调门洞）：
+- [x] `src/map-gen.js` 删除 buildSnow/buildDepot，重写 buildDust2/buildCanal/buildMetro 为以下实现（已含连通性与机制分布设计，实施时用 Task 1 的连通性诊断校验，若有 unreachable 格微调门洞）：
 
 ```js
 export function buildDust2() {
@@ -859,7 +859,7 @@ export function buildMetro() {
 }
 ```
 
-- [ ] `src/config.js`：
+- [x] `src/config.js`：
   - import 改为 `import { buildDust2, buildCanal, buildMetro } from './map-gen.js';`
   - 注册块改为三图（删 snow/depot 两行）+ 机制数据：
 
@@ -882,7 +882,7 @@ registerMap({ id: 'metro', name: '地铁枢纽', accent: '#b08aff', rows: buildM
 Run: `node --check src/map-gen.js; node --check src/config.js; node test/selftest.js`
 Expected: 全过（三图诊断用例 + 现有用例）
 
-- [ ] 三图逐个跑模拟确认 AI 可在新图完整对局：
+- [x] 三图逐个跑模拟确认 AI 可在新图完整对局：
 
 Run: `node test/simulate.js dust2 normal; node test/simulate.js canal normal; node test/simulate.js metro normal`
 Expected: 三图均"模拟通过"（T 胜率 30-70%）
@@ -905,7 +905,7 @@ git commit -m "feat(maps): 三图重做 dust2/canal/metro + 机制点位数据 +
 
 ### Step 1: 实现纹理
 
-- [ ] `src/textures.js`：现有 wallTex/crateTex/waterTex 生成代码之后，新增四个纹理生成（风格仿现有——色板函数）：
+- [x] `src/textures.js`：现有 wallTex/crateTex/waterTex 生成代码之后，新增四个纹理生成（风格仿现有——色板函数）：
 
 ```js
   const thinWallTex = mk(64, 64);
@@ -955,7 +955,7 @@ git commit -m "feat(maps): 三图重做 dust2/canal/metro + 机制点位数据 +
   }
 ```
 
-- [ ] drawGround 静态层瓦片分支（126 行 `if (c === '~') ...` 之后）加：
+- [x] drawGround 静态层瓦片分支（126 行 `if (c === '~') ...` 之后）加：
 
 ```js
         if (c === '=') t.drawImage(thinWallTex, px, py, TILE, TILE);
@@ -968,7 +968,7 @@ git commit -m "feat(maps): 三图重做 dust2/canal/metro + 机制点位数据 +
         if (c === 'o') t.drawImage(barrelTex, px + 8, py + 8, 24, 24);
 ```
 
-- [ ] 小地图分支（165-174 行附近 `} else if (c === '~')` 之后）加：
+- [x] 小地图分支（165-174 行附近 `} else if (c === '~')` 之后）加：
 
 ```js
         } else if (c === '=') {
@@ -981,7 +981,7 @@ git commit -m "feat(maps): 三图重做 dust2/canal/metro + 机制点位数据 +
           t.fillStyle = '#c05030';
 ```
 
-- [ ] `src/render.js` drawParticles（`else if (p.kind === 'boom')` 分支之后）加：
+- [x] `src/render.js` drawParticles（`else if (p.kind === 'boom')` 分支之后）加：
 
 ```js
     } else if (p.kind === 'splash') {
@@ -1013,7 +1013,7 @@ git commit -m "feat(render): 薄墙/深水/高台/油桶纹理 + 水花粒子"
 
 ### Step 1: 写平衡抽查脚本
 
-- [ ] 创建 `test/balance.mjs`：
+- [x] 创建 `test/balance.mjs`：
 
 ```js
 import { createGame, startMatch, update } from '../src/game.js';
