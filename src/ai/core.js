@@ -59,7 +59,9 @@ function botThink(e, game, dt) {
       e.angle = angNorm(Math.atan2(e.lastDmgFrom.y - e.y, e.lastDmgFrom.x - e.x));
       if (!e.aimTarget) {
         e.aimTarget = e.lastDmgFrom;
-        e.reaction = Math.min(e.reaction, d.react * 0.4);
+        // 受击反应延迟：空闲 bot（reaction=0）被打后也需转身时间，避免 0 延迟背袭反击
+        if (!(e.reaction > 0)) e.reaction = d.react * 0.4;
+        else e.reaction = Math.min(e.reaction, d.react * 0.4);
       }
     }
   }
