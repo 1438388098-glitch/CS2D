@@ -264,6 +264,21 @@ ok('fps enemy marker present', game._fpsEntityMarkers.some((m) => m.team !== p.t
 ok('fps enemy edge alert', game._fpsEnemyAlert && game._fpsEnemyAlert.count > 0);
 ok('fps marker elevation fields', game._fpsEntityMarkers.every((m) => typeof m.elev === 'number'));
 
+game.smokes = [{ x: 200, y: 100, r: 90, life: 10 }];
+for (const e of game.entities) {
+  if (e.bot && e.team !== p.team) {
+    e.dead = false;
+    e.hp = 100;
+    e.x = 320;
+    e.y = 100;
+  }
+}
+render3d(game);
+ok('fps smoke occludes markers', game._fpsEntityMarkers.some((m) => m.smokeA < 0.14 && m.occluded));
+ok('fps smoke enemy alert suppressed', game._fpsEnemyAlert.count === 0);
+game.smokes = [];
+render3d(game);
+
 const savedEntities = game.entities;
 const stressBase = savedEntities.find((e) => e.bot && !e.dead) || p;
 const stress = [];

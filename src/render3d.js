@@ -870,6 +870,8 @@ function updateFpsMarkers(F, zbuf) {
     for (let c = x0; c <= x1; c++) {
       if (zbuf[c] && zbuf[c].d < depth) { occluded = true; break; }
     }
+    const smokeA = smokeAlphaBetween(F, e.x, e.y);
+    if (smokeA < 0.14) occluded = true;
     let m = fpsMarkerPool.pop();
     if (!m) m = {};
     m.team = e.team;
@@ -880,6 +882,7 @@ function updateFpsMarkers(F, zbuf) {
     m.nx = sx / F.iw;
     m.ny = pt.sy / F.ih;
     m.occluded = occluded;
+    m.smokeA = smokeA;
     m.elev = elev;
     m.isKiller = g.lastKiller === e && p.dead;
     markers.push(m);
@@ -899,6 +902,7 @@ function drawTeammateMarkers(F) {
   const t = F.cctx;
   for (const m of g._fpsEntityMarkers) {
     if (m.team !== p.team) continue;
+    if (m.smokeA < 0.14) continue;
     const sx = m.nx * F.iw;
     const sy = m.ny * F.ih;
     const a = m.occluded ? 0.55 : 0.9;
@@ -927,6 +931,7 @@ function drawEnemyMarkers(F) {
   const t = F.cctx;
   for (const m of g._fpsEntityMarkers) {
     if (m.team === p.team) continue;
+    if (m.smokeA < 0.14) continue;
     const sx = m.nx * F.iw;
     const sy = m.ny * F.ih;
     if (sx < 6 || sx > F.iw - 6 || sy < 6 || sy > F.ih - 6) continue;
@@ -955,7 +960,7 @@ function drawEnemyEdgeIndicators(F) {
   const markers = g._fpsEntityMarkers || [];
   let count = 0;
   for (const m of markers) {
-    if (m.team !== p.team) count++;
+    if (m.team !== p.team && m.smokeA >= 0.14) count++;
   }
   g._fpsEnemyAlert = { count, time: g.time || 0 };
   if (!p || g.viewMode !== 'fps' || count === 0) return;
@@ -974,6 +979,7 @@ function drawEnemyEdgeIndicators(F) {
   let shown = 0;
   for (const m of markers) {
     if (m.team === p.team || shown >= 6) continue;
+    if (m.smokeA < 0.14) continue;
     const sx = m.nx * F.iw;
     const sy = m.ny * F.ih;
     if (sx >= pad && sx <= F.iw - pad && sy >= pad && sy <= F.ih - pad) continue;
@@ -1150,11 +1156,12 @@ function collectDecals(F, out) {
     const depth = dx * F.cos + dy * F.sin;
     if (depth < NEAR || depth > F.fogMax) continue;
     const perp = -dx * F.sin + dy * F.cos;
+    const smokeA = smokeAlphaBetween(F, d.x, d.y);
     if (d.type === 'corpse') {
-      out.push({ depth, perp, cv: corpseCanvas(F.g, d), sw: 32 * F.U, sh: 36 * F.U, baseH: 0, alpha: clamp(d.life / 3, 0, 1) });
+      out.push({ depth, perp, cv: corpseCanvas(F.g, d), sw: 32 * F.U, sh: 36 * F.U, baseH: 0, alpha: clamp(d.life / 3, 0, 1) * smokeA });
     } else {
       // 弹孔/火花：命中点小圆点（面向相机），生命末期淡出
-      out.push({ depth, perp, cv: holeCanvas(F.g, d.type), sw: 11 * F.U, sh: 11 * F.U, baseH: 0, alpha: clamp(d.life / 2, 0.15, 1) });
+      out.push({ depth, perp, cv: holeCanvas(F.g, d.type), sw: 11 * F.U, sh: 11 * F.U, baseH: 0, alpha: clamp(d.life / 2, 0.15, 1) * smokeA });
     }
   }
 }
@@ -1230,7 +1237,7 @@ function collectWeather(F, out) {
     if (depth < NEAR || depth > F.fogMax) continue;
     const perp = -dx * F.sin + dy * F.cos;
     const alpha = clamp(0.35 + 0.3 * (1 - depth / F.fogMax), 0.05, 1);
-    out.push({ depth, perp, cv, sw, sh, baseH: 0, alpha });
+    out.push({ depth, perp, cv, sw, sh, baseH: 0, alpha: alpha * smokeAlphaBetween(F, wx, wy) });
   }
 }
 
@@ -1449,10 +1456,36 @@ function collectEntities(F, out) {
     const depth = dx * F.cos + dy * F.sin;
     if (depth < NEAR || depth > F.fogMax) continue;
     const perp = -dx * F.sin + dy * F.cos;
+    const smokeA = smokeAlphaBetween(F, e.x, e.y);
+    if (smokeA <= 0.12) continue;
     const s = { depth, perp, cv: entitySprite(F.g, e), sw: 44 * F.U, sh: 44 * F.U, baseH: groundElevationAt(e.x, e.y) + (e.height || 0) * mapTile() };
+    s.alpha = smokeA;
     if (killHi && e === killHi) s.isKiller = true;
     out.push(s);
   }
+}
+
+// 与 map.los 的烟雾判定保持一致：线段穿过烟圈时按覆盖度淡出，而不是继续显示完整实体。
+function smokeAlphaBetween(F, x, y) {
+  const smokes = F.g && F.g.smokes;
+  if (!smokes || !smokes.length) return 1;
+  const dx = x - F.cx, dy = y - F.cy;
+  const dist2 = dx * dx + dy * dy;
+  let alpha = 1;
+  for (const s of smokes) {
+    if (!(s.r > 0) || !isFinite(s.r)) continue;
+    const rr = s.r + 8;
+    let t = 0;
+    if (dist2 > 1e-6) t = clamp(((s.x - F.cx) * dx + (s.y - F.cy) * dy) / dist2, 0, 1);
+    const px = F.cx + dx * t;
+    const py = F.cy + dy * t;
+    const d = Math.hypot(px - s.x, py - s.y);
+    if (d < rr) {
+      const cover = 1 - d / rr;
+      alpha = Math.min(alpha, clamp(0.9 - cover * 0.82, 0.08, 0.9));
+    }
+  }
+  return alpha;
 }
 
 // 人物建模：正面立绘士兵（经典 Wolf3D billboard 风格）——影/步态双腿/躯干战术背心/持枪手臂/头盔头
@@ -1551,7 +1584,7 @@ function collectSmokes(F, out) {
     const perp = -dx * F.sin + dy * F.cos;
     const lifeA = clamp(sm.life / 2, 0, 1);
     const fogA = clamp(1 - (depth / F.fogMax) * 0.8, 0.35, 1);
-    const alpha = lifeA * clamp((sm.r - 20) / 100, 0.25, 0.5) * fogA;
+    const alpha = lifeA * clamp((sm.r - 20) / 100, 0.2, 0.42) * fogA;
     out.push({ depth, perp, cv: smokeCanvas(F.g, sm.r), sw: 2 * sm.r, sh: 2 * sm.r, baseH: F.eyeH - sm.r, alpha });
   }
 }
@@ -1566,10 +1599,10 @@ function smokeCanvas(game, r) {
     c.width = size; c.height = size;
     const t = c.getContext('2d');
     const grad = t.createRadialGradient(size / 2, size / 2, size * 0.15, size / 2, size / 2, size / 2);
-    grad.addColorStop(0, 'rgba(150,151,156,0.72)');
-    grad.addColorStop(0.45, 'rgba(126,128,134,0.58)');
-    grad.addColorStop(0.8, 'rgba(96,100,108,0.34)');
-    grad.addColorStop(1, 'rgba(72,76,84,0)');
+    grad.addColorStop(0, 'rgba(126,117,104,0.62)');
+    grad.addColorStop(0.45, 'rgba(104,98,90,0.5)');
+    grad.addColorStop(0.8, 'rgba(78,76,72,0.3)');
+    grad.addColorStop(1, 'rgba(64,62,58,0)');
     t.fillStyle = grad;
     t.fillRect(0, 0, size, size);
     cache = game._smokeCv = { key, cv: c };
@@ -1599,7 +1632,7 @@ function collectBomb(F, out) {
       t.fill();
     }
   }
-  out.push({ depth, perp, cv: fxCanvas(F.g, 'bomb', bombDraw), sw: 20 * F.U, sh: 16 * F.U, baseH: 0 });
+  out.push({ depth, perp, cv: fxCanvas(F.g, 'bomb', bombDraw), sw: 20 * F.U, sh: 16 * F.U, baseH: 0, alpha: smokeAlphaBetween(F, b.x, b.y) });
 }
 
 function bombDraw(t, cvW, cvH) {
@@ -1629,7 +1662,7 @@ function collectDrops(F, out) {
       t.fillRect(2, 4, cw - 4, 3);
       t.fillStyle = 'rgba(255,255,255,0.6)';
       t.fillRect(2, 2, 5, 2);
-    }), sw: 26 * F.U, sh: 8 * F.U, baseH: 0 });
+    }), sw: 26 * F.U, sh: 8 * F.U, baseH: 0, alpha: smokeAlphaBetween(F, d.x, d.y) });
   }
 }
 
@@ -1647,7 +1680,7 @@ function collectGrenades(F, out) {
       t.fill();
       t.fillStyle = '#111';
       t.fillRect(cw / 2 - 2, ch / 2 - 5, 4, 10);
-    }), sw: 12 * F.U, sh: 12 * F.U, baseH: 0 });
+    }), sw: 12 * F.U, sh: 12 * F.U, baseH: 0, alpha: smokeAlphaBetween(F, gn.x, gn.y) });
   }
 }
 
