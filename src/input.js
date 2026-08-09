@@ -81,24 +81,25 @@ export function initInput(game, canvasRef) {
     if (e.repeat) return;
     keys[e.code] = true;
     if (matches(e.code, 'viewToggle')) { e.preventDefault(); toggleViewMode(game); }
-    if (e.code === 'KeyQ' || e.code === 'KeyE') {
-      if (game.player && game.player.dead && game.state !== 'END') {
-        e.preventDefault();
-        cycleSpectate(game, e.code === 'KeyE' ? 1 : -1);
-      }
+    if ((matches(e.code, 'spectateNext') || matches(e.code, 'spectatePrev')) && game.player && game.player.dead && game.state !== 'END') {
+      e.preventDefault();
+      cycleSpectate(game, matches(e.code, 'spectateNext') ? 1 : -1);
     }
     // 玩家→bot 战术指令（F1 集合 / F2 攻A / F3 攻B / F4 守点）
-    if (e.code === 'F1') setPlayerOrder(game, 'follow');
-    if (e.code === 'F2') setPlayerOrder(game, 'siteA');
-    if (e.code === 'F3') setPlayerOrder(game, 'siteB');
-    if (e.code === 'F4') setPlayerOrder(game, 'hold');
+    if (matches(e.code, 'orderFollow')) setPlayerOrder(game, 'follow');
+    if (matches(e.code, 'orderSiteA')) setPlayerOrder(game, 'siteA');
+    if (matches(e.code, 'orderSiteB')) setPlayerOrder(game, 'siteB');
+    if (matches(e.code, 'orderHold')) setPlayerOrder(game, 'hold');
     if (matches(e.code, 'buy')) {
       if (game.ui.isBuyOpen()) game.ui.closeBuy();
       else { game.ui.openBuy(); uiSfx('panel', 0.3); if (document.pointerLockElement) document.exitPointerLock(); }
     }
-    if (/^Digit[1-7]$/.test(e.code) && game.ui.isBuyOpen()) {
-      e.preventDefault();
-      game.ui.switchBuyCat(parseInt(e.code.slice(5), 10) - 1);
+    for (let i = 1; i <= 7; i++) {
+      if (matches(e.code, 'buyCat' + i) && game.ui.isBuyOpen()) {
+        e.preventDefault();
+        game.ui.switchBuyCat(i - 1);
+        break;
+      }
     }
     if (matches(e.code, 'scoreboard')) {
       e.preventDefault();
