@@ -6,7 +6,22 @@ import { setPlayerOrder } from './ai.js';
 
 let lastWheelT = 0;
 
+const VIEW_MODES = ['top', 'follow', 'fps'];
+
+export function setViewMode(game, mode) {
+  game.viewMode = VIEW_MODES.includes(mode) ? mode : 'top';
+  try { localStorage.setItem('cs2d_viewmode', game.viewMode); } catch (err) {}
+  if (game.viewMode !== 'fps' && typeof document !== 'undefined' && document.pointerLockElement) {
+    document.exitPointerLock();
+  }
+}
+
+export function toggleViewMode(game) {
+  setViewMode(game, VIEW_MODES[(VIEW_MODES.indexOf(game.viewMode) + 1) % VIEW_MODES.length]);
+}
+
 export function initInput(game, canvasRef) {
+  try { const v = localStorage.getItem('cs2d_viewmode'); if (VIEW_MODES.includes(v)) game.viewMode = v; } catch (err) {}
   const keys = game.input.keys;
   const mouse = game.input.mouse;
   const windowRef = window;
@@ -14,6 +29,7 @@ export function initInput(game, canvasRef) {
   windowRef.addEventListener('keydown', (e) => {
     if (e.repeat) return;
     keys[e.code] = true;
+    if (matches(e.code, 'viewToggle')) { e.preventDefault(); toggleViewMode(game); }
     // 玩家→bot 战术指令（F1 集合 / F2 攻A / F3 攻B / F4 守点）
     if (e.code === 'F1') setPlayerOrder(game, 'follow');
     if (e.code === 'F2') setPlayerOrder(game, 'siteA');
@@ -21,7 +37,7 @@ export function initInput(game, canvasRef) {
     if (e.code === 'F4') setPlayerOrder(game, 'hold');
     if (matches(e.code, 'buy')) {
       if (game.ui.isBuyOpen()) game.ui.closeBuy();
-      else { game.ui.openBuy(); uiSfx('panel', 0.3); }
+      else { game.ui.openBuy(); uiSfx('panel', 0.3); if (document.pointerLockElement) document.exitPointerLock(); }
     }
     if (/^Digit[1-7]$/.test(e.code) && game.ui.isBuyOpen()) {
       e.preventDefault();
@@ -33,6 +49,8 @@ export function initInput(game, canvasRef) {
       game.ui.toggleScoreboard(true);
     }
     if (matches(e.code, 'pause')) {
+      // 无条件先解锁：MENU 态 Esc 也应释放指针锁定（否则光标永久消失）
+      if (document.pointerLockElement) document.exitPointerLock();
       if (game.ui.isBuyOpen()) { game.ui.closeBuy(); return; }
       if (game.ui.isPaused()) game.ui.unpause();
       else if (game.state === 'MENU') return;
@@ -70,6 +88,11 @@ export function initInput(game, canvasRef) {
   }, false);
 
   windowRef.addEventListener('mousemove', (e) => {
+    if (game.viewMode === 'fps') {
+      // 标准 FPS 增量瞄准：累积 movementX（普通 mousemove 即可，无需指针锁定）
+      game._mlookDx = (game._mlookDx || 0) + (e.movementX || 0);
+    }
+    // 同时记录绝对位置（俯视/跟随瞄准与 HUD 使用）
     const r = canvasRef.getBoundingClientRect();
     mouse.x = e.clientX - r.left;
     mouse.y = e.clientY - r.top;
@@ -78,6 +101,9 @@ export function initInput(game, canvasRef) {
   canvasRef.addEventListener('mousedown', (e) => {
     initAudio();
     if (e.button === 0) {
+      const hit = typeof document !== 'undefined' && document.elementFromPoint ? document.elementFromPoint(e.clientX, e.clientY) : null;
+      const onUi = hit && hit.closest && hit.closest('#ui, .cyber-panel, button, [data-speed], [data-skip]');
+      if (onUi) return;
       const cw = game.canvasW || window.innerWidth;
       const mmW = isMiniZoomed() ? 480 : 240;
       const mmH = isMiniZoomed() ? 360 : 180;
@@ -85,10 +111,16 @@ export function initInput(game, canvasRef) {
       const mx = e.clientX - r.left;
       const my = e.clientY - r.top;
       const onMini = mx > cw - mmW - 12 && my < mmH + 10;
+      // FPS 为绝对瞄准（同跟随视角），不再请求指针锁定；点击画布即开火
       if (!onMini) mouse.down = true;
       if (game.player && game.player.dead && game.state !== 'END') {
-        const mates = game.entities.filter((ee) => ee.team === game.player.team && !ee.dead);
-        if (mates.length) game.spectateIdx = (game.spectateIdx + 1) % mates.length;
+        if (game.cyber && !game.cyber.ended) {
+          const bots = game.entities.filter((ee) => ee.bot && !ee.dead);
+          if (bots.length) game.spectateIdx = (game.spectateIdx + 1) % bots.length;
+        } else {
+          const mates = game.entities.filter((ee) => ee.team === game.player.team && !ee.dead);
+          if (mates.length) game.spectateIdx = (game.spectateIdx + 1) % mates.length;
+        }
       }
     }
     if (e.button === 2) mouse.rdown = true;
@@ -103,6 +135,15 @@ export function initInput(game, canvasRef) {
   }, false);
 
   canvasRef.addEventListener('contextmenu', (e) => e.preventDefault(), false);
+
+  document.addEventListener('pointerlockchange', () => {
+    // Esc 解锁兜底自动暂停（记分板开着时也暂停：Chrome 吞 Esc keydown，否则会落入未锁定未暂停的"裸奔"状态）
+    if (!document.pointerLockElement && game.viewMode === 'fps' &&
+        (game.state === 'BUY' || game.state === 'LIVE') &&
+        game.ui && !game.ui.isPaused() && !(game.ui.isBuyOpen && game.ui.isBuyOpen())) {
+      game.ui.pause();
+    }
+  }, false);
 
   windowRef.addEventListener('blur', () => {
     for (const k in keys) keys[k] = false;
@@ -178,7 +219,10 @@ export function switchNade(e, nade) {
 export function quickThrow(e, nade, gameRef) {
   if (!e || e.dead) return;
   switchNade(e, nade);
-  if (e.slot === 'nade:' + nade) fireWeapon(e, gameRef);
+  if (e.slot === 'nade:' + nade) {
+    e.fireCd = 0;
+    fireWeapon(e, gameRef);
+  }
 }
 
 export function setKey(game, code, down) {
