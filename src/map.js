@@ -213,7 +213,19 @@ const warnedDisconnected = new Set();
 const MAP_LAYOUT = {
   dust2: { entryDist: 340, holdDists: [100, 190, 300] },
   canal: { entryDist: 420, holdDists: [80, 150, 220] },
-  metro: { entryDist: 340, holdDists: [140, 260, 380] }
+  metro: { entryDist: 340, holdDists: [140, 260, 380] },
+  // 大型边境熔炉图（150×140）：地图更大，攻防距离更长，按实际比例放大
+  'foundry-port': { entryDist: 560, holdDists: [200, 360, 520] },
+  'foundry-ridge': { entryDist: 560, holdDists: [200, 360, 520] },
+  'foundry-ruin': { entryDist: 560, holdDists: [200, 360, 520] },
+  // forge 程序化熔炉（80×52）：中等尺寸
+  forge: { entryDist: 420, holdDists: [140, 240, 340] },
+  // 单挑小图（1v1）：紧凑攻防，防 AI 站太远摸不到
+  'duel-pit': { entryDist: 260, holdDists: [70, 120, 170] },
+  'duel-alley': { entryDist: 260, holdDists: [70, 120, 170] },
+  'duel-forge': { entryDist: 260, holdDists: [70, 120, 170] },
+  // 自定义编辑器地图：默认中等布局，避免回退 dust2 缩放参数在小图上失效
+  'custom-map': { entryDist: 420, holdDists: [140, 240, 340] }
 };
 
 function buildLanes(map) {

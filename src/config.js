@@ -100,14 +100,23 @@ export const DIFF = {
   }
 };
 
-export const MAP_AI = {
-  dust2: { ctSpread: 0.72, tSpread: 1.18 },
-  canal: { ctSpread: 0.68, tSpread: 1.20 },
-  metro: { ctSpread: 1.10, tSpread: 0.92 }
+export const MAP_CT_REACT = {
+  dust2: 0.6,
+  canal: 0.4,
+  metro: 0.55,
+  forge: 0.5,
+  'foundry-port': 0.5,
+  'foundry-ridge': 0.5,
+  'foundry-ruin': 0.5,
+  'duel-pit': 0.5,
+  'duel-alley': 0.5,
+  'duel-forge': 0.5,
+  'custom-map': 0.5
 };
 
 export const BOT_AI = {
   FOV: 1.15,
+  MAX_VIEW: 720,
   HEAR_RADIUS: 1000,
   HEAR_TTL: 1500,
   FLASH_ANGLE: 1.2,
