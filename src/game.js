@@ -538,8 +538,14 @@ export function setCustomBotsUpdater(fn) { modeBotsUpdate = fn; }
 function updateCam(game, dt) {
   let camTarget = game.player;
   if (game.player && game.player.dead) {
-    const mates = game.entities.filter((e) => e.team === game.player.team && !e.dead);
-    if (mates.length) camTarget = mates[game.spectateIdx % mates.length];
+    // 击杀镜头：死亡后 0.9s 锁定击杀者视角，随后切入队友观战
+    if (game.killCamT > 0) {
+      game.killCamT -= dt;
+      if (game.lastKiller && !game.lastKiller.dead) camTarget = game.lastKiller;
+    } else {
+      const mates = game.entities.filter((e) => e.team === game.player.team && !e.dead);
+      if (mates.length) camTarget = mates[game.spectateIdx % mates.length];
+    }
   }
   if (game.viewMode === 'follow' && camTarget && !camTarget.dead && !game.cyber) {
     // follow 相机 look-ahead：沿瞄准方向前置一小段，提升前方视野感知；空闲时平滑回落

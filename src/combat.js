@@ -440,6 +440,8 @@ export function killEntity(v, killer, weapon, head, game) {
   if (v === game.player) {
     v.streak = 0;
     game.lastKiller = killer;
+    // 击杀镜头：死亡后短暂锁定击杀者视角（0.9s），随后切入队友观战
+    game.killCamT = 0.9;
     emit('deathinfo', { killer: killer ? killer.name : '环境', weapon: wname, head: !!head });
     // 伤害报告：本回合造成总伤害 / 爆头数
     emit('damagereport', { dmg: Math.round(v.dmgGiven || 0), heads: v.dmgHeads || 0 });
