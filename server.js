@@ -49,7 +49,9 @@ const SECURITY_HEADERS = {
   'X-Content-Type-Options': 'nosniff',
   'Referrer-Policy': 'strict-origin-when-cross-origin',
   'X-Frame-Options': 'SAMEORIGIN',
-  'Cross-Origin-Resource-Policy': 'same-origin'
+  'Cross-Origin-Resource-Policy': 'same-origin',
+  'X-XSS-Protection': '1; mode=block',
+  'Permissions-Policy': 'camera=(), microphone=(), geolocation=(), payment=()'
 };
 
 const BLOCKED_PREFIXES = ['/.git', '/.autopilot', '/node_modules'];
