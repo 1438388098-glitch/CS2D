@@ -1310,7 +1310,7 @@ function updateDecalsNext(game) {
       mesh.visible = true;
       mesh.position.set(d.x || 0, groundElevationAt(d.x || 0, d.y || 0) + tile * 0.05, d.y || 0);
       mesh.rotation.set(0, -(d.angle || 0) - Math.PI / 2, 0);
-    } else if (d.type === 'spark' || d.type === 'hole') {
+    } else if (d.type === 'spark' || d.type === 'hole' || d.type === 'bullet') {
       seenPoint.add(d);
       let mesh = decalPointMeshes.get(d);
       if (!mesh) {
@@ -1319,9 +1319,24 @@ function updateDecalsNext(game) {
         dynamicGroup.add(mesh);
       }
       mesh.visible = true;
-      mesh.position.set(d.x || 0, groundElevationAt(d.x || 0, d.y || 0) + tile * 0.06, d.y || 0);
-      mesh.scale.setScalar(tile * (d.type === 'hole' ? 0.3 : 0.58));
-      mesh.material.opacity = Math.max(0.18, Math.min(1, (d.life || 1) * 0.12));
+      if (d.type === 'bullet') {
+        const map = getMap();
+        const grid = map && map.grid;
+        const c = tileToChar(grid, Math.floor((d.x || 0) / tile), Math.floor((d.y || 0) / tile));
+        const wallH = c === '=' || c === 'C' ? tile * 0.28 : tile * 0.78;
+        const back = tile * 0.56;
+        mesh.position.set(
+          (d.x || 0) - Math.cos(d.angle || 0) * back,
+          groundElevationAt(d.x || 0, d.y || 0) + wallH,
+          (d.y || 0) - Math.sin(d.angle || 0) * back
+        );
+        mesh.scale.setScalar(tile * 0.26);
+        mesh.material.opacity = Math.max(0.22, Math.min(1, (d.life || 1) * 0.15));
+      } else {
+        mesh.position.set(d.x || 0, groundElevationAt(d.x || 0, d.y || 0) + tile * 0.06, d.y || 0);
+        mesh.scale.setScalar(tile * (d.type === 'hole' ? 0.3 : 0.58));
+        mesh.material.opacity = Math.max(0.18, Math.min(1, (d.life || 1) * 0.12));
+      }
     }
   }
   for (const [d, mesh] of corpseMeshes) {
@@ -1363,7 +1378,7 @@ function makeCorpseMesh(T, team, tile) {
 function makeDecalPointMesh(T, type) {
   const mat = new T.SpriteMaterial({
     map: makeGlowTexture(),
-    color: type === 'hole' ? 0x0b0d0f : 0xffd166,
+    color: type === 'hole' || type === 'bullet' ? 0x0b0d0f : 0xffd166,
     transparent: true,
     opacity: 0.9,
     depthWrite: false

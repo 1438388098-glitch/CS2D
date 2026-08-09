@@ -185,7 +185,7 @@ function fireRay(e, game, ang, w, dmg, isPellet) {
         inWall = true;
         penMult *= 0.7;
         if (penMult < 0.49) { wallT = s * 6; break; }
-        addDecal(game, px, py, 'bullet');
+        addDecal(game, px, py, 'bullet', ang);
         emit('sfx', { name: 'penetrate', vol: 0.5, x: px, y: py, game });
       }
       continue;
@@ -225,10 +225,10 @@ function fireRay(e, game, ang, w, dmg, isPellet) {
     const hx = ox + cos * hitLen, hy = oy + sin * hitLen;
     spawnBlood(hx, hy, ang, head, game);
     game.tracers.push({ x1: ox, y1: oy, x2: hx, y2: hy, life: 0.09, team: e.team });
-    addDecal(game, hx, hy, 'hole');
+    addDecal(game, hx, hy, 'hole', ang);
   } else {
     game.tracers.push({ x1: ox, y1: oy, x2: tx, y2: ty, life: 0.09, team: e.team });
-    addDecal(game, tx, ty, 'spark');
+    addDecal(game, tx, ty, 'spark', ang);
     for (let sp = 0; sp < 6; sp++) {
       spawnParticle(game, { kind: 'spark', x: tx, y: ty, vx: Math.cos(ang + rand(-1, 1)) * rand(60, 260), vy: Math.sin(ang + rand(-1, 1)) * rand(60, 260), life: rand(0.1, 0.3), size: 1.5 });
     }
@@ -537,8 +537,8 @@ export function pickupWeapon(e, game) {
   }
 }
 
-export function addDecal(game, x, y, type) {
-  game.decals.push({ type, x, y, life: type === 'hole' ? 20 : 6 });
+export function addDecal(game, x, y, type, angle) {
+  game.decals.push({ type, x, y, angle, life: type === 'hole' ? 20 : 6 });
   if (game.decals.length > MAX_DECALS) game.decals.splice(0, game.decals.length - MAX_DECALS);
   redrawDecals(game);
 }

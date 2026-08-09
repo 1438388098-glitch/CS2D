@@ -87,6 +87,16 @@ try {
     pass('three.js corpse decal rendered: ' + decalStats.corpseObjects);
   }
 
+  const beforeBullet = decalStats ? decalStats.decalObjects : 0;
+  await cdp.eval(`(()=>{const g=window.__cs2d&&window.__cs2d.game;if(!g||!g.player)return false;g.decals.push({type:'bullet',x:g.player.x+160,y:g.player.y+120,angle:0.2,life:6});return true})()`);
+  await sleep(400);
+  const bulletStats = await cdp.eval(`(()=>{const g=window.__cs2d&&window.__cs2d.game;return g&&g._renderStats?g._renderStats:null})()`);
+  if (!bulletStats || bulletStats.decalObjects <= beforeBullet) {
+    fail('three.js bullet decal missing: ' + JSON.stringify(bulletStats));
+  } else {
+    pass('three.js bullet decal rendered: ' + bulletStats.decalObjects);
+  }
+
   await cdp.eval(`(()=>{const g=window.__cs2d&&window.__cs2d.game;const e=g&&g.entities&&g.entities.find((x)=>x&&x!==g.player);if(!e)return false;e.muzzleT=1;return true})()`);
   await sleep(350);
   const muzzleStats = await cdp.eval(`(()=>{const g=window.__cs2d&&window.__cs2d.game;return g&&g._renderStats?g._renderStats:null})()`);
