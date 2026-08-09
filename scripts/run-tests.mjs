@@ -16,11 +16,18 @@ const skipFiles = new Set([
   'verify-awp.mjs'
 ]);
 
-const tests = fs.readdirSync(testDir)
+const args = process.argv.slice(2);
+const filter = args.find((arg) => !arg.startsWith('-')) || null;
+
+let tests = fs.readdirSync(testDir)
   .filter((name) => /\.(?:cjs|js|mjs)$/i.test(name))
   .filter((name) => !skipPrefixes.some((prefix) => name.startsWith(prefix)))
   .filter((name) => !skipFiles.has(name))
   .sort();
+
+if (filter) {
+  tests = tests.filter((name) => name.includes(filter));
+}
 
 if (tests.length === 0) {
   console.error('run-tests: no test files discovered');
