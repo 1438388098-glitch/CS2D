@@ -3,6 +3,7 @@ import {
   shouldRerouteStuck,
   shouldPushLatePlant,
   shouldRetreatWithoutBomb,
+  shouldRetakeBomb,
   shouldRushPlant
 } from '../src/ai/rules.js';
 
@@ -41,5 +42,14 @@ assert.equal(shouldRetreatWithoutBomb({ team: 't', hasBomb: false }, 60, 2, 1), 
 assert.equal(shouldRetreatWithoutBomb({ team: 't', hasBomb: true }, 100, 2, 1), false, 'bomb carrier should never retreat');
 assert.equal(shouldRetreatWithoutBomb({ team: 't', hasBomb: false, bomb: { planted: true } }, 100, 2, 1), false, 'planted bomb should not trigger retreat');
 assert.equal(shouldRetreatWithoutBomb({ team: 't', hasBomb: false, bomb: { dropped: true } }, 100, 2, 1), false, 'dropped bomb should not trigger retreat');
+
+assert.equal(shouldRetakeBomb({ team: 'ct' }, true, 120, 2), true, 'near CT should retake even at round end');
+assert.equal(shouldRetakeBomb({ team: 'ct' }, true, 900, 30), true, 'CT with enough time should retake from distance');
+assert.equal(shouldRetakeBomb({ team: 'ct' }, true, 900, 2, 1, 4), false, 'far outnumbered CT should not throw away retake');
+assert.equal(shouldRetakeBomb({ team: 'ct' }, true, 900, 2, 1, 1), true, 'late 1v1 should still contest bomb');
+assert.equal(shouldRetakeBomb({ team: 't' }, true, 900, 30), false, 'T should not use CT retake rule');
+assert.equal(shouldRetakeBomb({ team: 'ct', dead: true }, true, 120, 30), false, 'dead CT cannot retake');
+assert.equal(shouldRetakeBomb({ team: 'ct', defusing: true }, true, 120, 30), false, 'defusing CT should stay on bomb');
+assert.equal(shouldRetakeBomb({ team: 'ct' }, false, 120, 30), false, 'unplanted bomb should not trigger retake');
 
 console.log('ai-rules: all PASS');

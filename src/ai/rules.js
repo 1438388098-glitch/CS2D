@@ -19,3 +19,10 @@ export function shouldRetreatWithoutBomb(e, roundTime, enAlive, myAlive, roundDu
   if (e.bomb && (e.bomb.planted || e.bomb.dropped)) return false;
   return roundTime > roundDur - lateAt && enAlive >= myAlive;
 }
+
+export function shouldRetakeBomb(e, planted, dist, timeLeft, myAlive = 1, enAlive = 1, minTime = 8, nearDist = 420) {
+  if (!e || e.team !== 'ct' || !planted) return false;
+  if (e.dead || e.defusing) return false;
+  if (timeLeft < minTime && dist > nearDist && enAlive > myAlive + 1) return false;
+  return true;
+}
