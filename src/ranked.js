@@ -91,7 +91,7 @@ export function newRankedState() {
       name: '玩家',
       mmr: 0,
       placement: { left: 5, wins: 0, kills: 0, deaths: 0 },
-      stats: { played: 0, w: 0, l: 0, kills: 0, deaths: 0, mvp: 0, streak: 0, bestStreak: 0 },
+      stats: { played: 0, w: 0, l: 0, kills: 0, deaths: 0, mvp: 0, streak: 0, bestStreak: 0, lossStreak: 0 },
       history: [],
       next: null
     }
@@ -112,7 +112,8 @@ export function loadRanked() {
       if (parsed && parsed.version === VERSION && parsed.player) {
         state = parsed;
         if (!state.player.history) state.player.history = [];
-        if (!state.player.stats) state.player.stats = { played: 0, w: 0, l: 0, kills: 0, deaths: 0, mvp: 0, streak: 0, bestStreak: 0 };
+        if (!state.player.stats) state.player.stats = { played: 0, w: 0, l: 0, kills: 0, deaths: 0, mvp: 0, streak: 0, bestStreak: 0, lossStreak: 0 };
+        if (!state.player.stats.lossStreak) state.player.stats.lossStreak = 0;
         return state;
       }
     } catch (e) { /* fallthrough */ }
@@ -203,6 +204,8 @@ export function applyRankedResult(s, r) {
   const placement = s.player.placement.left > 0;
   const tierBefore = s.player.mmr > 0 ? tierOf(s.player.mmr) : null;
   let delta = 0;
+  let lossProtect = false;
+  const nextLossStreak = win ? 0 : (s.player.stats.lossStreak || 0) + 1;
   if (placement) {
     s.player.placement.left--;
     if (win) s.player.placement.wins++;
@@ -217,6 +220,7 @@ export function applyRankedResult(s, r) {
     let d = 32 * ((win ? 1 : 0) - expected) + (mvp ? 3 : 0);
     // 连胜加成：3 连胜起 MMR 增益 ×1.25，让连赢上分更快、接近真实天梯手感
     if (win && s.player.stats.streak >= 3) d *= 1.25;
+    if (!win && nextLossStreak >= 3) { d *= 0.6; lossProtect = true; }
     delta = clamp(Math.round(d), -40, 40);
     s.player.mmr = clamp(s.player.mmr + delta, 400, 2500);
   }
@@ -230,12 +234,13 @@ export function applyRankedResult(s, r) {
   s.player.stats.played++;
   if (win) { s.player.stats.w++; s.player.stats.streak++; }
   else { s.player.stats.l++; s.player.stats.streak = 0; }
+  s.player.stats.lossStreak = nextLossStreak;
   s.player.stats.bestStreak = Math.max(s.player.stats.bestStreak, s.player.stats.streak);
   s.player.stats.kills += kills;
   s.player.stats.deaths += deaths;
   if (mvp) s.player.stats.mvp++;
   addHistory(s, { win, kills, deaths, mvp, oppMmr, oppName, mapId, score, delta, placement });
-  return { delta, placementDone: s.player.placement.left === 0 && placement, tierChange };
+  return { delta, placementDone: s.player.placement.left === 0 && placement, tierChange, lossProtect };
 }
 
 export function rankedEndMatch(game) {
@@ -260,6 +265,7 @@ export function rankedEndMatch(game) {
     if (res.tierChange === 'up') msg += ' · 段位晋升 ' + tierOf(s.player.mmr).name;
     else if (res.tierChange === 'down') msg += ' · 段位跌落 ' + tierOf(s.player.mmr).name;
     if (s.player.placement.left > 0) msg += ' · 剩余定级 ' + s.player.placement.left + ' 场';
+    if (res.lossProtect) msg += ' \u00b7 \u8fde\u8d25\u4fdd\u62a4';
     game.ui.showToast(msg);
   }
   return { ok: true, win, mvp, delta: res.delta, tierChange: res.tierChange };

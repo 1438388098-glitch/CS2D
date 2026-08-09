@@ -43,6 +43,16 @@ ok('regular mmr changed', res.delta !== 0 && s.player.mmr !== mmrBefore);
 ok('history cap', s.player.history.length <= 20);
 
 s = resetRanked();
+s.player.mmr = 1500;
+s.player.placement.left = 0;
+s.player.stats.lossStreak = 0;
+const loss1 = applyRankedResult(s, { win: false, kills: 1, deaths: 5, mvp: false, oppMmr: 1500, oppName: 'NAVI', mapId: 'dust2', score: [4, 9] });
+const loss2 = applyRankedResult(s, { win: false, kills: 1, deaths: 5, mvp: false, oppMmr: 1500, oppName: 'NAVI', mapId: 'dust2', score: [4, 9] });
+const loss3 = applyRankedResult(s, { win: false, kills: 1, deaths: 5, mvp: false, oppMmr: 1500, oppName: 'NAVI', mapId: 'dust2', score: [4, 9] });
+ok('loss streak tracked', s.player.stats.lossStreak === 3);
+ok('loss protection reduces third loss', loss3.lossProtect && loss3.delta > loss1.delta);
+
+s = resetRanked();
 s.player.mmr = 1300;
 s.player.placement.left = 0;
 save();
