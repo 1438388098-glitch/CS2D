@@ -91,6 +91,10 @@ const server = http.createServer((req, res) => {
     return;
   }
   if (urlPath === '/') urlPath = '/index.html';
+  if (urlPath.includes('\\') || urlPath.includes('\0')) {
+    sendStatus(res, 400, 'Bad Request');
+    return;
+  }
   // 敏感目录不下发（.git 等仓库内部文件）
   if (BLOCKED_PREFIXES.some((prefix) => urlPath === prefix || urlPath.startsWith(prefix + '/'))) {
     sendStatus(res, 403, 'Forbidden');
