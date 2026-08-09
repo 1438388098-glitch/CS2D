@@ -45,6 +45,8 @@ const SECURITY_HEADERS = {
   'Cross-Origin-Resource-Policy': 'same-origin'
 };
 
+const BLOCKED_PREFIXES = ['/.git', '/.autopilot', '/node_modules'];
+
 const COMPRESSIBLE_EXT = new Set(['.html', '.js', '.mjs', '.css', '.json', '.svg', '.txt', '.map']);
 
 function cacheControlFor(filePath) {
@@ -79,7 +81,7 @@ const server = http.createServer((req, res) => {
   }
   if (urlPath === '/') urlPath = '/index.html';
   // 敏感目录不下发（.git 等仓库内部文件）
-  if (urlPath.startsWith('/.git')) {
+  if (BLOCKED_PREFIXES.some((prefix) => urlPath === prefix || urlPath.startsWith(prefix + '/'))) {
     sendStatus(res, 403, 'Forbidden');
     return;
   }
