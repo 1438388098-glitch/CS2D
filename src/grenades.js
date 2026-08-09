@@ -59,9 +59,13 @@ export function updateGrenades(game, dt) {
           const d = Math.hypot(e.x - g.x, e.y - g.y);
           if (d > 800) continue;
           const fa = Math.atan2(g.y - e.y, g.x - e.x);
-          if (Math.abs(angDiff(e.angle, fa)) > BOT_AI.FLASH_ANGLE) continue;
+          const diff = Math.abs(angDiff(e.angle, fa));
+          if (diff > BOT_AI.FLASH_ANGLE) continue;
           if (!los(game, g.x, g.y, e.x, e.y, e.height)) continue;
-          const dur = (1 - d / 800) * 4;
+          // 距离 + 视角对齐双重衰减：远距或视野边缘的白屏时间更短，正对近处最久
+          const distF = Math.max(0, 1 - d / 800);
+          const angF = Math.max(0, 1 - diff / BOT_AI.FLASH_ANGLE);
+          const dur = (distF * 0.7 + angF * 0.3) * 4;
           if (e === game.player) {
             game.flashT = Math.max(game.flashT, dur);
             emit('flash', { opacity: Math.min(0.9, dur * 0.22) });
