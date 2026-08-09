@@ -77,6 +77,12 @@ try {
   } else {
     pass('performance budget and render stability active: ' + JSON.stringify(backend.stats.performance));
   }
+  const aimGuide = await cdp.eval(`(()=>{const g=window.__cs2d&&window.__cs2d.game;const p=g&&g.player;return {guide:g&&g._renderStats&&g._renderStats.aimGuide,aim:p&&p._aimHit}})()`);
+  if (!aimGuide || !aimGuide.guide || aimGuide.guide.laser !== 1 || aimGuide.guide.hitMarker !== 1 || aimGuide.guide.hitKind === 'none' || !aimGuide.aim || aimGuide.aim.hitKind === undefined) {
+    fail('three.js aim ray guide missing: ' + JSON.stringify(aimGuide));
+  } else {
+    pass('aim ray laser/hit marker active: ' + JSON.stringify(aimGuide.guide));
+  }
   const settingsApplied = await cdp.eval(`(()=>{const q=document.getElementById('renderQualitySel');const d=document.getElementById('dprSel');if(!q||!d)return false;q.value='60';q.dispatchEvent(new Event('input',{bubbles:true}));d.value='100';d.dispatchEvent(new Event('input',{bubbles:true}));return true})()`);
   await sleep(400);
   const settingsState = await cdp.eval(`(()=>{const g=window.__cs2d&&window.__cs2d.game;const s=g&&g._renderStats;return {quality:s&&s.quality,renderQuality:g&&g.renderQuality,dprLimit:g&&g.dprLimit}})()`);

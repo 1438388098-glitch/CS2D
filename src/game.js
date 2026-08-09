@@ -16,7 +16,7 @@ import {initOppModel} from './ai/oppmodel.js';
 import {canSeeInFog} from './fog.js';
 import { shouldRerouteStuck } from './ai/rules.js';
 import { stuckObjective } from './ai/stability.js';
-import { castLaserEnd as castLaserEndFps } from './fps-laser.js';
+import { castAimRay as castAimRayFps } from './fps-laser.js';
 
 const emit = (evt, p) => ctx.bus.emit(evt, p);
 
@@ -711,9 +711,10 @@ function updatePlayer(game, dt) {
     game.lastStep = { x: p.x, y: p.y, t: game.time, walk, team: p.team };
   }
   updatePlayerAim(game, dt);
+  p._aimHit = castAimRayFps(p, game);
   const held = weaponDef(p);
   if (held && held.kind !== 'knife') {
-    p.laserEnd = castLaserEndFps(p, game);
+    p.laserEnd = p._aimHit;
   } else {
     p.laserEnd = null;
   }

@@ -2,10 +2,11 @@ import { MAPS, WEAPONS } from './config.js';
 import { weaponDef, ammoFor, reserveFor } from './entities.js';
 import { effectiveSpread } from './ballistic.js';
 import { los, getMap } from './map.js';
-import { clamp } from './utils.js';
+import { clamp, angDiff } from './utils.js';
 import { crosshairSpreadPx, shouldDrawFpsSpreadCrosshair } from './crosshair.js';
 import { getBindLabel } from './keymap.js';
 import { fogEnabled } from './fog.js';
+import { castAimRay } from './fps-laser.js';
 
 let ctx = null;
 let layers = null;
@@ -55,6 +56,48 @@ export function fpsInteractAction(game) {
     return { label: '拾取 ' + (wd ? wd.name : d.wid), action: 'interact' };
   }
   return null;
+}
+
+// FPS 3D 模式的严格互动判定：不仅要进入半径，还必须被准星射线命中且无墙/烟遮挡。
+export function fpsAimInteractAction(game) {
+  const p = game && game.player;
+  if (!p || p.dead || game.viewMode !== 'fps' || (game.state !== 'BUY' && game.state !== 'LIVE')) return null;
+  const ray = p._aimHit || castAimRay(p, game, { range: 260 });
+  const aimedAt = (x, y, r = 190) => {
+    const d = Math.hypot(x - p.x, y - p.y);
+    if (d > r) return false;
+    const a = Math.atan2(y - p.y, x - p.x);
+    if (Math.abs(angDiff(a, p.angle || 0)) > 0.24) return false;
+    return los(game, p.x, p.y, x, y, p.height || 0);
+  };
+  if (game.bomb && game.bomb.dropped && p.team === 't' && aimedAt(game.bomb.x, game.bomb.y)) {
+    return { label: '拾取 C4', action: 'interact' };
+  }
+  if (game.bomb && game.bomb.planted && p.team === 'ct' && aimedAt(game.bomb.x, game.bomb.y, 210)) {
+    return { label: '拆除 C4', action: 'interact' };
+  }
+  if (p.hasBomb && !(game.bomb && game.bomb.planted)) {
+    const map = getMap();
+    const site = map && map.sites ? (game.tAttackSite === 'A' ? map.sites.A : map.sites.B) : null;
+    if (site) {
+      const inRect = p.x >= site.x0 && p.x <= site.x1 && p.y >= site.y0 && p.y <= site.y1;
+      const nearCenter = Math.hypot(p.x - site.cx, p.y - site.cy) <= 120;
+      const aim = Math.abs(angDiff(Math.atan2(site.cy - p.y, site.cx - p.x), p.angle || 0)) < 0.32;
+      const rayInSite = ray && ray.x >= site.x0 && ray.x <= site.x1 && ray.y >= site.y0 && ray.y <= site.y1;
+      if ((inRect || nearCenter) && (aim || rayInSite)) return { label: '安放 C4', action: 'interact' };
+    }
+  }
+  let bestDrop = null;
+  for (const d of game.drops || []) {
+    if (!aimedAt(d.x, d.y, 220)) continue;
+    const heldPrimary = p.weapons && p.weapons.primary;
+    if (heldPrimary === d.wid) continue;
+    const wd = WEAPONS[d.wid];
+    if (!bestDrop || Math.hypot(d.x - p.x, d.y - p.y) < bestDrop.d) {
+      bestDrop = { d: Math.hypot(d.x - p.x, d.y - p.y), label: '拾取 ' + (wd ? wd.name : d.wid), action: 'interact' };
+    }
+  }
+  return bestDrop ? { label: bestDrop.label, action: bestDrop.action } : null;
 }
 
 // FPS death spectate overlay data.
@@ -332,7 +375,7 @@ export function renderHud(game) {
     }
   }
   if (game.viewMode === 'fps' && p && !p.dead) {
-    const act = fpsInteractAction(game);
+    const act = fpsAimInteractAction(game);
     if (act) {
       const label = '[' + getBindLabel(act.action) + '] ' + act.label;
       ctx.save();

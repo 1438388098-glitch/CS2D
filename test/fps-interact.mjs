@@ -1,4 +1,4 @@
-import { fpsInteractAction } from '../src/hud.js';
+import { fpsInteractAction, fpsAimInteractAction } from '../src/hud.js';
 import { loadMap } from '../src/map.js';
 import { MAPS } from '../src/config.js';
 
@@ -54,6 +54,17 @@ function game(overrides = {}) {
 {
   const g = game({ player: player({ x: 500, y: 500, hasBomb: true }), bomb: { x: 100, y: 100, dropped: true, planted: false } });
   ok('far interaction is null', fpsInteractAction(g) === null);
+}
+
+{
+  const g = game({ bomb: { x: 150, y: 100, dropped: true, planted: false } });
+  const act = fpsAimInteractAction(g);
+  ok('aimed C4 pickup', act && act.action === 'interact' && act.label.indexOf('C4') >= 0);
+}
+
+{
+  const g = game({ player: player({ angle: Math.PI }), bomb: { x: 150, y: 100, dropped: true, planted: false } });
+  ok('not aimed C4 is null', fpsAimInteractAction(g) === null);
 }
 
 console.log('fps-interact: all PASS');

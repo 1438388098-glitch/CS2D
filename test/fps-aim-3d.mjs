@@ -1,6 +1,7 @@
 import { createGame, startMatch, update } from '../src/game.js';
 import { projectPitchPoint, pitchScreenHorizon } from '../src/render3d.js';
-import { castLaserEnd } from '../src/fps-laser.js';
+import { castLaserEnd, castAimRay } from '../src/fps-laser.js';
+import { loadMap } from '../src/map.js';
 
 function ok(name, cond) {
   if (!cond) throw new Error('fps-aim-3d: ' + name + ' FAIL');
@@ -120,6 +121,40 @@ function fresh() {
   p.pitch = 0.35;
   const up = castLaserEnd(p, g);
   ok('laser up endpoint above floor', up !== null && up.z > 0);
+}
+
+{
+  const rows = [
+    '#........#',
+    '#........#',
+    '#........#',
+    '#........#',
+    '#..D.....#',
+    '#........#',
+    '#........#',
+    '#........#',
+    '#........#',
+    '#........#'
+  ];
+  loadMap({ id: 'ray-test', name: 'ray', tile: 16, rows, allowDisconnected: true });
+  const base = {
+    x: 32,
+    y: 24,
+    angle: 0,
+    pitch: 0,
+    height: 0,
+    team: 'ct',
+    weapons: { primary: null, secondary: 'glock', nades: {} },
+    slot: 'secondary'
+  };
+  const wall = castAimRay(base, { entities: [] });
+  ok('aim ray hits wall face', wall && wall.hitKind === 'wall' && Math.abs(wall.distance - 114) < 6 && wall.solid === true);
+  const crateP = { ...base, y: 72 };
+  const crate = castAimRay(crateP, { entities: [] });
+  ok('aim ray hits crate before wall', crate && crate.hitKind === 'crate' && Math.abs(crate.distance - 18) < 0.01);
+  const enemy = { x: 50, y: 72, dead: false, team: 't', rad: 8, height: 0 };
+  const ent = castAimRay(crateP, { entities: [enemy] });
+  ok('aim ray hits enemy before crate', ent && ent.hitKind === 'entity' && ent.entity === enemy && ent.distance < 24);
 }
 
 console.log('fps-aim-3d: all PASS');

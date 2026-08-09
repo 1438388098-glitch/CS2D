@@ -235,6 +235,7 @@ export function render3dNext(game) {
     updateLighting(map, game);
     updateDynamicNext(game);
     updateViewmodelNext(game);
+    updateAimGuide(game);
     const teamMarkers = Array.from(entityMeshes.values()).filter((g) => {
       const m = g.getObjectByName('teamMarker');
       return !!(m && m.visible);
@@ -332,6 +333,7 @@ export function render3dNext(game) {
         contactAO: 1
       },
       fpsHud: game._fpsHudStats || { teamBars: 0, siteMarkers: 0, bombMarkers: 0, damageNumbers: 0, roundTimer: 0, bombTimer: 0, ammoHud: 0, statusLines: 0 },
+      aimGuide: game._aimGuide || { laser: 0, hitMarker: 0, hitKind: 'none', distance: 0 },
       performance: perf,
       mapIdentity: mapIdentityStats || { spawnMarkers: 0, flags: 0, namePlate: 0 },
       smokeRenderMode: 'cloud',
@@ -1922,6 +1924,74 @@ function makeWeatherPoints(map, theme, count) {
   points.name = 'weather:' + (theme.weather && theme.weather.kind || 'none');
   points.frustumCulled = false;
   return points;
+}
+
+function updateAimGuide(game) {
+  if (!dynamicGroup || !THREE) return;
+  const p = game && game.player;
+  const ray = p && p._aimHit;
+  const tile = (getMap() && getMap().tile) || 16;
+  let laser = dynamicGroup.getObjectByName('aimLaser');
+  let marker = dynamicGroup.getObjectByName('aimMarker');
+  if (!ray || !Number.isFinite(ray.x) || !Number.isFinite(ray.y)) {
+    if (laser) laser.visible = false;
+    if (marker) marker.visible = false;
+    game._aimGuide = { laser: 0, hitMarker: 0, hitKind: 'none', distance: 0 };
+    return;
+  }
+  if (!laser) {
+    const geo = new THREE.BufferGeometry().setFromPoints([
+      new THREE.Vector3(0, 0, 0),
+      new THREE.Vector3(1, 0, 1)
+    ]);
+    laser = new THREE.Line(geo, new THREE.LineBasicMaterial({
+      color: 0xff5548,
+      transparent: true,
+      opacity: 0.78,
+      depthWrite: false
+    }));
+    laser.name = 'aimLaser';
+    laser.frustumCulled = false;
+    dynamicGroup.add(laser);
+  }
+  const eyeZ = groundElevationAt(p.x, p.y) + (0.5 + (p.height || 0)) * tile;
+  const pos = laser.geometry.attributes.position;
+  pos.setXYZ(0, p.x, eyeZ, p.y);
+  pos.setXYZ(1, ray.x, ray.z, ray.y);
+  pos.needsUpdate = true;
+  laser.visible = true;
+  if (!marker) {
+    marker = new THREE.Sprite(new THREE.SpriteMaterial({
+      map: makeGlowTexture(),
+      color: 0xff6a4d,
+      transparent: true,
+      opacity: 0.95,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false,
+      depthTest: false
+    }));
+    marker.name = 'aimMarker';
+    marker.frustumCulled = false;
+    dynamicGroup.add(marker);
+  }
+  const kindColor = ray.hitKind === 'entity' ? 0xff4d4d :
+    ray.hitKind === 'crate' ? 0xffcf5e :
+      ray.hitKind === 'barrel' ? 0xff9a4d :
+        ray.hitKind === 'floor' ? 0x58e08c : 0xffb347;
+  marker.material.color.setHex(kindColor);
+  marker.position.set(ray.x, ray.z + tile * 0.05, ray.y);
+  marker.scale.setScalar(Math.max(tile * 0.18, Math.min(tile * 0.5, tile * 0.28)));
+  marker.visible = true;
+  game._aimGuide = {
+    laser: 1,
+    hitMarker: 1,
+    hitKind: ray.hitKind || 'range',
+    distance: Math.round((ray.distance || 0) * 10) / 10,
+    x: Math.round(ray.x * 10) / 10,
+    y: Math.round(ray.y * 10) / 10,
+    z: Math.round((ray.z || 0) * 10) / 10,
+    entity: ray.entity ? 1 : 0
+  };
 }
 
 function updateDynamicNext(game) {
