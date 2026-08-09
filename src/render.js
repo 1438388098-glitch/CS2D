@@ -313,30 +313,33 @@ function drawEntities(game) {
       ctx.lineTo(20, -8);
       ctx.stroke();
     } else if (w) {
+      // 后坐偏移：开火时枪身沿后向退，与准星扩散视觉一致
+      const recoilOff = (e.recoil || 0) * 4;
       const gl = gunLen(w);
       ctx.fillStyle = '#1a1d22';
-      ctx.fillRect(4, -3, gl, 6);
+      ctx.fillRect(4 - recoilOff, -3, gl, 6);
       ctx.fillStyle = '#0c0e11';
-      ctx.fillRect(4, -2, gl, 2);
+      ctx.fillRect(4 - recoilOff, -2, gl, 2);
       if (w.kind === 'sniper') {
         ctx.strokeStyle = '#33383f';
         ctx.lineWidth = 3;
         ctx.beginPath();
-        ctx.moveTo(14, -5);
-        ctx.lineTo(14, 5);
+        ctx.moveTo(14 - recoilOff, -5);
+        ctx.lineTo(14 - recoilOff, 5);
         ctx.stroke();
       }
     }
     if (e.muzzleT > 0 && w) {
+      const recoilOff = (e.recoil || 0) * 4;
       ctx.fillStyle = '#ffd75e';
       ctx.beginPath();
-      ctx.moveTo(gunLen(w), -5);
-      ctx.lineTo(gunLen(w) + 16, -1);
-      ctx.lineTo(gunLen(w), 3);
+      ctx.moveTo(gunLen(w) - recoilOff, -5);
+      ctx.lineTo(gunLen(w) - recoilOff + 16, -1);
+      ctx.lineTo(gunLen(w) - recoilOff, 3);
       ctx.fill();
       ctx.fillStyle = '#fff3c0';
       ctx.beginPath();
-      ctx.arc(gunLen(w), 0, 4, 0, Math.PI * 2);
+      ctx.arc(gunLen(w) - recoilOff, 0, 4, 0, Math.PI * 2);
       ctx.fill();
     }
     ctx.restore();
