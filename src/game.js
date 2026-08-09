@@ -13,6 +13,7 @@ import { clamp, lerp, rand, angDiff } from './utils.js';
 import { pressed, getBindLabel } from './keymap.js';
 import { initInfo, prune, intelBroadcast } from './info.js';
 import { initOppModel } from './ai/oppmodel.js';
+import { shouldRerouteStuck } from './ai/rules.js';
 
 const emit = (evt, p) => ctx.bus.emit(evt, p);
 
@@ -344,7 +345,7 @@ export function update(game, dt) {
       e.stuckT += dt;
       if (e.stuckT > 0.6) {
         const sd = Math.hypot(e.x - e.lastSample.x, e.y - e.lastSample.y);
-        if (sd < 6 && e.path && e.pathI < e.path.length) {
+        if (shouldRerouteStuck(e, sd)) {
           const obj = botObjectiveForStuck(e, game);
           pathTo(e, obj.x + rand(-80, 80), obj.y + rand(-80, 80));
         }
