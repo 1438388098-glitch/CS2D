@@ -3,47 +3,81 @@ import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import crypto from 'crypto';
+import { spawnSync } from 'child_process';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = __dirname;
 const PORT = process.env.PORT || 8080;
 
+// Major 模式自检：modes.js 若被外部还原为旧版（缺 48 队赛制），启动时自动修复
+try {
+  const majorSrc = fs.readFileSync(path.join(ROOT, 'src', 'modes.js'), 'utf8');
+  if (!majorSrc.includes('setMajorSim')) {
+    console.log('  [Major] modes.js 缺少 48 队赛制代码，正在自动修复...');
+    const pr = spawnSync(process.execPath, [path.join(ROOT, 'scripts', 'patch-major.mjs')], { encoding: 'utf8' });
+    if (pr.status !== 0) console.error('  [Major] 自动修复失败: ' + (pr.stderr || pr.stdout || ''));
+    else console.log('  [Major] 修复完成（48 队 + IEM 2026 赛制）');
+  }
+} catch (err) {
+  console.error('  [Major] 自检异常: ' + err.message);
+}
+
 const MIME = {
   '.html': 'text/html; charset=utf-8',
   '.js': 'text/javascript; charset=utf-8',
+  '.mjs': 'text/javascript; charset=utf-8',
   '.css': 'text/css; charset=utf-8',
   '.json': 'application/json; charset=utf-8',
   '.png': 'image/png',
+  '.jpg': 'image/jpeg',
+  '.jpeg': 'image/jpeg',
   '.svg': 'image/svg+xml',
-  '.ico': 'image/x-icon'
+  '.ico': 'image/x-icon',
+  '.mp3': 'audio/mpeg',
+  '.wav': 'audio/wav'
 };
+
+const SECURITY_HEADERS = {
+  'X-Content-Type-Options': 'nosniff',
+  'Referrer-Policy': 'strict-origin-when-cross-origin',
+  'X-Frame-Options': 'SAMEORIGIN',
+  'Cross-Origin-Resource-Policy': 'same-origin'
+};
+
+function sendStatus(res, code, body) {
+  res.writeHead(code, { 'Content-Type': 'text/plain; charset=utf-8', ...SECURITY_HEADERS });
+  res.end(body);
+}
 
 const server = http.createServer((req, res) => {
   let urlPath;
   try {
     urlPath = decodeURIComponent(req.url.split('?')[0]);
   } catch (e) {
-    res.writeHead(400);
-    res.end('Bad Request');
+    sendStatus(res, 400, 'Bad Request');
     return;
   }
   if (urlPath === '/') urlPath = '/index.html';
+  // 敏感目录不下发（.git 等仓库内部文件）
+  if (urlPath.startsWith('/.git')) {
+    sendStatus(res, 403, 'Forbidden');
+    return;
+  }
   const filePath = path.join(ROOT, urlPath);
   const rel = path.relative(ROOT, filePath);
   if (rel.startsWith('..') || path.isAbsolute(rel)) {
-    res.writeHead(403);
-    res.end('Forbidden');
+    sendStatus(res, 403, 'Forbidden');
     return;
   }
   fs.readFile(filePath, (err, data) => {
     if (err) {
-      res.writeHead(404);
-      res.end('Not Found');
+      sendStatus(res, 404, 'Not Found');
       return;
     }
     const headers = {
       'Content-Type': MIME[path.extname(filePath).toLowerCase()] || 'application/octet-stream',
-      'Cache-Control': 'no-cache'
+      'Cache-Control': 'no-cache',
+      ...SECURITY_HEADERS
     };
     res.writeHead(200, headers);
     if (req.method === 'HEAD') {
@@ -166,20 +200,22 @@ server.on('upgrade', (req, socket) => {
   socket.on('error', () => {});
 });
 
-function listen(port) {
+function listen(port, tries = 0) {
+  if (tries > 20) throw new Error('No free port found');
+  server.removeAllListeners('error');
   server.listen(port, () => {
-  const url = `http://localhost:${port}`;
-  console.log('');
-  console.log('  CS2D · 平面反恐精英');
-  console.log('  ─────────────────────────────');
-  console.log(`  已启动: ${url}`);
-  console.log('  按 Ctrl+C 退出');
-  console.log('');
+    const url = `http://localhost:${port}`;
+    console.log('');
+    console.log('  CS2D 路 平面反恐精英');
+    console.log('  ────────────────────────────');
+    console.log(`  已启动  ${url}`);
+    console.log('  按 Ctrl+C 退出');
+    console.log('');
   });
-  server.on('error', (err) => {
+  server.once('error', (err) => {
     if (err.code === 'EADDRINUSE') {
       console.log('  port ' + port + ' in use, trying ' + (port + 1));
-      listen(port + 1);
+      server.close(() => listen(port + 1, tries + 1));
     } else {
       throw err;
     }
