@@ -194,6 +194,15 @@ export function renderMinimap(game) {
     }
   }
 
+  // 出生点标记：T 暖色/CT 冷色小方块，便于快速判断双方出生区域
+  const mmap = getMap();
+  if (mmap) {
+    mctx.fillStyle = 'rgba(255,160,60,0.55)';
+    for (const sp of mmap.spawns.t || []) mctx.fillRect(ox + sp.x * s - 1.5, oy + sp.y * s - 1.5, 3, 3);
+    mctx.fillStyle = 'rgba(70,150,255,0.55)';
+    for (const sp of mmap.spawns.ct || []) mctx.fillRect(ox + sp.x * s - 1.5, oy + sp.y * s - 1.5, 3, 3);
+  }
+
   // 烟雾区：灰斑覆盖对应区域，提升战术可读性
   if (game.smokes && game.smokes.length) {
     mctx.fillStyle = 'rgba(170,175,185,0.5)';
