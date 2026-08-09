@@ -57,6 +57,15 @@ try {
   } else {
     pass('entity weapon meshes present: ' + backend.stats.entityWeapons);
   }
+  const vmState = await cdp.eval(`(()=>{const g=window.__cs2d&&window.__cs2d.game;const p=g&&g.player;if(!g||!p)return null;p.fireCd=0.3;p.lastSlot='secondary';p.reloading=true;p.reloadT=0.4;p.scoped=true;g.scopeT=0.5;return true})()`);
+  await sleep(400);
+  const vmStats = await cdp.eval(`(()=>{const g=window.__cs2d&&window.__cs2d.game;const c=window.__cs2d;return {backend:c&&c.render3d&&c.render3d.backend,gameBackend:g&&g._render3dBackend,parts:g&&g._renderStats?g._renderStats.viewmodelParts:0,objects:g&&g._renderStats?g._renderStats.viewmodelObjects:0}})()`);
+  if (!vmState || !vmStats || vmStats.backend !== 'next' || vmStats.gameBackend !== 'next' || !vmStats.parts || vmStats.parts < 6 || vmStats.objects < 1) {
+    fail('three.js detailed viewmodel missing: ' + JSON.stringify(vmStats));
+  } else {
+    pass('detailed viewmodel rendered: ' + JSON.stringify(vmStats));
+  }
+  await cdp.eval(`(()=>{const g=window.__cs2d&&window.__cs2d.game;const p=g&&g.player;if(!g||!p)return false;p.fireCd=0;p.lastSlot=null;p.reloading=false;p.reloadT=0;p.scoped=false;g.scopeT=0;return true})()`);
   if (!backend || !backend.stats || backend.stats.bakedGround !== 1) {
     fail('three.js baked ground layer missing: ' + JSON.stringify(backend && backend.stats));
   } else {

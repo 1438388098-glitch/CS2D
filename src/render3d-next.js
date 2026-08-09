@@ -2,6 +2,7 @@
 // 保留旧 render3d.js 作为降级路径；本模块在 Three.js 可用前不阻塞游戏启动。
 import { getMap, groundElevationAt } from './map.js';
 import { themeOf } from './textures.js';
+import { WEAPONS } from './config.js';
 
 export function tileToChar(grid, tx, ty) {
   if (!grid || !grid.length) return '#';
@@ -217,6 +218,11 @@ export function render3dNext(game) {
       mapObjects: mapGroup ? mapGroup.children.length : 0,
       dynamicObjects: dynamicGroup ? dynamicGroup.children.length : 0,
       viewmodelObjects: viewmodelGroup ? viewmodelGroup.children.length : 0,
+      viewmodelParts: viewmodelGroup ? (() => {
+        let n = 0;
+        viewmodelGroup.traverse((o) => { if (o.isMesh) n++; });
+        return n;
+      })() : 0,
       teamMarkers,
       entityWeapons,
       entityMuzzles,
@@ -1237,13 +1243,29 @@ function updateViewmodelNext(game) {
   const recoil = Math.min(p.recoil || 0, 1);
   const reloadT = p.reloadT || 0;
   const reloading = !!p.reloading;
-  viewmodelGroup.position.set(0.26 * tile, -0.18 * tile + recoil * 0.018 * tile + (reloading ? Math.sin(reloadT * 22) * 0.02 * tile : 0), -0.48 * tile);
-  viewmodelGroup.rotation.set(reloading ? Math.sin(reloadT * 10) * 0.12 : recoil * 0.14, 0, recoil * 0.08);
+  const switching = !!p.lastSlot && p.lastSlot !== p.slot && (p.fireCd || 0) > 0.12;
+  const scopeT = Math.max(0, Math.min(1, (game.scopeT || 0) * (p.scoped ? 1 : 0)));
+  const switchY = switching ? 0.26 * tile + Math.sin((p.fireCd || 0) * 12) * 0.05 * tile : 0;
+  const switchRot = switching ? Math.cos((p.fireCd || 0) * 10) * 0.45 : 0;
+  viewmodelGroup.position.set(
+    0.26 * tile + scopeT * 0.38 * tile,
+    -0.18 * tile + recoil * 0.018 * tile + (reloading ? Math.sin(reloadT * 22) * 0.02 * tile : 0) - switchY + scopeT * 0.12 * tile,
+    -0.48 * tile - scopeT * 0.12 * tile
+  );
+  viewmodelGroup.rotation.set(reloading ? Math.sin(reloadT * 10) * 0.12 : recoil * 0.14, scopeT * 0.38 + switchRot, recoil * 0.08 + scopeT * 0.16);
   const muzzle = viewmodelGroup.getObjectByName('muzzle');
   if (muzzle) {
     muzzle.visible = (p.muzzleT || 0) > 0;
     if (muzzle.visible) muzzle.scale.setScalar(0.85 + Math.random() * 0.35);
   }
+  const mag = viewmodelGroup.getObjectByName('mag');
+  if (mag) {
+    const drop = reloading ? 0.9 + Math.sin(reloadT * 9) * 0.2 : 0;
+    mag.rotation.x = drop * (p.slot === 'primary' ? 1 : 0.8);
+    mag.position.y = reloading ? -0.18 * tile / 16 - drop * 0.12 * tile / 16 : -0.18 * tile / 16;
+  }
+  const sight = viewmodelGroup.getObjectByName('frontSight');
+  if (sight) sight.visible = !p.scoped;
 }
 
 function updateEntities(game) {
@@ -1656,8 +1678,30 @@ function buildViewmodel(p) {
   const isKnife = p.slot === 'knife' || (p.weapons && p.weapons.knife && p.slot === 'knife');
   const isNade = p.slot && String(p.slot).indexOf('nade:') === 0;
   const group = new T.Group();
-  const metal = new T.MeshLambertMaterial({ color: 0x38434b });
-  const dark = new T.MeshLambertMaterial({ color: 0x22282c });
+  const wid = isKnife ? 'knife' : isNade ? null : (p.slot === 'primary' ? (p.weapons && p.weapons.primary) : (p.weapons && p.weapons.secondary));
+  const w = wid && WEAPONS[wid] ? WEAPONS[wid] : null;
+  const kind = w && w.kind ? w.kind : 'rifle';
+  const longGun = kind === 'rifle' || kind === 'sniper' || kind === 'smg' || kind === 'shotgun';
+  const metal = new T.MeshStandardMaterial({
+    color: kind === 'sniper' ? 0x596876 : kind === 'smg' ? 0x444c55 : 0x38434b,
+    roughness: 0.42,
+    metalness: 0.46
+  });
+  const dark = new T.MeshStandardMaterial({
+    color: 0x22282c,
+    roughness: 0.72,
+    metalness: 0.22
+  });
+  const guardMat = new T.MeshStandardMaterial({
+    color: 0x4d565e,
+    roughness: 0.68,
+    metalness: 0.16
+  });
+  const gripMat = new T.MeshStandardMaterial({
+    color: 0x342d28,
+    roughness: 0.9,
+    metalness: 0.04
+  });
   if (isNade) {
     const nade = new T.Mesh(new T.SphereGeometry(0.30 * s, 10, 8), new T.MeshLambertMaterial({ color: 0x4f5b42 }));
     group.add(nade);
@@ -1668,16 +1712,31 @@ function buildViewmodel(p) {
     blade.position.z = -0.18 * s;
     group.add(blade, handle);
   } else {
-    const rifle = !p.weapons || p.slot === 'primary';
-    const receiver = new T.Mesh(new T.BoxGeometry(0.16 * s, 0.18 * s, rifle ? 0.72 * s : 0.48 * s), metal);
-    const barrel = new T.Mesh(new T.CylinderGeometry(0.045 * s, 0.045 * s, rifle ? 0.55 * s : 0.25 * s, 8), dark);
+    const receiver = new T.Mesh(new T.BoxGeometry(0.17 * s, 0.16 * s, longGun ? 0.62 * s : 0.48 * s), metal);
+    receiver.name = 'receiver';
+    const barrel = new T.Mesh(new T.CylinderGeometry(0.038 * s, 0.05 * s, longGun ? 0.64 * s : 0.28 * s, 8), dark);
+    barrel.name = 'barrel';
     barrel.rotation.x = Math.PI / 2;
-    barrel.position.set(0, 0.02 * s, -0.52 * s);
-    const mag = new T.Mesh(new T.BoxGeometry(0.12 * s, 0.28 * s, 0.20 * s), dark);
-    mag.position.set(0, -0.18 * s, 0.05 * s);
-    const stock = new T.Mesh(new T.BoxGeometry(0.14 * s, 0.14 * s, rifle ? 0.34 * s : 0.22 * s), dark);
-    stock.position.z = 0.45 * s;
-    group.add(receiver, barrel, mag, stock);
+    barrel.position.set(0, 0.02 * s, longGun ? -0.62 * s : -0.34 * s);
+    const handguard = new T.Mesh(new T.BoxGeometry(0.15 * s, 0.12 * s, longGun ? 0.36 * s : 0.20 * s), guardMat);
+    handguard.name = 'handguard';
+    handguard.position.set(0, 0.02 * s, longGun ? -0.40 * s : -0.20 * s);
+    const mag = new T.Mesh(new T.BoxGeometry(0.12 * s, longGun ? 0.30 * s : 0.24 * s, 0.18 * s), dark);
+    mag.name = 'mag';
+    mag.position.set(0, -0.18 * s, longGun ? 0.02 * s : 0.05 * s);
+    const stock = new T.Mesh(new T.BoxGeometry(0.13 * s, 0.14 * s, longGun ? 0.36 * s : 0.22 * s), dark);
+    stock.name = 'stock';
+    stock.position.z = longGun ? 0.42 * s : 0.30 * s;
+    const grip = new T.Mesh(new T.BoxGeometry(0.11 * s, 0.22 * s, 0.12 * s), gripMat);
+    grip.name = 'grip';
+    grip.position.set(0, -0.18 * s, longGun ? 0.20 * s : 0.14 * s);
+    const rail = new T.Mesh(new T.BoxGeometry(0.09 * s, 0.05 * s, longGun ? 0.52 * s : 0.30 * s), dark);
+    rail.name = 'rail';
+    rail.position.set(0, 0.10 * s, longGun ? -0.12 * s : -0.02 * s);
+    const sight = new T.Mesh(new T.BoxGeometry(0.03 * s, 0.09 * s, 0.09 * s), metal);
+    sight.name = 'frontSight';
+    sight.position.set(0, 0.15 * s, longGun ? -0.62 * s : -0.36 * s);
+    group.add(receiver, barrel, handguard, mag, stock, grip, rail, sight);
   }
   const muzzle = new T.Sprite(new T.SpriteMaterial({
     map: makeGlowTexture(),
@@ -1688,7 +1747,7 @@ function buildViewmodel(p) {
     depthWrite: false
   }));
   muzzle.name = 'muzzle';
-  muzzle.position.set(0, 0.02 * s, -0.82 * s);
+  muzzle.position.set(0, 0.02 * s, longGun ? -0.98 * s : -0.58 * s);
   muzzle.visible = false;
   group.add(muzzle);
   viewmodelGroup.add(group);
