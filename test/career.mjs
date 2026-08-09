@@ -1,6 +1,6 @@
 import {
   loadCareer, resetCareer, setStorage, setRng, getState, train, sellPlayer, buyPlayer, candidates,
-  nextSeason, seasonReport, abandonPendingMatch, settlePlayerMatch, simulatePlayerMatch, careerEndMatch, startCareerMatch, save, __clearStateForTest, findPlayerFixture, findCupMatch, cupMap, nextMatch, trainTeammate
+  nextSeason, seasonReport, abandonPendingMatch, settlePlayerMatch, simulatePlayerMatch, careerEndMatch, startCareerMatch, save, __clearStateForTest, findPlayerFixture, findCupMatch, cupMap, nextMatch, trainTeammate, careerMapPool
 } from '../src/career.js';
 import { effectiveSpread } from '../src/ballistic.js';
 import { startReload } from '../src/combat.js';
@@ -35,6 +35,7 @@ ok('initial attrs', s.player.attrs.aim === 50 && s.player.attrs.move === 50 && s
 ok('roster 4', s.team.roster.length === 4);
 ok('fixtures 56', s.season.fixtures.length === 56);
 ok('standings 8', s.season.standings.length === 8);
+ok('career map pool expanded', careerMapPool().includes('duel-pit') && careerMapPool().includes('duel-alley') && careerMapPool().includes('duel-forge'));
 ok('league 乙级', s.team.league === '乙级');
 ok('real player team', s.player.name === 'donk' && s.team.name === 'Team Spirit');
 ok('real roster names', s.team.roster.every((p) => ['sh1ro', 'chopper', 'magixx', 'zont1x'].includes(p.name)));

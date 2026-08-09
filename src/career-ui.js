@@ -19,7 +19,10 @@ const ATTR_CN = { aim: '射击', move: '移速', react: '反应', nade: '道具'
 const CUP_CN = { QF: '八强', SF: '四强', F: '决赛' };
 const MAP_CN = { dust2: '沙漠遗址', canal: '运河小镇', metro: '地铁枢纽' };
 function cn(v, map) { return map[v] || v; }
-function mapName(id) { return MAP_CN[id] || id; }
+function mapName(id) {
+  const extra = { forge: '\u7194\u7089\u5de5\u574a', 'duel-pit': '\u6597\u6280\u5751', 'duel-alley': '\u6b8b\u5df7\u5bf9\u51b3', 'duel-forge': '\u7194\u7089\u5355\u6311' };
+  return MAP_CN[id] || extra[id] || id;
+}
 function cupRoundLabel(n) { return n === 3 ? '冠军' : n === 2 ? '亚军' : n === 1 ? '四强' : n === 0 ? '八强' : '未参加'; }
 
 export function initCareerUi(documentRef, gameRef) {

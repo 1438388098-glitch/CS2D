@@ -1,12 +1,14 @@
 import { ROUND } from './config.js';
-import {registerMode} from './registry.js';
+import {registerMode, registerMap} from './registry.js';
 import {setupMatchEntities, startRound, startMatch} from './game.js';
 import {teamDiffParams, simScore} from './modes.js';
+import {DUEL_MAPS} from './duel-maps.js';
 
 const SAVE_KEY = 'cs2d_career';
 const BACKUP_KEY = 'cs2d_career_backup';
 const VERSION = 2; // v2：旧档重建，使用真实战队/选手中文信息
-const MAP_IDS = ['dust2', 'canal', 'metro', 'forge'];
+const MAP_IDS = ['dust2', 'canal', 'metro', 'forge', 'duel-pit', 'duel-alley', 'duel-forge'];
+for (const m of DUEL_MAPS) registerMap({ id: m.id, name: m.name, accent: m.accent, rows: m.rows, mode: 'career' });
 const ROLES = ['突破', '补枪', '指挥', '自由人'];
 const PLAYER_TEAM = { name: 'Team Spirit', tag: 'SPIRIT' };
 const PLAYER_LINEUP = ['sh1ro', 'chopper', 'magixx', 'zont1x']; // 玩家扮演 donk
@@ -100,6 +102,7 @@ function refreshPlayerRating(s) {
 export function xpNeeded(level) { return level * 500; }
 export function titleFor(level) { return TITLES[Math.max(0, Math.min(level - 1, TITLES.length - 1))]; }
 export function trainingTiers() { return TRAIN_TIERS.map((t) => ({ ...t })); }
+export function careerMapPool() { return MAP_IDS.slice(); }
 
 function makeRoster() {
   return ROLES.map((role, i) => {
