@@ -787,7 +787,77 @@ function drawWalls(F, zbuf) {
 }
 
 // ===== Sprite 集合与绘制（墙体之后，zbuf 逐列裁剪）=====
+// 3D 标记数据：FPS 模式每帧收集实体屏幕位置，供队友穿透墙标记 / 名牌 / 遇敌箭头共用。
+function updateFpsMarkers(F, zbuf) {
+  const g = F.g;
+  const p = g.player;
+  const markers = [];
+  if (!p || g.viewMode !== 'fps') {
+    g._fpsEntityMarkers = markers;
+    return;
+  }
+  const T = mapTile();
+  for (const e of g.entities) {
+    if (e.dead || e === F.ent) continue;
+    const dx = e.x - F.cx, dy = e.y - F.cy;
+    const depth = dx * F.cos + dy * F.sin;
+    if (depth < NEAR || depth > F.fogMax) continue;
+    const perp = -dx * F.sin + dy * F.cos;
+    const headH = 44 * F.U + (e.height || 0) * T;
+    const pt = projectAt(F, depth, perp, headH, false);
+    if (!pt) continue;
+    const sx = pt.sx;
+    let occluded = false;
+    const x0 = Math.max(0, Math.floor(sx - 3));
+    const x1 = Math.min(F.iw - 1, Math.ceil(sx + 3));
+    for (let c = x0; c <= x1; c++) {
+      if (zbuf[c] && zbuf[c].d < depth) { occluded = true; break; }
+    }
+    markers.push({
+      team: e.team,
+      bot: e.bot,
+      name: e.name || '?',
+      hp: e.hp || 0,
+      depth,
+      nx: sx / F.iw,
+      ny: pt.sy / F.ih,
+      occluded,
+      isKiller: g.lastKiller === e && p.dead
+    });
+  }
+  g._fpsEntityMarkers = markers;
+}
+
+// 队友穿透墙标记：即使被墙体遮挡也显示屏幕位置，避免 3D 模式跟丢队友。
+function drawTeammateMarkers(F) {
+  const g = F.g;
+  const p = g.player;
+  if (!p || g.viewMode !== 'fps' || !g._fpsEntityMarkers) return;
+  const t = F.cctx;
+  for (const m of g._fpsEntityMarkers) {
+    if (m.team !== p.team) continue;
+    const sx = m.nx * F.iw;
+    const sy = m.ny * F.ih;
+    const a = m.occluded ? 0.55 : 0.9;
+    t.save();
+    t.globalAlpha = a;
+    t.fillStyle = '#58e08a';
+    t.strokeStyle = 'rgba(0,0,0,0.65)';
+    t.lineWidth = 1.5;
+    t.beginPath();
+    t.moveTo(sx, sy - 7);
+    t.lineTo(sx + 5.5, sy - 1);
+    t.lineTo(sx, sy + 5);
+    t.lineTo(sx - 5.5, sy - 1);
+    t.closePath();
+    t.fill();
+    t.stroke();
+    t.restore();
+  }
+}
+
 function drawSprites(F, zbuf, alive, p) {
+  updateFpsMarkers(F, zbuf);
   const sprites = [];
   collectEntities(F, sprites);
   collectSmokes(F, sprites);
@@ -803,6 +873,7 @@ function drawSprites(F, zbuf, alive, p) {
   drawTracers(F);
   drawLaser(F, alive, p);
   drawSpectatePlate(F); // D3 观战名牌（排序绘制后手画，始终可见）
+  drawTeammateMarkers(F);
 }
 
 // ===== B3 伤害数字（combat.js 的 game.dmgPops：上浮淡出，描黑边可读）=====
