@@ -4,6 +4,7 @@ import {
   shouldPushLatePlant,
   shouldRetreatWithoutBomb,
   shouldRetakeBomb,
+  canRerouteAgain,
   shouldRushDefuser,
   shouldKeepPath,
   shouldRotateToHot,
@@ -73,5 +74,10 @@ assert.equal(shouldKeepPath({ path: [{ x: 0, y: 0 }, { x: 100, y: 0 }], pathI: 0
 assert.equal(shouldKeepPath({ path: [{ x: 0, y: 0 }, { x: 100, y: 0 }], pathI: 0 }, 10, 10, 12, 10), false, 'stationary bot should be eligible for reroute');
 assert.equal(shouldKeepPath({ path: null, pathI: 0 }, 10, 10, 70, 10), false, 'bot without path should not keep path');
 assert.equal(shouldKeepPath({ path: [{ x: 0, y: 0 }], pathI: 1 }, 10, 10, 70, 10), false, 'completed path should not be kept');
+
+assert.equal(canRerouteAgain({}, null, 10), true, 'bot without reroute history may reroute');
+assert.equal(canRerouteAgain({}, 9.2, 10), true, 'cooldown boundary should allow reroute');
+assert.equal(canRerouteAgain({}, 9.3, 10), false, 'reroute within cooldown should be blocked');
+assert.equal(canRerouteAgain(null, 9.3, 10), false, 'missing bot should not reroute');
 
 console.log('ai-rules: all PASS');

@@ -44,3 +44,8 @@ export function shouldKeepPath(e, startX, startY, x, y, minProgress = 30) {
   if (!e || !e.path || e.pathI >= e.path.length) return false;
   return Math.hypot(x - startX, y - startY) >= minProgress;
 }
+
+export function canRerouteAgain(e, lastRerouteAt, now, cooldown = 0.8) {
+  if (!e) return false;
+  return !lastRerouteAt || now - lastRerouteAt >= cooldown;
+}
