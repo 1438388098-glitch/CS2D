@@ -77,13 +77,35 @@ function applyRemote(msg) {
   const e = game.entities.find((x) => x.netRole === 'remote');
   if (!e) return;
   if (msg.team !== e.team) return;
-  e.x = msg.x; e.y = msg.y; e.angle = msg.angle; e.hp = msg.hp;
+  // 位置插值：新快照到来时把上一目标位置存为插值起点，新位置为目标，渲染层在两者间平滑
+  if (e._netTx !== undefined && (msg.x !== e._netTx || msg.y !== e._netTy)) {
+    e._netPx = e._netTx;
+    e._netPy = e._netTy;
+    e._netT0 = typeof performance !== 'undefined' ? performance.now() : Date.now();
+  } else if (e._netPx === undefined) {
+    e._netPx = msg.x; e._netPy = msg.y;
+    e._netT0 = typeof performance !== 'undefined' ? performance.now() : Date.now();
+  }
+  e._netTx = msg.x; e._netTy = msg.y;
+  e.angle = msg.angle; e.hp = msg.hp;
   e.vx = msg.vx || 0; e.vy = msg.vy || 0; e.dead = !!msg.dead;
   if (msg.weapon) {
     e.weapons.primary = msg.weapon;
     e.slot = 'primary';
   }
   if (msg.ammo !== undefined) e.ammoMap[msg.weapon || e.weapons.primary || 'glock'] = msg.ammo;
+}
+
+// 渲染插值：按快照间隔（~33ms）在上一目标与当前目标间线性平滑远程实体位置
+export function smoothRemote(gameRef, dt) {
+  if (!gameRef) return;
+  const e = gameRef.entities && gameRef.entities.find((x) => x.netRole === 'remote');
+  if (!e || e._netPx === undefined || e._netTx === undefined) return;
+  const now = typeof performance !== 'undefined' ? performance.now() : Date.now();
+  const span = Math.max(1, now - e._netT0);
+  const t = Math.min(1, span / 33);
+  e.x = e._netPx + (e._netTx - e._netPx) * t;
+  e.y = e._netPy + (e._netTy - e._netPy) * t;
 }
 
 function startHost() {

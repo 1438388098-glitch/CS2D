@@ -18,7 +18,7 @@ import {nextRenderScale} from './render-scale.js';
 import {initCareerUi} from './career-ui.js';
 import {initRankedUi} from './ranked-ui.js';
 import {majorAction} from './modes.js';
-import {initLan, hostStartMatchNow} from './lan.js';
+import {initLan, hostStartMatchNow, smoothRemote} from './lan.js';
 import {openMapEditor, closeMapEditor, saveEditorMap, playEditorMapNow, installSavedEditorMap} from './map-editor.js';
 
 const canvas = document.getElementById('game');
@@ -127,6 +127,7 @@ function startLoop() {
         if (game.over) break;
       }
       const tR0 = performance.now();
+      smoothRemote(game, dt);
       if (game.viewMode === 'fps' && fpsCameraEntity(game)) {
         if (render3dNextReady()) {
           render3dNext(game);
