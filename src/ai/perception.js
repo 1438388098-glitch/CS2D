@@ -5,6 +5,7 @@ import {fogEnabled, hasLineOfSight} from '../fog.js';
 import {recordOppPos} from './oppmodel.js';
 
 const SPATIAL_CELL = 240;
+const AI_VIEW_CAP = 680;
 
 function buildSpatial(game, tick) {
   const grid = new Map();
@@ -35,8 +36,8 @@ function nearbySpatial(e, game, radius) {
 
 export function findVisibleEnemy(e, game) {
   let best = null;
-  let bestD = Math.min((e.aiParams || diffOf(game)).view, viewCap(game), BOT_AI.MAX_VIEW || Infinity);
-  if (fogEnabled(game)) bestD = Math.min(bestD, 560);
+  let bestD = Math.min((e.aiParams || diffOf(game)).view, viewCap(game), BOT_AI.MAX_VIEW || Infinity, AI_VIEW_CAP);
+  if (fogEnabled(game)) bestD = Math.min(bestD, 540);
   let bestScore = -Infinity;
   const tick = Math.floor(game.time * 30);
   if (!game.spatial || game.spatial.tick !== tick) buildSpatial(game, tick);

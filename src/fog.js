@@ -27,9 +27,11 @@ export function castRayEndpoint(game, x, y, angle, radius, step = 8) {
   return { x: px, y: py };
 }
 
-export function canSeeInFog(game, viewer, target, radius = 560) {
+const FOG_RADIUS = 540;
+
+export function canSeeInFog(game, viewer, target, radius = FOG_RADIUS) {
   if (!fogEnabled(game)) return true;
-  radius = Math.min(radius, 560);
+  radius = Math.min(radius, FOG_RADIUS);
   const d = Math.hypot(target.x - viewer.x, target.y - viewer.y);
   if (d > radius) return false;
   // 兼容历史距离辅助：viewer 落在墙内时保留距离判断，实际对局中玩家/bot 始终在可行走格。
@@ -37,13 +39,13 @@ export function canSeeInFog(game, viewer, target, radius = 560) {
   return los(game, viewer.x, viewer.y, target.x, target.y, viewer.height || 0);
 }
 
-export function hasLineOfSight(game, viewer, target, radius = 560) {
+export function hasLineOfSight(game, viewer, target, radius = FOG_RADIUS) {
   if (!viewer || !target) return false;
   if (!los(game, viewer.x, viewer.y, target.x, target.y, viewer.height || 0)) return false;
   return canSeeInFog(game, viewer, target, radius);
 }
 
-export function castVisionPolygon(game, x, y, radius = 560, rays = 72) {
+export function castVisionPolygon(game, x, y, radius = FOG_RADIUS, rays = 72) {
   const points = [];
   for (let i = 0; i < rays; i++) {
     const a = (i / rays) * Math.PI * 2;
