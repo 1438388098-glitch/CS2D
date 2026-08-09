@@ -6,7 +6,7 @@ import { teamDiffParams, simScore } from './modes.js';
 const SAVE_KEY = 'cs2d_ranked';
 const BACKUP_KEY = 'cs2d_ranked_backup';
 const VERSION = 1;
-const MAP_IDS = ['dust2', 'canal', 'metro'];
+const MAP_IDS = ['dust2', 'canal', 'metro', 'forge'];
 const TIERS = [
   { key: 'bronze', label: '青铜', min: 0, width: 1000 },
   { key: 'silver', label: '白银', min: 1000, width: 200 },

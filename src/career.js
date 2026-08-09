@@ -6,7 +6,7 @@ import {teamDiffParams, simScore} from './modes.js';
 const SAVE_KEY = 'cs2d_career';
 const BACKUP_KEY = 'cs2d_career_backup';
 const VERSION = 2; // v2：旧档重建，使用真实战队/选手中文信息
-const MAP_IDS = ['dust2', 'canal', 'metro'];
+const MAP_IDS = ['dust2', 'canal', 'metro', 'forge'];
 const ROLES = ['突破', '补枪', '指挥', '自由人'];
 const PLAYER_TEAM = { name: 'Team Spirit', tag: 'SPIRIT' };
 const PLAYER_LINEUP = ['sh1ro', 'chopper', 'magixx', 'zont1x']; // 玩家扮演 donk
