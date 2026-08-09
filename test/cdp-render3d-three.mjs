@@ -57,6 +57,11 @@ try {
   } else {
     pass('resource caches and quality guards active: ' + JSON.stringify({ textureCache: backend.stats.textureCacheSize, geometryCache: backend.stats.geometryCacheSize, quality: backend.stats.quality, pixelRatio: backend.stats.pixelRatio }));
   }
+  if (!backend || !backend.stats || !backend.stats.lighting || backend.stats.lighting.bounceLight !== 1 || backend.stats.lighting.shadowFrustum <= 0 || backend.stats.lighting.shadowFrustum >= 1800 || backend.stats.lighting.contactAO !== 1) {
+    fail('three.js lighting/AO guards missing: ' + JSON.stringify(backend && backend.stats && backend.stats.lighting));
+  } else {
+    pass('soft shadow/bounce/contact AO active: ' + JSON.stringify(backend.stats.lighting));
+  }
   const settingsApplied = await cdp.eval(`(()=>{const q=document.getElementById('renderQualitySel');const d=document.getElementById('dprSel');if(!q||!d)return false;q.value='60';q.dispatchEvent(new Event('input',{bubbles:true}));d.value='100';d.dispatchEvent(new Event('input',{bubbles:true}));return true})()`);
   await sleep(400);
   const settingsState = await cdp.eval(`(()=>{const g=window.__cs2d&&window.__cs2d.game;const s=g&&g._renderStats;return {quality:s&&s.quality,renderQuality:g&&g.renderQuality,dprLimit:g&&g.dprLimit}})()`);

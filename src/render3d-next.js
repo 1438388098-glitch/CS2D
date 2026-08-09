@@ -58,6 +58,7 @@ let canvasRef = null;
 let layersRef = null;
 let cameraLight = null;
 let cameraFill = null;
+let bounceLight = null;
 let entityMeshes = new Map();
 let dropMeshes = new Map();
 let grenadeMeshes = new Map();
@@ -119,6 +120,7 @@ function disposeRenderer() {
   };
   cameraLight = null;
   cameraFill = null;
+  bounceLight = null;
   mapKey = '';
   entityMeshes = new Map();
   dropMeshes = new Map();
@@ -162,6 +164,7 @@ export async function initRenderer3dNext(canvas, layers) {
     renderer.setPixelRatio(Math.min((typeof window !== 'undefined' && window.devicePixelRatio) || 1, 2));
     renderer.shadowMap.enabled = true;
     renderer.shadowMap.type = T.PCFSoftShadowMap;
+    renderer.shadowMap.autoUpdate = true;
     renderer.outputColorSpace = T.SRGBColorSpace;
     renderer.toneMapping = T.ACESFilmicToneMapping;
     renderer.toneMappingExposure = 0.92;
@@ -195,6 +198,10 @@ export async function initRenderer3dNext(canvas, layers) {
     scene.add(cameraLight.target);
     cameraFill = new T.PointLight(0xffe8c8, 0.65, 1100, 1.8);
     camera.add(cameraFill);
+    bounceLight = new T.DirectionalLight(0xffffff, 0.26);
+    bounceLight.position.set(-600, 160, -420);
+    scene.add(bounceLight);
+    scene.add(bounceLight.target);
     return true;
   } catch (err) {
     console.error('[render3d-next] init failed:', err);
@@ -216,7 +223,7 @@ export function render3dNext(game) {
     const ent = fpsCameraEntity(game);
     if (!ent) return;
     updateCamera(game, ent, map);
-    updateLighting(map);
+    updateLighting(map, game);
     updateDynamicNext(game);
     updateViewmodelNext(game);
     const teamMarkers = Array.from(entityMeshes.values()).filter((g) => {
@@ -290,6 +297,13 @@ export function render3dNext(game) {
       weatherPoints: weatherPoints ? weatherPoints.geometry.attributes.position.count : 0,
       weatherKind: weatherKey || 'none',
       atmosphere,
+      lighting: {
+        shadowMapSize: cameraLight ? cameraLight.shadow.mapSize.x : 0,
+        shadowFrustum: cameraLight ? cameraLight.shadow.camera.right - cameraLight.shadow.camera.left : 0,
+        shadowType: renderer && renderer.shadowMap ? renderer.shadowMap.type : 0,
+        bounceLight: bounceLight ? 1 : 0,
+        contactAO: 1
+      },
       fpsHud: game._fpsHudStats || { teamBars: 0, siteMarkers: 0, bombMarkers: 0, damageNumbers: 0 },
       drawCalls: renderer && renderer.info && renderer.info.render ? renderer.info.render.calls : 0,
       quality,
@@ -563,7 +577,7 @@ function updateCamera(game, ent, map) {
   camera.rotation.x = 0;
 }
 
-function updateLighting(map) {
+function updateLighting(map, game) {
   if (!cameraLight || !map) return;
   const cx = map.W / 2;
   const cz = map.H / 2;
@@ -572,15 +586,21 @@ function updateLighting(map) {
   const sun = sky.sun || [255, 214, 150];
   const atmo = theme.atmo || {};
   const haze = atmo.haze || 0.5;
-  cameraLight.position.set(cx + 420 + haze * 220, 420 + haze * 260, cz + 260);
-  cameraLight.target.position.set(cx, 0, cz);
+  const cam = camera && camera.position ? camera.position : null;
+  const lx = cam ? Math.max(0, Math.min(map.W, cam.x)) : cx;
+  const lz = cam ? Math.max(0, Math.min(map.H, cam.z)) : cz;
+  cameraLight.position.set(lx + 420 + haze * 220, 420 + haze * 260, lz + 260);
+  cameraLight.target.position.set(lx, 0, lz);
   cameraLight.color.setRGB(sun[0] / 255, sun[1] / 255, sun[2] / 255);
   cameraLight.intensity = 1.7 + haze * 0.9;
-  cameraLight.shadow.camera.left = -Math.max(map.W, 900);
-  cameraLight.shadow.camera.right = Math.max(map.W, 900);
-  cameraLight.shadow.camera.top = Math.max(map.H, 900);
-  cameraLight.shadow.camera.bottom = -Math.max(map.H, 900);
+  const shadowHalf = Math.min(780, Math.max(520, Math.max(map.W, map.H) * 0.32));
+  cameraLight.shadow.camera.left = -shadowHalf;
+  cameraLight.shadow.camera.right = shadowHalf;
+  cameraLight.shadow.camera.top = shadowHalf;
+  cameraLight.shadow.camera.bottom = -shadowHalf;
   cameraLight.shadow.camera.updateProjectionMatrix();
+  cameraLight.shadow.normalBias = 0.018;
+  cameraLight.shadow.bias = -0.0005;
   if (hemiLight) {
     const ground = atmo.fogColor || [89, 97, 90];
     hemiLight.color.setRGB(0.81 + haze * 0.16, 0.85 + haze * 0.1, 0.95);
@@ -590,6 +610,16 @@ function updateLighting(map) {
   if (cameraFill) {
     cameraFill.color.setRGB(sun[0] / 255, sun[1] / 255, sun[2] / 255);
     cameraFill.intensity = 0.42 + haze * 0.34;
+  }
+  if (bounceLight) {
+    const floor = theme.floor || [36, 39, 44];
+    const br = Math.min(1, (floor[0] / 255) * 1.45);
+    const bg = Math.min(1, (floor[1] / 255) * 1.45);
+    const bb = Math.min(1, (floor[2] / 255) * 1.45);
+    bounceLight.color.setRGB(br, bg, bb);
+    bounceLight.intensity = 0.16 + (1 - haze) * 0.13;
+    bounceLight.position.set(cameraLight.position.x - 720, 160, cameraLight.position.z - 480);
+    bounceLight.target.position.set(lx, 0, lz);
   }
   atmosphere.mapId = map.id;
   atmosphere.sun = sun.slice();
@@ -808,18 +838,19 @@ function addInstancedWallVariants(group, T, counts, geometry, materials, fill) {
 }
 
 function groundAOAt(grid, tx, ty) {
-  let minDist = 4;
+  let occ = 0;
   for (let dy = -2; dy <= 2; dy++) {
     for (let dx = -2; dx <= 2; dx++) {
       const c = tileToChar(grid, tx + dx, ty + dy);
-      if (c === '#' || c === '=' || c === 'C' || c === 'o' || c === '^' || c === 'R') {
-        minDist = Math.min(minDist, Math.max(Math.abs(dx), Math.abs(dy)));
-      }
+      if (c !== '#' && c !== '=' && c !== 'C' && c !== 'o' && c !== '^' && c !== 'R') continue;
+      const d = Math.max(Math.abs(dx), Math.abs(dy));
+      if (d > 2) continue;
+      let w = d === 0 ? 0.2 : d === 1 ? 0.1 : 0.025;
+      if (dx === 0 || dy === 0) w *= 1.35;
+      occ += w;
     }
   }
-  if (minDist <= 1) return 0.78 + minDist * 0.08;
-  if (minDist === 2) return 0.92;
-  return 1;
+  return Math.max(0.56, Math.min(1, 1 - occ));
 }
 
 function setGroundVertexColors(geo, w, h, grid, tile, map) {
