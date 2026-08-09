@@ -52,6 +52,11 @@ try {
   } else {
     pass('scene stats: ' + JSON.stringify(backend.stats));
   }
+  if (!backend || !backend.stats || backend.stats.teamMarkers < 1) {
+    fail('three.js teammate markers missing: ' + JSON.stringify(backend && backend.stats));
+  } else {
+    pass('teammate markers visible: ' + backend.stats.teamMarkers);
+  }
   if (!backend || !backend.stats || backend.stats.mapObjects < 4) {
     fail('three.js map props missing: ' + JSON.stringify(backend && backend.stats));
   } else {
@@ -79,7 +84,7 @@ try {
   await cdp.eval(`(()=>{const g=window.__cs2d&&window.__cs2d.game;if(g)g.viewMode='fps';return true})()`);
   await sleep(1800);
   const switched = await cdp.eval(`(()=>{const g=window.__cs2d&&window.__cs2d.game;const c=window.__cs2d;return {map:g&&g.opts&&g.opts.mapId,backend:c&&c.render3d&&c.render3d.backend,stats:g&&g._renderStats}})()`);
-  if (!switched || switched.map !== 'canal' || switched.backend !== 'next' || !switched.stats || switched.stats.dynamicObjects < 1 || switched.stats.viewmodelObjects < 1) {
+  if (!switched || switched.map !== 'canal' || switched.backend !== 'next' || !switched.stats || switched.stats.dynamicObjects < 1 || switched.stats.viewmodelObjects < 1 || switched.stats.teamMarkers < 1) {
     fail('map switch with three.js failed: ' + JSON.stringify(switched));
   } else {
     pass('map switch with three.js: ' + JSON.stringify(switched));

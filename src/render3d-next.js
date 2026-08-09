@@ -165,6 +165,10 @@ export function render3dNext(game) {
     updateLighting(map);
     updateDynamicNext(game);
     updateViewmodelNext(game);
+    const teamMarkers = Array.from(entityMeshes.values()).filter((g) => {
+      const m = g.getObjectByName('teamMarker');
+      return !!(m && m.visible);
+    }).length;
     const dpr = game.dpr || 1;
     const cssW = canvasRef.width / dpr;
     const cssH = canvasRef.height / dpr;
@@ -189,6 +193,7 @@ export function render3dNext(game) {
       mapObjects: mapGroup ? mapGroup.children.length : 0,
       dynamicObjects: dynamicGroup ? dynamicGroup.children.length : 0,
       viewmodelObjects: viewmodelGroup ? viewmodelGroup.children.length : 0,
+      teamMarkers,
       drawCalls: renderer && renderer.info && renderer.info.render ? renderer.info.render.calls : 0
     };
   } catch (err) {
@@ -252,6 +257,7 @@ function updateCamera(game, ent, map) {
   const eye = 0.5 * ((map && map.tile) || 16);
   const elev = groundElevationAt(ent.x || 0, ent.y || 0);
   camera.position.set(ent.x || 0, eye + elev, ent.y || 0);
+  if (skyMesh) skyMesh.position.set(camera.position.x, 0, camera.position.z);
   camera.rotation.set(0, -(ent.angle || 0) - Math.PI / 2, 0);
   camera.rotation.x = 0;
 }
@@ -279,8 +285,10 @@ function buildMapScene(map, layers) {
 
   buildSky(map);
 
-  const floorTex = textureFrom(layers && layers.floorTex, Math.max(1, w / 8), Math.max(1, h / 8));
-  const floorNorm = normalMapFor(layers && layers.floorTex, Math.max(1, w / 8), Math.max(1, h / 8));
+  const floorRX = Math.max(2, Math.round(w / 180));
+  const floorRY = Math.max(2, Math.round(h / 180));
+  const floorTex = textureFrom(layers && layers.floorTex, floorRX, floorRY);
+  const floorNorm = normalMapFor(layers && layers.floorTex, floorRX, floorRY);
   const floorMat = new T.MeshStandardMaterial({
     map: floorTex,
     normalMap: floorNorm,
@@ -290,7 +298,8 @@ function buildMapScene(map, layers) {
     metalness: 0.02,
     vertexColors: true
   });
-  const floorGeo = new T.PlaneGeometry(w, h, Math.min(56, Math.max(8, Math.floor(Math.max(w, h) / 220))), Math.min(56, Math.max(8, Math.floor(Math.max(w, h) / 220))));
+  const floorSeg = Math.min(64, Math.max(24, Math.floor(Math.max(w, h) / 110)));
+  const floorGeo = new T.PlaneGeometry(w, h, floorSeg, floorSeg);
   setGroundVertexColors(floorGeo, w, h);
   const ground = new T.Mesh(floorGeo, floorMat);
   ground.rotation.x = -Math.PI / 2;
@@ -380,6 +389,7 @@ function buildMapScene(map, layers) {
   addInstancedBarrels(mapGroup, T, counts.barrel, barrelMat);
   addInstancedWater(mapGroup, T, grid, tile, counts.water, waterMat, deepWaterMat);
   addInstancedWallCaps(mapGroup, T, grid, tile, counts.wall, counts.thin, capMat);
+  addInstancedWallBases(mapGroup, T, grid, tile, counts.wall, counts.thin);
   addInstancedSites(mapGroup, T, grid, tile);
   addSiteMarkers(mapGroup, T, map, tile);
   addInstancedDecos(mapGroup, T, layers && layers.decos, tile);
@@ -523,7 +533,10 @@ function normalMapFor(source, repeatX, repeatY) {
     tex.wrapS = THREE.RepeatWrapping;
     tex.wrapT = THREE.RepeatWrapping;
     tex.repeat.set(repeatX || 1, repeatY || 1);
-    tex.anisotropy = 4;
+    tex.generateMipmaps = true;
+    tex.minFilter = THREE.LinearMipmapLinearFilter;
+    tex.magFilter = THREE.LinearFilter;
+    tex.anisotropy = 8;
     normalMapCache.set(source, tex);
     return tex;
   } catch (err) {
@@ -573,6 +586,37 @@ function addInstancedWallCaps(group, T, grid, tile, wallCount, thinCount, materi
         const y = (isThin ? tile * 0.55 : tile) + tile * 0.035;
         setInstanceTransform(T, mesh, i, tx * tile + tile / 2, y, ty * tile + tile / 2, 1, 1, 1, 0, 0, 0);
         mesh.setColorAt(i, new T.Color(wallColor(c)));
+        i++;
+      }
+    }
+    group.add(mesh);
+  };
+  add(wallCount, false);
+  add(thinCount, true);
+}
+
+function addInstancedWallBases(group, T, grid, tile, wallCount, thinCount) {
+  if (!wallCount && !thinCount) return;
+  const baseMat = new T.MeshStandardMaterial({
+    color: 0x24272c,
+    roughness: 0.96,
+    metalness: 0.03
+  });
+  const add = (count, isThin) => {
+    if (!count) return;
+    const geo = new T.BoxGeometry(tile * (isThin ? 1.12 : 1.18), tile * 0.09, tile * (isThin ? 1.12 : 1.18));
+    const mesh = new T.InstancedMesh(geo, baseMat, count);
+    mesh.name = isThin ? 'thinWallBases' : 'wallBases';
+    mesh.receiveShadow = true;
+    let i = 0;
+    for (let ty = 0; ty < grid.length && i < count; ty++) {
+      const row = grid[ty] || [];
+      for (let tx = 0; tx < row.length && i < count; tx++) {
+        const c = row[tx];
+        if (isThin ? c !== '=' : c !== '#') continue;
+        const y = tile * 0.045;
+        setInstanceTransform(T, mesh, i, tx * tile + tile / 2, y, ty * tile + tile / 2, 1, 1, 1, 0, 0, 0);
+        mesh.setColorAt(i, new T.Color(isThin ? 0x2f2a25 : 0x2b2e34));
         i++;
       }
     }
@@ -796,7 +840,10 @@ function textureFrom(source, repeatX, repeatY) {
   tex.wrapS = THREE.RepeatWrapping;
   tex.wrapT = THREE.RepeatWrapping;
   tex.repeat.set(repeatX || 1, repeatY || 1);
-  tex.anisotropy = 4;
+  tex.generateMipmaps = true;
+  tex.minFilter = THREE.LinearMipmapLinearFilter;
+  tex.magFilter = THREE.LinearFilter;
+  tex.anisotropy = 8;
   return tex;
 }
 
@@ -895,6 +942,8 @@ function updateEntities(game) {
     const tile = (getMap() && getMap().tile) || 16;
     group.position.set(e.x || 0, groundElevationAt(e.x || 0, e.y || 0) + (e.crouched ? tile * 0.28 : tile * 0.0), e.y || 0);
     group.rotation.set(0, -(e.angle || 0) - Math.PI / 2, 0);
+    const marker = group.getObjectByName('teamMarker');
+    if (marker) marker.visible = !!(game.player && e.team === game.player.team);
     const walk = (e.bobPhase || 0);
     const legA = group.getObjectByName('legA');
     const legB = group.getObjectByName('legB');
@@ -936,7 +985,16 @@ function makeCharacter(T, e, tile) {
   armA.position.set(-tile * 0.43, tile * 0.78, 0);
   const armB = armA.clone();
   armB.position.x = tile * 0.43;
-  group.add(body, head, legA, legB, armA, armB);
+  const marker = new T.Mesh(new T.ConeGeometry(tile * 0.24, tile * 0.62, 6), new T.MeshBasicMaterial({
+    color: team,
+    transparent: true,
+    opacity: 0.95,
+    depthWrite: false
+  }));
+  marker.name = 'teamMarker';
+  marker.position.y = tile * 1.92;
+  marker.renderOrder = 8;
+  group.add(body, head, legA, legB, armA, armB, marker);
   return group;
 }
 
