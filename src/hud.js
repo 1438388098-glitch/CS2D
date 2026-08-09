@@ -1,9 +1,10 @@
-import { MAPS } from './config.js';
+import { MAPS, WEAPONS } from './config.js';
 import { weaponDef, ammoFor } from './entities.js';
 import { effectiveSpread } from './ballistic.js';
 import { los, getMap } from './map.js';
 import { clamp } from './utils.js';
 import { crosshairSpreadPx, shouldDrawFpsSpreadCrosshair } from './crosshair.js';
+import { getBindLabel } from './keymap.js';
 
 let ctx = null;
 let layers = null;
@@ -24,6 +25,36 @@ export function setMiniZoom(z) {
 }
 
 export function isMiniZoomed() { return mmZoom === 2; }
+
+// FPS mode interaction target: pure logic used by HUD and tests.
+export function fpsInteractAction(game) {
+  const p = game && game.player;
+  if (!p || p.dead || game.viewMode !== 'fps' || (game.state !== 'BUY' && game.state !== 'LIVE')) return null;
+  const near = (x, y, r = 120) => Math.hypot(x - p.x, y - p.y) <= r;
+  if (game.bomb && game.bomb.dropped && p.team === 't' && near(game.bomb.x, game.bomb.y)) {
+    return { label: '拾取 C4', action: 'interact' };
+  }
+  if (game.bomb && game.bomb.planted && p.team === 'ct' && near(game.bomb.x, game.bomb.y, 140)) {
+    return { label: '拆除 C4', action: 'interact' };
+  }
+  if (p.hasBomb && !(game.bomb && game.bomb.planted)) {
+    const map = getMap();
+    const site = map && map.sites ? (game.tAttackSite === 'A' ? map.sites.A : map.sites.B) : null;
+    if (site) {
+      const inRect = p.x >= site.x0 && p.x <= site.x1 && p.y >= site.y0 && p.y <= site.y1;
+      const nearCenter = near(site.cx, site.cy, 90);
+      if (inRect || nearCenter) return { label: '安放 C4', action: 'interact' };
+    }
+  }
+  for (const d of game.drops || []) {
+    if (!near(d.x, d.y)) continue;
+    const heldPrimary = p.weapons && p.weapons.primary;
+    if (heldPrimary === d.wid) continue;
+    const wd = WEAPONS[d.wid];
+    return { label: '拾取 ' + (wd ? wd.name : d.wid), action: 'interact' };
+  }
+  return null;
+}
 
 function rr(mctx, x, y, w, h, r) {
   mctx.beginPath();
@@ -223,6 +254,22 @@ export function renderHud(game) {
   const h2 = ctx.canvas.height / dpr;
   const p = game.player;
   // FPS 命中反馈/击杀环恒锚定屏幕中心（朝向=鼠标屏幕方向，中心即射击线）
+  if (game.viewMode === 'fps' && p && !p.dead) {
+    const act = fpsInteractAction(game);
+    if (act) {
+      const label = '[' + getBindLabel(act.action) + '] ' + act.label;
+      ctx.save();
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.font = "600 15px 'Microsoft YaHei','Segoe UI',sans-serif";
+      ctx.lineWidth = 5;
+      ctx.strokeStyle = 'rgba(0,0,0,0.8)';
+      ctx.strokeText(label, w2 / 2, h2 - 82);
+      ctx.fillStyle = 'rgba(255,235,160,0.95)';
+      ctx.fillText(label, w2 / 2, h2 - 82);
+      ctx.restore();
+    }
+  }
   const aimX = game.viewMode === 'fps' ? w2 / 2 : game.input.mouse.x;
   const aimY = game.viewMode === 'fps' ? h2 / 2 : game.input.mouse.y;
   ctx.save();
