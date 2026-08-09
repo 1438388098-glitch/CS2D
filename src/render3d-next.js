@@ -1,6 +1,7 @@
 // 3D 重构入口：Three.js 低多边形比赛环境渲染器。
 // 保留旧 render3d.js 作为降级路径；本模块在 Three.js 可用前不阻塞游戏启动。
 import { getMap, groundElevationAt } from './map.js';
+import { themeOf } from './textures.js';
 
 export function tileToChar(grid, tx, ty) {
   if (!grid || !grid.length) return '#';
@@ -184,6 +185,7 @@ export function render3dNext(game) {
     game._renderStats = {
       total: renderMs,
       render3dBackend: 'next',
+      mapObjects: mapGroup ? mapGroup.children.length : 0,
       dynamicObjects: dynamicGroup ? dynamicGroup.children.length : 0,
       viewmodelObjects: viewmodelGroup ? viewmodelGroup.children.length : 0,
       drawCalls: renderer && renderer.info && renderer.info.render ? renderer.info.render.calls : 0
@@ -274,7 +276,7 @@ function buildMapScene(map, layers) {
   const w = map.W || grid.length * tile;
   const h = map.H || (grid.length ? grid[0].length * tile : 0);
 
-  buildSky();
+  buildSky(map);
 
   const floorTex = textureFrom(layers && layers.floorTex, Math.max(1, w / 8), Math.max(1, h / 8));
   const floorNorm = normalMapFor(layers && layers.floorTex, Math.max(1, w / 8), Math.max(1, h / 8));
@@ -329,6 +331,11 @@ function buildMapScene(map, layers) {
     roughness: 0.55,
     metalness: 0.35
   });
+  const capMat = new T.MeshStandardMaterial({
+    color: 0xffffff,
+    roughness: 0.88,
+    metalness: 0.02
+  });
   const waterMat = new T.MeshStandardMaterial({
     map: textureFrom(layers && layers.waterTex, 1, 1),
     color: 0xbfe4ff,
@@ -351,27 +358,29 @@ function buildMapScene(map, layers) {
   addInstancedWallVariants(mapGroup, T, countWallVariants(grid, wallMats.length), new T.BoxGeometry(tile, tile, tile), wallMats,
     (tx, ty, c, cx, cz, i, mesh) => {
       setInstanceTransform(T, mesh, i, cx, tile * 0.5, cz, 1, 1, 1, 0, 0, 0);
-      mesh.setColorAt(i, wallColor(c));
+      mesh.setColorAt(i, new T.Color(wallColor(c)));
     });
   addInstancedBoxes(mapGroup, T, 'thin', counts.thin, new T.BoxGeometry(tile, tile, tile), wallMat,
     (tx, ty, c, cx, cz, i, mesh) => {
       setInstanceTransform(T, mesh, i, cx, tile * 0.275, cz, 1, 0.55, 1, 0, 0, 0);
-      mesh.setColorAt(i, wallColor(c));
+      mesh.setColorAt(i, new T.Color(wallColor(c)));
     });
   addInstancedBoxes(mapGroup, T, 'crates', counts.crate, new T.BoxGeometry(tile, tile, tile), crateMat,
     (tx, ty, c, cx, cz, i, mesh) => {
       setInstanceTransform(T, mesh, i, cx, tile * 0.275, cz, 0.92, 0.55, 0.92, 0, 0, (tx * 0.7 + ty * 0.3) % 1);
-      mesh.setColorAt(i, 0xb8865a);
+      mesh.setColorAt(i, new T.Color(0xb8865a));
     });
   addInstancedBoxes(mapGroup, T, 'platforms', counts.platform, new T.BoxGeometry(tile, tile, tile), platformMat,
     (tx, ty, c, cx, cz, i, mesh) => {
       const hgt = c === '^' ? tile : tile * 0.5;
       setInstanceTransform(T, mesh, i, cx, hgt * 0.5, cz, 1, hgt / tile, 1, 0, 0, 0);
-      mesh.setColorAt(i, c === '^' ? 0x9faab4 : 0x9b8f78);
+      mesh.setColorAt(i, new T.Color(c === '^' ? 0x9faab4 : 0x9b8f78));
     });
   addInstancedBarrels(mapGroup, T, counts.barrel, barrelMat);
   addInstancedWater(mapGroup, T, grid, tile, counts.water, waterMat, deepWaterMat);
+  addInstancedWallCaps(mapGroup, T, grid, tile, counts.wall, counts.thin, capMat);
   addInstancedSites(mapGroup, T, grid, tile);
+  addSiteMarkers(mapGroup, T, map, tile);
   addInstancedDecos(mapGroup, T, layers && layers.decos, tile);
 }
 
@@ -547,6 +556,31 @@ function addInstancedBoxes(group, T, name, count, geometry, material, fill) {
   group.add(mesh);
 }
 
+function addInstancedWallCaps(group, T, grid, tile, wallCount, thinCount, material) {
+  const add = (count, isThin) => {
+    if (!count) return;
+    const geo = new T.BoxGeometry(tile * 1.06, tile * 0.07, tile * 1.06);
+    const mesh = new T.InstancedMesh(geo, material, count);
+    mesh.name = isThin ? 'thinWallCaps' : 'wallCaps';
+    mesh.receiveShadow = true;
+    let i = 0;
+    for (let ty = 0; ty < grid.length && i < count; ty++) {
+      const row = grid[ty] || [];
+      for (let tx = 0; tx < row.length && i < count; tx++) {
+        const c = row[tx];
+        if (isThin ? c !== '=' : c !== '#') continue;
+        const y = (isThin ? tile * 0.55 : tile) + tile * 0.035;
+        setInstanceTransform(T, mesh, i, tx * tile + tile / 2, y, ty * tile + tile / 2, 1, 1, 1, 0, 0, 0);
+        mesh.setColorAt(i, new T.Color(wallColor(c)));
+        i++;
+      }
+    }
+    group.add(mesh);
+  };
+  add(wallCount, false);
+  add(thinCount, true);
+}
+
 function setInstanceTransform(T, mesh, index, x, y, z, sx, sy, sz, rx, ry, rz) {
   const e = new T.Euler(rx, ry, rz, 'YXZ');
   const q = new T.Quaternion().setFromEuler(e);
@@ -578,7 +612,7 @@ function addInstancedBarrels(group, T, count, material) {
     for (let tx = 0; tx < row.length && i < count; tx++) {
       if (row[tx] !== 'o') continue;
       setInstanceTransform(T, mesh, i, tx * tile + tile / 2, tile * 0.225, ty * tile + tile / 2, 1, 0.45, 1, 0, 0, 0);
-      mesh.setColorAt(i, 0xb85a38);
+      mesh.setColorAt(i, new T.Color(0xb85a38));
       i++;
     }
   }
@@ -605,7 +639,7 @@ function addInstancedWater(group, T, grid, tile, waterCount, shallowMat, deepMat
         obj.position.set(tx * tile + tile / 2, isDeep ? 0.035 : 0.05, ty * tile + tile / 2);
         obj.updateMatrix();
         mesh.setMatrixAt(i, obj.matrix);
-        mesh.setColorAt(i, isDeep ? 0x17475f : 0xbfe4ff);
+        mesh.setColorAt(i, new T.Color(isDeep ? 0x17475f : 0xbfe4ff));
         i++;
       }
     }
@@ -631,30 +665,127 @@ function addInstancedSites(group, T, grid, tile) {
       obj.position.set(tx * tile + tile / 2, 0.025, ty * tile + tile / 2);
       obj.updateMatrix();
       mesh.setMatrixAt(i, obj.matrix);
-      mesh.setColorAt(i, c === 'a' ? 0xff8a4a : 0x5aa8ff);
+      mesh.setColorAt(i, new T.Color(c === 'a' ? 0xff8a4a : 0x5aa8ff));
       i++;
     }
   }
   group.add(mesh);
 }
 
+function addSiteMarkers(group, T, map, tile) {
+  if (!map || !map.sites) return;
+  const keys = ['A', 'B'];
+  for (const key of keys) {
+    const s = map.sites[key];
+    if (!s) continue;
+    const cx = (s.x0 + s.x1) / 2;
+    const cz = (s.y0 + s.y1) / 2;
+    const w = Math.max(1, s.x1 - s.x0);
+    const h = Math.max(1, s.y1 - s.y0);
+    const inner = Math.max(10, Math.min(w, h) * 0.34);
+    const outer = Math.max(16, Math.min(w, h) * 0.42);
+    const color = key === 'A' ? 0xff8a4a : 0x5aa8ff;
+    const ring = new T.Mesh(
+      new T.RingGeometry(inner, outer, 48),
+      new T.MeshBasicMaterial({ color, transparent: true, opacity: 0.28, side: T.DoubleSide, depthWrite: false })
+    );
+    ring.rotation.x = -Math.PI / 2;
+    ring.position.set(cx, 0.045, cz);
+    ring.renderOrder = 3;
+    group.add(ring);
+
+    const pts = [
+      new T.Vector3(s.x0 + 4, 0.05, s.y0 + 4),
+      new T.Vector3(s.x1 - 4, 0.05, s.y0 + 4),
+      new T.Vector3(s.x1 - 4, 0.05, s.y1 - 4),
+      new T.Vector3(s.x0 + 4, 0.05, s.y1 - 4)
+    ];
+    const frame = new T.LineLoop(
+      new T.BufferGeometry().setFromPoints(pts),
+      new T.LineBasicMaterial({ color, transparent: true, opacity: 0.55 })
+    );
+    group.add(frame);
+
+    const label = makeSiteLabel(T, key);
+    label.position.set(cx, tile * 1.15, cz);
+    group.add(label);
+  }
+}
+
+function makeSiteLabel(T, key) {
+  const cv = document.createElement('canvas');
+  cv.width = 128;
+  cv.height = 128;
+  const ctx = cv.getContext('2d');
+  ctx.clearRect(0, 0, 128, 128);
+  const color = key === 'A' ? '#ff9a5a' : '#5aa8ff';
+  ctx.strokeStyle = color;
+  ctx.lineWidth = 14;
+  ctx.strokeRect(8, 8, 112, 112);
+  ctx.fillStyle = color;
+  ctx.font = 'bold 84px sans-serif';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(key, 64, 66);
+  const tex = new T.CanvasTexture(cv);
+  if (T.SRGBColorSpace) tex.colorSpace = T.SRGBColorSpace;
+  const mat = new T.SpriteMaterial({ map: tex, transparent: true, opacity: 0.92, depthWrite: false });
+  const sprite = new T.Sprite(mat);
+  sprite.scale.set(96, 96, 1);
+  return sprite;
+}
+
 function addInstancedDecos(group, T, decos, tile) {
   if (!decos || !decos.length) return;
-  const count = Math.min(decos.length, 48);
-  const mat = new T.MeshLambertMaterial({ color: 0xffffff });
-  const mesh = new T.InstancedMesh(new T.BoxGeometry(tile * 0.16, tile * 0.24, tile * 0.16), mat, count);
-  mesh.castShadow = true;
-  mesh.receiveShadow = true;
-  for (let i = 0; i < count; i++) {
-    const d = decos[i];
+  const buckets = {};
+  for (const d of decos) {
     if (!d) continue;
-    const x = d.tx * tile + tile / 2;
-    const z = d.ty * tile + tile / 2;
-    const color = d.kind && d.kind.indexOf('bush') >= 0 ? 0x5e8a5a : d.kind && d.kind.indexOf('rock') >= 0 ? 0x8d8a82 : 0xa38a5a;
-    setInstanceTransform(T, mesh, i, x, tile * 0.12, z, 1, 1, 1, 0, 0, (d.tx * 1.7 + d.ty * 0.9) % (Math.PI * 2));
-    mesh.setColorAt(i, color);
+    const kind = d.kind || 'decoStone';
+    if (!buckets[kind]) buckets[kind] = [];
+    if (buckets[kind].length < 64) buckets[kind].push(d);
   }
-  group.add(mesh);
+  const geometryFor = (kind) => {
+    switch (kind) {
+      case 'decoGrass': return new T.ConeGeometry(0.10, 0.24, 5);
+      case 'decoStone': return new T.DodecahedronGeometry(0.14, 0);
+      case 'decoBarrel': return new T.CylinderGeometry(0.12, 0.12, 0.22, 8);
+      case 'decoPot': return new T.CylinderGeometry(0.09, 0.06, 0.20, 6);
+      case 'decoPipe': return new T.CylinderGeometry(0.09, 0.09, 1.0, 8);
+      case 'decoTire': return new T.TorusGeometry(0.18, 0.07, 6, 10);
+      case 'decoRock': return new T.DodecahedronGeometry(0.20, 0);
+      case 'decoPallet': return new T.BoxGeometry(0.70, 0.08, 0.55);
+      case 'decoLamp': return new T.CylinderGeometry(0.03, 0.03, 0.60, 6);
+      default: return new T.BoxGeometry(0.18, 0.16, 0.18);
+    }
+  };
+  const colorFor = (kind) => {
+    if (kind === 'decoGrass') return 0x6c9a62;
+    if (kind === 'decoBarrel' || kind === 'decoPot') return 0xb66a42;
+    if (kind === 'decoPipe' || kind === 'decoLamp') return 0x8b98a8;
+    if (kind === 'decoTire') return 0x2b3036;
+    if (kind === 'decoRock') return 0x8d8a82;
+    if (kind === 'decoPallet') return 0xa38a5a;
+    return 0x999c9a;
+  };
+  for (const kind of Object.keys(buckets)) {
+    const items = buckets[kind];
+    if (!items.length) continue;
+    const mat = new T.MeshLambertMaterial({ color: colorFor(kind) });
+    const mesh = new T.InstancedMesh(geometryFor(kind), mat, items.length);
+    mesh.castShadow = true;
+    mesh.receiveShadow = true;
+    for (let i = 0; i < items.length; i++) {
+      const d = items[i];
+      const x = d.tx * tile + tile / 2;
+      const z = d.ty * tile + tile / 2;
+      const ry = (d.tx * 1.7 + d.ty * 0.9) % (Math.PI * 2);
+      const rx = kind === 'decoTire' ? -Math.PI / 2 : kind === 'decoPipe' ? Math.PI / 2 : 0;
+      const y = tile * (kind === 'decoLamp' ? 0.35 : 0.12);
+      const sy = kind === 'decoTire' ? 0.35 : 1;
+      setInstanceTransform(T, mesh, i, x, y, z, 1, sy, 1, rx, 0, ry);
+    }
+    group.add(mesh);
+  }
 }
 
 function textureFrom(source, repeatX, repeatY) {
@@ -668,7 +799,7 @@ function textureFrom(source, repeatX, repeatY) {
   return tex;
 }
 
-function buildSky() {
+function buildSky(map) {
   if (!scene || !THREE || typeof document === 'undefined') return;
   if (skyMesh) {
     scene.remove(skyMesh);
@@ -676,18 +807,23 @@ function buildSky() {
     if (skyMesh.material) disposeMaterial(skyMesh.material);
     skyMesh = null;
   }
+  const theme = themeOf((map && map.id) || 'dust2');
+  const sky = theme.sky || {};
+  const top = sky.top || '#182838';
+  const horizon = sky.horizon || '#52606b';
+  const sun = sky.sun || [255, 214, 150];
   const canvas = document.createElement('canvas');
   canvas.width = 512;
   canvas.height = 256;
   const ctx = canvas.getContext('2d');
   const grad = ctx.createLinearGradient(0, 0, 0, 256);
-  grad.addColorStop(0, '#182838');
-  grad.addColorStop(0.55, '#52606b');
+  grad.addColorStop(0, top);
+  grad.addColorStop(0.55, horizon);
   grad.addColorStop(0.78, '#9a8b70');
   grad.addColorStop(1, '#c4b18c');
   ctx.fillStyle = grad;
   ctx.fillRect(0, 0, 512, 256);
-  ctx.fillStyle = 'rgba(255,235,190,0.95)';
+  ctx.fillStyle = 'rgba(' + sun[0] + ',' + sun[1] + ',' + sun[2] + ',0.95)';
   ctx.beginPath();
   ctx.arc(392, 72, 26, 0, Math.PI * 2);
   ctx.fill();
@@ -704,6 +840,10 @@ function buildSky() {
   skyMesh = new THREE.Mesh(geo, mat);
   skyMesh.renderOrder = -20;
   scene.add(skyMesh);
+  const fog = theme.atmo && theme.atmo.fogColor;
+  if (fog) {
+    scene.fog = new THREE.Fog(new THREE.Color(fog[0] / 255, fog[1] / 255, fog[2] / 255), 420, Math.max(900, map.W * 0.8));
+  }
 }
 
 function updateDynamicNext(game) {

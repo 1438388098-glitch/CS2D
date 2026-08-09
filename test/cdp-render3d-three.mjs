@@ -52,6 +52,11 @@ try {
   } else {
     pass('scene stats: ' + JSON.stringify(backend.stats));
   }
+  if (!backend || !backend.stats || backend.stats.mapObjects < 4) {
+    fail('three.js map props missing: ' + JSON.stringify(backend && backend.stats));
+  } else {
+    pass('map props present: ' + backend.stats.mapObjects);
+  }
 
   const pixels = await cdp.eval(`(()=>{const c=document.querySelector('canvas');if(!c)return null;const w=Math.min(c.width,1600),h=Math.min(c.height,900);const d=c.getContext('2d').getImageData(0,0,w,h).data;let lit=0,bright=0,white=0,colors=new Set(),checked=0;for(let y=0;y<h;y+=3){for(let x=0;x<w;x+=3){const i=(y*w+x)*4;const r=d[i],g=d[i+1],b=d[i+2];const sum=r+g+b;checked++;if(sum>40)lit++;if(sum>540)bright++;if(sum>720)white++;colors.add((r>>4)+','+(g>>4)+','+(b>>4));}}return {lit,bright,white,checked,colors:colors.size}})()`);
   if (!pixels || pixels.lit < 1 || pixels.colors < 8) {
@@ -77,6 +82,11 @@ try {
     fail('map switch with three.js failed: ' + JSON.stringify(switched));
   } else {
     pass('map switch with three.js: ' + JSON.stringify(switched));
+  }
+  if (!switched || !switched.stats || switched.stats.mapObjects < 4) {
+    fail('map props missing after map switch: ' + JSON.stringify(switched));
+  } else {
+    pass('map props after map switch: ' + switched.stats.mapObjects);
   }
 
   await cdp.eval(`(()=>{const g=window.__cs2d&&window.__cs2d.game;if(!g)return false;g.tracers=Array.from({length:80},(_,i)=>({x1:100+i*2,y1:100+i,x2:100+i,y2:120+i}));return true})()`);
