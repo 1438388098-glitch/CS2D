@@ -116,6 +116,9 @@ export async function initRenderer3dNext(canvas, layers) {
     renderer.shadowMap.enabled = true;
     renderer.shadowMap.type = T.PCFSoftShadowMap;
     renderer.outputColorSpace = T.SRGBColorSpace;
+    renderer.toneMapping = T.ACESFilmicToneMapping;
+    renderer.toneMappingExposure = 0.92;
+    renderer.setClearColor(0x1c2530, 1);
     scene = new T.Scene();
     scene.fog = new T.Fog(0x20262e, 500, 2400);
     camera = new T.PerspectiveCamera(75, 16 / 9, 0.05, 4000);
@@ -201,6 +204,7 @@ function rebuildMap(game, map) {
   disposeAllDynamic();
   clearGroup(dynamicGroup);
   if (viewmodelGroup) clearGroup(viewmodelGroup);
+  viewmodelKey = '';
   buildMapScene(map, layersRef);
 }
 
@@ -265,7 +269,7 @@ function buildMapScene(map, layers) {
   buildSky();
 
   const floorTex = textureFrom(layers && layers.floorTex, Math.max(1, w / 8), Math.max(1, h / 8));
-  const floorMat = new T.MeshLambertMaterial({ map: floorTex, color: 0xd8d3c8 });
+  const floorMat = new T.MeshStandardMaterial({ map: floorTex, color: 0xd8d3c8, roughness: 0.9, metalness: 0.02 });
   const ground = new T.Mesh(new T.PlaneGeometry(w, h), floorMat);
   ground.rotation.x = -Math.PI / 2;
   ground.receiveShadow = true;
@@ -273,33 +277,45 @@ function buildMapScene(map, layers) {
   mapGroup.add(ground);
 
   const counts = scanMapCounts(grid, tile);
-  const wallMat = new T.MeshLambertMaterial({
+  const wallMat = new T.MeshStandardMaterial({
     map: textureFrom((layers && (layers.wallVariants && layers.wallVariants.v0)) || (layers && layers.wallTex), 1, 1),
-    color: 0xffffff
+    color: 0xffffff,
+    roughness: 0.82,
+    metalness: 0.02
   });
-  const crateMat = new T.MeshLambertMaterial({
+  const crateMat = new T.MeshStandardMaterial({
     map: textureFrom((layers && layers.crateTex) || (layers && layers.thinWallTex), 1, 1),
-    color: 0xffffff
+    color: 0xffffff,
+    roughness: 0.68,
+    metalness: 0.04
   });
-  const platformMat = new T.MeshLambertMaterial({
+  const platformMat = new T.MeshStandardMaterial({
     map: textureFrom((layers && layers.platformTex) || floorTex, 1, 1),
-    color: 0xffffff
+    color: 0xffffff,
+    roughness: 0.85,
+    metalness: 0.02
   });
-  const barrelMat = new T.MeshLambertMaterial({
+  const barrelMat = new T.MeshStandardMaterial({
     map: textureFrom(layers && layers.barrelTex, 1, 1),
-    color: 0xffffff
+    color: 0xffffff,
+    roughness: 0.55,
+    metalness: 0.35
   });
-  const waterMat = new T.MeshLambertMaterial({
+  const waterMat = new T.MeshStandardMaterial({
     map: textureFrom(layers && layers.waterTex, 1, 1),
     color: 0xbfe4ff,
     transparent: true,
     opacity: 0.72,
+    roughness: 0.25,
+    metalness: 0.05,
     depthWrite: false
   });
-  const deepWaterMat = new T.MeshLambertMaterial({
+  const deepWaterMat = new T.MeshStandardMaterial({
     color: 0x194a6b,
     transparent: true,
     opacity: 0.82,
+    roughness: 0.3,
+    metalness: 0.1,
     depthWrite: false
   });
 
@@ -779,9 +795,15 @@ function updateTracers(game) {
     }
     return;
   }
-  if (!lines) {
+  const needed = Math.max(64, tracers.length * 6);
+  if (!lines || lines.geometry.attributes.position.array.length < needed) {
+    if (lines) {
+      dynamicGroup.remove(lines);
+      lines.geometry.dispose();
+      lines.material.dispose();
+    }
     const geo = new THREE.BufferGeometry();
-    const positions = new Float32Array(tracers.length * 6);
+    const positions = new Float32Array(needed);
     geo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
     const mat = new THREE.LineBasicMaterial({ color: 0xffd88a, transparent: true, opacity: 0.55 });
     lines = new THREE.LineSegments(geo, mat);

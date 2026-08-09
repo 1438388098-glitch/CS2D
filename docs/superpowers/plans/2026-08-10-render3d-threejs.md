@@ -25,7 +25,7 @@
 - Create: `vendor/three.module.js`
 - Create: `src/render3d-next.js`
 
-- [ ] **Step 1: Install and vendor Three.js**
+- [x] **Step 1: Install and vendor Three.js**
 
 Run:
 ```bash
@@ -36,7 +36,7 @@ copy node_modules\three\build\three.module.js vendor\three.module.js
 
 Expected: `vendor/three.module.js` exists and is larger than 1 MB.
 
-- [ ] **Step 2: Add renderer skeleton**
+- [x] **Step 2: Add renderer skeleton**
 
 ```js
 import * as THREE from '../vendor/three.module.js';
@@ -109,12 +109,12 @@ export function render3dNext(game) {
 }
 ```
 
-- [ ] **Step 3: Syntax-check**
+- [x] **Step 3: Syntax-check**
 
 Run: `npm run check`
 Expected: PASS.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add vendor/three.module.js src/render3d-next.js
@@ -127,7 +127,7 @@ git commit -m "feat: vendor three and add renderer skeleton"
 - Modify: `src/render3d-next.js`
 - Create: `test/render3d-next.mjs`
 
-- [ ] **Step 1: Add exported pure helpers**
+- [x] **Step 1: Add exported pure helpers**
 
 Add to `src/render3d-next.js`:
 
@@ -159,13 +159,13 @@ export function cameraZFor(c, tile) {
 }
 ```
 
-- [ ] **Step 2: Build static map group**
+- [x] **Step 2: Build static map group**
 
 In `rebuildMap(game)`, iterate `grid`, merge wall boxes where possible, add one floor plane under the whole map, and add sky/directional light with shadows. Use `layersRef.floorTex`, `layersRef.wallVariants`, `layersRef.crateTex`, and deterministic vertex colors for AO.
 
 Call `rebuildMap(game)` from `render3dNext(game)` when `mapKey !== getMap().id`.
 
-- [ ] **Step 3: Write pure tests**
+- [x] **Step 3: Write pure tests**
 
 Create `test/render3d-next.mjs`:
 
@@ -189,7 +189,7 @@ ok('camera half platform height', cameraZFor('R', 16) === 16);
 Run: `node test/render3d-next.mjs`
 Expected: PASS.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add src/render3d-next.js test/render3d-next.mjs
@@ -201,13 +201,13 @@ git commit -m "feat: build Three.js map geometry and lighting"
 **Files:**
 - Modify: `src/render3d-next.js`
 
-- [ ] **Step 1: Add pooled entity models**
+- [x] **Step 1: Add pooled entity models**
 
 For each entity, maintain `entity.mesh` (a `THREE.Group`) with body/head/legs; CT is blue, T is sand/red, dead entities fall to the floor. For drops, create a small weapon box. For bombs, create a C4-like box with red pulse light.
 
 For smoke and particles, create `THREE.Sprite` objects with a generated radial texture, opacity based on `life`, and a hard pool cap of 120.
 
-- [ ] **Step 2: Add first-person viewmodel**
+- [x] **Step 2: Add first-person viewmodel**
 
 Create `viewmodelGroup` children based on `weaponDef(p)`:
 
@@ -217,7 +217,7 @@ Create `viewmodelGroup` children based on `weaponDef(p)`:
 
 Use `p.recoil`, `p.reloadT`, `p.muzzleT`, and `p.bobPhase` for stable low-poly animation.
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add src/render3d-next.js
@@ -230,7 +230,7 @@ git commit -m "feat: add Three.js entities and viewmodel"
 - Modify: `src/main.js`
 - Modify: `src/game.js`
 
-- [ ] **Step 1: Modify main.js**
+- [x] **Step 1: Modify main.js**
 
 Import `render3dNext`, `initRenderer3dNext`, `render3dNextReady` from `./render3d-next.js`. In `reloadMapLayers()`:
 
@@ -249,7 +249,7 @@ if (game.viewMode === 'fps' && fpsCameraEntity(game)) {
 
 On `render3dNext` exceptions, set `game._render3dBackend = 'legacy'` once and continue.
 
-- [ ] **Step 2: Modify game.js**
+- [x] **Step 2: Modify game.js**
 
 In `updatePlayerAim()`:
 
@@ -276,7 +276,7 @@ if (game.viewMode === 'fps') {
 }
 ```
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add src/main.js src/game.js
@@ -288,7 +288,7 @@ git commit -m "feat: wire Three.js renderer and lock FPS vertical aim"
 **Files:**
 - Create: `test/cdp-render3d-three.mjs`
 
-- [ ] **Step 1: Add CDP test**
+- [x] **Step 1: Add CDP test**
 
 Copy the structure from `test/cdp-fps3d.mjs`, then assert:
 
@@ -298,7 +298,7 @@ Copy the structure from `test/cdp-fps3d.mjs`, then assert:
 - mouse `movementY` does not change `pitch`.
 - `FPSHint` or backend stats show the new renderer.
 
-- [ ] **Step 2: Run all verification**
+- [x] **Step 2: Run all verification**
 
 Run:
 ```bash
@@ -311,7 +311,7 @@ node test/cdp-render3d-three.mjs
 
 Expected: all PASS. Debug any WebGL/fallback issue before committing.
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add test/cdp-render3d-three.mjs src/render3d-next.js

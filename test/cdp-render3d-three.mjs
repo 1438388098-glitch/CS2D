@@ -73,10 +73,19 @@ try {
   await cdp.eval(`(()=>{window.GAME.debug.setOpts({mapId:'canal'});window.GAME.startMatch();return true})()`);
   await sleep(1800);
   const switched = await cdp.eval(`(()=>{const g=window.__cs2d&&window.__cs2d.game;const c=window.__cs2d;return {map:g&&g.opts&&g.opts.mapId,backend:c&&c.render3d&&c.render3d.backend,stats:g&&g._renderStats}})()`);
-  if (!switched || switched.map !== 'canal' || switched.backend !== 'next' || !switched.stats || switched.stats.dynamicObjects < 1) {
+  if (!switched || switched.map !== 'canal' || switched.backend !== 'next' || !switched.stats || switched.stats.dynamicObjects < 1 || switched.stats.viewmodelObjects < 1) {
     fail('map switch with three.js failed: ' + JSON.stringify(switched));
   } else {
     pass('map switch with three.js: ' + JSON.stringify(switched));
+  }
+
+  await cdp.eval(`(()=>{const g=window.__cs2d&&window.__cs2d.game;if(!g)return false;g.tracers=Array.from({length:80},(_,i)=>({x1:100+i*2,y1:100+i,x2:100+i,y2:120+i}));return true})()`);
+  await sleep(400);
+  const stress = await cdp.eval(`(()=>{const g=window.__cs2d&&window.__cs2d.game;const c=window.__cs2d;return {backend:c&&c.render3d&&c.render3d.backend,gameBackend:g&&g._render3dBackend,stats:g&&g._renderStats}})()`);
+  if (!stress || stress.backend !== 'next' || stress.gameBackend !== 'next' || !stress.stats || stress.stats.drawCalls < 1) {
+    fail('tracer buffer stress fell back: ' + JSON.stringify(stress));
+  } else {
+    pass('tracer buffer stress keeps next backend: ' + JSON.stringify(stress));
   }
 
   await cdp.close();
