@@ -76,12 +76,18 @@ try {
   }
 
   await cdp.eval(`(()=>{window.GAME.debug.setOpts({mapId:'canal'});window.GAME.startMatch();return true})()`);
+  await cdp.eval(`(()=>{const g=window.__cs2d&&window.__cs2d.game;if(g)g.viewMode='fps';return true})()`);
   await sleep(1800);
   const switched = await cdp.eval(`(()=>{const g=window.__cs2d&&window.__cs2d.game;const c=window.__cs2d;return {map:g&&g.opts&&g.opts.mapId,backend:c&&c.render3d&&c.render3d.backend,stats:g&&g._renderStats}})()`);
   if (!switched || switched.map !== 'canal' || switched.backend !== 'next' || !switched.stats || switched.stats.dynamicObjects < 1 || switched.stats.viewmodelObjects < 1) {
     fail('map switch with three.js failed: ' + JSON.stringify(switched));
   } else {
     pass('map switch with three.js: ' + JSON.stringify(switched));
+  }
+  if (!switched || !switched.stats || switched.stats.mapId !== 'canal') {
+    fail('three.js map id not synced: ' + JSON.stringify(switched));
+  } else {
+    pass('three.js map id synced: ' + switched.stats.mapId);
   }
   if (!switched || !switched.stats || switched.stats.mapObjects < 4) {
     fail('map props missing after map switch: ' + JSON.stringify(switched));

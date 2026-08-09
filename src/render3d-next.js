@@ -185,6 +185,7 @@ export function render3dNext(game) {
     game._renderStats = {
       total: renderMs,
       render3dBackend: 'next',
+      mapId: map && map.id || '',
       mapObjects: mapGroup ? mapGroup.children.length : 0,
       dynamicObjects: dynamicGroup ? dynamicGroup.children.length : 0,
       viewmodelObjects: viewmodelGroup ? viewmodelGroup.children.length : 0,
