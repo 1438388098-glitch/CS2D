@@ -5,6 +5,7 @@ import {
   fpsCursorStyle,
   isFpsPointerLockActive,
   clearFpsMouseDeltas,
+  cycleSpectate,
   switchWeapon,
   switchNade,
   setKey,
@@ -108,5 +109,24 @@ assert.equal(inputGame.input.mouse.x, 12, 'setMouse should update x');
 assert.equal(inputGame.input.mouse.y, 34, 'setMouse should update y');
 setMouseDown(inputGame, true);
 assert.equal(inputGame.input.mouse.down, true, 'setMouseDown should update mouse state');
+
+const specGame = makeGame('fps');
+specGame.state = 'LIVE';
+specGame.player = { dead: true, team: 'ct', angle: 0.5, pitch: 0.2 };
+specGame.entities = [
+  { team: 'ct', dead: false, angle: 1.1, pitch: 0.3 },
+  { team: 'ct', dead: false, angle: 2.1, pitch: -0.1 },
+  { team: 't', dead: false, angle: 3.1, pitch: 0.4 }
+];
+specGame.spectateIdx = 0;
+specGame._specAngle = null;
+specGame._specPitch = null;
+assert.equal(cycleSpectate(specGame, 1), specGame.entities[1], 'cycleSpectate should move to next alive mate');
+assert.equal(specGame.spectateIdx, 1, 'cycleSpectate should update spectateIdx');
+assert.equal(specGame._specAngle, 2.1, 'cycleSpectate should reset yaw to target');
+assert.equal(specGame._specPitch, -0.1, 'cycleSpectate should reset pitch to target');
+assert.equal(cycleSpectate(specGame, -1), specGame.entities[0], 'cycleSpectate should support reverse direction');
+specGame.entities[0].dead = true;
+assert.equal(cycleSpectate(specGame, 1), specGame.entities[1], 'cycleSpectate should skip dead mates');
 
 console.log('input: all PASS');

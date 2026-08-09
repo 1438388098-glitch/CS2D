@@ -50,6 +50,24 @@ export function toggleViewMode(game) {
   setViewMode(game, VIEW_MODES[(VIEW_MODES.indexOf(game.viewMode) + 1) % VIEW_MODES.length]);
 }
 
+export function cycleSpectate(game, dir = 1) {
+  if (!game || !game.player || !game.player.dead || game.state === 'END') return null;
+  const p = game.player;
+  let targets;
+  if (game.cyber && !game.cyber.ended) {
+    targets = game.entities.filter((ee) => ee.bot && !ee.dead);
+  } else {
+    targets = game.entities.filter((ee) => ee.team === p.team && !ee.dead);
+  }
+  if (!targets.length) return null;
+  const step = ((dir % targets.length) + targets.length) % targets.length;
+  game.spectateIdx = (game.spectateIdx + step) % targets.length;
+  const target = targets[game.spectateIdx % targets.length];
+  game._specAngle = target ? target.angle : null;
+  game._specPitch = target ? (target.pitch || 0) : null;
+  return target;
+}
+
 export function initInput(game, canvasRef) {
   try { const v = localStorage.getItem('cs2d_viewmode'); if (VIEW_MODES.includes(v)) game.viewMode = v; } catch (err) {}
   fpsCanvas = canvasRef;
@@ -62,6 +80,12 @@ export function initInput(game, canvasRef) {
     if (e.repeat) return;
     keys[e.code] = true;
     if (matches(e.code, 'viewToggle')) { e.preventDefault(); toggleViewMode(game); }
+    if (e.code === 'KeyQ' || e.code === 'KeyE') {
+      if (game.player && game.player.dead && game.state !== 'END') {
+        e.preventDefault();
+        cycleSpectate(game, e.code === 'KeyE' ? 1 : -1);
+      }
+    }
     // 玩家→bot 战术指令（F1 集合 / F2 攻A / F3 攻B / F4 守点）
     if (e.code === 'F1') setPlayerOrder(game, 'follow');
     if (e.code === 'F2') setPlayerOrder(game, 'siteA');
@@ -147,13 +171,7 @@ export function initInput(game, canvasRef) {
       if (!onMini) mouse.down = true;
       if (!onMini && game.viewMode === 'fps' && (game.state === 'BUY' || game.state === 'LIVE')) requestFpsPointerLock(game);
       if (game.player && game.player.dead && game.state !== 'END') {
-        if (game.cyber && !game.cyber.ended) {
-          const bots = game.entities.filter((ee) => ee.bot && !ee.dead);
-          if (bots.length) game.spectateIdx = (game.spectateIdx + 1) % bots.length;
-        } else {
-          const mates = game.entities.filter((ee) => ee.team === game.player.team && !ee.dead);
-          if (mates.length) game.spectateIdx = (game.spectateIdx + 1) % mates.length;
-        }
+        cycleSpectate(game, 1);
       }
     }
     if (e.button === 2) mouse.rdown = true;
@@ -207,7 +225,11 @@ export function initInput(game, canvasRef) {
     if (now - lastWheelT < 80) return;
     lastWheelT = now;
     const p = game.player;
-    if (!p || p.dead) return;
+    if (!p) return;
+    if (p.dead) {
+      if (game.state !== 'END') cycleSpectate(game, e.deltaY > 0 ? 1 : -1);
+      return;
+    }
     const slots = ['primary', 'secondary', 'knife'];
     let idx = slots.indexOf(p.slot);
     if (idx < 0) idx = 1;
