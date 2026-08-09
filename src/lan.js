@@ -61,7 +61,9 @@ function connect(gameRef, role, room, name) {
       const sb = $('lanStartBtn');
       if (sb) sb.textContent = '房主已离开';
       game.lan.connected = false;
+      game.lan.hostLeft = true;
       try { if (ws) ws.close(); } catch (err) { /* ignore */ }
+      showHostLeftRecovery();
     } else if (msg.type === 'start') {
       Object.assign(game.opts, {
         mode: 'lan', seed: msg.seed, mapId: msg.mapId, team: msg.team,
@@ -83,10 +85,35 @@ function connect(gameRef, role, room, name) {
   };
   ws.onclose = () => {
     if (heartbeat) { clearInterval(heartbeat); heartbeat = null; }
-    setStatus('局域网连接已断开');
+    if (game && game.lan && game.lan.hostLeft) {
+      setStatus('房主已离开，请返回主菜单重新建房');
+      showHostLeftRecovery();
+    } else {
+      setStatus('局域网连接已断开');
+    }
     setConn('');
   };
   ws.onerror = () => setStatus('连接失败，请确认在同一局域网且服务已启动');
+}
+
+function showHostLeftRecovery() {
+  if (typeof document === 'undefined') return;
+  let btn = document.getElementById('lanBackBtn');
+  if (!btn) {
+    btn = document.createElement('button');
+    btn.id = 'lanBackBtn';
+    btn.className = 'btn';
+    btn.textContent = '返回主菜单';
+    btn.onclick = () => {
+      const panel = $('lanPanel');
+      if (panel) panel.style.display = 'none';
+      if (game && game.ui) game.ui.showMenu();
+      closeLan();
+    };
+    const status = $('lanStatus');
+    if (status && status.parentNode) status.parentNode.insertBefore(btn, status.nextSibling);
+  }
+  btn.style.display = 'inline-block';
 }
 
 function applyRemote(msg) {

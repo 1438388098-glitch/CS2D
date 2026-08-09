@@ -102,6 +102,22 @@ try {
   assert.equal(leavePeer.type, 'peer', 'host should get peer update on leave');
   assert.equal(leavePeer.count, 1);
 
+  // hostLeft：房主离开时剩余玩家收到提示，旧房间立即清理
+  const c = makeWsClient(port);
+  await c.handshake();
+  c.send({ type: 'hello', role: 'guest', room: 'TESTROOM', name: 'G2' });
+  const welcomeC = JSON.parse(await c.next());
+  assert.equal(welcomeC.type, 'welcome');
+  const peerC = JSON.parse(await a.next());
+  assert.equal(peerC.type, 'peer');
+  assert.equal(peerC.count, 2);
+
+  a.send({ type: 'leave' });
+  const hostLeft = JSON.parse(await c.next());
+  assert.equal(hostLeft.type, 'hostLeft', 'guest should receive hostLeft when host leaves');
+  assert.equal(hostLeft.count, 0);
+  await new Promise((resolve) => c.sock.once('close', resolve));
+
   a.sock.destroy();
 } finally {
   clearTimeout(failTimer);

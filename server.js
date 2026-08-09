@@ -224,7 +224,11 @@ function leave(ws) {
     if (r.host === ws) r.host = null;
     if (wasHost) {
       // 房主离开：通知剩余玩家重新建房，避免对方空等
-      broadcast(ws.room, { type: 'hostLeft', count: r.clients.size, clients: [...r.clients].map((c) => ({ role: c.role, name: c.name })) }, ws);
+      broadcast(ws.room, { type: 'hostLeft', count: 0, clients: [] }, ws);
+    }
+    if (wasHost && r.clients.size > 0) {
+      for (const c of [...r.clients]) { c.room = null; try { c.socket.end(); } catch (err) { /* closed */ } }
+      r.clients.clear();
     }
     broadcast(ws.room, { type: 'peer', count: r.clients.size, clients: [...r.clients].map((c) => ({ role: c.role, name: c.name })) }, ws);
     if (r.clients.size === 0) rooms.delete(ws.room);
