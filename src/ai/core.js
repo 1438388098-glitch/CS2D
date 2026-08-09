@@ -9,7 +9,7 @@ import { report, query, MSG } from '../info.js';
 import { clamp, rand, angDiff, angNorm, viewCap } from '../utils.js';
 import { styleOf } from './shared.js';
 import { findVisibleEnemy } from './perception.js';
-import { shouldSaveForEco } from './rules.js';
+import { shouldSaveForEco, shouldRepositionOnIntel } from './rules.js';
 import { botObjective, ctReactsTo } from './decisions.js';
 import { botActions } from './actions.js';
 
@@ -220,6 +220,23 @@ function botThink(e, game, dt) {
         followPath(e, dt, weapon.speed * 235);
         return;
       }
+    }
+  }
+  const ctHold = e.role === 'a' ? getMap().holds.A : e.role === 'b' ? getMap().holds.B : null;
+  const ctHome = ctHold && ctHold.anchors && ctHold.anchors.length ? ctHold.anchors[0] : (getMap().spawns.ct && getMap().spawns.ct[0]);
+  const intelAge = e.lastKnown && e.lastKnownT < 99 ? e.lastKnownT : 99;
+  const distHome = ctHome ? Math.hypot(e.x - ctHome.x, e.y - ctHome.y) : 0;
+  if (ctHome && shouldRepositionOnIntel(e, intelAge, distHome, !!(game.bomb && game.bomb.planted))) {
+    e.trigger = false;
+    e.repositionOnIntel = true;
+    if (e.path === null && e.repathT <= 0) {
+      pathTo(e, ctHome.x, ctHome.y);
+      e.repathT = 1.2;
+    }
+    if (e.path) {
+      e.angle = angNorm(Math.atan2(ctHome.y - e.y, ctHome.x - e.x));
+      followPath(e, dt, weapon.speed * 235);
+      return;
     }
   }
   const obj = botObjective(e, game);
