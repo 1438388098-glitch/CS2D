@@ -52,6 +52,11 @@ try {
   } else {
     pass('scene stats: ' + JSON.stringify(backend.stats));
   }
+  if (!backend || !backend.stats || backend.stats.entityWeapons < 1) {
+    fail('three.js entity weapon meshes missing: ' + JSON.stringify(backend && backend.stats));
+  } else {
+    pass('entity weapon meshes present: ' + backend.stats.entityWeapons);
+  }
   if (!backend || !backend.stats || backend.stats.teamMarkers < 1) {
     fail('three.js teammate markers missing: ' + JSON.stringify(backend && backend.stats));
   } else {
@@ -75,6 +80,15 @@ try {
     fail('three.js corpse decal missing: ' + JSON.stringify(decalStats));
   } else {
     pass('three.js corpse decal rendered: ' + decalStats.corpseObjects);
+  }
+
+  await cdp.eval(`(()=>{const g=window.__cs2d&&window.__cs2d.game;const e=g&&g.entities&&g.entities.find((x)=>x&&x!==g.player);if(!e)return false;e.muzzleT=1;return true})()`);
+  await sleep(350);
+  const muzzleStats = await cdp.eval(`(()=>{const g=window.__cs2d&&window.__cs2d.game;return g&&g._renderStats?g._renderStats:null})()`);
+  if (!muzzleStats || muzzleStats.entityMuzzles < 1) {
+    fail('three.js entity muzzle flash missing: ' + JSON.stringify(muzzleStats));
+  } else {
+    pass('three.js entity muzzle flash rendered: ' + muzzleStats.entityMuzzles);
   }
 
   const pixels = await cdp.eval(`(()=>{const c=document.querySelector('canvas');if(!c)return null;const w=Math.min(c.width,1600),h=Math.min(c.height,900);const d=c.getContext('2d').getImageData(0,0,w,h).data;let lit=0,bright=0,white=0,colors=new Set(),checked=0;for(let y=0;y<h;y+=3){for(let x=0;x<w;x+=3){const i=(y*w+x)*4;const r=d[i],g=d[i+1],b=d[i+2];const sum=r+g+b;checked++;if(sum>40)lit++;if(sum>540)bright++;if(sum>720)white++;colors.add((r>>4)+','+(g>>4)+','+(b>>4));}}return {lit,bright,white,checked,colors:colors.size}})()`);

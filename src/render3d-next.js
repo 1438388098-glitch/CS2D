@@ -173,6 +173,14 @@ export function render3dNext(game) {
       const m = g.getObjectByName('teamMarker');
       return !!(m && m.visible);
     }).length;
+    const entityWeapons = Array.from(entityMeshes.values()).filter((g) => {
+      const m = g.getObjectByName('weaponMesh');
+      return !!(m && m.visible);
+    }).length;
+    const entityMuzzles = Array.from(entityMeshes.values()).filter((g) => {
+      const m = g.getObjectByName('muzzle');
+      return !!(m && m.visible);
+    }).length;
     const mapCullSafe = mapGroup ? mapGroup.children.filter((o) => o.isInstancedMesh && o.frustumCulled === false).length : 0;
     const dpr = game.dpr || 1;
     const cssW = canvasRef.width / dpr;
@@ -199,6 +207,8 @@ export function render3dNext(game) {
       dynamicObjects: dynamicGroup ? dynamicGroup.children.length : 0,
       viewmodelObjects: viewmodelGroup ? viewmodelGroup.children.length : 0,
       teamMarkers,
+      entityWeapons,
+      entityMuzzles,
       corpseObjects: corpseMeshes.size,
       decalObjects: decalPointMeshes.size,
       mapCullSafe,
@@ -987,8 +997,12 @@ function updateEntities(game) {
       dynamicGroup.add(group);
     }
     const tile = (getMap() && getMap().tile) || 16;
-    group.position.set(e.x || 0, groundElevationAt(e.x || 0, e.y || 0) + (e.crouched ? tile * 0.28 : tile * 0.0), e.y || 0);
+    group.position.set(e.x || 0, 0, e.y || 0);
     group.rotation.set(0, -(e.angle || 0) - Math.PI / 2, 0);
+    group.position.y = groundElevationAt(e.x || 0, e.y || 0) + (e.crouched ? tile * 0.16 : tile * 0.0);
+    group.scale.y = e.crouched ? 0.72 : 1;
+    const bob = (e.walking ? Math.sin((e.bobPhase || 0) * 2) * tile * 0.025 : 0);
+    group.position.y += bob;
     const marker = group.getObjectByName('teamMarker');
     if (marker) marker.visible = !!(game.player && e.team === game.player.team);
     const walk = (e.bobPhase || 0);
@@ -998,6 +1012,16 @@ function updateEntities(game) {
       const sw = e.walking ? Math.sin(walk * 2) * 0.45 : 0;
       legA.rotation.x = sw;
       legB.rotation.x = -sw;
+    }
+    const muzzle = group.getObjectByName('muzzle');
+    if (muzzle) {
+      muzzle.visible = (e.muzzleT || 0) > 0;
+      if (muzzle.visible) muzzle.scale.setScalar(tile * (0.42 + Math.random() * 0.2));
+    }
+    const bodyMat = group.userData && group.userData.bodyMat;
+    if (bodyMat && group.userData.baseColor) {
+      const hurt = (e.lastDmgT && game.time && (game.time * 1000 - e.lastDmgT) < 150) || e.hp <= 24;
+      bodyMat.color.setHex(hurt ? 0xfff2d8 : group.userData.baseColor);
     }
     group.visible = true;
   }
@@ -1013,25 +1037,62 @@ function makeCharacter(T, e, tile) {
   const group = new T.Group();
   const team = e.team === 't' ? 0xe0a35a : 0x4f9dd8;
   const dark = e.team === 't' ? 0x7d5230 : 0x2b5d82;
+  const gear = e.team === 't' ? 0x8a5a32 : 0x3f6f95;
   const mat = new T.MeshLambertMaterial({ color: team });
   const darkMat = new T.MeshLambertMaterial({ color: dark });
-  const body = new T.Mesh(new T.BoxGeometry(tile * 0.62, tile * 0.72, tile * 0.30), mat);
-  body.position.y = tile * 0.78;
+  const gearMat = new T.MeshLambertMaterial({ color: gear });
+  const body = new T.Mesh(new T.BoxGeometry(tile * 0.60, tile * 0.68, tile * 0.30), mat);
+  body.name = 'body';
+  body.position.y = tile * 0.80;
   body.castShadow = true;
+  const chest = new T.Mesh(new T.BoxGeometry(tile * 0.46, tile * 0.44, tile * 0.34), gearMat);
+  chest.name = 'chest';
+  chest.position.y = tile * 0.88;
+  chest.castShadow = true;
   const head = new T.Mesh(new T.BoxGeometry(tile * 0.34, tile * 0.30, tile * 0.30), new T.MeshLambertMaterial({ color: e.team === 't' ? 0xd29a6a : 0xd2b08a }));
+  head.name = 'head';
   head.position.y = tile * 1.28;
   head.castShadow = true;
+  const helmet = new T.Mesh(new T.BoxGeometry(tile * 0.38, tile * 0.13, tile * 0.34), gearMat);
+  helmet.name = 'helmet';
+  helmet.position.y = tile * 1.43;
+  helmet.castShadow = true;
   const legA = new T.Mesh(new T.BoxGeometry(tile * 0.17, tile * 0.50, tile * 0.20), darkMat);
   legA.name = 'legA';
-  legA.position.set(-tile * 0.14, tile * 0.24, 0);
+  legA.position.set(-tile * 0.14, tile * 0.25, 0);
   legA.castShadow = true;
   const legB = legA.clone();
   legB.name = 'legB';
   legB.position.x = tile * 0.14;
   const armA = new T.Mesh(new T.BoxGeometry(tile * 0.15, tile * 0.58, tile * 0.18), darkMat);
-  armA.position.set(-tile * 0.43, tile * 0.78, 0);
+  armA.name = 'armA';
+  armA.position.set(-tile * 0.43, tile * 0.82, 0);
+  armA.castShadow = true;
   const armB = armA.clone();
+  armB.name = 'armB';
   armB.position.x = tile * 0.43;
+  const backpack = new T.Mesh(new T.BoxGeometry(tile * 0.34, tile * 0.42, tile * 0.18), gearMat);
+  backpack.name = 'backpack';
+  backpack.position.set(0, tile * 0.88, -tile * 0.24);
+  backpack.castShadow = true;
+  const weapon = new T.Mesh(new T.BoxGeometry(tile * 0.16, tile * 0.12, tile * 0.76), new T.MeshLambertMaterial({ color: 0x2c3035 }));
+  weapon.name = 'weaponMesh';
+  weapon.position.set(tile * 0.58, tile * 0.88, 0);
+  weapon.rotation.y = Math.PI / 2;
+  weapon.castShadow = true;
+  const muzzle = new T.Sprite(new T.SpriteMaterial({
+    map: makeGlowTexture(),
+    color: 0xffd166,
+    transparent: true,
+    opacity: 0.95,
+    blending: T.AdditiveBlending,
+    depthWrite: false
+  }));
+  muzzle.name = 'muzzle';
+  muzzle.position.set(tile * 0.88, tile * 0.90, 0);
+  muzzle.scale.setScalar(tile * 0.42);
+  muzzle.visible = false;
+  muzzle.renderOrder = 9;
   const marker = new T.Mesh(new T.ConeGeometry(tile * 0.24, tile * 0.62, 6), new T.MeshBasicMaterial({
     color: team,
     transparent: true,
@@ -1041,7 +1102,8 @@ function makeCharacter(T, e, tile) {
   marker.name = 'teamMarker';
   marker.position.y = tile * 1.92;
   marker.renderOrder = 8;
-  group.add(body, head, legA, legB, armA, armB, marker);
+  group.add(body, chest, head, helmet, legA, legB, armA, armB, backpack, weapon, muzzle, marker);
+  group.userData = { bodyMat: mat, baseColor: team };
   return group;
 }
 
