@@ -1,6 +1,6 @@
 ﻿import { WEAPONS, PRICES, MAPS, ECONOMY, ROUND } from './config.js';
 import { ctx } from './ctx.js';
-import { ACTIONS, getBindLabel, getBindCodes, bind, resetBinds } from './keymap.js';
+import { ACTIONS, matches, getBindLabel, getBindCodes, bind, resetBinds } from './keymap.js';
 import { setViewMode, requestFpsPointerLock, resizeCanvas } from './input.js';
 import { readAudioPrefs, writeAudioPrefs } from './audio/prefs.js';
 
@@ -920,12 +920,33 @@ function bindOverlays() {
   const helpOverlay = el('helpOverlay');
   const helpClose = el('helpClose');
   if (helpBtn && helpOverlay) {
-    helpBtn.onclick = () => { helpOverlay.classList.add('show'); };
-    if (helpClose) helpClose.onclick = () => helpOverlay.classList.remove('show');
+    const toggleHelp = (show) => {
+      if (show) {
+        if (doc && doc.pointerLockElement) doc.exitPointerLock();
+        renderHelpBindings();
+        helpOverlay.classList.add('show');
+      } else {
+        helpOverlay.classList.remove('show');
+      }
+    };
+    helpBtn.onclick = () => toggleHelp(true);
+    if (helpClose) helpClose.onclick = () => toggleHelp(false);
     helpOverlay.addEventListener('mousedown', (e) => {
-      if (e.target === helpOverlay) helpOverlay.classList.remove('show');
+      if (e.target === helpOverlay) toggleHelp(false);
     }, false);
   }
+  window.addEventListener('keydown', (e) => {
+    if (e.repeat || !matches(e.code, 'help')) return;
+    const overlay = el('helpOverlay');
+    if (!overlay) return;
+    if (overlay.classList.contains('show')) {
+      overlay.classList.remove('show');
+    } else {
+      if (doc && doc.pointerLockElement) doc.exitPointerLock();
+      renderHelpBindings();
+      overlay.classList.add('show');
+    }
+  }, false);
   const buyPanel = el('buy');
   buyPanel.addEventListener('mousedown', (e) => e.stopPropagation(), false);
   doc.addEventListener('mousedown', (e) => {
@@ -960,6 +981,7 @@ function bindSettings() {
   if (resetBtn) resetBtn.onclick = () => {
     resetBinds();
     renderKeybindList(listEl);
+    renderHelpBindings();
   };
   // 音量滑杆
   const prefs = getAudioPrefs();
@@ -983,6 +1005,7 @@ function bindSettings() {
     const okBind = bind(bindTarget, e.code);
     cancelBindTarget();
     renderKeybindList(listEl);
+    renderHelpBindings();
     if (!okBind) { const st = el('editorStatus'); if (st) st.textContent = '该键已被其他操作使用'; }
   }, true);
   // 视角模式存档
@@ -1202,6 +1225,31 @@ function renderKeybindList(listEl) {
     row.appendChild(b);
     listEl.appendChild(row);
   }
+}
+
+export function renderHelpBindings() {
+  const root = doc || (typeof document !== 'undefined' ? document : null);
+  if (!root) return;
+  const box = root.getElementById('helpBinds');
+  if (!box) return;
+  const groups = [
+    { actions: ['moveUp', 'moveDown', 'moveLeft', 'moveRight'], label: '移动' },
+    { actions: ['walk'], label: '静步' },
+    { actions: ['reload'], label: '换弹' },
+    { actions: ['interact'], label: '互动（装/拆/拾取）' },
+    { actions: ['weaponPrimary', 'weaponSecondary', 'weaponKnife'], label: '武器切换' },
+    { actions: ['nadeHe', 'nadeFlash', 'nadeSmoke'], label: '快速投掷' },
+    { actions: ['orderFollow', 'orderSiteA', 'orderSiteB', 'orderHold'], label: '指挥队友' },
+    { actions: ['buy'], label: '购买菜单' },
+    { actions: ['scoreboard'], label: '记分板' },
+    { actions: ['pause', 'mute'], label: '暂停 / 静音' },
+    { actions: ['viewToggle'], label: '切换视角' },
+    { actions: ['help'], label: '帮助' }
+  ];
+  box.innerHTML = groups.map((g) => {
+    const keys = g.actions.map(getBindLabel).join(' / ');
+    return '<div><b>' + esc(keys || '未绑定') + '</b> ' + esc(g.label) + '</div>';
+  }).join('');
 }
 
 export function isBuyOpen() { return buyOpen; }
