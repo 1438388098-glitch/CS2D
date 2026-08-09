@@ -22,11 +22,6 @@ export function startReload(e, game) {
   if (e.reloading || !w || w.kind === 'knife') return;
   if (w.mag <= 0) return;
   let r = reserveFor(e);
-  // 设计意图：bot 备弹耗尽自动补满，避免 AI 因弹药管理卡死（训练/对战均如此）
-  if (e.bot && r <= 0) {
-    e.reserveMap[wkey(e)] = w.reserve;
-    r = w.reserve;
-  }
   if (ammoFor(e) >= w.mag || r <= 0) return;
   e.reloading = true;
   e.reloadT = w.reload / 1000 * (e.reloadMult || 1);
