@@ -165,3 +165,38 @@ export function buildMetro() {
   for (let x = 50; x <= 53; x++) b.wall(x, 6);
   return b;
 }
+
+export function buildForge() {
+  const b = createBuilder(80, 52);
+  border(b);
+  b.corridor(1, 2, 78, 5);          // top lane
+  b.corridor(1, 23, 78, 5);         // mid lane
+  b.corridor(1, 45, 78, 5);         // bottom lane
+  b.corridor(8, 2, 4, 48);          // west spine
+  b.corridor(36, 2, 4, 48);         // central spine
+  b.corridor(66, 2, 4, 48);         // east spine
+  b.corridor(57, 7, 14, 8);         // A approach
+  b.site('A', 59, 9, 10, 4);
+  b.boxes(60, 10, 2, 2); b.boxes(65, 12, 2, 2); b.boxes(58, 13, 2, 1);
+  b.crate(63, 11); b.crate(68, 10);
+  b.tile(63, 8, '^'); b.tile(64, 8, '^');
+  b.tile(57, 13, '='); b.tile(70, 13, '=');
+  b.corridor(8, 35, 16, 7);         // B approach
+  b.corridor(8, 42, 16, 3);         // B lower gate
+  b.site('B', 10, 36, 12, 5);
+  b.boxes(12, 37, 2, 2); b.boxes(17, 39, 2, 2); b.boxes(11, 41, 2, 1);
+  b.crate(15, 40); b.crate(20, 38);
+  b.tile(14, 36, '^'); b.tile(15, 36, '^');
+  b.tile(9, 38, '='); b.tile(24, 38, '=');
+  b.boxes(20, 24, 2, 2); b.boxes(56, 24, 2, 2);
+  b.boxes(36, 14, 2, 2); b.boxes(36, 30, 2, 2);
+  b.boxes(30, 23, 2, 2); b.boxes(48, 23, 2, 2);
+  b.boxes(8, 20, 2, 2); b.boxes(66, 20, 2, 2);
+  b.boxes(14, 3, 2, 2); b.boxes(42, 3, 2, 2);
+  b.boxes(14, 46, 2, 2); b.boxes(48, 46, 2, 2);
+  b.crate(38, 16); b.crate(38, 33); b.crate(20, 25); b.crate(55, 25);
+  b.tile(38, 19, 'o'); b.tile(38, 30, 'o');
+  b.spawn('t', 2, 3, 5, 2);
+  b.spawn('c', 73, 46, 5, 2);
+  return b;
+}
