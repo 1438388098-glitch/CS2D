@@ -241,5 +241,6 @@ ok('render 60 mixed frames', (() => {
 ok('fps entity markers generated', Array.isArray(game._fpsEntityMarkers) && game._fpsEntityMarkers.length > 0);
 ok('fps teammate marker present', game._fpsEntityMarkers.some((m) => m.team === p.team));
 ok('fps enemy marker present', game._fpsEntityMarkers.some((m) => m.team !== p.team));
+ok('fps enemy edge alert', game._fpsEnemyAlert && game._fpsEnemyAlert.count > 0);
 
 console.log('render3d-smoke: all PASS');

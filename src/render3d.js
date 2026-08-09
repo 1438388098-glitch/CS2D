@@ -14,6 +14,7 @@ import { initGL3d, gl3dReady, gl3dCanvas, glResize, glBegin, glSky, glFloorRow, 
 const FOV_H = Math.PI / 2;
 const NEAR = 0.01;
 const PITCH_LIMIT = 1.35;
+const MAX_FPS_MARKERS = 24;
 // B5 开镜过渡插值辅助
 const lerp = (a, b, t) => a + (b - a) * t;
 const easeInOut = (t) => t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
@@ -904,6 +905,62 @@ function drawEnemyMarkers(F) {
   }
 }
 
+// 遇敌红边与方向提示：敌人存在时给画面边缘淡红反馈；屏幕外的敌人显示指向箭头。
+function drawEnemyEdgeIndicators(F) {
+  const g = F.g;
+  const p = g.player;
+  const markers = g._fpsEntityMarkers || [];
+  let count = 0;
+  for (const m of markers) {
+    if (m.team !== p.team) count++;
+  }
+  g._fpsEnemyAlert = { count, time: g.time || 0 };
+  if (!p || g.viewMode !== 'fps' || count === 0) return;
+  const t = F.cctx;
+  const intensity = Math.min(0.18, 0.08 + count * 0.012);
+  const R = Math.max(F.iw, F.ih) * 0.7;
+  const dg = t.createRadialGradient(F.iw / 2, F.ih * 0.46, R * 0.32, F.iw / 2, F.ih * 0.46, R);
+  dg.addColorStop(0, 'rgba(255,40,30,0)');
+  dg.addColorStop(1, 'rgba(255,40,30,' + intensity.toFixed(3) + ')');
+  t.save();
+  t.fillStyle = dg;
+  t.fillRect(0, 0, F.iw, F.ih);
+  t.restore();
+  const pad = Math.min(F.iw, F.ih) * 0.035 + 10;
+  const size = Math.max(7, Math.min(10, F.iw / 160));
+  let shown = 0;
+  for (const m of markers) {
+    if (m.team === p.team || shown >= 6) continue;
+    const sx = m.nx * F.iw;
+    const sy = m.ny * F.ih;
+    if (sx >= pad && sx <= F.iw - pad && sy >= pad && sy <= F.ih - pad) continue;
+    const dx = sx - F.iw / 2;
+    const dy = sy - F.ih / 2;
+    const mag = Math.max(Math.abs(dx), Math.abs(dy));
+    if (mag < 1e-6) continue;
+    const ax = F.iw / 2 + dx / mag * (F.iw / 2 - pad);
+    const ay = F.ih / 2 + dy / mag * (F.ih / 2 - pad);
+    const ang = Math.atan2(dy, dx);
+    t.save();
+    t.translate(ax, ay);
+    t.rotate(ang);
+    t.globalAlpha = 0.78;
+    t.fillStyle = '#ff4030';
+    t.strokeStyle = 'rgba(0,0,0,0.7)';
+    t.lineWidth = 1.5;
+    t.beginPath();
+    t.moveTo(size * 1.2, 0);
+    t.lineTo(-size * 0.7, size * 0.8);
+    t.lineTo(-size * 0.35, 0);
+    t.lineTo(-size * 0.7, -size * 0.8);
+    t.closePath();
+    t.fill();
+    t.stroke();
+    t.restore();
+    shown++;
+  }
+}
+
 // 实体名牌与血条：只给未被墙体完全遮挡的实体绘制，避免与穿透墙标记叠成一片。
 function drawEntityPlates(F) {
   const g = F.g;
@@ -954,6 +1011,7 @@ function drawSprites(F, zbuf, alive, p) {
   drawSpectatePlate(F); // D3 观战名牌（排序绘制后手画，始终可见）
   drawTeammateMarkers(F);
   drawEnemyMarkers(F);
+  drawEnemyEdgeIndicators(F);
   drawEntityPlates(F);
 }
 
