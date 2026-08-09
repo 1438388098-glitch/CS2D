@@ -33,3 +33,9 @@ export function shouldRushDefuser(e, defusing, dist, timeLeft, minTime = 4, stop
   if (dist <= stopDist) return true;
   return timeLeft <= minTime;
 }
+
+export function shouldRotateToHot(e, hotSite, dist, timeLeft, planted = false, minTime = 12, far = 500) {
+  if (!e || e.team !== 'ct' || !hotSite || planted) return false;
+  if (e.dead || e.defusing) return false;
+  return timeLeft > minTime && dist > far;
+}

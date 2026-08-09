@@ -5,6 +5,7 @@ import {
   shouldRetreatWithoutBomb,
   shouldRetakeBomb,
   shouldRushDefuser,
+  shouldRotateToHot,
   shouldRushPlant
 } from '../src/ai/rules.js';
 
@@ -59,5 +60,12 @@ assert.equal(shouldRushDefuser({ team: 't' }, true, 1200, 10), false, 'T should 
 assert.equal(shouldRushDefuser({ team: 't' }, false, 300, 2), false, 'no defuser should not trigger rush');
 assert.equal(shouldRushDefuser({ team: 'ct' }, true, 300, 2), false, 'CT should not use T defuser-stop rule');
 assert.equal(shouldRushDefuser({ team: 't', dead: true }, true, 300, 2), false, 'dead T cannot rush defuser');
+
+assert.equal(shouldRotateToHot({ team: 'ct' }, 'A', 700, 30), true, 'CT with hot intel and time should rotate');
+assert.equal(shouldRotateToHot({ team: 'ct' }, 'A', 300, 30), false, 'CT already near hot site should not rotate pointlessly');
+assert.equal(shouldRotateToHot({ team: 'ct' }, 'A', 700, 8), false, 'CT should not rotate when time is nearly gone');
+assert.equal(shouldRotateToHot({ team: 'ct' }, 'A', 700, 30, true), false, 'CT should not rotate after bomb is planted');
+assert.equal(shouldRotateToHot({ team: 't' }, 'A', 700, 30), false, 'T should not use CT hot-rotate rule');
+assert.equal(shouldRotateToHot({ team: 'ct', dead: true }, 'A', 700, 30), false, 'dead CT cannot rotate');
 
 console.log('ai-rules: all PASS');
