@@ -253,5 +253,7 @@ for (const key of ['dash', 'schedule', 'training', 'roster', 'standings', 'cup']
   const html = __renderTabForTest(key);
   ok('career tab renders ' + key, html && html.length > 0);
 }
+const trainingHtml = __renderTabForTest('training');
+ok('career training radar renders', trainingHtml.includes('career-radar') && trainingHtml.includes('综合能力'));
 
 console.log('career: all PASS');

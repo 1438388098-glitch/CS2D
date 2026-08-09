@@ -542,6 +542,16 @@ td.money{color:var(--gold);font-family:var(--f-num)}
 .career-fixture.mine{border:1px solid rgba(255,138,42,.4)}
 .career-train-row{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:7px 0;border-bottom:1px solid rgba(255,255,255,.05)}
 .career-train-row b{width:110px;font-size:12px}
+.career-radar-wrap{display:flex;align-items:center;gap:14px;margin:8px 0 12px;padding:10px;background:rgba(255,255,255,.03);border:1px solid var(--line-2);border-radius:8px}
+.career-radar{width:170px;max-width:38%;height:auto;flex:none}
+.career-radar line,.career-radar-grid{fill:none;stroke:rgba(255,255,255,.12);stroke-width:1}
+.career-radar-grid{stroke:rgba(255,255,255,.06)}
+.career-radar-shape{fill:rgba(255,138,42,.24);stroke:#ff8a2a;stroke-width:2}
+.career-radar circle{fill:#ffd75e;stroke:#ff8a2a}
+.career-radar text{fill:var(--txt-2);font-size:11px}
+.career-radar-summary{display:flex;flex-direction:column;gap:2px;min-width:0}
+.career-radar-summary b{font-size:34px;font-family:var(--f-num);color:var(--gold);line-height:1}
+.career-radar-summary span{color:var(--txt-2);font-size:12px}
 .career-roster,.career-pool{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:8px}
 .career-player-card{background:rgba(255,255,255,.04);border:1px solid var(--line-2);border-radius:7px;padding:9px 10px;display:flex;flex-direction:column;gap:3px;min-width:0}
 .career-player-card b{font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}

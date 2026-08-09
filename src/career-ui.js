@@ -136,6 +136,38 @@ function attrsBars(s) {
   return Object.entries(s.player.attrs).map(([k, v]) => '<div class="career-attr"><span>' + cn(k, ATTR_CN) + '</span><div class="career-bar"><i style="width:' + v + '%"></i></div><b>' + v + '</b></div>').join('');
 }
 
+function attrsRadar(attrs) {
+  const keys = Object.keys(attrs);
+  const cx = 80;
+  const cy = 75;
+  const r = 58;
+  const point = (k, scale) => {
+    const i = keys.indexOf(k);
+    const angle = -Math.PI / 2 + (i * 2 * Math.PI) / keys.length;
+    const val = Math.max(0, Math.min(1, (attrs[k] || 0) / 100 * scale));
+    return (cx + Math.cos(angle) * r * val) + ',' + (cy + Math.sin(angle) * r * val);
+  };
+  const grid = [0.25, 0.5, 0.75, 1].map((s) => '<polygon points="' + keys.map((k) => point(k, s)).join(' ') + '" class="career-radar-grid"/>').join('');
+  const axes = keys.map((k) => {
+    const p = point(k, 1);
+    return '<line x1="' + cx + '" y1="' + cy + '" x2="' + p.split(',')[0] + '" y2="' + p.split(',')[1] + '"/>';
+  }).join('');
+  const labels = keys.map((k, i) => {
+    const angle = -Math.PI / 2 + (i * 2 * Math.PI) / keys.length;
+    const x = Math.round(cx + Math.cos(angle) * (r + 14));
+    const y = Math.round(cy + Math.sin(angle) * (r + 14) + 3);
+    return '<text x="' + x + '" y="' + y + '" text-anchor="middle">' + cn(k, ATTR_CN) + '</text>';
+  }).join('');
+  const poly = '<polygon points="' + keys.map((k) => point(k, 1)).join(' ') + '" class="career-radar-shape"/>';
+  const dots = keys.map((k) => {
+    const p = point(k, 1).split(',');
+    return '<circle cx="' + p[0] + '" cy="' + p[1] + '" r="2.6"/>';
+  }).join('');
+  const total = Object.values(attrs).reduce((a, b) => a + Number(b || 0), 0);
+  const average = Math.round(total / Math.max(1, keys.length));
+  return '<div class="career-radar-wrap"><svg class="career-radar" viewBox="0 0 160 150" role="img" aria-label="属性雷达图">' + grid + axes + poly + dots + labels + '</svg><div class="career-radar-summary"><b>' + average + '</b><span>综合能力</span></div></div>';
+}
+
 function renderDash(s) {
   const stats = s.player.seasonStats;
   const nm = nextMatch(s);
@@ -207,7 +239,7 @@ function renderSchedule(s) {
 }
 
 function renderTraining(s) {
-  let html = '<div class="career-card"><h4>训练课</h4><p>本轮剩余 ' + s.team.trainingLeft + ' 次 · 资金 ' + money(s.team.bank) + '</p>';
+  let html = '<div class="career-card"><h4>训练课</h4><p>本轮剩余 ' + s.team.trainingLeft + ' 次 · 资金 ' + money(s.team.bank) + '</p>' + attrsRadar(s.player.attrs);
   for (const [attr, v] of Object.entries(s.player.attrs)) {
     html += '<div class="career-train-row"><b>' + cn(attr, ATTR_CN) + ' (' + v + ')</b>';
     for (const tier of trainingTiers()) {
