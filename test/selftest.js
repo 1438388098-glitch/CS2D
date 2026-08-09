@@ -666,3 +666,6 @@ process.exit(0);
   game.noRoundEnd = true;
   game.noRoundEnd = false;
   game.noRoundEnd = false;
+  game.noRoundEnd = true;
+  game.noRoundEnd = false;
+  game.noRoundEnd = false;

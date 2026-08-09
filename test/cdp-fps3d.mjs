@@ -5,6 +5,26 @@ const APP_PORT = 8097;
 const DBG_PORT = 9237;
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
+async function waitForApp(cdp, timeout = 12000) {
+  const t0 = Date.now();
+  while (Date.now() - t0 < timeout) {
+    const ready = await cdp.eval(`(()=>{
+      const b = document.getElementById('startBtn');
+      return !!(b && window.__cs2d && window.__cs2d.game);
+    })()`);
+    if (ready) return;
+    await sleep(300);
+  }
+  const diag = await cdp.eval(`(()=>({
+    href: location.href,
+    readyState: document.readyState,
+    bodyLen: document.body ? document.body.innerHTML.length : -1,
+    hasStart: !!document.getElementById('startBtn'),
+    hasGame: !!(window.__cs2d && window.__cs2d.game)
+  }))()`);
+  throw new Error('app not ready: ' + JSON.stringify(diag));
+}
+
 const srv = spawn('node', ['server.js'], {
   cwd: 'D:/Claudeworkspace/CS2D',
   env: { ...process.env, PORT: String(APP_PORT) },
@@ -28,11 +48,12 @@ try {
   const cdp = new CDP(pageUrl);
   await cdp.connect();
   await cdp.navigate(`http://127.0.0.1:${APP_PORT}/`);
-  await sleep(2500);
+  await waitForApp(cdp);
 
   const bodyLen = await cdp.eval(`document.body ? document.body.innerHTML.length : -1`);
   pass('body html length: ' + bodyLen);
 
+  await cdp.eval(`(()=>{try{localStorage.clear()}catch(e){}const g=window.__cs2d&&window.__cs2d.game;if(g)g.opts.mode='classic';return true})()`);
   const started = await cdp.eval(`(()=>{const b=document.getElementById('startBtn');if(!b)return false;b.click();return true})()`);
   if (!started) fail('start button missing');
   else pass('start clicked');
