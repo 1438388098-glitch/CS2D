@@ -672,7 +672,8 @@ box.innerHTML = '<div class="mode-hint">点击“开始”进入地图编辑器�
     if (!opts.leftId) opts.leftId = CYBER_ROSTER[0].id;
     if (!opts.rightId) opts.rightId = CYBER_ROSTER[1].id;
     if (!opts.mapId) opts.mapId = 'dust2';
-    if (!opts.bet) opts.bet = Math.min(100, coins);
+    if (!opts.bet) opts.bet = Math.min(100, Math.max(1, Math.floor(coins * 0.25)));
+    if (opts.bet > Math.floor(coins * 0.25)) opts.bet = Math.max(1, Math.floor(coins * 0.25));
     if (!opts.side) opts.side = 'left';
     const teamHtml = (selId) => CYBER_ROSTER.map((c) => '<option value="' + c.id + '"' + (c.id === selId ? ' selected' : '') + '>' + c.tag + ' \u00b7 ' + c.name + ' \u00b7 ' + c.rating + '</option>').join('');
     const mapHtml = ['dust2', 'canal', 'metro'].map((id) => '<option value="' + id + '"' + (opts.mapId === id ? ' selected' : '') + '>' + id + '</option>').join('');
@@ -682,7 +683,7 @@ box.innerHTML = '<div class="mode-hint">点击“开始”进入地图编辑器�
       '<div class="cyber-pick"><label>\u5de6\u65b9\u6218\u961f</label><select id="cyberLeft">' + teamHtml(opts.leftId) + '</select></div>' +
       '<div class="cyber-pick"><label>\u53f3\u65b9\u6218\u961f</label><select id="cyberRight">' + teamHtml(opts.rightId) + '</select></div>' +
       '<div class="cyber-pick"><label>\u5730\u56fe</label><select id="cyberMap">' + mapHtml + '</select></div>' +
-      '<div class="cyber-pick"><label>\u4e0b\u6ce8\u91d1\u989d</label><input id="cyberBet" type="number" min="1" max="' + coins + '" value="' + opts.bet + '"></div>' +
+      '<div class="cyber-pick"><label>\u4e0b\u6ce8\u91d1\u989d</label><input id="cyberBet" type="number" min="1" max="' + Math.max(1, Math.floor(coins * 0.25)) + '" value="' + opts.bet + '"></div>' +
       '<div class="cyber-pick"><label>\u62bc\u6ce8\u65b9</label><select id="cyberSide"><option value="left"' + (opts.side === 'left' ? ' selected' : '') + '>\u5de6\u65b9</option><option value="right"' + (opts.side === 'right' ? ' selected' : '') + '>\u53f3\u65b9</option></select></div>' +
       '<div id="cyberOdds" class="mode-hint"></div><div class="mode-hint">\u6700\u8fd1\u8bb0\u5f55</div>' + histHtml;
     const leftSel = el('cyberLeft'), rightSel = el('cyberRight'), mapSel = el('cyberMap'), betIn = el('cyberBet'), sideSel = el('cyberSide');
@@ -700,7 +701,7 @@ box.innerHTML = '<div class="mode-hint">点击“开始”进入地图编辑器�
     if (leftSel) leftSel.onchange = () => { opts.leftId = leftSel.value; renderOdds(); };
     if (rightSel) rightSel.onchange = () => { opts.rightId = rightSel.value; renderOdds(); };
     if (mapSel) mapSel.onchange = () => { opts.mapId = mapSel.value; };
-    if (betIn) betIn.onchange = () => { opts.bet = Math.max(1, Math.floor(Number(betIn.value) || 100)); renderOdds(); };
+    if (betIn) betIn.onchange = () => { const cap = Math.max(1, Math.floor(coins * 0.25)); opts.bet = Math.min(cap, Math.max(1, Math.floor(Number(betIn.value) || 100))); renderOdds(); };
     if (sideSel) sideSel.onchange = () => { opts.side = sideSel.value; renderOdds(); };
     renderOdds();
   } else if (mode === 'duel') {
