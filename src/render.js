@@ -1,10 +1,11 @@
-import { WEAPONS, DROP_COL, TILE } from './config.js';
-import { weaponDef } from './entities.js';
-import { getMap, getGrid } from './map.js';
-import { gunLen, FONT } from './render-utils.js';
-import { clamp, rand } from './utils.js';
+import {WEAPONS, DROP_COL, TILE} from './config.js';
+import {weaponDef} from './entities.js';
+import {getMap, getGrid} from './map.js';
+import {gunLen} from './render-utils.js';
+import {clamp, rand} from './utils.js';
 const mapTile = () => getMap()?.tile || TILE;
-import { ARCHETYPES } from './persona.js';
+import {ARCHETYPES} from './persona.js';
+import {fogEnabled, castVisionPolygon} from './fog.js';
 
 let ctx = null;
 let layers = null;
@@ -19,7 +20,9 @@ export function render(game) {
   const w2 = ctx.canvas.width / dpr;
   const h2 = ctx.canvas.height / dpr;
   const p = game.player;
-  if (!p || p.dead) game.zoom = 1;
+  if (!p || p.dead) {
+    if (!(game.cyber && game.state === 'LIVE' && !game.cyber.ended)) game.zoom = 0.75;
+  }
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   ctx.fillStyle = '#14161a';
   ctx.fillRect(0, 0, w2, h2);
@@ -33,6 +36,7 @@ export function render(game) {
   game._shy = shy;
   ctx.save();
   ctx.translate(w2 / 2, h2 / 2);
+  // 地图固定：所有视角都不旋转世界（人物朝向由实体 sprite 的 angle 表现）
   ctx.scale(scale, scale);
   ctx.translate(-game.camX + shx, -game.camY + shy);
   ctx.drawImage(layers.staticLayer, 0, 0);
@@ -107,6 +111,7 @@ function drawWaterOverlay(game) {
 function drawBombSiteMarks(game) {
   const map = getMap();
   if (game.state !== 'BUY' && game.state !== 'LIVE') return;
+  if (!map.sites || !map.sites.A || !map.sites.B) return;
   const pulse = 0.5 + 0.5 * Math.sin(performance.now() / 400);
   ctx.strokeStyle = 'rgba(255,150,90,' + (0.25 + 0.2 * pulse) + ')';
   ctx.lineWidth = 3;
@@ -168,7 +173,8 @@ function drawDrops(game) {
   ctx.font = "12px 'Segoe UI','Microsoft YaHei',sans-serif";
   ctx.textAlign = 'center';
   for (const d of game.drops) {
-    const w = WEAPONS[d.wid];
+    const info = dropRenderInfo(d);
+    if (!info) continue;
     const blink = 0.65 + 0.35 * Math.sin(performance.now() / 280);
     const near = game.player && !game.player.dead && Math.hypot(game.player.x - d.x, game.player.y - d.y) < 48;
     ctx.save();
@@ -177,24 +183,74 @@ function drawDrops(game) {
     ctx.beginPath();
     ctx.ellipse(0, 5, 11, 5, 0, 0, Math.PI * 2);
     ctx.fill();
-    ctx.rotate(-Math.PI / 2);
-    const len = w.kind === 'sniper' ? 30 : (w.kind === 'rifle' ? 26 : 22);
-    ctx.fillStyle = 'rgba(24,26,32,' + blink + ')';
-    ctx.fillRect(-len / 2, -3.5, len, 7);
-    ctx.fillStyle = DROP_COL[w.kind] || '#ccc';
-    ctx.fillRect(-len / 2, -1.2, len, 2.4);
-    ctx.fillStyle = 'rgba(255,255,255,' + blink + ')';
-    ctx.fillRect(-len / 2, -4, 4, 8);
+    if (info.kind === 'kit') {
+      ctx.fillStyle = 'rgba(24,26,32,' + blink + ')';
+      ctx.fillRect(-7, -5, 14, 10);
+      ctx.fillStyle = info.color;
+      ctx.fillRect(-2.5, -8, 5, 16);
+      ctx.strokeStyle = 'rgba(255,255,255,' + blink + ')';
+      ctx.lineWidth = 1.5;
+      ctx.strokeRect(-7, -5, 14, 10);
+    } else {
+      const w = WEAPONS[d.wid];
+      ctx.rotate(-Math.PI / 2);
+      const len = w.kind === 'sniper' ? 30 : (w.kind === 'rifle' ? 26 : 22);
+      ctx.fillStyle = 'rgba(24,26,32,' + blink + ')';
+      ctx.fillRect(-len / 2, -3.5, len, 7);
+      ctx.fillStyle = info.color;
+      ctx.fillRect(-len / 2, -1.2, len, 2.4);
+      ctx.fillStyle = 'rgba(255,255,255,' + blink + ')';
+      ctx.fillRect(-len / 2, -4, 4, 8);
+    }
     ctx.restore();
     ctx.fillStyle = near ? 'rgba(255,240,180,' + blink + ')' : 'rgba(255,220,150,' + blink * 0.8 + ')';
     ctx.font = near ? "bold 11px 'Segoe UI','Microsoft YaHei',sans-serif" : "9px 'Segoe UI','Microsoft YaHei',sans-serif";
-    ctx.fillText(w.name, d.x, d.y - 16);
+    ctx.fillText(info.label, d.x, d.y - 16);
     if (near) {
       ctx.fillStyle = 'rgba(140,255,170,0.9)';
       ctx.font = "10px 'Segoe UI','Microsoft YaHei',sans-serif";
       ctx.fillText('拾取', d.x, d.y + 20);
     }
   }
+  ctx.restore();
+}
+
+export function dropRenderInfo(d) {
+  if (!d) return null;
+  if (d.kind === 'kit') return { label: '拆弹钳', kind: 'kit', color: '#ffd34d' };
+  const w = d.wid && WEAPONS[d.wid];
+  if (!w) return null;
+  return { label: w.name, kind: w.kind, color: DROP_COL[w.kind] || '#ccc' };
+}
+
+function drawLaser(game) {
+  const p = game.player;
+  if (!p || p.dead || !p.laserEnd) return;
+  const end = p.laserEnd;
+  const sx = p.x + Math.cos(p.angle) * 20;
+  const sy = p.y + Math.sin(p.angle) * 20;
+  const dx = end.x - sx, dy = end.y - sy;
+  const len = Math.hypot(dx, dy);
+  if (len < 2) return;
+  const strong = p.scoped ? 0.9 : 0.38;
+  ctx.save();
+  ctx.lineCap = 'round';
+  ctx.strokeStyle = 'rgba(255,70,70,' + (strong * 0.14) + ')';
+  ctx.lineWidth = 9;
+  ctx.beginPath();
+  ctx.moveTo(sx, sy);
+  ctx.lineTo(end.x, end.y);
+  ctx.stroke();
+  ctx.strokeStyle = 'rgba(255,70,70,' + strong + ')';
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(sx, sy);
+  ctx.lineTo(end.x, end.y);
+  ctx.stroke();
+  ctx.fillStyle = 'rgba(255,120,120,0.95)';
+  ctx.beginPath();
+  ctx.arc(end.x, end.y, 4, 0, Math.PI * 2);
+  ctx.fill();
   ctx.restore();
 }
 
@@ -212,74 +268,10 @@ function drawGrenades(game) {
   }
 }
 
-function drawCricketEntity(e) {
-  const col = e.color || '#ffd75e';
-  const pct = clamp(e.hp / e.maxHp, 0, 1);
-  ctx.save();
-  ctx.translate(e.x, e.y);
-  ctx.fillStyle = 'rgba(0,0,0,0.35)';
-  ctx.beginPath();
-  ctx.ellipse(0, 5, 14, 7, 0, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.strokeStyle = col;
-  ctx.lineWidth = 1.6;
-  const wa = Math.sin(performance.now() / 300) * 3;
-  ctx.beginPath();
-  ctx.moveTo(0, -12);
-  ctx.lineTo(9 + wa, -23);
-  ctx.moveTo(0, -12);
-  ctx.lineTo(-9 + wa, -23);
-  ctx.stroke();
-  ctx.rotate(e.angle);
-  ctx.fillStyle = 'rgba(0,0,0,0.2)';
-  ctx.beginPath();
-  ctx.ellipse(0, 0, 15, 18, 0, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.fillStyle = col;
-  ctx.beginPath();
-  ctx.ellipse(0, 0, 12, 16, 0, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.fillStyle = '#1d222a';
-  ctx.beginPath();
-  ctx.arc(0, -13, 8, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.fillStyle = '#fff';
-  ctx.beginPath();
-  ctx.arc(3, -15, 2.4, 0, Math.PI * 2);
-  ctx.arc(-3, -15, 2.4, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.strokeStyle = 'rgba(255,255,255,0.25)';
-  ctx.lineWidth = 2;
-  for (let i = -1; i <= 1; i++) {
-    ctx.beginPath();
-    ctx.moveTo(i * 5, 2);
-    ctx.lineTo(i * 8, 13);
-    ctx.stroke();
-  }
-  ctx.strokeStyle = 'rgba(0,0,0,0.6)';
-  ctx.lineWidth = 3;
-  ctx.beginPath();
-  ctx.arc(0, 0, 22, 0, Math.PI * 2);
-  ctx.stroke();
-  ctx.strokeStyle = pct > 0.5 ? '#7be36a' : pct > 0.25 ? '#ffd75e' : '#ff5d5d';
-  ctx.beginPath();
-  ctx.arc(0, 0, 22, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * pct);
-  ctx.stroke();
-  ctx.restore();
-  ctx.save();
-  ctx.globalAlpha = 0.9;
-  ctx.font = "11px 'Segoe UI','Microsoft YaHei',sans-serif";
-  ctx.textAlign = 'center';
-  ctx.fillStyle = col;
-  ctx.fillText(e.name, e.x, e.y - 32);
-  ctx.restore();
-}
 
 function drawEntities(game) {
   for (const e of game.entities) {
     if (e.dead) continue;
-    if (e.boss) { drawBossEntity(e); continue; }
-    if (e.cricket) { drawCricketEntity(e); continue; }
     const isP = e === game.player;
     const darkCol = e.team === 'ct' ? '#4d9bff' : '#ffa03d';
     ctx.save();
@@ -482,58 +474,72 @@ function drawParticles(game) {
     }
   }
 }
-function drawBossEntity(e) {
-  const pulse = 0.55 + 0.45 * Math.sin(performance.now() / 240);
-  ctx.save();
-  ctx.translate(e.x, e.y);
-  ctx.fillStyle = "rgba(0,0,0,0.4)";
-  ctx.beginPath();
-  ctx.ellipse(0, 10, 30, 15, 0, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.strokeStyle = "rgba(210,60,255," + (0.5 + 0.4 * pulse) + ")";
-  ctx.lineWidth = 4;
-  ctx.beginPath();
-  ctx.arc(0, 0, 34, 0, Math.PI * 2);
-  ctx.stroke();
-  ctx.rotate(e.angle);
-  ctx.fillStyle = "#2b0b33";
-  ctx.beginPath();
-  ctx.ellipse(0, 0, 26, 34, 0, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.fillStyle = "#d04ad6";
-  ctx.beginPath();
-  ctx.arc(0, -8, 11, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.fillStyle = "#ff4d8d";
-  ctx.fillRect(-12, -18, 24, 5);
-  ctx.fillStyle = "#ffd27a";
-  ctx.fillRect(14, -6, 22, 4);
-  ctx.restore();
-  const hpPct = Math.max(0, e.hp / (e.maxHp || 1));
-  ctx.fillStyle = "rgba(0,0,0,0.6)";
-  ctx.fillRect(e.x - 38, e.y - 48, 76, 7);
-  ctx.fillStyle = "#d04ad6";
-  ctx.fillRect(e.x - 37, e.y - 47, 74 * hpPct, 5);
-  ctx.fillStyle = "#ffd0f0";
-  ctx.font = "12px 'Segoe UI','Microsoft YaHei',sans-serif";
-  ctx.textAlign = "center";
-  ctx.fillText(e.name, e.x, e.y - 56);
-}
-
-function drawBossShots(game) {
-  if (!game.bossShots || !game.bossShots.length) return;
-  for (const s of game.bossShots) {
-    const a = Math.min(1, s.life);
-    ctx.fillStyle = "rgba(255,70,170," + a + ")";
-    ctx.beginPath();
-    ctx.arc(s.x, s.y, s.size, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.strokeStyle = "rgba(255,220,90," + a * 0.7 + ")";
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.arc(s.x, s.y, s.size + 4, 0, Math.PI * 2);
-    ctx.stroke();
+function drawFog(game) {
+  if (!fogEnabled(game)) return;
+  if (typeof document === 'undefined') return;
+  const map = getMap();
+  if (!map || !map.W || !map.H) return;
+  const SCALE = 0.5;
+  const fw = Math.max(1, Math.ceil(map.W * SCALE));
+  const fh = Math.max(1, Math.ceil(map.H * SCALE));
+  let cv = game._fogCv;
+  if (!cv || cv.width !== fw || cv.height !== fh) {
+    cv = document.createElement('canvas');
+    cv.width = fw;
+    cv.height = fh;
+    game._fogCv = cv;
   }
+  const p = game.player;
+  const viewpoints = [];
+  if (p && !p.dead) viewpoints.push(p);
+  for (const e of game.entities) {
+    if (e.bot && !e.dead && p && e.team === p.team) viewpoints.push(e);
+  }
+  if (!viewpoints.length) {
+    ctx.save();
+    ctx.imageSmoothingEnabled = true;
+    ctx.drawImage(cv, 0, 0, map.W, map.H);
+    ctx.restore();
+    return;
+  }
+  const now = performance.now();
+  const smokeKey = (game.smokes || []).map((s) => Math.round(s.x / 32) + ',' + Math.round(s.y / 32)).join(';');
+  const posKey = viewpoints.map((v) => Math.round(v.x / 16) + ',' + Math.round(v.y / 16)).join('|');
+  const key = posKey + '#' + smokeKey;
+  if (game._fogKey === key && now - (game._fogUpdatedAt || 0) < 120) {
+    ctx.save();
+    ctx.imageSmoothingEnabled = true;
+    ctx.drawImage(cv, 0, 0, map.W, map.H);
+    ctx.restore();
+    return;
+  }
+  game._fogKey = key;
+  game._fogUpdatedAt = now;
+  const fctx = cv.getContext('2d');
+  fctx.setTransform(1, 0, 0, 1, 0, 0);
+  fctx.globalCompositeOperation = 'source-over';
+  fctx.clearRect(0, 0, fw, fh);
+  fctx.fillStyle = 'rgba(2,5,9,0.94)';
+  fctx.fillRect(0, 0, fw, fh);
+  fctx.globalCompositeOperation = 'destination-out';
+  for (const v of viewpoints) {
+    const pts = castVisionPolygon(game, v.x, v.y, 560, 96);
+    fctx.save();
+    fctx.shadowColor = 'rgba(0,0,0,1)';
+    fctx.shadowBlur = 10;
+    fctx.fillStyle = 'rgba(0,0,0,1)';
+    fctx.beginPath();
+    fctx.moveTo(pts[0].x * SCALE, pts[0].y * SCALE);
+    for (let i = 1; i < pts.length; i++) fctx.lineTo(pts[i].x * SCALE, pts[i].y * SCALE);
+    fctx.closePath();
+    fctx.fill();
+    fctx.restore();
+  }
+  fctx.globalCompositeOperation = 'source-over';
+  ctx.save();
+  ctx.imageSmoothingEnabled = true;
+  ctx.drawImage(cv, 0, 0, map.W, map.H);
+  ctx.restore();
 }
 
 function drawTracers(game) {
