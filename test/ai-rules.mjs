@@ -10,6 +10,7 @@ import {
   shouldRotateToHot,
   shouldUnstuck,
   pickPlantSite,
+  shouldEscortCarrier,
   shouldRushPlant
 } from '../src/ai/rules.js';
 
@@ -94,5 +95,14 @@ assert.equal(pickPlantSite({ team: 't', hasBomb: true }, { dist: 400, cover: 1, 
 assert.equal(pickPlantSite({ team: 't', hasBomb: false }, { dist: 200, cover: 2 }, { dist: 500, cover: 1 }, 40), null, 'non-carrier should not choose plant site');
 assert.equal(pickPlantSite({ team: 't', hasBomb: true, dead: true }, { dist: 200, cover: 2 }, { dist: 500, cover: 1 }, 40), null, 'dead carrier should not choose plant site');
 assert.equal(pickPlantSite({ team: 't', hasBomb: true, bomb: { planted: true } }, { dist: 200, cover: 2 }, { dist: 500, cover: 1 }, 40), null, 'planted bomb should not choose another site');
+
+assert.equal(shouldEscortCarrier({ team: 't' }, 200, 180, 12), true, 'near-site carrier should be escorted early');
+assert.equal(shouldEscortCarrier({ team: 't' }, 200, 500, 12), false, 'carrier still far from site should not gather teammates');
+assert.equal(shouldEscortCarrier({ team: 't' }, 200, 180, 24), false, 'mid-round teammates should keep lanes instead of escorting');
+assert.equal(shouldEscortCarrier({ team: 't' }, 80, 180, 12), false, 'already close teammate should not collapse onto carrier');
+assert.equal(shouldEscortCarrier({ team: 't', hasBomb: true }, 200, 180, 12), false, 'bomb carrier should not escort itself');
+assert.equal(shouldEscortCarrier({ team: 'ct' }, 200, 180, 12), false, 'CT should not use T escort rule');
+assert.equal(shouldEscortCarrier({ team: 't', dead: true }, 200, 180, 12), false, 'dead bot cannot escort');
+assert.equal(shouldEscortCarrier({ team: 't', bomb: { planted: true } }, 200, 180, 12), false, 'planted bomb should end escort behavior');
 
 console.log('ai-rules: all PASS');

@@ -72,3 +72,10 @@ export function pickPlantSite(e, siteA, siteB, timeLeft, lateAt = 30, minAdvanta
   if (Math.abs(a - b) < minAdvantage) return null;
   return a > b ? 'A' : 'B';
 }
+
+export function shouldEscortCarrier(e, distToCarrier, carrierToSite, roundTime, earlyUntil = 20, closeSite = 300, closeCarrier = 420) {
+  if (!e || e.hasBomb || e.dead) return false;
+  if (e.team !== 't' || distToCarrier <= 0 || !Number.isFinite(carrierToSite)) return false;
+  if (e.bomb && e.bomb.planted) return false;
+  return roundTime < earlyUntil && carrierToSite <= closeSite && distToCarrier > 120 && distToCarrier < closeCarrier;
+}
