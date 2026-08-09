@@ -80,6 +80,10 @@ function sendStatus(res, code, body, extraHeaders = {}) {
 }
 
 const server = http.createServer((req, res) => {
+  // 请求日志（LOG=1 开启）：记录方法/路径/状态码，便于本地调试
+  if (process.env.LOG === '1') {
+    res.on('finish', () => console.log(`[http] ${req.method} ${req.url} -> ${res.statusCode}`));
+  }
   if (req.method !== 'GET' && req.method !== 'HEAD') {
     sendStatus(res, 405, 'Method Not Allowed', { 'Allow': 'GET, HEAD' });
     return;
