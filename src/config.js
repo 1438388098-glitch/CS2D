@@ -19,7 +19,7 @@ registerWeapon('p90', { name: 'P90', price: 2350, dmg: 21, rpm: 857, mag: 50, re
 registerWeapon('xm', { name: 'XM1014', price: 2000, dmg: 11, rpm: 71, mag: 7, reserve: 32, reload: 2600, spread: 7.0, speed: 0.9, auto: false, kind: 'shotgun', range: 750, pellets: 8, ballistic: { first: 0.65, perShot: 0.1, max: 1.5, recover: 2.2, move: { stand: 1.0, walk: 0.45, run: 1.25, crouch: 0.75 } } });
 registerWeapon('ak', { name: 'AK-47', price: 2700, dmg: 40, rpm: 600, mag: 30, reserve: 90, reload: 2400, spread: 2.4, speed: 0.87, auto: true, kind: 'rifle', range: 1300, ballistic: { first: 0.08, perShot: 0.12, max: 2.1, recover: 2.2, move: { stand: 1.0, walk: 0.45, run: 1.6, crouch: 0.68 } } });
 registerWeapon('m4', { name: 'M4A4', price: 3100, dmg: 33, rpm: 666, mag: 30, reserve: 90, reload: 2400, spread: 1.8, speed: 0.87, auto: true, kind: 'rifle', range: 1300, ballistic: { first: 0.08, perShot: 0.1, max: 1.9, recover: 2.4, move: { stand: 1.0, walk: 0.45, run: 1.6, crouch: 0.68 } } });
-registerWeapon('awp', { name: 'AWP', price: 4750, dmg: 115, rpm: 41, mag: 5, reserve: 30, reload: 3700, spread: 14.0, speed: 0.72, auto: false, kind: 'sniper', range: 1500, scoped: true, ballistic: { first: 0.1, perShot: 0, max: 1.2, recover: 2.5, move: { stand: 1.0, walk: 0.7, run: 2.4, crouch: 0.85 } } });
+registerWeapon('awp', { name: 'AWP', price: 4750, dmg: 115, rpm: 41, mag: 5, reserve: 30, reload: 3700, spread: 14.0, speed: 0.72, auto: false, kind: 'sniper', range: 1500, scoped: true, armorPen: 1, ballistic: { first: 0.1, perShot: 0, max: 1.2, recover: 2.5, move: { stand: 1.0, walk: 0.7, run: 2.4, crouch: 0.85 } } });
 
 // 兼容导出：注册表视图（运行时新注册的武器立即可见，零破坏既有 WEAPONS[id] 访问）
 export const WEAPONS = new Proxy({}, {

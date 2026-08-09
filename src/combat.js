@@ -341,6 +341,9 @@ export function applyDamage(v, dmg, opt, game) {
   if (v.dead) return;
   const head = opt.head;
   const armor = v.armor > 0;
+  // 护甲穿透：狙击等穿甲武器按 armorPen 比例无视护甲（AWP 身体一枪击杀全甲目标，符合 CS 规则）
+  const penW = typeof opt.weapon === 'string' ? WEAPONS[opt.weapon] : null;
+  const armorPen = (penW && penW.armorPen) || 0;
   let hpLoss, armLoss;
   if (head && (!armor || !v.helmet)) {
     hpLoss = dmg * 4;
@@ -349,7 +352,7 @@ export function applyDamage(v, dmg, opt, game) {
     hpLoss = dmg * 4 * 0.75;
     armLoss = 0;
   } else if (armor) {
-    const absorbed = Math.min(dmg * 0.4, v.armor);
+    const absorbed = Math.min(dmg * 0.4 * (1 - armorPen), v.armor);
     hpLoss = dmg - absorbed;
     armLoss = absorbed;
   } else {
