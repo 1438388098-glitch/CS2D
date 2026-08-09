@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "start": "node server.js",
-    "test": "node test/selftest.js && node test/core-infra.mjs && node test/map-gen.mjs && node test/input.mjs && node test/audio-patch.js && node test/fog.mjs && node test/senses.mjs && node test/ai-perception.mjs && node test/ai-nades.mjs && node test/ai-spacing.mjs && node test/ai-clutch.mjs && node test/ai-retake.mjs && node test/ai-defuse.mjs && node test/ai-hold.mjs && node test/ai-stalk.mjs && node test/ai-pickup.mjs && node test/ai-retreat.mjs && node test/ai-stress.mjs && node test/ai-ladder.mjs && node test/ai-nav.mjs && node test/ai-intel.mjs && node test/ai-hunt.mjs && node test/ai-escort.mjs && node test/ai-fairness.mjs && node test/ai-pistol.mjs && node test/ai-support.mjs && node test/simulate.js && node test/modes.js && node test/economy.js && node test/ai-tactics.mjs && node test/ai-highpoint.mjs && node test/map-depth.mjs && node test/map-editor.mjs && node test/weapons-falloff.mjs && node test/career.mjs && node test/ranked.mjs && node test/duel.mjs && node test/render3d-proj.mjs && node test/fps-integration.mjs && node test/render3d-smoke.mjs && node test/fps-feedback.mjs && node test/config-validation.mjs && node test/audio-tail.mjs && node test/map-editor-export.mjs && node test/quick-throw.mjs && node test/server-http.mjs && node test/official-maps.mjs",
+    "test": "node scripts/run-tests.mjs",
     "check": "node scripts/check-syntax.mjs",
     "train": "node train/run-evolve.mjs",
     "train-batch": "node train/run-batch.mjs --gens=200 --map=dust2",
