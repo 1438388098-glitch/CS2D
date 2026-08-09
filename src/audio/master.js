@@ -18,6 +18,11 @@ export function initAudio() {
     initAudioCore(() => new AC());
     resumeAudio();
     if (typeof window !== 'undefined') bindAudioUnlock(window);
+    // 静音状态持久化：启动时从偏好恢复
+    try {
+      const prefs = readAudioPrefs(localStorage);
+      muted = prefs.muted === true;
+    } catch (e) { /* 无存储 */ }
     setMasterGain(muted ? 0 : 1);
     // 音量偏好（设置页滑杆）
     try {
@@ -31,6 +36,12 @@ export function initAudio() {
 export function setMuted(v) {
   muted = v;
   setMasterGain(v ? 0 : 1);
+  // 持久化静音状态
+  try {
+    const prefs = readAudioPrefs(localStorage);
+    prefs.muted = v;
+    writeAudioPrefs(prefs, localStorage);
+  } catch (e) { /* 无存储 */ }
 }
 
 export function isMuted() { return muted; }
