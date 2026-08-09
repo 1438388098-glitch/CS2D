@@ -4,6 +4,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import crypto from 'crypto';
 import { spawnSync } from 'child_process';
+import zlib from 'zlib';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = __dirname;
@@ -44,6 +45,25 @@ const SECURITY_HEADERS = {
   'Cross-Origin-Resource-Policy': 'same-origin'
 };
 
+const COMPRESSIBLE_EXT = new Set(['.html', '.js', '.mjs', '.css', '.json', '.svg', '.txt', '.map']);
+
+function cacheControlFor(filePath) {
+  const ext = path.extname(filePath).toLowerCase();
+  return ext === '.html' ? 'no-cache' : 'public, max-age=3600';
+}
+
+function compressIfPossible(data, req, filePath) {
+  const ext = path.extname(filePath).toLowerCase();
+  if (!COMPRESSIBLE_EXT.has(ext) || data.length < 1024) return null;
+  const acceptEncoding = String(req.headers['accept-encoding'] || '').toLowerCase();
+  if (!acceptEncoding.includes('gzip')) return null;
+  try {
+    return zlib.gzipSync(data);
+  } catch (err) {
+    return null;
+  }
+}
+
 function sendStatus(res, code, body) {
   res.writeHead(code, { 'Content-Type': 'text/plain; charset=utf-8', ...SECURITY_HEADERS });
   res.end(body);
@@ -76,15 +96,23 @@ const server = http.createServer((req, res) => {
     }
     const headers = {
       'Content-Type': MIME[path.extname(filePath).toLowerCase()] || 'application/octet-stream',
-      'Cache-Control': 'no-cache',
+      'Cache-Control': cacheControlFor(filePath),
+      'Vary': 'Accept-Encoding',
       ...SECURITY_HEADERS
     };
+    const body = compressIfPossible(data, req, filePath);
+    if (body) {
+      headers['Content-Encoding'] = 'gzip';
+      headers['Content-Length'] = body.length;
+    } else {
+      headers['Content-Length'] = data.length;
+    }
     res.writeHead(200, headers);
     if (req.method === 'HEAD') {
       res.end();
       return;
     }
-    res.end(data);
+    res.end(body || data);
   });
 });
 
