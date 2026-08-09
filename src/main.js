@@ -1,18 +1,24 @@
-import { createGame, startMatch, update } from './game.js';
-import { initTextures, preloadTextures } from './textures.js';
-import { initRenderer, render } from './render.js';
-import { initHud, renderHud, renderCrosshair, renderMinimap, toggleMiniZoom, isMiniZoomed, setMiniZoom } from './hud.js';
-import { initUi, setMutedFnExposed, setMenuBackgroundFromLayer, refreshMapPreviews } from './ui.js';
-import { initUiDom, updateHudDom } from './ui-dom.js';
-import { initInput, resizeCanvas, setKey, setMouse, setMouseDown } from './input.js';
-import { killEntity } from './combat.js';
-import { getMap } from './map.js';
-import { MAPS } from './config.js';
-import { setMuted, isMuted, setAudioContext, startAmbient } from './audio.js';
+import {createGame, startMatch, update, skipSpectatedRound} from './game.js';
+import {initTextures, preloadTextures} from './textures.js';
+import {initRenderer, render} from './render.js';
+import {initRenderer3d, render3d, fpsCameraEntity} from './render3d.js';
+import {updateFpsUi, getAudioPrefs} from './ui.js';
+import {initHud, renderHud, renderCrosshair, renderMinimap, renderLens, toggleMiniZoom, isMiniZoomed, setMiniZoom} from './hud.js';
+import {initUi, setMutedFnExposed, setMenuBackgroundFromLayer, refreshMapPreviews, syncMapCards} from './ui.js';
+import {initUiDom, updateHudDom} from './ui-dom.js';
+import {initInput, resizeCanvas, setKey, setMouse, setMouseDown, syncFpsCursor} from './input.js';
+import {killEntity} from './combat.js';
+import {getMap, loadMap, findMapById} from './map.js';
+import { installChosenFourthMap } from './4th-map-candidates.js';
+import {MAPS} from './config.js';
+import {isMuted, setAudioContext, startAmbient, initAudio, getBusVolume, setBusVolume} from './audio.js';
 import './modes.js';
-import { majorAction } from './modes.js';
-import { initLan, hostStartMatchNow } from './lan.js';
-import { openMapEditor, closeMapEditor, saveEditorMap, playEditorMapNow } from './map-editor.js';
+import {nextRenderScale} from './render-scale.js';
+import {initCareerUi} from './career-ui.js';
+import {initRankedUi} from './ranked-ui.js';
+import {majorAction} from './modes.js';
+import {initLan, hostStartMatchNow} from './lan.js';
+import {openMapEditor, closeMapEditor, saveEditorMap, playEditorMapNow, installSavedEditorMap} from './map-editor.js';
 
 const canvas = document.getElementById('game');
 const game = createGame();
@@ -23,6 +29,7 @@ setAudioContext(() => game);
 function reloadMapLayers() {
   game.layers = initTextures(getMap());
   initRenderer(canvas, game.layers);
+  initRenderer3d(canvas, game.layers);
   initHud(canvas, game.layers);
   if (game.layers) setMenuBackgroundFromLayer(game.opts.mapId, game.layers.staticLayer, game.layers.W, game.layers.H);
   startAmbient(game.opts.mapId);
@@ -33,23 +40,48 @@ game.onMapChanged = reloadMapLayers;
 function initMenuBackgrounds() {
   for (const m of MAPS) {
     try {
-      const layers = initTextures(m);
+      loadMap(m);
+      const map = getMap();
+      const layers = initTextures(map);
       if (layers) setMenuBackgroundFromLayer(m.id, layers.staticLayer, layers.W, layers.H);
     } catch (err) { /* 单图失败不阻塞 */ }
   }
+  syncMapCards();
+  refreshMapPreviews();
+  loadMap(findMapById(game.opts.mapId || 'dust2'));
+}
+
+function ensureMenuMapBackground(mapId) {
+  const def = findMapById(mapId);
+  if (!def || def.id !== mapId) return;
+  try {
+    loadMap(def);
+    const map = getMap();
+    const layers = initTextures(map);
+    if (layers) setMenuBackgroundFromLayer(mapId, layers.staticLayer, layers.W, layers.H);
+  } catch (err) { /* 单图失败不阻塞 */ }
+  loadMap(findMapById(game.opts.mapId || 'dust2'));
+  syncMapCards();
   refreshMapPreviews();
 }
 
 // 启动：先预加载真实纹理（失败自动降级程序化），再初始化所有图层与界面
 async function boot() {
   await preloadTextures();
-  reloadMapLayers();
-  initMenuBackgrounds();
+  installChosenFourthMap();
+  installSavedEditorMap();
   initUi(document, canvas, game);
+  initCareerUi(document, game);
+  initRankedUi(document, game);
   initUiDom(game);
   initInput(game, canvas);
   initLan(game);
   resizeCanvas(game, canvas);
+  reloadMapLayers();
+  initMenuBackgrounds();
+  window.__refreshMapPreviews = refreshMapPreviews;
+  window.__syncMapCards = syncMapCards;
+  window.__addMenuMapPreview = ensureMenuMapBackground;
 
   canvas.addEventListener('mousedown', (e) => {
     const cw = game.canvasW || window.innerWidth;
@@ -66,10 +98,19 @@ async function boot() {
   if (mmIn) mmIn.addEventListener('click', (e) => { setMiniZoom(2); e.stopPropagation(); });
   if (mmOut) mmOut.addEventListener('click', (e) => { setMiniZoom(1); e.stopPropagation(); });
 
+  const spdMap = [['spd1', 1], ['spd2', 2], ['spd4', 4], ['spd8', 8]];
+  for (const [id, spd] of spdMap) {
+    const b = document.getElementById(id);
+    if (b) b.addEventListener('click', () => { game.spectate.speed = spd; });
+  }
+  const skipRound = document.getElementById('skipRound');
+  if (skipRound) skipRound.addEventListener('click', () => skipSpectatedRound(game));
+
   game.ui.showMenu();
   startLoop();
 }
 
+let frameMsEma = 16.7; let statsT = 0; let scaleCur = 1.0; let scaleT = 0; // E4 自适应：默认全分辨率（1080P），超预算降档
 let lastT = performance.now();
 function startLoop() {
   function loop(t) {
@@ -77,10 +118,34 @@ function startLoop() {
     const dt = Math.min((now - lastT) / 1000, 0.05);
     lastT = now;
     try {
-      update(game, dt);
-      render(game);
+      const speed = Math.max(1, Math.min(8, Math.floor((game.cyber && game.cyber.speed) || (game.spectate && game.spectate.speed) || 1)));
+      for (let i = 0; i < speed; i++) {
+        update(game, dt);
+        if (game.over) break;
+      }
+      const tR0 = performance.now();
+      if (game.viewMode === 'fps' && fpsCameraEntity(game)) render3d(game); else render(game);
+      const renderMs = performance.now() - tR0;
+      frameMsEma = frameMsEma * 0.9 + renderMs * 0.1;
+      game._renderScale = scaleCur;
+      statsT++;
+      if (statsT >= 60) {
+        statsT = 0;
+        const next = nextRenderScale(scaleCur, frameMsEma, { lockT: scaleT });
+        scaleCur = next.scale;
+        scaleT = next.lockT;
+      }
+      if (statsT % 30 === 0 && window.__cs2d) window.__cs2d.stats = { frameMs: frameMsEma, render3d: game._renderStats || null, scale: scaleCur };
+      if (game.viewMode !== 'fps') renderLens(game);
       renderMinimap(game);
       updateHudDom(now);
+      updateFpsUi(game);
+      syncFpsCursor(game);
+      // 对局结束/回主菜单时释放指针锁定（FPS 模式光标不会永久消失，也阻断 END 期间 _mlookDx 累积）
+      if (game.viewMode === 'fps' && document.pointerLockElement &&
+          (game.state === 'END' || game.state === 'MENU')) {
+        document.exitPointerLock();
+      }
       renderHud(game);
       renderCrosshair(game);
     } catch (err) {
@@ -129,5 +194,11 @@ window.__lanStart = hostStartMatchNow;
 
 window.__cs2d = {
   get game() { return game; },
-  get state() { return { state: game.state, diff: game.opts.diff, mapId: game.opts.mapId, round: game.round, score: game.score }; }
+  get state() { return { state: game.state, diff: game.opts.diff, mapId: game.opts.mapId, round: game.round, score: game.score }; },
+  audio: {
+    getBusVolume,
+    setBusVolume,
+    initAudio,
+    getPrefs: () => getAudioPrefs()
+  }
 };
