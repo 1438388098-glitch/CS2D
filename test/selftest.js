@@ -1,14 +1,16 @@
+import fs from 'fs';
 import { installStubs, registerUiIds } from './stubdom.js';
 installStubs();
 registerUiIds();
 
-import { createGame, startMatch, startRound, update } from '../src/game.js';
+import { createGame, startMatch, startRound, update, skipSpectatedRound } from '../src/game.js';
 import { initUi } from '../src/ui.js';
 import { setKey, setMouse, setMouseDown, switchWeapon, switchNade } from '../src/input.js';
 import { buyItem } from '../src/economy.js';
-import { WEAPONS, MAPS } from '../src/config.js';
-import { killEntity, fireWeapon } from '../src/combat.js';
+import { WEAPONS, MAPS, ROUND } from '../src/config.js';
+import { killEntity, fireWeapon, applyDamage } from '../src/combat.js';
 import { los, aStar, nearestWalkable, walkable, getMapDiagnostics, getGrid, getMap, findMapById, loadMap, pathable, tileAt } from '../src/map.js';
+import { ctx } from '../src/ctx.js';
 import { installMechTestMap, installLegacyDust2Map } from './map-fixture.js';
 installMechTestMap();
 installLegacyDust2Map();
@@ -37,6 +39,25 @@ T('boot-match', () => {
   if (game.mapW !== getMap().W || game.mapH !== getMap().H) throw new Error('map size wrong');
 });
 
+T('hud-spectate-clickable', () => {
+  const css = fs.readFileSync('styles.css', 'utf8');
+  const m = css.match(/#hud-spectate\{[^}]*\}/);
+  if (!m || !m[0].includes('pointer-events:auto')) throw new Error('hud-spectate 观战按钮不可点击');
+});
+
+T('spectate-skip-round', () => {
+  const g = createGame();
+  g.opts.mapId = 'legacy-dust2';
+  startMatch(g);
+  g.player.dead = true;
+  g.state = 'LIVE';
+  g.buyTime = 0;
+  g.freezeT = 0;
+  g.roundTime = 110;
+  const r = skipSpectatedRound(g);
+  if (!r.ok || g.state !== 'END') throw new Error('spectate skip did not finish round: ' + r.ok + ' ' + g.state);
+});
+
 T('maps-three', () => {
   for (const id of ['dust2', 'canal', 'metro']) {
     const def = findMapById(id);
@@ -52,7 +73,9 @@ T('maps-three', () => {
 });
 
 T('player-tank', () => {
-  player().hp = 1000000;
+  const p = player();
+  p.hp = 1000000;
+  if (!p || p.dead || p.hp !== 1000000) throw new Error('player-tank 初始状态异常');
 });
 
 T('buy-items', () => {
@@ -144,6 +167,7 @@ T('bullet-hits-mouse-line', () => {
   p.shotStreak = 0;
   game.state = 'LIVE';
   game.freezeT = 0;
+  game.hitPauseT = 0;
   p.x = 1200; p.y = 900;
   game.camX = 1200; game.camY = 900;
   game.input.mouse.x = 960; game.input.mouse.y = 540;
@@ -191,16 +215,72 @@ T('awp-scope-zoom-consistency', () => {
   game.input.mouse.rdown = true;
   tick(1, 1 / 30);
   if (!p.scoped) throw new Error('awp not scoped on rdown');
-  if (game.zoom !== 1.7) throw new Error('zoom not 1.7 when scoped: ' + game.zoom);
+  if (game.zoom !== 0.75) throw new Error('zoom not 0.75 when scoped: ' + game.zoom);
   const before = game.tracers.length;
   game.input.mouse.down = true;
   game.input.mouse.wasDown = false;
   tick(1, 1 / 30);
   game.input.mouse.down = false;
   game.input.mouse.rdown = false;
-  if (game.zoom !== 1.7) throw new Error('zoom collapsed after firing frame: ' + game.zoom);
+  if (game.zoom !== 0.75) throw new Error('zoom collapsed after firing frame: ' + game.zoom);
   const t = game.tracers.find((tr) => Math.abs(tr.x1 - p.x) < 1 && Math.abs(tr.y1 - p.y) < 1);
   if (!t) throw new Error('awp no tracer');
+});
+
+T('awp-magnifier-laser-state', () => {
+  const p = player();
+  p.dead = false;
+  game.endedT = 0;
+  game.roundTime = 0;
+  game.state = 'LIVE';
+  p.weapons.primary = 'awp';
+  p.ammoMap = { awp: 5 };
+  p.reserveMap = { awp: 30 };
+  p.slot = 'primary';
+  p.fireCd = 0;
+  p.reloading = false;
+  p.recoil = 0;
+  game.freezeT = 0;
+  p.x = 1200; p.y = 900;
+  game.camX = 1200; game.camY = 900;
+  game.input.mouse.x = 800; game.input.mouse.y = 450;
+  game.input.mouse.rdown = true;
+  tick(1, 1 / 30);
+  if (!p.scoped) throw new Error('awp not scoped on rdown');
+  if (game.zoom !== 0.75) throw new Error('zoom not 0.75 when scoped: ' + game.zoom);
+  if (!p.laserEnd || !Number.isFinite(p.laserEnd.x) || !Number.isFinite(p.laserEnd.y)) {
+    throw new Error('awp laser end missing when scoped');
+  }
+  if (Math.hypot(p.laserEnd.x - p.x, p.laserEnd.y - p.y) < 20) {
+    throw new Error('awp laser too short: ' + JSON.stringify(p.laserEnd));
+  }
+});
+
+T('all-player-guns-laser', () => {
+  const p = player();
+  p.dead = false;
+  game.endedT = 0;
+  game.roundTime = 0;
+  game.state = 'LIVE';
+  p.weapons.primary = 'ak';
+  p.ammoMap = { ak: 30 };
+  p.reserveMap = { ak: 90 };
+  p.slot = 'primary';
+  p.fireCd = 0;
+  p.reloading = false;
+  p.recoil = 0;
+  game.freezeT = 0;
+  p.x = 1200; p.y = 900;
+  game.camX = 1200; game.camY = 900;
+  game.input.mouse.x = 800; game.input.mouse.y = 450;
+  game.input.mouse.rdown = false;
+  tick(1, 1 / 30);
+  if (!p.laserEnd || !Number.isFinite(p.laserEnd.x) || !Number.isFinite(p.laserEnd.y)) {
+    throw new Error('player ak laser missing');
+  }
+  for (const e of game.entities) {
+    if (e.bot && e.laserEnd) throw new Error('bot should not have laser');
+  }
 });
 
 T('plant-bomb', () => {
@@ -208,6 +288,7 @@ T('plant-bomb', () => {
   startRound(game);
   game.freezeT = 0;
   game.buyTime = 30;
+  game.noRoundEnd = true;
   player().team = 't';
   player().hp = 1000000;
   for (const e of game.entities) {
@@ -233,6 +314,7 @@ T('plant-bomb', () => {
   }
   setKey(game, 'KeyE', false);
   if (!game.bomb || !game.bomb.planted) throw new Error('bomb not planted');
+  game.noRoundEnd = false;
 });
 
 T('bomb-explodes', () => {
@@ -301,6 +383,7 @@ T('defuse-round', () => {
 });
 
 T('full-match', () => {
+  game.noRoundEnd = false;
   let guard = 0;
   while (!game.over && guard++ < 9000) {
     update(game, 1 / 30);
@@ -318,7 +401,7 @@ T('full-match', () => {
     }
   }
   if (!game.over) throw new Error('match did not finish');
-  if (game.score.T < 13 && game.score.CT < 13) throw new Error('no team reached 13: ' + game.score.T + ':' + game.score.CT);
+  if (game.score.T < ROUND.MATCH_WIN && game.score.CT < ROUND.MATCH_WIN) throw new Error('no team reached ' + ROUND.MATCH_WIN + ': ' + game.score.T + ':' + game.score.CT);
 });
 
 T('restart', () => {
@@ -354,12 +437,14 @@ T('thin-wall', () => {
   shooter.slot = 'primary';
   shooter.ammoMap.ak = 30;
   const target = g.entities.find((e) => e.bot && e.team === 'ct');
-  target.x = 580; target.y = 200; target.dead = false; target.hp = 100;
+  target.x = 580; target.y = 200; target.dead = false; target.hp = 1000;
   target.armor = 100; target.helmet = true;
   target.vx = 0; target.vy = 0;
   shooter.angle = 0;
+  const savedRand = ctx.rand;
+  ctx.rand = () => 0.99;
   fireWeapon(shooter, g);
-  const dmgWall = 100 - target.hp;
+  const dmgWall = 1000 - target.hp;
   target.hp = 100;
   const g2 = createGame();
   g2.opts.mapId = 'mech-test';
@@ -368,16 +453,37 @@ T('thin-wall', () => {
   t2.team = 't'; t2.x = 540; t2.y = 200; t2.dead = false;
   t2.weapons.primary = 'ak'; t2.slot = 'primary'; t2.ammoMap.ak = 30;
   const tgt2 = g2.entities.find((e) => e.bot && e.team === 'ct');
-  tgt2.x = 700; tgt2.y = 200; tgt2.dead = false; tgt2.hp = 100;
+  tgt2.x = 700; tgt2.y = 200; tgt2.dead = false; tgt2.hp = 1000;
   tgt2.armor = 100; tgt2.helmet = true;
   t2.angle = 0;
+  ctx.rand = () => 0.99;
   fireWeapon(t2, g2);
-  const dmgPlain = 100 - tgt2.hp;
+  const dmgPlain = 1000 - tgt2.hp;
+  ctx.rand = savedRand;
   if (!(dmgWall > 0 && Math.abs(dmgWall - dmgPlain * 0.7) < 1.5)) {
     throw new Error('薄墙穿射伤害应为 0.7x: wall=' + dmgWall + ' plain=' + dmgPlain);
   }
   if (!g.decals.some((d) => d.type === 'bullet')) throw new Error('未生成穿射弹孔');
   loadMap(findMapById('legacy-dust2'));
+});
+
+T('armor-head', () => {
+  const mk = (hp, armor, helmet) => {
+    const g = createGame({ team: 'ct' });
+    startMatch(g);
+    const e = g.player;
+    e.hp = hp; e.armor = armor; e.helmet = helmet;
+    return { g, e };
+  };
+  const ak = mk(100, 100, true);
+  applyDamage(ak.e, 40, { head: true }, ak.g);
+  if (ak.e.hp !== 0 || !ak.e.dead) throw new Error('AK helmet headshot should kill: hp=' + ak.e.hp);
+  const m4 = mk(100, 100, true);
+  applyDamage(m4.e, 33, { head: true }, m4.g);
+  if (m4.e.hp !== 1) throw new Error('M4 helmet headshot should not kill: hp=' + m4.e.hp);
+  const body = mk(100, 100, true);
+  applyDamage(body.e, 40, { head: false }, body.g);
+  if (body.e.hp !== 76) throw new Error('armored body hit should be 0.6x: hp=' + body.e.hp);
 });
 
 T('map-unit', () => {
@@ -489,12 +595,13 @@ T('water', () => {
   startMatch(g);
   g.freezeT = 0;
   const b = g.entities.find((e) => e.bot && e.team === 't');
+  b.bot = false;
   b.weapons.primary = null; b.weapons.secondary = null;
   b.dead = false; b.usedNadeRound = g.round; b.hasBomb = false;
   b.role = 'mid'; b.blind = 0; b.aimTarget = null;
   for (const o of g.entities) if (o !== b && o.bot) o.dead = true;
   // AI 挂起：objCache 命中 + repathT 冷却 → botThink 不覆写 vx，速度逐帧持续
-  const aiHold = (x, y) => { b.objCache = { x, y }; b.objAt = 0; b.objBombState = 'n'; b.path = null; b.repathT = 5; };
+  const aiHold = (x, y) => { b.objCache = { x, y }; b.objAt = 0; b.objBombState = 'n'; b.path = null; b.repathT = 5; b.peekCount = 3; b.peekT = 10; };
   aiHold(300, 540);
   // 浅水减速：涉水 0.5s 位移 vs 干燥地
   b.x = 100; b.y = 540; b.vx = 235; b.vy = 0;
@@ -657,15 +764,34 @@ T('ai-barrel', () => {
   loadMap(findMapById('legacy-dust2'));
 });
 
+T('bo9-format', () => {
+  const g = createGame();
+  g.opts.mapId = 'legacy-dust2';
+  initUi(document, canvasStub, g);
+  startMatch(g);
+  if (ROUND.MATCH_WIN !== 5) throw new Error('BO9 应先赢 5 局, MATCH_WIN=' + ROUND.MATCH_WIN);
+  // 4:4 平局 → 不加时，直接打第 9 局决胜
+  g.state = 'END'; g.endedT = 0; g.over = false; g.ot = false;
+  g.score.T = 4; g.score.CT = 4;
+  update(g, 1 / 60);
+  if (g.ot !== false) throw new Error('BO9 4:4 不应进入加时');
+  if (g.state === 'END' || g.over) throw new Error('BO9 4:4 应继续决胜局');
+  // 5:4 → 立即结束
+  g.state = 'END'; g.endedT = 0; g.over = false; g.ot = false;
+  g.score.T = 5; g.score.CT = 4;
+  update(g, 1 / 60);
+  if (!g.over || g.state !== 'END') throw new Error('BO9 5:4 应立即结束');
+  // 长赛制（MR9）8:8 仍保留加时
+  g.matchWin = 9;
+  g.state = 'END'; g.endedT = 0; g.over = false; g.ot = false;
+  g.score.T = 8; g.score.CT = 8;
+  update(g, 1 / 60);
+  if (g.ot !== true) throw new Error('MR9 8:8 应进入加时');
+});
+
 console.log('selftest: ' + (errors.length === 0 ? 'PASS' : 'FAIL'));
 if (errors.length) {
   for (const e of errors) console.log('  ' + e);
   process.exit(1);
 }
 process.exit(0);
-  game.noRoundEnd = true;
-  game.noRoundEnd = false;
-  game.noRoundEnd = false;
-  game.noRoundEnd = true;
-  game.noRoundEnd = false;
-  game.noRoundEnd = false;
