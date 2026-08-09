@@ -35,16 +35,21 @@ export function preloadTextures() {
   });
 }
 
-export function hasRealTextures() { return Object.keys(texCache).length > 0; }
 
 function texImg(p) { return texCache[p] || null; }
 
 // ===== 主题色板（程序化兜底 + 装饰/结构用色）=====
 const THEMES = {
-  dust2: { floor: [36, 39, 44], floorSpots: [90, 85, 75], wall: [90, 96, 104], wallSpots: [80, 86, 96], crate: [122, 90, 52], crateSpots: [110, 82, 44], water: [29, 74, 94], waterSpots: [50, 110, 160], mmWall: '#4d545e', mmCrate: '#6d5534', tint: null, deco: ['decoGrass', 'decoStone'] },
-  canal: { floor: [44, 54, 52], floorSpots: [88, 102, 96], wall: [88, 102, 98], wallSpots: [74, 88, 84], crate: [106, 88, 64], crateSpots: [94, 78, 56], water: [23, 66, 88], waterSpots: [50, 110, 160], mmWall: '#4d645f', mmCrate: '#6d5c42', tint: null, deco: ['decoBarrel', 'decoPot'] },
-  metro: { floor: [38, 40, 52], floorSpots: [82, 82, 102], wall: [70, 76, 96], wallSpots: [58, 64, 82], crate: [92, 84, 78], crateSpots: [76, 68, 62], water: [29, 74, 94], waterSpots: [50, 110, 160], mmWall: '#464c63', mmCrate: '#5f564f', tint: 'rgba(40,52,92,0.12)', deco: ['decoPipe', 'decoLamp'] }
+  dust2: { floor: [36, 39, 44], floorSpots: [90, 85, 75], wall: [90, 96, 104], wallSpots: [80, 86, 96], crate: [122, 90, 52], crateSpots: [110, 82, 44], water: [29, 74, 94], waterSpots: [50, 110, 160], mmWall: '#4d545e', mmCrate: '#6d5534', tint: null, deco: ['decoGrass', 'decoStone', 'decoTire'], sky: { top: '#232b3a', horizon: '#8a7a52', sun: [255, 214, 150] }, weather: { kind: 'sand', wind: [0.5, 0.2], density: 0.45, color: [186, 160, 110] }, atmo: { haze: 0.5, fogColor: [150, 130, 95] } },
+  canal: { floor: [44, 54, 52], floorSpots: [88, 102, 96], wall: [88, 102, 98], wallSpots: [74, 88, 84], crate: [106, 88, 64], crateSpots: [94, 78, 56], water: [23, 66, 88], waterSpots: [50, 110, 160], mmWall: '#4d645f', mmCrate: '#6d5c42', tint: null, deco: ['decoBarrel', 'decoPot', 'decoPallet'], sky: { top: '#16241f', horizon: '#55684f', sun: [198, 236, 212] }, weather: { kind: 'mist', wind: [0.15, 0.05], density: 0.55, color: [170, 185, 175] }, atmo: { haze: 0.75, fogColor: [150, 165, 155] } },
+  metro: { floor: [38, 40, 52], floorSpots: [82, 82, 102], wall: [70, 76, 96], wallSpots: [58, 64, 82], crate: [92, 84, 78], crateSpots: [76, 68, 62], water: [29, 74, 94], waterSpots: [50, 110, 160], mmWall: '#464c63', mmCrate: '#5f564f', tint: 'rgba(40,52,92,0.12)', deco: ['decoPipe', 'decoLamp', 'decoTire'], sky: { top: '#111a2e', horizon: '#33456b', sun: [168, 200, 255] }, weather: { kind: null }, atmo: { haze: 0.55, fogColor: [90, 105, 140] } },
+  arctic: { floor: [188, 198, 208], floorSpots: [140, 152, 164], wall: [118, 132, 150], wallSpots: [102, 116, 134], crate: [110, 96, 70], crateSpots: [96, 82, 60], water: [40, 84, 118], waterSpots: [76, 128, 178], mmWall: '#6c7a90', mmCrate: '#6f5d43', tint: 'rgba(120,160,210,0.08)', deco: ['decoRock', 'decoTire', 'decoPallet'], sky: { top: '#33465c', horizon: '#a8bcd0', sun: [236, 246, 255] }, weather: { kind: 'snow', wind: [0.3, 0.4], density: 0.7, color: [235, 242, 250] }, atmo: { haze: 0.6, fogColor: [185, 200, 215] } },
+  blast: { floor: [46, 48, 56], floorSpots: [94, 92, 104], wall: [84, 86, 100], wallSpots: [66, 68, 82], crate: [124, 96, 62], crateSpots: [106, 82, 52], water: [29, 74, 94], waterSpots: [50, 110, 160], mmWall: '#4c4f62', mmCrate: '#715d3f', tint: 'rgba(72,56,24,0.10)', deco: ['decoPipe', 'decoLamp', 'decoPallet', 'decoTire'], sky: { top: '#1d1c1a', horizon: '#55422a', sun: [255, 176, 102] }, weather: { kind: 'smoke', wind: [0.25, 0.1], density: 0.5, color: [120, 110, 95] }, atmo: { haze: 0.65, fogColor: [120, 105, 85] } }
 };
+
+export function themeOf(mapId) {
+  return THEMES[mapId] || THEMES.dust2;
+}
 
 // ===== 确定性 LCG（装饰物位置稳定）=====
 function lcg(seed) {
@@ -92,6 +97,38 @@ function genWallTex(th) {
     t.fillStyle = 'rgba(' + (th.wallSpots[0] + v * 40) + ',' + (th.wallSpots[1] + v * 40) + ',' + (th.wallSpots[2] + v * 40) + ',0.5)';
     t.fillRect(Math.random() * 128, Math.random() * 128, 3, 2);
   }
+  return c;
+}
+
+// ===== 墙纹理变体（消除 3D 渲染中墙面重复感）=====
+function genWallVariant(base, seed) {
+  const c = mkCanvas(128, 128);
+  const t = c.getContext('2d');
+  // 垂直错缝：base 为 repeat 平铺纹理，先纵向画两次铺出 128×132 源，再整体上移 seed*4 取 128×128 窗口（无缝衔接）
+  const tmp = mkCanvas(128, 132);
+  const tt = tmp.getContext('2d');
+  tt.drawImage(base, 0, 0);
+  tt.drawImage(base, 0, 128);
+  t.drawImage(tmp, 0, -seed * 4, 128, 128);
+  // 亮度差异：seed 1 全局提亮 6%，seed 2 压暗 6%
+  if (seed === 1 || seed === 2) {
+    t.globalCompositeOperation = 'source-atop';
+    t.fillStyle = seed === 1 ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)';
+    t.fillRect(0, 0, 128, 128);
+    t.globalCompositeOperation = 'source-over';
+  }
+  // 底部 7px 墙基阴影
+  const gb = t.createLinearGradient(0, 121, 0, 128);
+  gb.addColorStop(0, 'rgba(0,0,0,0.35)');
+  gb.addColorStop(1, 'rgba(0,0,0,0.55)');
+  t.fillStyle = gb;
+  t.fillRect(0, 121, 128, 7);
+  // 顶部 4px 暗角
+  const gt = t.createLinearGradient(0, 0, 0, 4);
+  gt.addColorStop(0, 'rgba(0,0,0,0.30)');
+  gt.addColorStop(1, 'rgba(0,0,0,0)');
+  t.fillStyle = gt;
+  t.fillRect(0, 0, 128, 4);
   return c;
 }
 
@@ -225,6 +262,44 @@ function drawDeco(t, kind, px, py, rnd) {
       t.beginPath(); t.arc(px + 15, py + 6, 2.6, 0, Math.PI * 2); t.fill();
       break;
     }
+    case 'decoTire': { // 堆叠轮胎
+      t.fillStyle = 'rgba(28,30,34,0.9)';
+      t.beginPath(); t.ellipse(px + 15, py + 20, 8, 7, 0, 0, Math.PI * 2); t.fill();
+      t.fillStyle = 'rgba(52,56,62,0.95)';
+      t.beginPath(); t.arc(px + 15, py + 20, 4.5, 0, Math.PI * 2); t.fill();
+      t.strokeStyle = 'rgba(18,19,22,0.9)';
+      t.lineWidth = 1.2;
+      t.beginPath(); t.ellipse(px + 15, py + 20, 8, 7, 0, 0, Math.PI * 2); t.stroke();
+      t.fillStyle = 'rgba(28,30,34,0.7)';
+      t.beginPath(); t.ellipse(px + 9, py + 13, 6, 5, 0, 0, Math.PI * 2); t.fill();
+      break;
+    }
+    case 'decoRock': { // 大块岩石堆（与碎石 decoStone 区分）
+      t.fillStyle = 'rgba(108,104,98,0.75)';
+      t.beginPath();
+      t.moveTo(px + 8, py + 26); t.lineTo(px + 12, py + 14); t.lineTo(px + 22, py + 12); t.lineTo(px + 28, py + 20); t.lineTo(px + 24, py + 27);
+      t.closePath(); t.fill();
+      t.fillStyle = 'rgba(126,122,114,0.7)';
+      t.beginPath();
+      t.moveTo(px + 16, py + 20); t.lineTo(px + 20, py + 10); t.lineTo(px + 27, py + 13); t.lineTo(px + 24, py + 21);
+      t.closePath(); t.fill();
+      t.strokeStyle = 'rgba(60,58,54,0.6)';
+      t.lineWidth = 1;
+      t.stroke();
+      break;
+    }
+    case 'decoPallet': { // 木托板
+      t.fillStyle = 'rgba(122,90,52,0.85)';
+      t.fillRect(px + 4, py + 18, 24, 5);
+      t.fillRect(px + 4, py + 24, 24, 3);
+      t.fillStyle = 'rgba(90,66,38,0.9)';
+      t.fillRect(px + 7, py + 27, 3, 3);
+      t.fillRect(px + 17, py + 27, 3, 3);
+      t.strokeStyle = 'rgba(60,44,26,0.6)';
+      t.lineWidth = 1;
+      t.beginPath(); t.moveTo(px + 4, py + 18); t.lineTo(px + 28, py + 18); t.stroke();
+      break;
+    }
   }
   t.restore();
 }
@@ -251,6 +326,8 @@ export function initTextures(map) {
   const platformTex = genPlatformTex();
   const crateTex = real.thin || genThinTex(); // 木箱用木纹
   const barrelTex = genBarrelTex();
+  const wallVariants = { v0: wallTex, v1: genWallVariant(wallTex, 1), v2: genWallVariant(wallTex, 2), v3: genWallVariant(wallTex, 3) };
+  const decoList = [];
 
   const staticLayer = mkCanvas(W, H);
   const decalLayer = mkCanvas(W, H);
@@ -298,6 +375,14 @@ export function initTextures(map) {
           g.addColorStop(1, 'rgba(0,0,0,0.5)');
           t.fillStyle = g;
           t.fillRect(px, py + mapTile() - 8, mapTile(), 8);
+        }
+        if (c === 'R') {
+          // 屋顶/坡道（半高平台，与 3D 高度一致）：复用平台纹理 + 更矮的立体表现
+          t.drawImage(platformTex, px, py, mapTile(), mapTile());
+          t.fillStyle = 'rgba(255,255,255,0.14)';
+          t.fillRect(px + 2, py + 2, mapTile() - 4, 2);
+          t.fillStyle = 'rgba(0,0,0,0.28)';
+          t.fillRect(px, py + mapTile() - 5, mapTile(), 5);
         }
         if (c === 'o') {
           // 油桶：瓦片 3/4 大小 + 高光 + 警示条 + 投影
@@ -407,6 +492,7 @@ export function initTextures(map) {
       if (rnd() > 0.5) continue;
       const kind = th.deco[Math.floor(rnd() * th.deco.length)];
       drawDeco(t, kind, dx * mapTile(), dy * mapTile(), rnd);
+      decoList.push({ kind, tx: dx, ty: dy });
       placed++;
     }
     // 6. 站点标记（色带 + 大字 + 边框增强辨识）
@@ -434,33 +520,36 @@ export function initTextures(map) {
     const t = miniMap.getContext('2d');
     t.fillStyle = 'rgba(16,19,23,0.92)';
     t.fillRect(0, 0, 480, 360);
+    // 瓦片在 minimap 画布上的格宽：mmScale=480/地图像素宽，一格 = tile*mmScale（修复内容被压进左上角的 bug）
+    const cell = mapTile() * mmScale;
     for (let y = 0; y < grid.length; y++) {
       for (let x = 0; x < grid[y].length; x++) {
         const c = grid[y][x];
+        const cx = x * cell, cy = y * cell;
         if (c === '#') {
           t.fillStyle = th.mmWall;
-          t.fillRect(x * mmScale, y * mmScale, mmScale + 0.6, mmScale + 0.6);
+          t.fillRect(cx, cy, cell + 0.6, cell + 0.6);
         } else if (c === 'C') {
           t.fillStyle = th.mmCrate;
-          t.fillRect(x * mmScale, y * mmScale, mmScale + 0.6, mmScale + 0.6);
+          t.fillRect(cx, cy, cell + 0.6, cell + 0.6);
         } else if (c === '~') {
           t.fillStyle = '#1d4a6e';
-          t.fillRect(x * mmScale, y * mmScale, mmScale + 0.6, mmScale + 0.6);
+          t.fillRect(cx, cy, cell + 0.6, cell + 0.6);
         } else if (c === '=') {
           t.fillStyle = 'rgba(168,162,154,0.9)';
-          t.fillRect(x * mmScale, y * mmScale, mmScale + 0.6, mmScale + 0.6);
+          t.fillRect(cx, cy, cell + 0.6, cell + 0.6);
         } else if (c === '≈') {
           t.fillStyle = '#0d2740';
-          t.fillRect(x * mmScale, y * mmScale, mmScale + 0.6, mmScale + 0.6);
+          t.fillRect(cx, cy, cell + 0.6, cell + 0.6);
         } else if (c === '^') {
           t.fillStyle = '#6a7280';
-          t.fillRect(x * mmScale, y * mmScale, mmScale + 0.6, mmScale + 0.6);
+          t.fillRect(cx, cy, cell + 0.6, cell + 0.6);
         } else if (c === 'o') {
           t.fillStyle = '#c05030';
-          t.fillRect(x * mmScale, y * mmScale, mmScale + 0.6, mmScale + 0.6);
+          t.fillRect(cx, cy, cell + 0.6, cell + 0.6);
         } else if (c === 'a' || c === 'b') {
           t.fillStyle = c === 'a' ? 'rgba(255,120,70,0.30)' : 'rgba(70,150,255,0.30)';
-          t.fillRect(x * mmScale, y * mmScale, mmScale + 0.6, mmScale + 0.6);
+          t.fillRect(cx, cy, cell + 0.6, cell + 0.6);
         }
       }
     }
@@ -475,9 +564,10 @@ export function initTextures(map) {
 
   return {
     W, H,
-    floorTex, wallTex, crateTex, waterTex,
+    floorTex, wallTex, wallVariants, crateTex, waterTex,
     thinWallTex, deepWaterTex, platformTex, barrelTex,
     staticLayer, decalLayer, miniMap, mmScale,
-    decal: decalLayer
+    decal: decalLayer,
+    decos: decoList
   };
 }
