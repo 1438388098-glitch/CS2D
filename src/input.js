@@ -13,6 +13,17 @@ export function fpsCursorStyle(game) {
   return game && game.viewMode === 'fps' && (game.state === 'BUY' || game.state === 'LIVE') ? 'none' : '';
 }
 
+export function isFpsPointerLockActive(game) {
+  return !!game && game.viewMode === 'fps' &&
+    typeof document !== 'undefined' && document.pointerLockElement === fpsCanvas;
+}
+
+export function clearFpsMouseDeltas(game) {
+  if (!game) return;
+  game._mlookDx = 0;
+  game._mlookDy = 0;
+}
+
 export function syncFpsCursor(game) {
   if (!fpsCanvas || typeof fpsCanvas.style === 'undefined') return;
   fpsCanvas.style.cursor = fpsCursorStyle(game);
@@ -109,13 +120,10 @@ export function initInput(game, canvasRef) {
   }, false);
 
   windowRef.addEventListener('mousemove', (e) => {
-    if (game.viewMode === 'fps') {
+    if (isFpsPointerLockActive(game)) {
       // 标准 FPS 增量瞄准：pointer lock 下累积 X/Y 位移，游戏循环统一消费一次
-      const pointerLocked = typeof document !== 'undefined' && document.pointerLockElement === fpsCanvas;
-      if (pointerLocked) {
-        game._mlookDx = (game._mlookDx || 0) + (e.movementX || 0);
-        game._mlookDy = (game._mlookDy || 0) + (e.movementY || 0);
-      }
+      game._mlookDx = (game._mlookDx || 0) + (e.movementX || 0);
+      game._mlookDy = (game._mlookDy || 0) + (e.movementY || 0);
     }
     // 同时记录绝对位置（俯视/跟随瞄准与 HUD 使用）
     const r = canvasRef.getBoundingClientRect();
@@ -163,8 +171,7 @@ export function initInput(game, canvasRef) {
 
   document.addEventListener('pointerlockchange', () => {
     if (!document.pointerLockElement && game.viewMode === 'fps') {
-      game._mlookDx = 0;
-      game._mlookDy = 0;
+      clearFpsMouseDeltas(game);
     }
     // Esc 解锁兜底自动暂停（记分板开着时也暂停：Chrome 吞 Esc keydown，否则会落入未锁定未暂停的"裸奔"状态）
     if (!document.pointerLockElement && game.viewMode === 'fps' &&
@@ -176,8 +183,7 @@ export function initInput(game, canvasRef) {
 
   windowRef.addEventListener('blur', () => {
     for (const k in keys) keys[k] = false;
-    game._mlookDx = 0;
-    game._mlookDy = 0;
+    clearFpsMouseDeltas(game);
     mouse.down = false;
     mouse.rdown = false;
     mouse.wasDown = false;
@@ -188,8 +194,7 @@ export function initInput(game, canvasRef) {
   document.addEventListener('visibilitychange', () => {
     if (!document.hidden) return;
     for (const k in keys) keys[k] = false;
-    game._mlookDx = 0;
-    game._mlookDy = 0;
+    clearFpsMouseDeltas(game);
     mouse.down = false;
     mouse.rdown = false;
     mouse.wasDown = false;

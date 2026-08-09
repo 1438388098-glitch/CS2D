@@ -2,6 +2,9 @@ import assert from 'node:assert/strict';
 import {
   setViewMode,
   toggleViewMode,
+  fpsCursorStyle,
+  isFpsPointerLockActive,
+  clearFpsMouseDeltas,
   switchWeapon,
   switchNade,
   setKey,
@@ -49,6 +52,20 @@ toggleViewMode(viewGame);
 assert.equal(viewGame.viewMode, 'fps', 'toggleViewMode should move follow -> fps');
 toggleViewMode(viewGame);
 assert.equal(viewGame.viewMode, 'top', 'toggleViewMode should wrap fps -> top');
+
+assert.equal(fpsCursorStyle({ viewMode: 'fps', state: 'LIVE' }), 'none', 'FPS live should hide the system cursor');
+assert.equal(fpsCursorStyle({ viewMode: 'fps', state: 'BUY' }), 'none', 'FPS buy should hide the system cursor');
+assert.equal(fpsCursorStyle({ viewMode: 'fps', state: 'END' }), '', 'FPS end should restore the system cursor');
+assert.equal(fpsCursorStyle({ viewMode: 'top', state: 'LIVE' }), '', 'top view should keep the system cursor');
+assert.equal(isFpsPointerLockActive(viewGame), false, 'FPS pointer lock should be inactive in non-browser tests');
+
+const deltaGame = makeGame('fps');
+deltaGame._mlookDx = 12;
+deltaGame._mlookDy = -8;
+clearFpsMouseDeltas(deltaGame);
+assert.equal(deltaGame._mlookDx, 0, 'clearFpsMouseDeltas should reset x');
+assert.equal(deltaGame._mlookDy, 0, 'clearFpsMouseDeltas should reset y');
+clearFpsMouseDeltas(null);
 
 const ent = makeEnt();
 switchWeapon(ent, 'primary');
