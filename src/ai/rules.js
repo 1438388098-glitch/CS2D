@@ -7,3 +7,9 @@ export function shouldPushLatePlant(e, roundTime, roundDur = 115, lateAt = 55) {
   if (e.bomb && e.bomb.planted) return false;
   return roundTime > lateAt && roundTime < roundDur;
 }
+
+export function shouldRushPlant(e, dist, roundTime, roundDur = 115, endWindow = 12, farDist = 650) {
+  if (!e || !e.hasBomb) return false;
+  if (e.bomb && e.bomb.planted) return false;
+  return roundTime > roundDur - endWindow && dist > farDist;
+}

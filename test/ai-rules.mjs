@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { shouldRerouteStuck, shouldPushLatePlant } from '../src/ai/rules.js';
+import { shouldRerouteStuck, shouldPushLatePlant, shouldRushPlant } from '../src/ai/rules.js';
 
 const bot = {
   team: 't',
@@ -23,5 +23,11 @@ assert.equal(shouldPushLatePlant(lateCarrier, 114), true, 'carrier should push u
 assert.equal(shouldPushLatePlant(lateCarrier, 115), false, 'carrier should not push after round end');
 assert.equal(shouldPushLatePlant({ team: 't', hasBomb: false }, 70), false, 'non-carrier should not push');
 assert.equal(shouldPushLatePlant({ team: 't', hasBomb: true, bomb: { planted: true } }, 70), false, 'planted bomb should not trigger late push');
+
+assert.equal(shouldRushPlant({ team: 't', hasBomb: true }, 700, 110), true, 'far carrier should rush plant in final window');
+assert.equal(shouldRushPlant({ team: 't', hasBomb: true }, 400, 110), false, 'near carrier should not need to rush plant');
+assert.equal(shouldRushPlant({ team: 't', hasBomb: true }, 700, 60), false, 'normal-time carrier should not rush plant');
+assert.equal(shouldRushPlant({ team: 't', hasBomb: false }, 700, 110), false, 'non-carrier should not rush plant');
+assert.equal(shouldRushPlant({ team: 't', hasBomb: true, bomb: { planted: true } }, 700, 110), false, 'planted bomb should not trigger rush plant');
 
 console.log('ai-rules: all PASS');
