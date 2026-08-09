@@ -393,8 +393,8 @@ export function render3d(game) {
   drawSprites(F, zbuf, alive, p);
   const tSprites = performance.now() - m0;
   drawDmgPops(F); // B3 伤害数字（drawSprites 之后、后续屏效之前）
-  drawMuzzle(F, alive, p);
   drawViewmodel(F, alive, p);
+  drawMuzzle(F, alive, p);
   if (scopeT > 0.005) drawScope(F); // B5 开镜淡入/淡出期间也画
   const vig = vignetteCanvas(F);
   if (vig) cctx.drawImage(vig, 0, 0);
@@ -1743,12 +1743,14 @@ function drawLaser(F, alive, p) {
   t.stroke();
 }
 
-// 枪口火光：屏幕中心黄色放射星光
+// 枪口火光：跟随 viewmodel 同一套后坐/步态偏移，避免火光固定在准星中心
 function drawMuzzle(F, alive, p) {
   if (!alive || !p.muzzleT || p.muzzleT <= 0) return;
   const t = F.cctx;
   const a = clamp(p.muzzleT / 0.08, 0, 1);
-  const mx = F.iw / 2, my = F.ih / 2;
+  const m = viewmodelMotion(F, p);
+  const mx = F.iw * 0.5 + m.dx;
+  const my = F.ih * 0.62 + m.dy;
   t.fillStyle = 'rgba(255,215,94,' + a.toFixed(3) + ')';
   t.beginPath();
   t.arc(mx, my, 8, 0, Math.PI * 2);
@@ -1781,6 +1783,17 @@ function drawMuzzle(F, alive, p) {
 }
 
 // ===== A2 武器 viewmodel（程序化立绘，全部 fillRect/ellipse/quadraticCurveTo，无资源）=====
+function viewmodelMotion(F, p) {
+  const kick = p.recoil || 0;
+  let dx = 0, dy = -kick * 6;
+  const ph = p.bobPhase || 0;
+  if (p.walking) {
+    dx += Math.sin(ph) * 2.2;
+    dy += Math.abs(Math.cos(ph)) * 1.5;
+  }
+  return { dx, dy, kick };
+}
+
 function drawViewmodel(F, alive, p) {
   if (!alive || !p) return;
   const t = F.cctx;
@@ -1794,11 +1807,7 @@ function drawViewmodel(F, alive, p) {
     ? (p.weapons && p.weapons.primary ? p.weapons.primary : (p.weapons && p.weapons.secondary ? p.weapons.secondary : 'glock'))
     : (p.slot === 'knife' ? 'knife' : (p.weapons && p.weapons.secondary ? p.weapons.secondary : 'glock'));
   // —— 状态联动（全部只读 game 已有状态）——
-  const kick = p.recoil || 0;
-  let dx = 0, dy = -kick * 6;
-  // 步态摆动（仅行走时）
-  const ph = p.bobPhase || 0;
-  if (p.walking) { dx += Math.sin(ph) * 2.2; dy += Math.abs(Math.cos(ph)) * 1.5; }
+  let { dx, dy, kick } = viewmodelMotion(F, p);
   // 换弹动画：t<0.15 整体下移出屏；中间段弹匣下拉 18px 旋转 -20°；t>0.85 复位
   let magDY = 0, magRot = 0;
   if (p.reloading) {
