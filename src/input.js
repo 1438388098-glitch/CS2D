@@ -243,7 +243,12 @@ export function initInput(game, canvasRef) {
 }
 
 export function resizeCanvas(game, canvasRef) {
-  const dpr = window.devicePixelRatio || 1;
+  const nativeDpr = window.devicePixelRatio || 1;
+  const dprLimit = (typeof game.dprLimit === 'number' && isFinite(game.dprLimit) && game.dprLimit >= 1)
+    ? game.dprLimit
+    : 2;
+  const dpr = Math.min(nativeDpr, dprLimit);
+  game.dprLimit = dprLimit;
   const w = window.innerWidth;
   const h = window.innerHeight;
   canvasRef.width = Math.round(w * dpr);

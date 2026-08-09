@@ -1,7 +1,7 @@
 ﻿import { WEAPONS, PRICES, MAPS, ECONOMY, ROUND } from './config.js';
 import { ctx } from './ctx.js';
 import { ACTIONS, getBindLabel, getBindCodes, bind, resetBinds } from './keymap.js';
-import { setViewMode, requestFpsPointerLock } from './input.js';
+import { setViewMode, requestFpsPointerLock, resizeCanvas } from './input.js';
 import { readAudioPrefs, writeAudioPrefs } from './audio/prefs.js';
 
 let doc = null;
@@ -1100,6 +1100,48 @@ function bindSettings() {
       game.fov = d * Math.PI / 180;
       if (fovVal) fovVal.textContent = d + '°';
       try { localStorage.setItem('cs2d_fov', String(d)); } catch (err) { /* 无存储 */ }
+    });
+  }
+  // 3D 画质滑杆（55-100%，实时降低 Three.js 内部渲染分辨率）
+  const qualityEl = el('renderQualitySel');
+  const qualityVal = el('renderQualityVal');
+  if (qualityEl) {
+    try {
+      const saved = parseFloat(localStorage.getItem('cs2d_render_quality'));
+      if (isFinite(saved)) game.renderQuality = Math.max(0.55, Math.min(1, saved));
+    } catch (err) { /* 无存储环境 */ }
+    const q = (typeof game.renderQuality === 'number' && isFinite(game.renderQuality))
+      ? Math.max(0.55, Math.min(1, game.renderQuality))
+      : 1;
+    qualityEl.value = String(Math.round(q * 100));
+    if (qualityVal) qualityVal.textContent = Math.round(q * 100) + '%';
+    qualityEl.addEventListener('input', () => {
+      const next = Math.max(0.55, Math.min(1, parseInt(qualityEl.value, 10) / 100));
+      game.renderQuality = next;
+      if (qualityVal) qualityVal.textContent = Math.round(next * 100) + '%';
+      try { localStorage.setItem('cs2d_render_quality', String(next)); } catch (err) { /* 无存储 */ }
+    });
+  }
+  // DPR 上限滑杆（1x-2x，切换后立即重设画布尺寸）
+  const dprEl = el('dprSel');
+  const dprVal = el('dprSelVal');
+  if (dprEl) {
+    try {
+      const saved = parseFloat(localStorage.getItem('cs2d_dpr_limit'));
+      if (isFinite(saved)) game.dprLimit = Math.max(1, Math.min(2, saved));
+    } catch (err) { /* 无存储环境 */ }
+    const limit = (typeof game.dprLimit === 'number' && isFinite(game.dprLimit))
+      ? Math.max(1, Math.min(2, game.dprLimit))
+      : 2;
+    game.dprLimit = limit;
+    dprEl.value = String(limit * 100);
+    if (dprVal) dprVal.textContent = Number(limit.toFixed(2)) + 'x';
+    if (canvas) resizeCanvas(game, canvas);
+    dprEl.addEventListener('input', () => {
+      game.dprLimit = parseInt(dprEl.value, 10) / 100;
+      if (canvas) resizeCanvas(game, canvas);
+      if (dprVal) dprVal.textContent = Number(game.dprLimit.toFixed(2)) + 'x';
+      try { localStorage.setItem('cs2d_dpr_limit', String(game.dprLimit)); } catch (err) { /* 无存储 */ }
     });
   }
 }

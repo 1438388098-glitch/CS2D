@@ -44,7 +44,7 @@ export function createGame(opts = {}) {
     over: false, spectateIdx: 0, lastPlantSite: null, dt: 0.016,
     lossStreakT: 0, lossStreakCT: 0,
     hitMarkT: 0, hitFlashT: 0, headshotT: 0, zoom: 0.75, hitPauseT: 0, dmgPops: [], scopeT: 0, lastKiller: null,
-    viewMode: 'top', fpsSens: 0.002, fpsSensY: 0.002, invertY: false, _mlookDx: 0, _mlookDy: 0, _specAngle: null, _specPitch: null, _specManual: null,
+    viewMode: 'top', fpsSens: 0.002, fpsSensY: 0.002, invertY: false, renderQuality: 1, dprLimit: 2, _mlookDx: 0, _mlookDy: 0, _specAngle: null, _specPitch: null, _specManual: null,
     stats: { hits: 0, shots: 0, headshots: 0 },
     time: 0,
     tAttackSite: 'A',
@@ -83,6 +83,16 @@ export function spawnParticle(game, props) {
 
 export function startMatch(game) {
   const ui = game.ui;
+  const viewSettings = {
+    viewMode: game.viewMode,
+    fpsSens: game.fpsSens,
+    fpsSensY: game.fpsSensY,
+    invertY: game.invertY,
+    fov: game.fov,
+    renderQuality: game.renderQuality,
+    dpr: game.dpr,
+    dprLimit: game.dprLimit
+  };
   if (ui) {
     emit('hideMenu');
     emit('hideEnd');
@@ -104,6 +114,7 @@ export function startMatch(game) {
   fresh.onMapChanged = game.onMapChanged;
   fresh.lan = game.lan;
   Object.assign(game, fresh);
+  Object.assign(game, viewSettings);
   // 世界种子：整局随机流可复现（回放/调试/训练一致性）；可传 game.seed 固定复现
   game.ctReactionMult = MAP_CT_REACT[game.opts.mapId] || 0.45;
   game.mapId = game.opts.mapId;

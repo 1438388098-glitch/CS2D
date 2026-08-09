@@ -57,6 +57,16 @@ try {
   } else {
     pass('resource caches and quality guards active: ' + JSON.stringify({ textureCache: backend.stats.textureCacheSize, geometryCache: backend.stats.geometryCacheSize, quality: backend.stats.quality, pixelRatio: backend.stats.pixelRatio }));
   }
+  const settingsApplied = await cdp.eval(`(()=>{const q=document.getElementById('renderQualitySel');const d=document.getElementById('dprSel');if(!q||!d)return false;q.value='60';q.dispatchEvent(new Event('input',{bubbles:true}));d.value='100';d.dispatchEvent(new Event('input',{bubbles:true}));return true})()`);
+  await sleep(400);
+  const settingsState = await cdp.eval(`(()=>{const g=window.__cs2d&&window.__cs2d.game;const s=g&&g._renderStats;return {quality:s&&s.quality,renderQuality:g&&g.renderQuality,dprLimit:g&&g.dprLimit}})()`);
+  if (!settingsApplied || !settingsState || Math.abs(settingsState.quality - 0.6) > 0.01 || Math.abs(settingsState.renderQuality - 0.6) > 0.01 || settingsState.dprLimit !== 1) {
+    fail('three.js quality/dpr settings not live: ' + JSON.stringify(settingsState));
+  } else {
+    pass('quality/dpr settings applied live: ' + JSON.stringify(settingsState));
+  }
+  await cdp.eval(`(()=>{const q=document.getElementById('renderQualitySel');const d=document.getElementById('dprSel');if(!q||!d)return false;q.value='100';q.dispatchEvent(new Event('input',{bubbles:true}));d.value='200';d.dispatchEvent(new Event('input',{bubbles:true}));return true})()`);
+  await sleep(300);
   if (!backend || !backend.stats || !backend.stats.atmosphere || backend.stats.atmosphere.mapId !== 'dust2' || backend.stats.weatherKind === 'none' || backend.stats.weatherPoints < 1) {
     fail('three.js map atmosphere/weather missing: ' + JSON.stringify(backend && backend.stats));
   } else {
