@@ -201,6 +201,7 @@ function addHistory(s, r) {
 export function applyRankedResult(s, r) {
   const { win, kills, deaths, mvp, oppMmr, oppName, mapId, score } = r;
   const placement = s.player.placement.left > 0;
+  const tierBefore = s.player.mmr > 0 ? tierOf(s.player.mmr) : null;
   let delta = 0;
   if (placement) {
     s.player.placement.left--;
@@ -219,6 +220,13 @@ export function applyRankedResult(s, r) {
     delta = clamp(Math.round(d), -40, 40);
     s.player.mmr = clamp(s.player.mmr + delta, 400, 2500);
   }
+  // 段位变化检测：升级/降级提示
+  const tierAfter = tierOf(s.player.mmr);
+  let tierChange = 'none';
+  if (tierBefore && !placement) {
+    if (tierAfter.index > tierBefore.index) tierChange = 'up';
+    else if (tierAfter.index < tierBefore.index) tierChange = 'down';
+  }
   s.player.stats.played++;
   if (win) { s.player.stats.w++; s.player.stats.streak++; }
   else { s.player.stats.l++; s.player.stats.streak = 0; }
@@ -227,7 +235,7 @@ export function applyRankedResult(s, r) {
   s.player.stats.deaths += deaths;
   if (mvp) s.player.stats.mvp++;
   addHistory(s, { win, kills, deaths, mvp, oppMmr, oppName, mapId, score, delta, placement });
-  return { delta, placementDone: s.player.placement.left === 0 && placement };
+  return { delta, placementDone: s.player.placement.left === 0 && placement, tierChange };
 }
 
 export function rankedEndMatch(game) {
@@ -249,10 +257,12 @@ export function rankedEndMatch(game) {
   if (game.ui) {
     game.ui.hideEnd();
     let msg = (win ? '胜利' : '失利') + (res.placementDone ? '，定级完成' : '，MMR ' + (res.delta >= 0 ? '+' : '') + res.delta);
+    if (res.tierChange === 'up') msg += ' · 段位晋升 ' + tierOf(s.player.mmr).name;
+    else if (res.tierChange === 'down') msg += ' · 段位跌落 ' + tierOf(s.player.mmr).name;
     if (s.player.placement.left > 0) msg += ' · 剩余定级 ' + s.player.placement.left + ' 场';
     game.ui.showToast(msg);
   }
-  return { ok: true, win, mvp, delta: res.delta };
+  return { ok: true, win, mvp, delta: res.delta, tierChange: res.tierChange };
 }
 
 export function simulateRankedMatch() {
