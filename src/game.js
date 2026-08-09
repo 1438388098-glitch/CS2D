@@ -15,6 +15,7 @@ import {initInfo, prune} from './info.js';
 import {initOppModel} from './ai/oppmodel.js';
 import {canSeeInFog} from './fog.js';
 import { shouldRerouteStuck } from './ai/rules.js';
+import { stuckObjective } from './ai/stability.js';
 import { castLaserEnd as castLaserEndFps } from './fps-laser.js';
 
 const emit = (evt, p) => ctx.bus.emit(evt, p);
@@ -437,11 +438,19 @@ export function update(game, dt) {
     }
     if (e.bot) {
       e.stuckT += dt;
-      if (e.stuckT > 0.6) {
+      const navNow = e.navTime || game.time || 0;
+      if (e.stuckT > 0.6 && (!e.lastRerouteAt || navNow - e.lastRerouteAt >= 1.2)) {
         const sd = Math.hypot(e.x - e.lastSample.x, e.y - e.lastSample.y);
         if (shouldRerouteStuck(e, sd)) {
-          const obj = botObjectiveForStuck(e, game);
-          pathTo(e, obj.x + rand(-80, 80), obj.y + rand(-80, 80));
+          const obj = stuckObjective(e, game);
+          const side = (e.stuckEscapes || 0) % 2 ? 1 : -1;
+          const ang = Math.atan2(obj.y - e.y, obj.x - e.x);
+          const tx = obj.x + Math.cos(ang + Math.PI / 2 * side) * 80 + rand(-25, 25);
+          const ty = obj.y + Math.sin(ang + Math.PI / 2 * side) * 80 + rand(-25, 25);
+          pathTo(e, tx, ty);
+          if (!e.path) pathTo(e, obj.x, obj.y);
+          e.lastRerouteAt = navNow;
+          e.stuckEscapes = (e.stuckEscapes || 0) + 1;
         }
         e.stuckT = 0;
         e.lastSample = { x: e.x, y: e.y };
@@ -844,13 +853,3 @@ function updatePlayerAim(game, dt) {
   p.angle = Math.atan2(game.input.mouse.y - py, game.input.mouse.x - px);
 }
 
-function botObjectiveForStuck(e, game) {
-  if (e.team === 't') {
-    const cs = game.tAttackSite === 'A' ? getMap().sites.A : getMap().sites.B;
-    if (cs) return { x: cs.cx, y: cs.cy };
-    const sp = getMap().spawns.t[0];
-    return { x: sp ? sp.x : 1200, y: sp ? sp.y : 900 };
-  }
-  if (game.bomb && game.bomb.planted) return { x: game.bomb.x, y: game.bomb.y };
-  return { x: 1200, y: 900 };
-}
