@@ -12,6 +12,15 @@ export function addMoney(e, amount) {
   e.money = Math.max(0, Math.min(ECONOMY.MONEY_CAP, e.money + amount));
 }
 
+export function nextRoundBudget(p, game) {
+  const streakKey = p && p.team === 'ct' ? 'lossStreakCT' : 'lossStreakT';
+  const streak = game ? (game[streakKey] || 0) : 0;
+  const lossBonus = ECONOMY.LOSS_BONUS[Math.min(streak, ECONOMY.LOSS_BONUS.length - 1)] || 0;
+  const win = Math.min(ECONOMY.MONEY_CAP, (p ? p.money : 0) + ECONOMY.WIN_MONEY);
+  const loss = Math.min(ECONOMY.MONEY_CAP, (p ? p.money : 0) + lossBonus);
+  return { win, loss, lossBonus, streak };
+}
+
 export function clearEquipment(e) {
   e.weapons.primary = null;
   e.weapons.secondary = null;
@@ -60,6 +69,16 @@ export function buyItem(game, what) {
     if (what === 'glock' || what === 'usp') {
       if (p.weapons.secondary === what || p.money < w.price) return false;
       p.money -= w.price;
+      // 旧副武器落地（与主武器替换一致）
+      if (p.weapons.secondary) {
+        const os = WEAPONS[p.weapons.secondary];
+        game.drops.push({
+          x: p.x, y: p.y, wid: p.weapons.secondary,
+          ammo: Math.min(os.mag, (p.ammoMap[p.weapons.secondary] === undefined ? os.mag : p.ammoMap[p.weapons.secondary])),
+          reserve: Math.min(os.reserve, p.reserveMap[p.weapons.secondary] === undefined ? os.reserve : p.reserveMap[p.weapons.secondary]),
+          life: 45, noPickT: 0.5
+        });
+      }
       p.weapons.secondary = what;
       p.ammoMap[what] = w.mag;
       p.reserveMap[what] = w.reserve;

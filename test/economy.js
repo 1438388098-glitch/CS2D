@@ -1,7 +1,7 @@
 import { createGame, startMatch, startRound, endRound } from '../src/game.js';
 import { ECONOMY, ROUND } from '../src/config.js';
 import { killEntity } from '../src/combat.js';
-import { buyItem } from '../src/economy.js';
+import { buyItem, nextRoundBudget } from '../src/economy.js';
 import { plantBomb, defuseBomb } from '../src/bomb.js';
 import { getMap } from '../src/map.js';
 import { defaultPistol } from '../src/entities.js';
@@ -122,6 +122,20 @@ for (const [winType, expected] of [
   before = t.money;
   endRound(g, 't', 'win', 'elimination');
   ok('loss bonus reset on win', t.money === before + ECONOMY.WIN_MONEY && g.lossStreakT === 0 && g.lossStreakCT === 1);
+}
+
+{
+  const g = fresh();
+  const p = g.player;
+  p.money = 2000;
+  p.team = 't';
+  g.lossStreakT = 3;
+  const budget = nextRoundBudget(p, g);
+  ok('budget win projection', budget.win === 2000 + ECONOMY.WIN_MONEY);
+  ok('budget loss projection', budget.loss === 2000 + ECONOMY.LOSS_BONUS[3]);
+  p.money = ECONOMY.MONEY_CAP;
+  const capped = nextRoundBudget(p, g);
+  ok('budget cap', capped.win === ECONOMY.MONEY_CAP && capped.loss === ECONOMY.MONEY_CAP);
 }
 
 {

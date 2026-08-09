@@ -3,6 +3,7 @@ import { ctx } from './ctx.js';
 import { ACTIONS, matches, getBindLabel, getBindCodes, bind, resetBinds } from './keymap.js';
 import { setViewMode, requestFpsPointerLock, resizeCanvas } from './input.js';
 import { readAudioPrefs, writeAudioPrefs } from './audio/prefs.js';
+import { nextRoundBudget } from './economy.js';
 
 let doc = null;
 let canvas = null;
@@ -417,7 +418,8 @@ export function renderBuyMenu(gameRef) {
   if (ecoEl) {
     const streakKey = p.team === 't' ? 'lossStreakT' : 'lossStreakCT';
     const streak = gameRef[streakKey] || 0;
-    ecoEl.textContent = '连败补偿 ' + String.fromCharCode(36) + ECONOMY.LOSS_BONUS[Math.min(streak, ECONOMY.LOSS_BONUS.length - 1)] + ' · 当前 ' + streak + ' 连败';
+    const budget = nextRoundBudget(p, gameRef);
+    ecoEl.textContent = '连败补偿 ' + String.fromCharCode(36) + ECONOMY.LOSS_BONUS[Math.min(streak, ECONOMY.LOSS_BONUS.length - 1)] + ' · 当前 ' + streak + ' 连败 · 下局预算 胜 ' + String.fromCharCode(36) + budget.win + ' / 败 ' + String.fromCharCode(36) + budget.loss;
   }
   // 分类竖列
   const cats = el('buyCats');
