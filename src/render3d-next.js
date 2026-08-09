@@ -510,7 +510,6 @@ function normalMapFor(source, repeatX, repeatY) {
     }
     g.putImageData(out, 0, 0);
     const tex = new THREE.CanvasTexture(canvas);
-    if (THREE.SRGBColorSpace) tex.colorSpace = THREE.SRGBColorSpace;
     tex.wrapS = THREE.RepeatWrapping;
     tex.wrapT = THREE.RepeatWrapping;
     tex.repeat.set(repeatX || 1, repeatY || 1);
