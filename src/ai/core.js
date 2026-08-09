@@ -9,6 +9,7 @@ import { report, query, MSG } from '../info.js';
 import { clamp, rand, angDiff, angNorm, viewCap } from '../utils.js';
 import { styleOf } from './shared.js';
 import { findVisibleEnemy } from './perception.js';
+import { shouldSaveForEco } from './rules.js';
 import { botObjective, ctReactsTo } from './decisions.js';
 import { botActions } from './actions.js';
 
@@ -201,6 +202,25 @@ function botThink(e, game, dt) {
       e.slot = 'primary';
     }
     return;
+  }
+  if (e.team === 't' && shouldSaveForEco(e, e.money || 0, (e.weapons && (e.weapons.primary === 'ak' || e.weapons.primary === 'm4' || e.weapons.primary === 'awp')) ? 2 : 0, game.roundTime || 0, game.roundDur || 115)) {
+    e.trigger = false;
+    e.ecoRetreat = true;
+    const tSpawn = getMap().spawns.t && getMap().spawns.t[0];
+    if (tSpawn) {
+      const anchor = e.anchorIdx || 0;
+      const sx = tSpawn.x + (anchor % 3) * 90 - 90;
+      const sy = tSpawn.y + (anchor % 2 ? 55 : -55);
+      if (e.path === null && e.repathT <= 0) {
+        pathTo(e, sx, sy);
+        e.repathT = 1.2;
+      }
+      if (e.path) {
+        e.angle = angNorm(Math.atan2(sy - e.y, sx - e.x));
+        followPath(e, dt, weapon.speed * 235);
+        return;
+      }
+    }
   }
   const obj = botObjective(e, game);
   if (obj) {
