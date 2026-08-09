@@ -84,11 +84,16 @@ export function __clearStateForTest() { state = null; }
 export function getOpponents() { return OPPONENTS.map((o) => ({ ...o })); }
 export function getStats() { const s = loadDuel(); return { ...s.stats, history: s.history.slice(), vs: s.vs || {} }; }
 
+export function pickDuelMap(selected, played) {
+  if (selected && selected !== 'auto' && DUEL_MAPS.some((m) => m.id === selected)) return selected;
+  return DUEL_MAPS[Math.max(0, played || 0) % DUEL_MAPS.length].id;
+}
+
 function pickOpponent(name) {
   return OPPONENTS.find((o) => o.name === name) || OPPONENTS[0];
 }
 
-export function recordResult(s, win, kills, deaths, oppName) {
+export function recordResult(s, win, kills, deaths, oppName, mapId) {
   s.stats.played++;
   if (win) { s.stats.w++; s.stats.streak++; }
   else { s.stats.l++; s.stats.streak = 0; }
@@ -102,15 +107,16 @@ export function recordResult(s, win, kills, deaths, oppName) {
     v.kills += kills;
     v.deaths += deaths;
   }
-  s.history.unshift({ t: Date.now(), win, kills, deaths, opp: oppName || null });
+  s.history.unshift({ t: Date.now(), win, kills, deaths, opp: oppName || null, map: mapId || null });
   if (s.history.length > 20) s.history.length = 20;
 }
 
 function duelStart(game) {
-  const map = DUEL_MAPS.find((m) => m.id === game.opts.duelMap) || DUEL_MAPS[0];
+  const mapId = pickDuelMap(game.opts.duelMap, getState().stats.played);
+  const map = DUEL_MAPS.find((m) => m.id === mapId) || DUEL_MAPS[0];
   game.opts.mapId = map.id;
   const opp = pickOpponent(game.opts.duelOpponent);
-  game.duelMatch = { settled: false, opp };
+  game.duelMatch = { settled: false, opp, mapId: map.id };
   game.opts.bots = 1;
   // 难度档：easy/normal/hard/hell 缩放对手 rating（影响 AI 参数），默认困难
   const diffMult = { easy: 0.7, normal: 0.85, hard: 1.0, hell: 1.15 };
@@ -134,7 +140,7 @@ function settleDuel(game) {
   const p = game.player;
   const win = (p.team === 't' && game.score.T >= ROUND.MATCH_WIN) || (p.team === 'ct' && game.score.CT >= ROUND.MATCH_WIN);
   const s = loadDuel();
-  recordResult(s, win, p.kills || 0, p.deaths || 0, game.duelMatch.opp.name);
+  recordResult(s, win, p.kills || 0, p.deaths || 0, game.duelMatch.opp.name, game.duelMatch.mapId);
   game.duelMatch.settled = true;
   save();
   if (game.ui) game.ui.showToast((win ? '胜' : '负') + ' ' + game.duelMatch.opp.name + ' · 总战绩 ' + s.stats.w + ' 胜 ' + s.stats.l + ' 负');

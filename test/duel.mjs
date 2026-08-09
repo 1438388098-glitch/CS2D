@@ -1,6 +1,6 @@
 import {
   loadDuel, resetDuel, setStorage, getState, recordResult, save, __clearStateForTest,
-  getOpponents, getStats
+  getOpponents, getStats, pickDuelMap
 } from '../src/duel.js';
 import { createGame, startMatch, finishMatch } from '../src/game.js';
 import { ROUND } from '../src/config.js';
@@ -26,6 +26,9 @@ setStorage(store);
 let s = resetDuel();
 ok('duel save persisted', store.map.has('cs2d_duel'));
 ok('duel opponents', getOpponents().length >= 8);
+ok('duel map auto rotates', pickDuelMap('auto', 0) === 'duel-pit' && pickDuelMap('auto', 1) === 'duel-alley' && pickDuelMap('auto', 2) === 'duel-forge');
+ok('duel map manual wins', pickDuelMap('duel-forge', 0) === 'duel-forge');
+ok('duel map auto fallback', pickDuelMap('missing', 5) === 'duel-forge');
 recordResult(s, true, 10, 5);
 recordResult(s, false, 4, 9);
 ok('duel stats', s.stats.played === 2 && s.stats.w === 1 && s.stats.l === 1 && s.stats.streak === 0 && s.stats.bestStreak === 1);
@@ -49,6 +52,7 @@ live.opts.mode = 'duel';
 live.opts.duelOpponent = 'ZywOo';
 startMatch(live);
 ok('duel live start', !!live.duelMatch && live.entities.length === 2 && live.state === 'BUY');
+ok('duel live auto map', live.duelMatch.mapId === 'duel-pit' && live.opts.mapId === 'duel-pit');
 live.player.team = 't';
 live.score.T = ROUND.MATCH_WIN;
 finishMatch(live);

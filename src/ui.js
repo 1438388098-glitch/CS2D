@@ -621,7 +621,7 @@ import { setMuted, initAudio, uiSfx, setBusVolume, stopAmbient } from './audio.j
 import { startMatch } from './game.js';
 import { buyItem } from './economy.js';
 import { MAJOR_TEAMS, majorAction, CYBER_ROSTER, CYBER_START_COINS, CYBER_BAILOUT_COINS, CYBER_BAILOUT_AT, cyberCoins, cyberStats, cyberHistory, cyberChance, cyberPayout } from './modes.js';
-import { OPPONENTS, getStats, resetDuel } from './duel.js';
+import { OPPONENTS, getStats, resetDuel, pickDuelMap } from './duel.js';
 import { DUEL_MAPS } from './duel-maps.js';
 
 let lastHoverT = 0;
@@ -719,7 +719,11 @@ box.innerHTML = '<div class="mode-hint">点击“开始”进入地图编辑器�
     renderOdds();
   } else if (mode === 'duel') {
     const stats = getStats();
-    const hist = stats.history.slice(0, 5).map((h) => '<div class="mode-hint">' + (h.win ? '胜 ' : '负 ') + h.kills + ' 杀 / ' + h.deaths + ' 死' + (h.opp ? ' · vs ' + h.opp : '') + '</div>').join('');
+    const mapName = (id) => {
+      const m = DUEL_MAPS.find((x) => x.id === id);
+      return m ? m.name : (id === 'auto' ? '自动轮换' : (id || ''));
+    };
+    const hist = stats.history.slice(0, 5).map((h) => '<div class="mode-hint">' + (h.win ? '胜 ' : '负 ') + h.kills + ' 杀 / ' + h.deaths + ' 死' + (h.opp ? ' · vs ' + h.opp : '') + (h.map ? ' · ' + mapName(h.map) : '') + '</div>').join('');
     // 每对手战绩速览：列出交手过的对手及其胜率
     const vsHtml = Object.keys(stats.vs || {}).map((k) => {
       const v = stats.vs[k];
@@ -727,15 +731,20 @@ box.innerHTML = '<div class="mode-hint">点击“开始”进入地图编辑器�
     }).join('');
     if (!game.opts.duelOpponent) game.opts.duelOpponent = OPPONENTS[0].name;
     const oppHtml = OPPONENTS.map((o) => '<option value="' + o.name + '"' + (game.opts.duelOpponent === o.name ? ' selected' : '') + '>' + o.name + ' · ' + o.tag + ' · ' + o.rating + '</option>').join('');
-    if (!game.opts.duelMap) game.opts.duelMap = DUEL_MAPS[0].id;
-    const mapHtml = DUEL_MAPS.map((m) => '<option value="' + m.id + '"' + (game.opts.duelMap === m.id ? ' selected' : '') + '>' + m.name + ' · ' + m.tagline + '</option>').join('');
+    if (!game.opts.duelMap || !DUEL_MAPS.some((m) => m.id === game.opts.duelMap)) game.opts.duelMap = 'auto';
+    const nextAutoId = pickDuelMap('auto', stats.played);
+    const mapHtml = '<option value="auto"' + (game.opts.duelMap === 'auto' ? ' selected' : '') + '>自动轮换 · 每场换图</option>' + DUEL_MAPS.map((m) => '<option value="' + m.id + '"' + (game.opts.duelMap === m.id ? ' selected' : '') + '>' + m.name + ' · ' + m.tagline + '</option>').join('');
     if (!game.opts.duelDiff) game.opts.duelDiff = 'hard';
     const diffHtml = [['easy', '简单'], ['normal', '普通'], ['hard', '困难'], ['hell', '地狱']].map(([v, l]) => '<option value="' + v + '"' + (game.opts.duelDiff === v ? ' selected' : '') + '>' + l + '</option>').join('');
-    box.innerHTML = '<div class="mode-hint">单挑模式：1v1 九局五胜（BO9），使用专用小图。</div><div class="duel-pick"><label>地图</label><select id="duelMapSel">' + mapHtml + '</select></div><div class="duel-pick"><label>对手</label><select id="duelOppSel">' + oppHtml + '</select></div><div class="duel-pick"><label>难度</label><select id="duelDiffSel">' + diffHtml + '</select></div><div class="duel-stats">总战绩 ' + stats.played + ' 场 · ' + stats.w + '胜 ' + stats.l + '负 · 连胜 ' + stats.streak + ' · 最佳 ' + stats.bestStreak + '</div>' + (vsHtml ? '<div class="mode-hint">对阵记录</div>' + vsHtml : '') + '<div class="mode-hint">最近 5 场</div>' + hist + '<button class="btn small" id="duelResetBtn">重置战绩</button>';
+    box.innerHTML = '<div class="mode-hint">单挑模式：1v1 九局五胜（BO9）。地图可选自动轮换或指定专用小图。</div><div class="duel-pick"><label>地图</label><select id="duelMapSel">' + mapHtml + '</select></div><div class="duel-pick"><label>对手</label><select id="duelOppSel">' + oppHtml + '</select></div><div class="duel-pick"><label>难度</label><select id="duelDiffSel">' + diffHtml + '</select></div><div id="duelMapHint" class="mode-hint">' + (game.opts.duelMap === 'auto' ? '自动轮换：下一场 ' + mapName(nextAutoId) : '已固定：' + mapName(game.opts.duelMap)) + '</div><div class="duel-stats">总战绩 ' + stats.played + ' 场 · ' + stats.w + '胜 ' + stats.l + '负 · 连胜 ' + stats.streak + ' · 最佳 ' + stats.bestStreak + '</div>' + (vsHtml ? '<div class="mode-hint">对阵记录</div>' + vsHtml : '') + '<div class="mode-hint">最近 5 场</div>' + hist + '<button class="btn small" id="duelResetBtn">重置战绩</button>';
     const mapSel2 = el('duelMapSel');
     if (mapSel2) {
       mapSel2.value = game.opts.duelMap;
-      mapSel2.onchange = () => { game.opts.duelMap = mapSel2.value; };
+      mapSel2.onchange = () => {
+        game.opts.duelMap = mapSel2.value;
+        const hintEl = el('duelMapHint');
+        if (hintEl) hintEl.textContent = game.opts.duelMap === 'auto' ? '自动轮换：下一场 ' + mapName(pickDuelMap('auto', stats.played)) : '已固定：' + mapName(game.opts.duelMap);
+      };
     }
     const sel = el('duelOppSel');
     if (sel) {
