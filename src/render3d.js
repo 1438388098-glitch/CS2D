@@ -885,6 +885,37 @@ function drawEnemyMarkers(F) {
   }
 }
 
+// 实体名牌与血条：只给未被墙体完全遮挡的实体绘制，避免与穿透墙标记叠成一片。
+function drawEntityPlates(F) {
+  const g = F.g;
+  const p = g.player;
+  if (!p || g.viewMode !== 'fps' || !g._fpsEntityMarkers) return;
+  const t = F.cctx;
+  const fontScale = Math.max(0.72, Math.min(1, F.iw / 1280));
+  t.font = Math.round(10 * fontScale) + 'px Arial';
+  t.textAlign = 'center';
+  t.lineJoin = 'round';
+  t.lineWidth = 2.4;
+  for (const m of g._fpsEntityMarkers) {
+    if (m.occluded) continue;
+    const sx = m.nx * F.iw;
+    const sy = m.ny * F.ih;
+    if (sx < 2 || sx > F.iw - 2 || sy < 2 || sy > F.ih - 2) continue;
+    const col = m.team === 'ct' ? '#7ab8ff' : '#ffb35c';
+    t.strokeStyle = 'rgba(0,0,0,0.82)';
+    t.strokeText(m.name, sx, sy - 8 * fontScale);
+    t.fillStyle = col;
+    t.fillText(m.name, sx, sy - 8 * fontScale);
+    const bw = 24 * fontScale, bh = 2.5;
+    const hpF = clamp((m.hp || 0) / 100, 0, 1);
+    t.fillStyle = 'rgba(0,0,0,0.68)';
+    t.fillRect(sx - bw / 2, sy - 4 * fontScale, bw, bh);
+    t.fillStyle = hpF > 0.5 ? '#6ee06e' : (hpF > 0.25 ? '#ffd34d' : '#ff5040');
+    t.fillRect(sx - bw / 2, sy - 4 * fontScale, bw * hpF, bh);
+  }
+  t.textAlign = 'start';
+}
+
 function drawSprites(F, zbuf, alive, p) {
   updateFpsMarkers(F, zbuf);
   const sprites = [];
@@ -904,6 +935,7 @@ function drawSprites(F, zbuf, alive, p) {
   drawSpectatePlate(F); // D3 观战名牌（排序绘制后手画，始终可见）
   drawTeammateMarkers(F);
   drawEnemyMarkers(F);
+  drawEntityPlates(F);
 }
 
 // ===== B3 伤害数字（combat.js 的 game.dmgPops：上浮淡出，描黑边可读）=====
