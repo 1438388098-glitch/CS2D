@@ -875,6 +875,12 @@ function bindMenu() {
 function bindOverlays() {
   if (!doc) return;
   el('resumeBtn').onclick = (e) => { game.ui.unpause(); requestFpsPointerLock(game); e.currentTarget.blur(); };
+  const settingsPause = el('settingsBtnPause');
+  if (settingsPause) settingsPause.onclick = (e) => {
+    const settings = el('settings');
+    if (settings) { settings.classList.add('show'); renderKeybindList(el('keybindList')); refreshViewSel(); }
+    e.currentTarget.blur();
+  };
   el('restartBtn').onclick = (e) => { game.ui.unpause(); startMatch(game); requestFpsPointerLock(game); e.currentTarget.blur(); };
   el('quitBtn').onclick = (e) => { game.ui.unpause(); game.ui.showMenu(); e.currentTarget.blur(); };
   el('againBtn').onclick = (e) => { game.ui.hideEnd(); startMatch(game); requestFpsPointerLock(game); e.currentTarget.blur(); };
