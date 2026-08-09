@@ -26,3 +26,10 @@ export function shouldRetakeBomb(e, planted, dist, timeLeft, myAlive = 1, enAliv
   if (timeLeft < minTime && dist > nearDist && enAlive > myAlive + 1) return false;
   return true;
 }
+
+export function shouldRushDefuser(e, defusing, dist, timeLeft, minTime = 4, stopDist = 700) {
+  if (!e || e.team !== 't' || !defusing) return false;
+  if (e.dead) return false;
+  if (dist <= stopDist) return true;
+  return timeLeft <= minTime;
+}

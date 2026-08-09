@@ -4,6 +4,7 @@ import {
   shouldPushLatePlant,
   shouldRetreatWithoutBomb,
   shouldRetakeBomb,
+  shouldRushDefuser,
   shouldRushPlant
 } from '../src/ai/rules.js';
 
@@ -51,5 +52,12 @@ assert.equal(shouldRetakeBomb({ team: 't' }, true, 900, 30), false, 'T should no
 assert.equal(shouldRetakeBomb({ team: 'ct', dead: true }, true, 120, 30), false, 'dead CT cannot retake');
 assert.equal(shouldRetakeBomb({ team: 'ct', defusing: true }, true, 120, 30), false, 'defusing CT should stay on bomb');
 assert.equal(shouldRetakeBomb({ team: 'ct' }, false, 120, 30), false, 'unplanted bomb should not trigger retake');
+
+assert.equal(shouldRushDefuser({ team: 't' }, true, 300, 10), true, 'T near defuser should interrupt immediately');
+assert.equal(shouldRushDefuser({ team: 't' }, true, 1200, 2), true, 'T should sprint to defuser at bomb timer end');
+assert.equal(shouldRushDefuser({ team: 't' }, true, 1200, 10), false, 'T should not waste a long sprint when time remains');
+assert.equal(shouldRushDefuser({ team: 't' }, false, 300, 2), false, 'no defuser should not trigger rush');
+assert.equal(shouldRushDefuser({ team: 'ct' }, true, 300, 2), false, 'CT should not use T defuser-stop rule');
+assert.equal(shouldRushDefuser({ team: 't', dead: true }, true, 300, 2), false, 'dead T cannot rush defuser');
 
 console.log('ai-rules: all PASS');
