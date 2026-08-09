@@ -50,6 +50,14 @@ try {
   assert.equal(js.headers.get('vary'), 'Accept-Encoding');
   assert.equal(js.headers.get('x-content-type-options'), 'nosniff');
 
+  const etag = js.headers.get('etag');
+  assert.ok(etag && etag.length >= 2, 'static response should include etag');
+  const revalidate = await fetch(`http://localhost:${port}/src/config.js`, {
+    headers: { 'Accept-Encoding': 'gzip', 'If-None-Match': etag }
+  });
+  assert.equal(revalidate.status, 304, 'matching If-None-Match should return 304');
+  assert.equal(revalidate.headers.get('cache-control'), 'public, max-age=3600', '304 should keep static cache policy');
+
   const html = await fetch(`http://localhost:${port}/`, {
     headers: { 'Accept-Encoding': 'gzip' }
   });

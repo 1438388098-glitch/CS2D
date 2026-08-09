@@ -94,9 +94,21 @@ const server = http.createServer((req, res) => {
       sendStatus(res, 404, 'Not Found');
       return;
     }
+    const etag = '"' + crypto.createHash('sha1').update(data).digest('hex').slice(0, 24) + '"';
+    if (req.headers['if-none-match'] === etag) {
+      res.writeHead(304, {
+        'ETag': etag,
+        'Cache-Control': cacheControlFor(filePath),
+        'Vary': 'Accept-Encoding',
+        ...SECURITY_HEADERS
+      });
+      res.end();
+      return;
+    }
     const headers = {
       'Content-Type': MIME[path.extname(filePath).toLowerCase()] || 'application/octet-stream',
       'Cache-Control': cacheControlFor(filePath),
+      'ETag': etag,
       'Vary': 'Accept-Encoding',
       ...SECURITY_HEADERS
     };
