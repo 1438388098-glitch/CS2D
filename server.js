@@ -222,6 +222,7 @@ function leave(ws) {
 }
 
 function handleData(ws, chunk) {
+  ws.lastActive = Date.now();
   ws.buf = Buffer.concat([ws.buf, chunk]);
   while (true) {
     if (ws.buf.length < 2) return;
@@ -237,6 +238,8 @@ function handleData(ws, chunk) {
       if (ws.buf.length < 10) return;
       len = Number(ws.buf.readBigUInt64BE(2)); off = 10;
     }
+    // 帧大小上限（64KB）：防恶意大帧撑爆缓冲
+    if (len > 65536) { ws.socket.destroy(); return; }
     const maskLen = masked ? 4 : 0;
     if (ws.buf.length < off + maskLen + len) return;
     const mask = masked ? ws.buf.slice(off, off + 4) : null;
@@ -258,11 +261,21 @@ server.on('upgrade', (req, socket) => {
   if (!key) { socket.destroy(); return; }
   const accept = crypto.createHash('sha1').update(key + '258EAFA5-E914-47DA-95CA-C5AB0DC85B11').digest('base64');
   socket.write('HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Accept: ' + accept + '\r\n\r\n');
-  const ws = { socket, room: null, role: null, name: null, buf: Buffer.alloc(0) };
+  const ws = { socket, room: null, role: null, name: null, buf: Buffer.alloc(0), lastActive: Date.now() };
   socket.on('data', (d) => handleData(ws, d));
   socket.on('close', () => leave(ws));
   socket.on('error', () => {});
 });
+
+// 心跳保活：每 30s 清理 90s 无活动的僵尸连接（大厅空挂/半开连接），避免泄漏
+setInterval(() => {
+  const now = Date.now();
+  for (const r of rooms.values()) {
+    for (const c of [...r.clients]) {
+      if (now - (c.lastActive || now) > 90000) { try { c.socket.destroy(); } catch (err) { /* closed */ } }
+    }
+  }
+}, 30000).unref();
 
 function listen(port, tries = 0) {
   if (tries > 20) throw new Error('No free port found');
