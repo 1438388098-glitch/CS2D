@@ -43,6 +43,7 @@ let mapKey = '';
 let canvasRef = null;
 let layersRef = null;
 let cameraLight = null;
+let cameraFill = null;
 let entityMeshes = new Map();
 let dropMeshes = new Map();
 let grenadeMeshes = new Map();
@@ -50,6 +51,7 @@ let smokeMeshes = [];
 let particleMeshes = [];
 let viewmodelKey = '';
 let initGen = 0;
+const normalMapCache = new Map();
 
 function ensureThree() {
   if (THREE) return Promise.resolve(THREE);
@@ -79,6 +81,7 @@ function disposeRenderer() {
   viewmodelGroup = null;
   skyMesh = null;
   cameraLight = null;
+  cameraFill = null;
   mapKey = '';
   entityMeshes = new Map();
   dropMeshes = new Map();
@@ -127,6 +130,7 @@ export async function initRenderer3dNext(canvas, layers) {
     dynamicGroup = new T.Group();
     viewmodelGroup = new T.Group();
     scene.add(mapGroup, dynamicGroup);
+    scene.add(camera);
     camera.add(viewmodelGroup);
     const hemi = new T.HemisphereLight(0xcfe8ff, 0x59615a, 1.05);
     scene.add(hemi);
@@ -138,6 +142,8 @@ export async function initRenderer3dNext(canvas, layers) {
     cameraLight.shadow.bias = -0.0008;
     scene.add(cameraLight);
     scene.add(cameraLight.target);
+    cameraFill = new T.PointLight(0xffe8c8, 0.65, 1100, 1.8);
+    camera.add(cameraFill);
     return true;
   } catch (err) {
     console.error('[render3d-next] init failed:', err);
@@ -167,6 +173,8 @@ export function render3dNext(game) {
     renderer.setPixelRatio(Math.min(dpr, 2));
     renderer.setSize(w, h, false);
     camera.aspect = w / h;
+    const fovDeg = game.fov && isFinite(game.fov) ? game.fov * 180 / Math.PI : 75;
+    if (Math.abs(camera.fov - fovDeg) > 0.01) camera.fov = fovDeg;
     camera.updateProjectionMatrix();
     const renderT0 = performance.now();
     renderer.render(scene, camera);
@@ -269,34 +277,54 @@ function buildMapScene(map, layers) {
   buildSky();
 
   const floorTex = textureFrom(layers && layers.floorTex, Math.max(1, w / 8), Math.max(1, h / 8));
-  const floorMat = new T.MeshStandardMaterial({ map: floorTex, color: 0xd8d3c8, roughness: 0.9, metalness: 0.02 });
-  const ground = new T.Mesh(new T.PlaneGeometry(w, h), floorMat);
+  const floorNorm = normalMapFor(layers && layers.floorTex, Math.max(1, w / 8), Math.max(1, h / 8));
+  const floorMat = new T.MeshStandardMaterial({
+    map: floorTex,
+    normalMap: floorNorm,
+    normalScale: new T.Vector2(0.38, 0.38),
+    color: 0xffffff,
+    roughness: 0.9,
+    metalness: 0.02,
+    vertexColors: true
+  });
+  const floorGeo = new T.PlaneGeometry(w, h, Math.min(56, Math.max(8, Math.floor(Math.max(w, h) / 220))), Math.min(56, Math.max(8, Math.floor(Math.max(w, h) / 220))));
+  setGroundVertexColors(floorGeo, w, h);
+  const ground = new T.Mesh(floorGeo, floorMat);
   ground.rotation.x = -Math.PI / 2;
   ground.receiveShadow = true;
   ground.position.set(w / 2, 0, h / 2);
   mapGroup.add(ground);
 
   const counts = scanMapCounts(grid, tile);
+  const crateNorm = normalMapFor((layers && layers.crateTex) || (layers && layers.thinWallTex));
   const wallMat = new T.MeshStandardMaterial({
     map: textureFrom((layers && (layers.wallVariants && layers.wallVariants.v0)) || (layers && layers.wallTex), 1, 1),
+    normalMap: normalMapFor((layers && (layers.wallVariants && layers.wallVariants.v0)) || (layers && layers.wallTex)),
+    normalScale: new T.Vector2(0.55, 0.55),
     color: 0xffffff,
     roughness: 0.82,
     metalness: 0.02
   });
   const crateMat = new T.MeshStandardMaterial({
     map: textureFrom((layers && layers.crateTex) || (layers && layers.thinWallTex), 1, 1),
+    normalMap: crateNorm,
+    normalScale: new T.Vector2(0.5, 0.5),
     color: 0xffffff,
     roughness: 0.68,
     metalness: 0.04
   });
   const platformMat = new T.MeshStandardMaterial({
     map: textureFrom((layers && layers.platformTex) || floorTex, 1, 1),
+    normalMap: floorNorm,
+    normalScale: new T.Vector2(0.35, 0.35),
     color: 0xffffff,
     roughness: 0.85,
     metalness: 0.02
   });
   const barrelMat = new T.MeshStandardMaterial({
     map: textureFrom(layers && layers.barrelTex, 1, 1),
+    normalMap: normalMapFor(layers && layers.barrelTex),
+    normalScale: new T.Vector2(0.45, 0.45),
     color: 0xffffff,
     roughness: 0.55,
     metalness: 0.35
@@ -319,7 +347,8 @@ function buildMapScene(map, layers) {
     depthWrite: false
   });
 
-  addInstancedBoxes(mapGroup, T, 'walls', counts.wall, new T.BoxGeometry(tile, tile, tile), wallMat,
+  const wallMats = makeWallMaterials(T, layers);
+  addInstancedWallVariants(mapGroup, T, countWallVariants(grid, wallMats.length), new T.BoxGeometry(tile, tile, tile), wallMats,
     (tx, ty, c, cx, cz, i, mesh) => {
       setInstanceTransform(T, mesh, i, cx, tile * 0.5, cz, 1, 1, 1, 0, 0, 0);
       mesh.setColorAt(i, wallColor(c));
@@ -363,6 +392,134 @@ function scanMapCounts(grid, tile) {
     }
   }
   return counts;
+}
+
+function countWallVariants(grid, variantCount) {
+  const counts = new Array(Math.max(1, variantCount)).fill(0);
+  for (let ty = 0; ty < grid.length; ty++) {
+    const row = grid[ty] || [];
+    for (let tx = 0; tx < row.length; tx++) {
+      if (row[tx] !== '#') continue;
+      counts[(tx * 7 + ty * 13) % counts.length]++;
+    }
+  }
+  return counts;
+}
+
+function makeWallMaterials(T, layers) {
+  const names = ['v0', 'v1', 'v2', 'v3'];
+  const mats = [];
+  for (const name of names) {
+    const src = layers && layers.wallVariants && layers.wallVariants[name];
+    if (!src) continue;
+    mats.push(new T.MeshStandardMaterial({
+      map: textureFrom(src, 1, 1),
+      normalMap: normalMapFor(src, 1, 1),
+      normalScale: new T.Vector2(0.55, 0.55),
+      color: 0xffffff,
+      roughness: 0.82,
+      metalness: 0.02
+    }));
+  }
+  if (!mats.length) {
+    const src = (layers && layers.wallTex) || null;
+    mats.push(new T.MeshStandardMaterial({
+      map: textureFrom(src, 1, 1),
+      normalMap: normalMapFor(src, 1, 1),
+      normalScale: new T.Vector2(0.55, 0.55),
+      color: 0xffffff,
+      roughness: 0.82,
+      metalness: 0.02
+    }));
+  }
+  return mats;
+}
+
+function addInstancedWallVariants(group, T, counts, geometry, materials, fill) {
+  for (let vi = 0; vi < materials.length; vi++) {
+    const count = counts[vi] || 0;
+    if (count < 1) continue;
+    const mesh = new T.InstancedMesh(geometry, materials[vi], count);
+    mesh.name = 'walls:' + vi;
+    mesh.castShadow = true;
+    mesh.receiveShadow = true;
+    let i = 0;
+    const map = getMap();
+    const grid = map && map.grid;
+    const tile = (map && map.tile) || 16;
+    for (let ty = 0; ty < grid.length && i < count; ty++) {
+      const row = grid[ty] || [];
+      for (let tx = 0; tx < row.length && i < count; tx++) {
+        const c = row[tx];
+        if (c !== '#' || (tx * 7 + ty * 13) % materials.length !== vi) continue;
+        fill(tx, ty, c, tx * tile + tile / 2, ty * tile + tile / 2, i, mesh);
+        i++;
+      }
+    }
+    group.add(mesh);
+  }
+}
+
+function setGroundVertexColors(geo, w, h) {
+  const pos = geo.attributes.position;
+  const colors = new Float32Array(pos.count * 3);
+  const hash = (x, y) => {
+    const s = Math.sin(x * 12.9898 + y * 78.233) * 43758.5453;
+    return s - Math.floor(s);
+  };
+  for (let i = 0; i < pos.count; i++) {
+    const wx = pos.getX(i) + w / 2;
+    const wy = pos.getY(i) + h / 2;
+    const n = hash(Math.floor(wx / 80), Math.floor(wy / 80));
+    const grain = 0.92 + n * 0.16 + Math.sin(wx * 0.0018 + wy * 0.0011) * 0.03;
+    colors[i * 3] = 0.88 * grain;
+    colors[i * 3 + 1] = 0.84 * grain;
+    colors[i * 3 + 2] = 0.76 * grain;
+  }
+  geo.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+}
+
+function normalMapFor(source, repeatX, repeatY) {
+  if (!THREE || !source || !source.width || !source.height || typeof document === 'undefined') return null;
+  if (normalMapCache.has(source)) return normalMapCache.get(source);
+  try {
+    const size = Math.min(256, Math.max(64, source.width || 256));
+    const canvas = document.createElement('canvas');
+    canvas.width = size;
+    canvas.height = Math.max(1, Math.round(size * (source.height || size) / (source.width || size)));
+    const g = canvas.getContext('2d');
+    g.drawImage(source, 0, 0, canvas.width, canvas.height);
+    const src = g.getImageData(0, 0, canvas.width, canvas.height).data;
+    const out = g.createImageData(canvas.width, canvas.height);
+    for (let y = 0; y < canvas.height; y++) {
+      for (let x = 0; x < canvas.width; x++) {
+        const i = (y * canvas.width + x) * 4;
+        const x0 = x > 0 ? i - 4 : i + 4;
+        const x1 = x < canvas.width - 1 ? i + 4 : i - 4;
+        const y0 = y > 0 ? i - canvas.width * 4 : i + canvas.width * 4;
+        const y1 = y < canvas.height - 1 ? i + canvas.width * 4 : i - canvas.width * 4;
+        const lx0 = 0.299 * src[x0] + 0.587 * src[x0 + 1] + 0.114 * src[x0 + 2];
+        const lx1 = 0.299 * src[x1] + 0.587 * src[x1 + 1] + 0.114 * src[x1 + 2];
+        const ly0 = 0.299 * src[y0] + 0.587 * src[y0 + 1] + 0.114 * src[y0 + 2];
+        const ly1 = 0.299 * src[y1] + 0.587 * src[y1 + 1] + 0.114 * src[y1 + 2];
+        out.data[i] = 128 + (lx1 - lx0) * 0.55;
+        out.data[i + 1] = 128 + (ly1 - ly0) * 0.55;
+        out.data[i + 2] = 255;
+        out.data[i + 3] = 255;
+      }
+    }
+    g.putImageData(out, 0, 0);
+    const tex = new THREE.CanvasTexture(canvas);
+    if (THREE.SRGBColorSpace) tex.colorSpace = THREE.SRGBColorSpace;
+    tex.wrapS = THREE.RepeatWrapping;
+    tex.wrapT = THREE.RepeatWrapping;
+    tex.repeat.set(repeatX || 1, repeatY || 1);
+    tex.anisotropy = 4;
+    normalMapCache.set(source, tex);
+    return tex;
+  } catch (err) {
+    return null;
+  }
 }
 
 function addInstancedBoxes(group, T, name, count, geometry, material, fill) {
