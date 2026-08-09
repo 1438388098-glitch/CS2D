@@ -1,6 +1,6 @@
 import {
   loadCareer, resetCareer, setStorage, setRng, getState, train, sellPlayer, buyPlayer, candidates,
-  nextSeason, seasonReport, abandonPendingMatch, settlePlayerMatch, simulatePlayerMatch, careerEndMatch, startCareerMatch, save, __clearStateForTest, findPlayerFixture, findCupMatch, cupMap, nextMatch
+  nextSeason, seasonReport, abandonPendingMatch, settlePlayerMatch, simulatePlayerMatch, careerEndMatch, startCareerMatch, save, __clearStateForTest, findPlayerFixture, findCupMatch, cupMap, nextMatch, trainTeammate
 } from '../src/career.js';
 import { effectiveSpread } from '../src/ballistic.js';
 import { startReload } from '../src/combat.js';
@@ -64,6 +64,15 @@ s.team.bank = 5000;
 s.player.attrs.aim = 100;
 r = train('aim', 'basic');
 ok('train full attr blocked', !r.ok && s.team.bank === 5000 && s.team.trainingLeft === 2);
+
+s = resetCareer();
+s.team.bank = 5000;
+const mate = s.team.roster[0];
+const mateBefore = mate.rating;
+r = trainTeammate(mate.id, 'basic');
+ok('train teammate', r.ok && mate.rating === mateBefore + 2 && s.team.trainingLeft === 1);
+r = trainTeammate('nonexistent', 'basic');
+ok('train teammate missing blocked', !r.ok);
 
 s = resetCareer();
 {

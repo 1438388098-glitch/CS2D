@@ -273,6 +273,25 @@ export function train(attr, tierKey) {
   return { ok: true };
 }
 
+// 队友训练：消耗训练次数与资金提升队友 rating（1 档点 ≈ 1 rating），赛季成长可持续
+export function trainTeammate(id, tierKey) {
+  const s = getState();
+  const tier = TRAIN_TIERS.find((t) => t.key === tierKey);
+  if (!tier) return { ok: false, error: '训练档位不存在' };
+  const p = s.team.roster.find((x) => x.id === id);
+  if (!p) return { ok: false, error: '队友不存在' };
+  if (s.team.trainingLeft <= 0) return { ok: false, error: '本轮训练次数已用完' };
+  if (s.team.bank < tier.cost) return { ok: false, error: '资金不足' };
+  if (p.rating >= 97) return { ok: false, error: '该队友已接近上限' };
+  s.team.bank -= tier.cost;
+  p.rating = Math.min(97, p.rating + tier.points);
+  s.team.trainingLeft--;
+  refreshPlayerRating(s);
+  addNews(s, 'info', '训练完成：' + p.name + ' rating +' + tier.points);
+  save();
+  return { ok: true };
+}
+
 export function sellPlayer(id) {
   const s = getState();
   if (!transferWindowOpen(s)) return { ok: false, error: '转会窗未开放' };
