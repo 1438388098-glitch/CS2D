@@ -1,4 +1,4 @@
-import { passable, los } from './map.js';
+import { passable, los, tileAt } from './map.js';
 import { applyDamage } from './combat.js';
 import { ctx } from './ctx.js';
 import { rand, angDiff } from './utils.js';
@@ -85,13 +85,21 @@ export function updateGrenades(game, dt) {
     }
     g.x += g.vx * dt;
     g.y += g.vy * dt;
+    // 抛体高度：飞行中 h 由 0.5 衰减到 0（模拟抛物线，约 0.6s 落地）；
+    // 空中（h>0.1）可越过薄墙 `=`（矮墙），落地后按正常碰撞
+    if (g.h === undefined) g.h = 0.5;
+    if (g.h > 0) g.h = Math.max(0, g.h - dt * 0.9);
+    const air = g.h > 0.1;
     if (!passable(g.x, g.y)) {
-      const nx = g.x - g.vx * dt * 2, ny = g.y - g.vy * dt * 2;
-      if (passable(nx, g.y)) { g.vy *= -0.55; g.vx *= 0.7; }
-      else if (passable(g.x, ny)) { g.vx *= -0.55; g.vy *= 0.7; }
-      else { g.vx *= -0.55; g.vy *= -0.55; }
-      g.bounces++;
-      if (g.bounces > 4) { g.x = nx; g.y = ny; g.vx = 0; g.vy = 0; }
+      const c = tileAt(g.x, g.y);
+      if (!(air && c === '=')) {
+        const nx = g.x - g.vx * dt * 2, ny = g.y - g.vy * dt * 2;
+        if (passable(nx, g.y)) { g.vy *= -0.55; g.vx *= 0.7; }
+        else if (passable(g.x, ny)) { g.vx *= -0.55; g.vy *= 0.7; }
+        else { g.vx *= -0.55; g.vy *= -0.55; }
+        g.bounces++;
+        if (g.bounces > 4) { g.x = nx; g.y = ny; g.vx = 0; g.vy = 0; }
+      }
     }
     g.vx *= Math.max(0, 1 - 1.6 * dt);
     g.vy *= Math.max(0, 1 - 1.6 * dt);
