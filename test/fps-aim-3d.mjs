@@ -1,5 +1,6 @@
 import { createGame, startMatch, update } from '../src/game.js';
 import { projectPitchPoint, pitchScreenHorizon } from '../src/render3d.js';
+import { castLaserEnd } from '../src/fps-laser.js';
 
 function ok(name, cond) {
   if (!cond) throw new Error('fps-aim-3d: ' + name + ' FAIL');
@@ -82,6 +83,20 @@ function fresh() {
   const floorFlat = projectPitchPoint(0, 0, 0, 0, focal, 16, 0, centerY, 100, 0, 0);
   const floorUp = projectPitchPoint(0, 0, 0, 0.4, focal, 16, 0, centerY, 100, 0, 0);
   ok('floor drops when looking up', floorFlat.sy < floorUp.sy);
+}
+
+{
+  const g = fresh();
+  const p = g.player;
+  p.pitch = 0;
+  const flat = castLaserEnd(p, g);
+  ok('laser flat endpoint has z', flat !== null && Number.isFinite(flat.z));
+  p.pitch = -0.45;
+  const down = castLaserEnd(p, g);
+  ok('laser down ends on floor', down !== null && down.z === 0);
+  p.pitch = 0.35;
+  const up = castLaserEnd(p, g);
+  ok('laser up endpoint above floor', up !== null && up.z > 0);
 }
 
 console.log('fps-aim-3d: all PASS');

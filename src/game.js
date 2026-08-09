@@ -15,6 +15,7 @@ import {initInfo, prune} from './info.js';
 import {initOppModel} from './ai/oppmodel.js';
 import {canSeeInFog} from './fog.js';
 import { shouldRerouteStuck } from './ai/rules.js';
+import { castLaserEnd as castLaserEndFps } from './fps-laser.js';
 
 const emit = (evt, p) => ctx.bus.emit(evt, p);
 
@@ -656,7 +657,7 @@ function updatePlayer(game, dt) {
   updatePlayerAim(game, dt);
   const held = weaponDef(p);
   if (held && held.kind !== 'knife') {
-    p.laserEnd = castLaserEnd(p, game);
+    p.laserEnd = castLaserEndFps(p, game);
   } else {
     p.laserEnd = null;
   }
