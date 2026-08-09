@@ -263,3 +263,38 @@ export function buildBazaar() {
   b.spawn('c', 3, 3, 6, 2);
   return b;
 }
+
+export function buildFoundry() {
+  const b = createBuilder(74, 50);
+  border(b);
+  b.corridor(1, 2, 72, 5);          // upper gantry
+  b.corridor(1, 22, 72, 5);         // mid corridor
+  b.corridor(1, 44, 72, 5);         // lower rail
+  b.corridor(4, 2, 6, 46);          // west spine
+  b.corridor(33, 2, 6, 46);         // center spine
+  b.corridor(63, 2, 6, 46);         // east spine
+  b.corridor(17, 8, 4, 35);         // scrap lane
+  b.corridor(47, 8, 4, 35);         // ingot lane
+  b.corridor(25, 13, 3, 25);        // pipe lane
+  b.corridor(55, 13, 3, 25);        // valve lane
+  b.site('A', 63, 4, 8, 5);
+  b.site('B', 4, 44, 10, 5);
+  b.tile(67, 7, '^'); b.tile(68, 7, '^'); b.tile(6, 47, '^'); b.tile(7, 47, '^');
+  for (let x = 23; x <= 34; x++) for (let y = 17; y <= 20; y++) b.tile(x, y, '~');
+  for (let x = 52; x <= 63; x++) for (let y = 28; y <= 31; y++) b.tile(x, y, '~');
+  b.corridor(26, 17, 3, 4);         // sluice bridge
+  b.corridor(55, 28, 3, 4);         // sluice bridge
+  b.tile(33, 24, '='); b.tile(34, 24, '='); b.tile(39, 24, '=');
+  b.tile(40, 24, '='); b.tile(46, 24, '='); b.tile(47, 24, '=');
+  b.boxes(65, 6, 2, 2); b.boxes(71, 8, 2, 2); b.boxes(18, 10, 2, 2);
+  b.boxes(49, 10, 2, 2); b.boxes(27, 14, 2, 2); b.boxes(56, 14, 2, 2);
+  b.boxes(9, 23, 2, 2); b.boxes(37, 23, 2, 2); b.boxes(60, 23, 2, 2);
+  b.boxes(8, 33, 2, 2); b.boxes(34, 33, 2, 2); b.boxes(62, 33, 2, 2);
+  b.boxes(6, 45, 2, 2); b.boxes(30, 45, 2, 2); b.boxes(52, 45, 2, 2);
+  b.crate(36, 5); b.crate(37, 5); b.crate(15, 25); b.crate(45, 25);
+  b.crate(20, 40); b.crate(60, 40); b.crate(39, 43);
+  b.tile(36, 22, 'o'); b.tile(50, 22, 'o'); b.tile(12, 37, 'o'); b.tile(57, 37, 'o');
+  b.spawn('t', 64, 47, 6, 2);
+  b.spawn('c', 4, 3, 6, 2);
+  return b;
+}

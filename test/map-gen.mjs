@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { createBuilder, buildDust2, buildCanal, buildMetro, buildForge, buildHarbor, buildBazaar } from '../src/map-gen.js';
+import { createBuilder, buildDust2, buildCanal, buildMetro, buildForge, buildHarbor, buildBazaar, buildFoundry } from '../src/map-gen.js';
 import { loadMap } from '../src/map.js';
 
 function countChar(rows, ch) {
@@ -53,7 +53,8 @@ const generatedMaps = [
   { name: 'metro', rows: buildMetro().rows(), w: 58, h: 42 },
   { name: 'forge', rows: buildForge().rows(), w: 80, h: 52 },
   { name: 'harbor', rows: buildHarbor().rows(), w: 72, h: 48 },
-  { name: 'bazaar', rows: buildBazaar().rows(), w: 66, h: 44 }
+  { name: 'bazaar', rows: buildBazaar().rows(), w: 66, h: 44 },
+  { name: 'foundry', rows: buildFoundry().rows(), w: 74, h: 50 }
 ];
 
 for (const map of generatedMaps) {
