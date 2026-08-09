@@ -185,6 +185,14 @@ if (typeof themeOf === 'function') {
   console.log('render3d-smoke: themeOf SKIP (textures.js 未导出)');
 }
 ok('render weather theme frame', (() => { render3d(game); return true; })());
+ok('render fog sky frame', (() => {
+  const prevFog = game.opts.fog;
+  game.opts.fog = true;
+  render3d(game);
+  game.opts.fog = prevFog;
+  render3d(game);
+  return true;
+})());
 
 // ===== 反馈/相机参数帧（并行 agent 实现中，防御式：只渲染不 FAIL）=====
 

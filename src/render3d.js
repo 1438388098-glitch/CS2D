@@ -354,6 +354,7 @@ export function render3d(game) {
     U: mapTile() / TILE, // 世界尺寸比例：官方图 tile=16 时精灵等世界单位量按 0.4 缩放
     time: game.time || 0,
     theme: themeOfMap(),
+    fogOn: !!(game.opts && game.opts.fog),
     scoped,
     scopeT
   };
@@ -437,6 +438,7 @@ let skyLayer = null;
 function skySignature(F) {
   const sky = (F.theme && F.theme.sky) || FALLBACK_THEME.sky;
   const fl = (F.theme && F.theme.floor) || FALLBACK_THEME.floor;
+  const fog = (F.theme && F.theme.atmo && F.theme.atmo.fogColor) || [150, 130, 95];
   return [
     F.iw, F.ih,
     (F.horizon || 0).toFixed(4),
@@ -444,7 +446,9 @@ function skySignature(F) {
     sky.top || '',
     sky.horizon || '',
     (sky.sun || []).join(','),
-    (fl || []).join(',')
+    (fl || []).join(','),
+    F.fogOn ? 'fog' : 'clear',
+    (fog || []).join(',')
   ].join('|');
 }
 
@@ -469,6 +473,7 @@ function drawSkyTo(F, t) {
   const { iw, ih, horizon } = F;
   const sky = F.theme.sky || FALLBACK_THEME.sky;
   const sun = sky.sun || [255, 217, 160];
+  const fogOn = !!F.fogOn;
   let grad = t.createLinearGradient(0, 0, 0, horizon);
   grad.addColorStop(0, sky.top);
   grad.addColorStop(0.8, sky.top);
@@ -505,6 +510,20 @@ function drawSkyTo(F, t) {
   grad.addColorStop(1, 'rgb(' + near.join(',') + ')');
   t.fillStyle = grad;
   t.fillRect(0, horizon, iw, ih - horizon);
+  if (fogOn) {
+    const fog = (F.theme.atmo && F.theme.atmo.fogColor) || [150, 130, 95];
+    const fogRGBA = (a) => 'rgba(' + Math.round(fog[0]) + ',' + Math.round(fog[1]) + ',' + Math.round(fog[2]) + ',' + a + ')';
+    const skyFog = t.createLinearGradient(0, 0, 0, horizon);
+    skyFog.addColorStop(0, fogRGBA(0.14));
+    skyFog.addColorStop(1, fogRGBA(0.5));
+    t.fillStyle = skyFog;
+    t.fillRect(0, 0, iw, horizon);
+    const floorFog = t.createLinearGradient(0, horizon, 0, ih);
+    floorFog.addColorStop(0, fogRGBA(0.54));
+    floorFog.addColorStop(1, fogRGBA(0.12));
+    t.fillStyle = floorFog;
+    t.fillRect(0, horizon, iw, ih - horizon);
+  }
 }
 
 function drawSky(F) {
