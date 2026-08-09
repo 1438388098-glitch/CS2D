@@ -51,6 +51,8 @@ let quadIdxMap = null, quadIdxCache = null;
 let shadeTiles = null, shadeTilesRef = null, shadeTilesBroken = false; // 已废弃占位（保留声明避免遗留引用）
 // E3c zbuf 数组复用（覆盖写全部列，避免每帧 new Array 分配）
 let zbufArr = null;
+let fpsMarkerCache = [];
+let fpsMarkerPool = [];
 
 // ===== 纯函数（node 单测用，无 DOM）=====
 
@@ -811,14 +813,21 @@ function drawWalls(F, zbuf) {
 function updateFpsMarkers(F, zbuf) {
   const g = F.g;
   const p = g.player;
-  const markers = [];
+  const markers = fpsMarkerCache;
+  for (const m of markers) {
+    if (fpsMarkerPool.length < MAX_FPS_MARKERS * 2) fpsMarkerPool.push(m);
+  }
+  markers.length = 0;
   if (!p || g.viewMode !== 'fps') {
     g._fpsEntityMarkers = markers;
+    g._fpsMarkerLimitHit = false;
     return;
   }
   const T = mapTile();
+  let candidates = 0;
   for (const e of g.entities) {
     if (e.dead || e === F.ent) continue;
+    candidates++;
     const dx = e.x - F.cx, dy = e.y - F.cy;
     const depth = dx * F.cos + dy * F.sin;
     if (depth < NEAR || depth > F.fogMax) continue;
@@ -834,20 +843,25 @@ function updateFpsMarkers(F, zbuf) {
     for (let c = x0; c <= x1; c++) {
       if (zbuf[c] && zbuf[c].d < depth) { occluded = true; break; }
     }
-    markers.push({
-      team: e.team,
-      bot: e.bot,
-      name: e.name || '?',
-      hp: e.hp || 0,
-      depth,
-      nx: sx / F.iw,
-      ny: pt.sy / F.ih,
-      occluded,
-      elev,
-      isKiller: g.lastKiller === e && p.dead
-    });
+    let m = fpsMarkerPool.pop();
+    if (!m) m = {};
+    m.team = e.team;
+    m.bot = e.bot;
+    m.name = e.name || '?';
+    m.hp = e.hp || 0;
+    m.depth = depth;
+    m.nx = sx / F.iw;
+    m.ny = pt.sy / F.ih;
+    m.occluded = occluded;
+    m.elev = elev;
+    m.isKiller = g.lastKiller === e && p.dead;
+    markers.push(m);
   }
+  markers.sort((a, b) => a.depth - b.depth);
+  const limitHit = markers.length > MAX_FPS_MARKERS || candidates > MAX_FPS_MARKERS;
+  markers.length = Math.min(markers.length, MAX_FPS_MARKERS);
   g._fpsEntityMarkers = markers;
+  g._fpsMarkerLimitHit = limitHit;
 }
 
 // 队友穿透墙标记：即使被墙体遮挡也显示屏幕位置，避免 3D 模式跟丢队友。

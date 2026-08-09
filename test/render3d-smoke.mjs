@@ -241,10 +241,31 @@ ok('render 60 mixed frames', (() => {
   }
   return true;
 })());
+p.dead = false;
+p.angle = 0;
+p.pitch = 0;
+p.scoped = false;
+const liveMate = game.entities.find((e) => e.bot && e.team === p.team);
+const liveEnemy = game.entities.find((e) => e.bot && e.team !== p.team);
+if (liveMate) { liveMate.dead = false; liveMate.hp = 100; liveMate.x = 200; liveMate.y = 100; }
+if (liveEnemy) { liveEnemy.dead = false; liveEnemy.hp = 100; liveEnemy.x = 300; liveEnemy.y = 100; }
+render3d(game);
 ok('fps entity markers generated', Array.isArray(game._fpsEntityMarkers) && game._fpsEntityMarkers.length > 0);
 ok('fps teammate marker present', game._fpsEntityMarkers.some((m) => m.team === p.team));
 ok('fps enemy marker present', game._fpsEntityMarkers.some((m) => m.team !== p.team));
 ok('fps enemy edge alert', game._fpsEnemyAlert && game._fpsEnemyAlert.count > 0);
 ok('fps marker elevation fields', game._fpsEntityMarkers.every((m) => typeof m.elev === 'number'));
+
+const savedEntities = game.entities;
+const stressBase = savedEntities.find((e) => e.bot && !e.dead) || p;
+const stress = [];
+for (let i = 0; i < 30; i++) {
+  stress.push({ ...stressBase, name: 'Stress' + i, x: p.x + 80 + i * 8, y: p.y + i * 4, team: 't', bot: true, dead: false });
+}
+game.entities = savedEntities.concat(stress);
+render3d(game);
+ok('fps marker cap enforced', game._fpsEntityMarkers.length <= 24 && game._fpsMarkerLimitHit === true);
+game.entities = savedEntities;
+render3d(game);
 
 console.log('render3d-smoke: all PASS');
