@@ -18,7 +18,26 @@ const skipFiles = new Set([
 
 const args = process.argv.slice(2);
 const listMode = args.includes('--list');
+const helpMode = args.includes('--help');
+const unknown = args.filter((arg) => arg.startsWith('-') && arg !== '--list' && arg !== '--help');
 const filter = args.find((arg) => !arg.startsWith('-')) || null;
+
+if (unknown.length > 0) {
+  console.error(`run-tests: unknown option(s): ${unknown.join(', ')}`);
+  console.error('run-tests: use --help for usage');
+  process.exit(2);
+}
+
+if (helpMode) {
+  console.log('Usage: node scripts/run-tests.mjs [--list] [--help] [filter...]');
+  console.log('');
+  console.log('Options:');
+  console.log('  --list  List discovered test files without running them');
+  console.log('  --help  Show this help');
+  console.log('');
+  console.log('Filters are case-sensitive substrings matched against test file names.');
+  process.exit(0);
+}
 
 let tests = fs.readdirSync(testDir)
   .filter((name) => /\.(?:cjs|js|mjs)$/i.test(name))
