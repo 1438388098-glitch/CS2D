@@ -106,7 +106,9 @@ export function fireWeapon(e, game) {
     game.shake = Math.max(game.shake, 5);
   } else if (w.kind === 'shotgun') {
     emit('sfx', { name: 'shotgun', vol: 0.9, x: e.x, y: e.y, game, wid: e.weapons.primary || e.weapons.secondary });
-  } else if (w.kind === 'pistol' || w.kind === 'smg') {
+  } else if (w.kind === 'smg') {
+    emit('sfx', { name: 'smg', vol: 0.8, x: e.x, y: e.y, game, wid: e.weapons.primary || e.weapons.secondary });
+  } else if (w.kind === 'pistol') {
     emit('sfx', { name: 'pistol', vol: 0.8, x: e.x, y: e.y, game, wid: e.weapons.primary || e.weapons.secondary });
   } else {
     emit('sfx', { name: 'shot', vol: 0.85, x: e.x, y: e.y, game, wid: e.weapons.primary || e.weapons.secondary });

@@ -1,10 +1,8 @@
-import { ctx as gameCtx } from '../ctx.js';
-import { clamp, rand } from '../utils.js';
-import {
-  initAudioCore, getAc, isAudioReady, getNoise, getBus, setBusVolume, getBusVolume,
-  setMasterGain, throttle, wrapTail, VOL_DEFAULTS
-} from './core.js';
-import { buildShot, buildSfx, buildUi, buildAmbient } from './patches.js';
+import {ctx as gameCtx} from '../ctx.js';
+import {clamp} from '../utils.js';
+import {initAudioCore, getAc, isAudioReady, resumeAudio, bindAudioUnlock, getBus, setBusVolume, getBusVolume, setMasterGain, VOL_DEFAULTS} from './core.js';
+import {buildShot, buildSfx, buildUi, buildAmbient} from './patches.js';
+import {readAudioPrefs, writeAudioPrefs} from './prefs.js';
 
 let muted = false;
 let gameProvider = null;
@@ -13,22 +11,19 @@ let gameProvider = null;
 gameCtx.bus.on('sfx', (p) => sfx(p.name, p.vol, p.x, p.y, p.game, p.wid, p.mat));
 
 export function initAudio() {
-  if (isAudioReady()) return;
+  if (getAc() && isAudioReady()) return;
   try {
     const AC = typeof window !== 'undefined' && (window.AudioContext || window.webkitAudioContext);
     if (!AC) return;
     initAudioCore(() => new AC());
+    resumeAudio();
+    if (typeof window !== 'undefined') bindAudioUnlock(window);
     setMasterGain(muted ? 0 : 1);
     // 音量偏好（设置页滑杆）
     try {
-      const raw = localStorage.getItem('cs2d_audio');
-      if (raw) {
-        const p = JSON.parse(raw);
-        for (const b of Object.keys(VOL_DEFAULTS)) {
-          const v = Number(p[b]);
-          if (isFinite(v)) setBusVolume(b, clamp(v, 0, 1));
-        }
-      }
+      const prefs = readAudioPrefs(localStorage);
+      for (const b of Object.keys(VOL_DEFAULTS)) setBusVolume(b, prefs[b]);
+      writeAudioPrefs(prefs, localStorage);
     } catch (e) { /* 无存储 */ }
   } catch (e) { /* 无音频环境 */ }
 }
@@ -53,10 +48,21 @@ const GUN_BY_WID = {
   awp: 'sniper', xm: 'shotgun', p250: 'pistol', deagle: 'pistol', glock: 'pistol', usp: 'pistol', knife: 'knife'
 };
 
+function shotVariantFor(name, wid) {
+  if (GUN_BY_WID[wid]) return GUN_BY_WID[wid];
+  if (name === 'awp') return 'sniper';
+  if (name === 'shotgun') return 'shotgun';
+  if (name === 'pistol') return 'pistol';
+  if (name === 'smg') return 'smg';
+  return 'rifle';
+}
+
 const REVERB_BY_MAP = {
   metro: { delay: 0.32, fb: 0.3, wet: 0.26 },
   canal: { delay: 0.24, fb: 0.25, wet: 0.22 },
-  dust2: { delay: 0.16, fb: 0.22, wet: 0.18 }
+  dust2: { delay: 0.16, fb: 0.22, wet: 0.18 },
+  arctic: { delay: 0.42, fb: 0.26, wet: 0.32 },
+  blast: { delay: 0.28, fb: 0.34, wet: 0.30 }
 };
 
 function buildReverb(ac, mapId) {
@@ -73,6 +79,7 @@ function buildReverb(ac, mapId) {
 }
 
 export function sfx(name, vol, x, y, game, wid, mat) {
+  resumeAudio();
   if (!isAudioReady() || muted) return;
   const ac = getAc();
   try {
@@ -83,11 +90,24 @@ export function sfx(name, vol, x, y, game, wid, mat) {
     let dv = 1;
     let pan = 0;
     if (x !== undefined && g && g.player && !g.player.dead) {
-      dv = clamp(1 - Math.hypot(x - g.player.x, y - g.player.y) / 1600, 0.12, 1);
-      const earX = g.player.x + Math.cos(g.player.angle) * 16;
-      pan = clamp((x - earX) / 320, -1, 1);
+      const lis = g.player;
+      const dx = x - lis.x, dy = y - lis.y;
+      const dist = Math.hypot(dx, dy);
+      if (g.viewMode === 'fps') {
+        // FPS 3D 声场：以视野朝向为基准——横向偏移→左右声像，背后声音更闷更轻（简化 HRTF）
+        const cosA = Math.cos(lis.angle), sinA = Math.sin(lis.angle);
+        const depth = dx * cosA + dy * sinA;
+        const perp = -dx * sinA + dy * cosA;
+        dv = clamp(1 - dist / 1400, 0.1, 1);
+        pan = clamp(perp / 300, -1, 1);
+        if (depth < 0) dv *= 0.55; // 背后：音量衰减（低通随 dv 同步收窄，见下方 lp）
+      } else {
+        dv = clamp(1 - dist / 1600, 0.12, 1);
+        const earX = lis.x + Math.cos(lis.angle) * 16;
+        pan = clamp((x - earX) / 320, -1, 1);
+      }
     }
-    const v = Math.min(1, (vol || 0.5) * dv);
+    const v = Math.min(1, (vol === undefined ? 0.5 : vol) * dv);
     let chain = out;
     const tails = [];
     let panner = null;
@@ -122,6 +142,23 @@ export function sfx(name, vol, x, y, game, wid, mat) {
       wetIn.connect(out);
       tails.push(...rev.nodes, dry, wetIn);
     }
+    if (name === 'boom' && g) {
+      // 爆炸低频余音：0.35s 后触发 90→28Hz 下坠音
+      const tailT = ac.currentTime + 0.35;
+      const o2 = ac.createOscillator();
+      const g2 = ac.createGain();
+      o2.type = 'sine';
+      o2.frequency.setValueAtTime(90, tailT);
+      o2.frequency.exponentialRampToValueAtTime(28, tailT + 1.1);
+      g2.gain.setValueAtTime(0.0001, tailT);
+      g2.gain.exponentialRampToValueAtTime(0.5 * (vol || 1) * 0.35, tailT + 0.08);
+      g2.gain.exponentialRampToValueAtTime(0.0001, tailT + 1.1);
+      o2.connect(g2);
+      g2.connect(out);
+      o2.start(tailT);
+      o2.stop(tailT + 1.2);
+      tails.push(o2, g2);
+    }
     let tailGuard = null;
     if (tails.length) {
       tailGuard = {
@@ -132,9 +169,8 @@ export function sfx(name, vol, x, y, game, wid, mat) {
       };
     }
     const env = { out: chain, vol: v, lp: lp ? lp.frequency.value : 3000, mapId: g && g.mapId, wid, mat, guard: tailGuard };
-    if (name === 'shot' || name === 'awp' || name === 'pistol' || name === 'shotgun') {
-      const variant = GUN_BY_WID[wid] || (name === 'awp' ? 'sniper' : name === 'shotgun' ? 'shotgun' : name === 'pistol' ? 'pistol' : 'rifle');
-      buildShot(ac, { ...env, variant });
+    if (name === 'shot' || name === 'awp' || name === 'pistol' || name === 'smg' || name === 'shotgun') {
+      buildShot(ac, { ...env, variant: shotVariantFor(name, wid) });
     } else {
       buildSfx(ac, env);
     }
@@ -144,6 +180,7 @@ export function sfx(name, vol, x, y, game, wid, mat) {
 
 // UI 音效：走 UI bus、无定位
 export function uiSfx(name, vol) {
+  resumeAudio();
   if (!isAudioReady() || muted) return;
   const ac = getAc();
   try {
@@ -158,6 +195,7 @@ export { setBusVolume, getBusVolume };
 let ambient = null;
 
 export function startAmbient(mapId) {
+  resumeAudio();
   if (!isAudioReady() || muted) return;
   const ac = getAc();
   try {
