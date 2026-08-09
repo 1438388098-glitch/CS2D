@@ -9,6 +9,7 @@ import {
   shouldKeepPath,
   shouldRotateToHot,
   shouldUnstuck,
+  pickPlantSite,
   shouldRushPlant
 } from '../src/ai/rules.js';
 
@@ -86,5 +87,12 @@ assert.equal(shouldUnstuck({ path: [{ x: 0, y: 0 }, { x: 50, y: 0 }], pathI: 0 }
 assert.equal(shouldUnstuck({ path: [{ x: 0, y: 0 }, { x: 50, y: 0 }], pathI: 0 }, 2, 40), false, 'moving bot should not be treated as stuck');
 assert.equal(shouldUnstuck({ path: null, pathI: 0 }, 2, 5), false, 'bot without path should not be teleported');
 assert.equal(shouldUnstuck({ path: [{ x: 0, y: 0 }], pathI: 1 }, 2, 5), false, 'completed-path bot should not be teleported');
+
+assert.equal(pickPlantSite({ team: 't', hasBomb: true }, { dist: 200, cover: 2, enemyNear: 0 }, { dist: 500, cover: 1, enemyNear: 2 }, 40), 'A', 'near covered site should be preferred early');
+assert.equal(pickPlantSite({ team: 't', hasBomb: true }, { dist: 500, cover: 1, enemyNear: 0 }, { dist: 200, cover: 2, enemyNear: 0 }, 15), 'B', 'late-round carrier should favor closer site');
+assert.equal(pickPlantSite({ team: 't', hasBomb: true }, { dist: 400, cover: 1, enemyNear: 1 }, { dist: 420, cover: 1, enemyNear: 1 }, 50), null, 'near-even site choices should wait for more intel');
+assert.equal(pickPlantSite({ team: 't', hasBomb: false }, { dist: 200, cover: 2 }, { dist: 500, cover: 1 }, 40), null, 'non-carrier should not choose plant site');
+assert.equal(pickPlantSite({ team: 't', hasBomb: true, dead: true }, { dist: 200, cover: 2 }, { dist: 500, cover: 1 }, 40), null, 'dead carrier should not choose plant site');
+assert.equal(pickPlantSite({ team: 't', hasBomb: true, bomb: { planted: true } }, { dist: 200, cover: 2 }, { dist: 500, cover: 1 }, 40), null, 'planted bomb should not choose another site');
 
 console.log('ai-rules: all PASS');

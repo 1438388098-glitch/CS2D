@@ -55,3 +55,20 @@ export function shouldUnstuck(e, stuckTime, movedDist, minTime = 1.5, minDist = 
   if (e.dead) return false;
   return stuckTime >= minTime && movedDist < minDist;
 }
+
+export function pickPlantSite(e, siteA, siteB, timeLeft, lateAt = 30, minAdvantage = 0.2) {
+  if (!e || !e.hasBomb) return null;
+  if (e.dead || (e.bomb && e.bomb.planted)) return null;
+  if (!siteA || !siteB) return null;
+  const distMult = timeLeft <= lateAt ? 2 : 1;
+  const maxDist = Math.max(siteA.dist, siteB.dist, 1);
+  const score = (site) => {
+    const distScore = (maxDist - site.dist) / maxDist * distMult;
+    const coverScore = (site.cover || 0) * 0.25;
+    const enemyScore = (site.enemyNear || 0) * -0.35;
+    return distScore + coverScore + enemyScore;
+  };
+  const a = score(siteA), b = score(siteB);
+  if (Math.abs(a - b) < minAdvantage) return null;
+  return a > b ? 'A' : 'B';
+}
