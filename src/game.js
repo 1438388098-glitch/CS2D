@@ -43,7 +43,7 @@ export function createGame(opts = {}) {
     over: false, spectateIdx: 0, lastPlantSite: null, dt: 0.016,
     lossStreakT: 0, lossStreakCT: 0,
     hitMarkT: 0, hitFlashT: 0, headshotT: 0, zoom: 0.75, hitPauseT: 0, dmgPops: [], scopeT: 0, lastKiller: null,
-    viewMode: 'top', fpsSens: 0.002, fpsSensY: 0.002, invertY: false, _mlookDx: 0, _mlookDy: 0, _specAngle: null, _specPitch: null,
+    viewMode: 'top', fpsSens: 0.002, fpsSensY: 0.002, invertY: false, _mlookDx: 0, _mlookDy: 0, _specAngle: null, _specPitch: null, _specManual: null,
     stats: { hits: 0, shots: 0, headshots: 0 },
     time: 0,
     tAttackSite: 'A',
@@ -777,6 +777,7 @@ function updatePlayerAim(game, dt) {
     } else {
       if (game._specAngle == null) game._specAngle = game.player ? game.player.angle : 0;
       if (game._specPitch == null) game._specPitch = game.player ? (game.player.pitch || 0) : 0;
+      if (dx || dy) game._specManual = game.time;
       game._specAngle += dx * sens;
       game._specPitch = clamp(game._specPitch - dy * sensY * yDir, -FPS_PITCH_LIMIT, FPS_PITCH_LIMIT);
     }

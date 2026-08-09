@@ -1,5 +1,5 @@
 import { MAPS, WEAPONS } from './config.js';
-import { weaponDef, ammoFor } from './entities.js';
+import { weaponDef, ammoFor, reserveFor } from './entities.js';
 import { effectiveSpread } from './ballistic.js';
 import { los, getMap } from './map.js';
 import { clamp } from './utils.js';
@@ -54,6 +54,27 @@ export function fpsInteractAction(game) {
     return { label: '拾取 ' + (wd ? wd.name : d.wid), action: 'interact' };
   }
   return null;
+}
+
+// FPS death spectate overlay data.
+export function fpsSpectateInfo(game) {
+  const p = game && game.player;
+  if (!p || !p.dead || game.viewMode !== 'fps') return null;
+  const targets = game.entities.filter((e) => e.bot && !e.dead && e.team === p.team);
+  if (!targets.length) return null;
+  const e = targets[game.spectateIdx % targets.length];
+  const w = weaponDef(e);
+  const wid = e.slot === 'primary' ? (e.weapons.primary || e.weapons.secondary) :
+    (e.weapons.secondary || e.weapons.primary);
+  return {
+    name: e.name || '?',
+    hp: e.hp || 0,
+    team: e.team,
+    weapon: w ? w.name : (wid || '?'),
+    ammo: wid ? ammoFor(e) : 0,
+    reserve: wid ? reserveFor(e) : 0,
+    target: e
+  };
 }
 
 function rr(mctx, x, y, w, h, r) {
@@ -254,6 +275,33 @@ export function renderHud(game) {
   const h2 = ctx.canvas.height / dpr;
   const p = game.player;
   // FPS 命中反馈/击杀环恒锚定屏幕中心（朝向=鼠标屏幕方向，中心即射击线）
+  if (game.viewMode === 'fps' && p && p.dead) {
+    const spec = fpsSpectateInfo(game);
+    if (spec) {
+      ctx.save();
+      ctx.textAlign = 'left';
+      ctx.textBaseline = 'top';
+      ctx.font = "700 16px 'Microsoft YaHei','Segoe UI',sans-serif";
+      ctx.lineWidth = 4;
+      ctx.strokeStyle = 'rgba(0,0,0,0.8)';
+      ctx.strokeText('观战 ' + spec.name, 18, 62);
+      ctx.fillStyle = spec.team === 'ct' ? '#7fb8ff' : '#ffcf8a';
+      ctx.fillText('观战 ' + spec.name, 18, 62);
+      ctx.font = "12px 'Microsoft YaHei','Segoe UI',sans-serif";
+      ctx.fillStyle = 'rgba(255,255,255,0.85)';
+      ctx.strokeText(spec.weapon + '  ' + spec.ammo + '/' + spec.reserve, 18, 84);
+      ctx.fillText(spec.weapon + '  ' + spec.ammo + '/' + spec.reserve, 18, 84);
+      ctx.fillStyle = 'rgba(0,0,0,0.65)';
+      ctx.fillRect(18, 102, 110, 6);
+      ctx.fillStyle = spec.hp > 60 ? '#4dc35c' : (spec.hp > 30 ? '#ffc24d' : '#ff5540');
+      ctx.fillRect(18, 102, 110 * clamp(spec.hp / 100, 0, 1), 6);
+      ctx.font = "11px 'Microsoft YaHei','Segoe UI',sans-serif";
+      ctx.fillStyle = 'rgba(255,255,255,0.55)';
+      ctx.strokeText('[Q/E] 切换目标', 18, 116);
+      ctx.fillText('[Q/E] 切换目标', 18, 116);
+      ctx.restore();
+    }
+  }
   if (game.viewMode === 'fps' && p && !p.dead) {
     const act = fpsInteractAction(game);
     if (act) {

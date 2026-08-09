@@ -63,6 +63,7 @@ export function cycleSpectate(game, dir = 1) {
   const step = ((dir % targets.length) + targets.length) % targets.length;
   game.spectateIdx = (game.spectateIdx + step) % targets.length;
   const target = targets[game.spectateIdx % targets.length];
+  game._specManual = null;
   game._specAngle = target ? target.angle : null;
   game._specPitch = target ? (target.pitch || 0) : null;
   return target;

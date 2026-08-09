@@ -299,11 +299,18 @@ export function render3d(game) {
   let angle = ent.angle;
   let pitch = Number.isFinite(ent.pitch) ? ent.pitch : 0;
   if (!(ent === p && alive)) {
-    if (game._specAngle === null || game._specAngle === undefined) {
-      game._specAngle = game.player ? game.player.angle : ent.angle;
-    }
-    if (game._specPitch === null || game._specPitch === undefined) {
-      game._specPitch = game.player ? (game.player.pitch || 0) : (ent.pitch || 0);
+    const autoFollow = game._specManual === null || game._specManual === undefined ||
+      (game.time - game._specManual) > 1.2;
+    if (autoFollow && ent) {
+      game._specAngle = ent.angle;
+      game._specPitch = ent.pitch || 0;
+    } else {
+      if (game._specAngle === null || game._specAngle === undefined) {
+        game._specAngle = game.player ? game.player.angle : ent.angle;
+      }
+      if (game._specPitch === null || game._specPitch === undefined) {
+        game._specPitch = game.player ? (game.player.pitch || 0) : (ent.pitch || 0);
+      }
     }
     angle = game._specAngle;
     pitch = game._specPitch;
