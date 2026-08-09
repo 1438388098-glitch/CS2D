@@ -1,6 +1,8 @@
-﻿import { WEAPONS, PRICES, MAPS, ECONOMY } from './config.js';
+﻿import { WEAPONS, PRICES, MAPS, ECONOMY, ROUND } from './config.js';
 import { ctx } from './ctx.js';
 import { ACTIONS, getBindLabel, getBindCodes, bind, resetBinds } from './keymap.js';
+import { setViewMode, requestFpsPointerLock } from './input.js';
+import { readAudioPrefs, writeAudioPrefs } from './audio/prefs.js';
 
 let doc = null;
 let canvas = null;
@@ -21,6 +23,7 @@ export function initUi(documentRef, canvasRef, gameRef) {
   game.ui = createUiApi();
   bindBus();
   bindMenu();
+  syncMapCards();
   bindModeMenu();
   bindOverlays();
   bindSettings();
@@ -165,7 +168,15 @@ function createUiApi() {
     isScoreboardOpen: () => sbOpen,
     showMatchEnd: (win, score, kd, mvp, stats) => {
       const majorNext = el('majorNextBtn');
-      if (majorNext) majorNext.style.display = game.opts && game.opts.mode === 'major' ? 'inline-flex' : 'none';
+      if (majorNext) {
+        const isMajor = game.opts && game.opts.mode === 'major';
+        const isCareer = game.opts && game.opts.mode === 'career';
+        const isRanked = game.opts && game.opts.mode === 'ranked';
+        majorNext.style.display = (isMajor || isCareer || isRanked) ? 'inline-flex' : 'none';
+        majorNext.textContent = isRanked ? '返回排位' : (isCareer ? '返回生涯总部' : '返回 Major 战报');
+        const againBtn = el('againBtn');
+        if (againBtn) againBtn.style.display = (isCareer || isRanked) ? 'none' : 'inline-flex';
+      }
       const f = el('endFinal');
       if (!f) return;
       f.textContent = win ? '胜利' : '败北';
@@ -227,7 +238,7 @@ function createUiApi() {
         if (bars) {
           bars.innerHTML = '';
           const tScore = game.score.T, cScore = game.score.CT;
-          const maxV = Math.max(13, tScore, cScore);
+          const maxV = Math.max(ROUND.MATCH_WIN, tScore, cScore);
           const rowT = doc.createElement('div');
           rowT.className = 'eb-row t';
           rowT.innerHTML = '<span class="eb-lab">T</span><div class="eb-track"><i style="width:' + (tScore / maxV * 100) + '%"></i></div><b>' + tScore + '</b>';
@@ -580,12 +591,15 @@ function renderScoreboard(gameRef) {
   if (rb) {
     rb.innerHTML = '';
     const hist = (gameRef.winHistory || []).slice(-26);
-    const total = 13;
-    for (let row = 0; row < 2; row++) {
+    const total = ROUND.MATCH_WIN;
+    const perRow = 13;
+    const rows = Math.max(1, Math.ceil(total / perRow));
+    for (let row = 0; row < rows; row++) {
       const seg = doc.createElement('div');
       seg.className = 'sb-seg';
-      for (let i = 0; i < total; i++) {
-        const idx = row * total + i;
+      const cells = Math.min(perRow, total - row * perRow);
+      for (let i = 0; i < cells; i++) {
+        const idx = row * perRow + i;
         const cell = doc.createElement('span');
         cell.className = 'rnd';
         if (idx < hist.length) {
@@ -603,7 +617,9 @@ function renderScoreboard(gameRef) {
 import { setMuted, initAudio, uiSfx, setBusVolume, stopAmbient } from './audio.js';
 import { startMatch } from './game.js';
 import { buyItem } from './economy.js';
-import { MAJOR_TEAMS, majorAction, CYBER_ROSTER, cyberCoins, cyberChance, cyberPayout } from './modes.js';
+import { MAJOR_TEAMS, majorAction, CYBER_ROSTER, CYBER_START_COINS, CYBER_BAILOUT_COINS, CYBER_BAILOUT_AT, cyberCoins, cyberStats, cyberHistory, cyberChance, cyberPayout } from './modes.js';
+import { OPPONENTS, getStats, resetDuel } from './duel.js';
+import { DUEL_MAPS } from './duel-maps.js';
 
 let lastHoverT = 0;
 
@@ -615,7 +631,7 @@ function uiHover() {
 }
 
 function hideModePanels() {
-  for (const id of ['majorPanel', 'lanPanel', 'editorOverlay']) {
+  for (const id of ['majorPanel', 'lanPanel', 'editorOverlay', 'cyberPanel', 'careerPanel', 'rankedPanel']) {
     const p = el(id);
     if (p) p.style.display = 'none';
   }
@@ -628,9 +644,13 @@ function renderModeSettings() {
   if (!box) return;
   const mode = game.opts.mode || 'classic';
   if (mode === 'major') {
-let html = '<div class="mode-hint">选择你的 Major 战队：</div><select id="majorTeamSel">';
+    if (!Array.isArray(MAJOR_TEAMS) || !MAJOR_TEAMS.length) {
+      box.innerHTML = '<div class="mode-hint">战队数据未就绪，请刷新页面（Major 模式需要 48 队数据）。</div>';
+      return;
+    }
+    let html = '<div class="mode-hint">选择你的 Major 战队：</div><select id="majorTeamSel">';
     for (const t of MAJOR_TEAMS) {
-html += '<option value="' + t.id + '"' + (game.opts.teamMajor === t.id ? ' selected' : '') + '>' + t.tag + ' · ' + t.name + ' · 强度 ' + t.rating + '</option>';
+      html += '<option value="' + t.id + '"' + (game.opts.teamMajor === t.id ? ' selected' : '') + '>' + t.tag + ' · ' + t.name + ' · 强度 ' + t.rating + '</option>';
     }
     html += '</select>';
     box.innerHTML = html;
@@ -644,43 +664,69 @@ html += '<option value="' + t.id + '"' + (game.opts.teamMajor === t.id ? ' selec
 box.innerHTML = '<div class="mode-hint">房主创建房间，另一台设备输入房间码加入；连接后由房主开赛。</div>';
   } else if (mode === 'editor') {
 box.innerHTML = '<div class="mode-hint">点击“开始”进入地图编辑器：左侧选择图块，画布绘制，右侧可保存/导出/试玩。</div>';
-  } else if (mode === 'br') {
-box.innerHTML = '<div class="mode-hint">随机荒岛、随机空投、毒圈缩圈，活到最后即吃鸡。</div>';
-  } else if (mode === 'rogue') {
-box.innerHTML = '<div class="mode-hint">每张地图和每波武器/词条都随机；清波获得强化。</div>';
-  } else if (mode === 'boss') {
-box.innerHTML = '<div class="mode-hint">Boss 有弹幕、召唤和狂暴二阶段，击败后领取奖励。</div>';
   } else if (mode === 'cyber') {
     const opts = game.opts.cyber = game.opts.cyber || {};
     const coins = cyberCoins();
+    const history = cyberHistory().slice(0, 5);
+    const stats = cyberStats();
     if (!opts.leftId) opts.leftId = CYBER_ROSTER[0].id;
     if (!opts.rightId) opts.rightId = CYBER_ROSTER[1].id;
+    if (!opts.mapId) opts.mapId = 'dust2';
     if (!opts.bet) opts.bet = Math.min(100, coins);
     if (!opts.side) opts.side = 'left';
-    const optHtml = (selId) => CYBER_ROSTER.map((c) => '<option value="' + c.id + '"' + (c.id === selId ? ' selected' : '') + '>' + c.name + ' ? ' + c.hp + 'HP ? ?' + c.atk + ' ? ?' + c.spd + '</option>').join('');
-    box.innerHTML = '<div class="mode-hint">余额 ' + coins + ' 螿螿币 · 选择双方并下注，强手赔率低、弱手赔率高。</div>' +
-      '<div class="cyber-pick"><label>左方</label><select id="cyberLeft">' + optHtml(opts.leftId) + '</select></div>' +
-      '<div class="cyber-pick"><label>右方</label><select id="cyberRight">' + optHtml(opts.rightId) + '</select></div>' +
-      '<div class="cyber-pick"><label>下注金额</label><input id="cyberBet" type="number" min="1" max="' + coins + '" value="' + opts.bet + '"></div>' +
-      '<div class="cyber-pick"><label>押注方</label><select id="cyberSide"><option value="left"' + (opts.side === 'left' ? ' selected' : '') + '>左方</option><option value="right"' + (opts.side === 'right' ? ' selected' : '') + '>右方</option></select></div>' +
-      '<div id="cyberOdds" class="mode-hint"></div>';
-    const leftSel = el('cyberLeft'), rightSel = el('cyberRight'), betIn = el('cyberBet'), sideSel = el('cyberSide');
+    const teamHtml = (selId) => CYBER_ROSTER.map((c) => '<option value="' + c.id + '"' + (c.id === selId ? ' selected' : '') + '>' + c.tag + ' \u00b7 ' + c.name + ' \u00b7 ' + c.rating + '</option>').join('');
+    const mapHtml = ['dust2', 'canal', 'metro'].map((id) => '<option value="' + id + '"' + (opts.mapId === id ? ' selected' : '') + '>' + id + '</option>').join('');
+    const histHtml = history.length ? history.map((h) => '<div class="mode-hint">' + (h.draw ? '\u5e73\u5c40\u9000\u6b3e ' : (h.won ? '\u8d62 ' : '\u8f93 ')) + h.left + ' vs ' + h.right + ' \u00b7 ' + (h.payout || 0) + ' \u86d0\u86d0\u5e01</div>').join('') : '<div class="mode-hint">\u6682\u65e0\u5bf9\u5c40\u8bb0\u5f55</div>';
+    const winRate = stats.played > 0 ? Math.round(stats.won / stats.played * 100) : 0;
+    box.innerHTML = '<div class="mode-hint">\u4f59\u989d ' + coins + ' \u86d0\u86d0\u5e01 \u00b7 \u521d\u59cb ' + CYBER_START_COINS + ' \u00b7 \u7834\u4ea7\u4fdd\u62a4 \u4f4e\u4e8e ' + CYBER_BAILOUT_AT + ' \u81ea\u52a8\u8865 ' + CYBER_BAILOUT_COINS + ' \u00b7 \u603b\u573a\u6b21 ' + stats.played + ' \u00b7 \u80dc\u7387 ' + winRate + '% \u00b7 \u8fde\u80dc ' + (stats.streak || 0) + ' \u00b7 \u51c0\u6536\u76ca ' + (stats.net >= 0 ? '+' + stats.net : stats.net) + ' \u00b7 \u4e24\u4e2a\u804c\u4e1a\u6218\u961f AI \u5bf9\u6218\uff0c\u4e0b\u6ce8\u89c2\u6218\u3002</div>' +
+      '<div class="cyber-pick"><label>\u5de6\u65b9\u6218\u961f</label><select id="cyberLeft">' + teamHtml(opts.leftId) + '</select></div>' +
+      '<div class="cyber-pick"><label>\u53f3\u65b9\u6218\u961f</label><select id="cyberRight">' + teamHtml(opts.rightId) + '</select></div>' +
+      '<div class="cyber-pick"><label>\u5730\u56fe</label><select id="cyberMap">' + mapHtml + '</select></div>' +
+      '<div class="cyber-pick"><label>\u4e0b\u6ce8\u91d1\u989d</label><input id="cyberBet" type="number" min="1" max="' + coins + '" value="' + opts.bet + '"></div>' +
+      '<div class="cyber-pick"><label>\u62bc\u6ce8\u65b9</label><select id="cyberSide"><option value="left"' + (opts.side === 'left' ? ' selected' : '') + '>\u5de6\u65b9</option><option value="right"' + (opts.side === 'right' ? ' selected' : '') + '>\u53f3\u65b9</option></select></div>' +
+      '<div id="cyberOdds" class="mode-hint"></div><div class="mode-hint">\u6700\u8fd1\u8bb0\u5f55</div>' + histHtml;
+    const leftSel = el('cyberLeft'), rightSel = el('cyberRight'), mapSel = el('cyberMap'), betIn = el('cyberBet'), sideSel = el('cyberSide');
     const oddsEl = el('cyberOdds');
     const renderOdds = () => {
       if (!oddsEl) return;
       const l = CYBER_ROSTER.find((c) => c.id === opts.leftId) || CYBER_ROSTER[0];
       const r = CYBER_ROSTER.find((c) => c.id === opts.rightId) || CYBER_ROSTER[1];
       const bet = Math.max(1, Math.floor(Number(opts.bet) || 100));
-      if (l.id === r.id) { oddsEl.textContent = '请选择两只不同的螿螿'; return; }
+      if (l.id === r.id) { oddsEl.textContent = '\u8bf7\u9009\u62e9\u4e24\u652f\u4e0d\u540c\u6218\u961f'; return; }
       const ch = opts.side === 'left' ? cyberChance(l, r) : 1 - cyberChance(l, r);
       const payout = cyberPayout(bet, ch);
-      oddsEl.textContent = '胜率 ' + Math.round(ch * 100) + '% ? 赔率 ' + (0.88 / Math.max(ch, 0.2)).toFixed(2) + 'x ? 预期返还 ' + payout + ' 螿螿币';
+      oddsEl.textContent = '\u80dc\u7387 ' + Math.round(ch * 100) + '% \u00b7 \u8d54\u7387 ' + (0.88 / Math.max(ch, 0.2)).toFixed(2) + 'x \u00b7 \u9884\u671f\u8fd4\u8fd8 ' + payout + ' \u86d0\u86d0\u5e01';
     };
     if (leftSel) leftSel.onchange = () => { opts.leftId = leftSel.value; renderOdds(); };
     if (rightSel) rightSel.onchange = () => { opts.rightId = rightSel.value; renderOdds(); };
+    if (mapSel) mapSel.onchange = () => { opts.mapId = mapSel.value; };
     if (betIn) betIn.onchange = () => { opts.bet = Math.max(1, Math.floor(Number(betIn.value) || 100)); renderOdds(); };
     if (sideSel) sideSel.onchange = () => { opts.side = sideSel.value; renderOdds(); };
     renderOdds();
+  } else if (mode === 'duel') {
+    const stats = getStats();
+    const hist = stats.history.slice(0, 5).map((h) => '<div class="mode-hint">' + (h.win ? '胜 ' : '负 ') + h.kills + ' 杀 / ' + h.deaths + ' 死</div>').join('');
+    if (!game.opts.duelOpponent) game.opts.duelOpponent = OPPONENTS[0].name;
+    const oppHtml = OPPONENTS.map((o) => '<option value="' + o.name + '"' + (game.opts.duelOpponent === o.name ? ' selected' : '') + '>' + o.name + ' · ' + o.tag + ' · ' + o.rating + '</option>').join('');
+    if (!game.opts.duelMap) game.opts.duelMap = DUEL_MAPS[0].id;
+    const mapHtml = DUEL_MAPS.map((m) => '<option value="' + m.id + '"' + (game.opts.duelMap === m.id ? ' selected' : '') + '>' + m.name + ' · ' + m.tagline + '</option>').join('');
+    box.innerHTML = '<div class="mode-hint">单挑模式：1v1 九局五胜（BO9），使用专用小图。</div><div class="duel-pick"><label>地图</label><select id="duelMapSel">' + mapHtml + '</select></div><div class="duel-pick"><label>对手</label><select id="duelOppSel">' + oppHtml + '</select></div><div class="duel-stats">总战绩 ' + stats.played + ' 场 · ' + stats.w + '胜 ' + stats.l + '负 · 连胜 ' + stats.streak + ' · 最佳 ' + stats.bestStreak + '</div><div class="mode-hint">最近 5 场</div>' + hist + '<button class="btn small" id="duelResetBtn">重置战绩</button>';
+    const mapSel2 = el('duelMapSel');
+    if (mapSel2) {
+      mapSel2.value = game.opts.duelMap;
+      mapSel2.onchange = () => { game.opts.duelMap = mapSel2.value; };
+    }
+    const sel = el('duelOppSel');
+    if (sel) {
+      sel.value = game.opts.duelOpponent;
+      sel.onchange = () => { game.opts.duelOpponent = sel.value; };
+    }
+    const resetBtn = el('duelResetBtn');
+    if (resetBtn) resetBtn.onclick = () => { if (window.confirm('确定重置单挑战绩？')) { resetDuel(); renderModeSettings(); } };
+  } else if (mode === 'ranked') {
+box.innerHTML = '<div class="mode-hint">排位赛：5 场定级赛确定段位，之后按 MMR 匹配对手。</div>';
+  } else if (mode === 'career') {
+box.innerHTML = '<div class="mode-hint">生涯模式：个人+战队，进入生涯总部管理赛季、训练与阵容。</div>';
   } else {
     box.innerHTML = '';
   }
@@ -689,10 +735,11 @@ box.innerHTML = '<div class="mode-hint">Boss 有弹幕、召唤和狂暴二阶�
 function bindModeMenu() {
   const modeSel = el('modeSel');
   if (!modeSel) return;
-  for (const c of modeSel.children) {
+  const cards = modeSel.querySelectorAll('.mode-card');
+  for (const c of cards) {
     c.onclick = (e) => {
       game.opts.mode = c.getAttribute('data-mode');
-      for (const cc of modeSel.children) cc.classList.toggle('sel', cc === c);
+      for (const cc of cards) cc.classList.toggle('sel', cc === c);
       try { localStorage.setItem('cs2d_mode', game.opts.mode); } catch (err) { /* no storage */ }
       renderModeSettings();
       e.currentTarget.blur();
@@ -700,7 +747,7 @@ function bindModeMenu() {
   }
   const savedMode = (() => { try { return localStorage.getItem('cs2d_mode'); } catch (err) { return null; } })();
   if (savedMode) game.opts.mode = savedMode;
-  for (const c of modeSel.children) c.classList.toggle('sel', c.getAttribute('data-mode') === game.opts.mode);
+  for (const c of cards) c.classList.toggle('sel', c.getAttribute('data-mode') === game.opts.mode);
   renderModeSettings();
 }
 
@@ -711,6 +758,8 @@ function bindMenu() {
   const muteBtn = el('muteBtn'), startBtn = el('startBtn');
   const tut = el('tutCheck');
   let tutorialShown = false;
+  // 元素缺失时跳过对应绑定（防单点缺失拖垮整个菜单）
+  if (!teamCt || !teamT) return;
   teamCt.onclick = (e) => {
     game.opts.team = 'ct';
     teamCt.classList.add('sel');
@@ -733,7 +782,7 @@ function bindMenu() {
   }
   // 地狱等级滑块（H1-H10）
   const hellRow = el('hellRow'), hellSlider = el('hellSlider'), hellVal = el('hellVal');
-  const HELL_STYLE = ['H1 热手', 'H2 渐入', 'H3 冠军', 'H4 保枪纪律', 'H5 经济纪律', 'H6 闪光配合', 'H7 转点反制', 'H8 保守架点流', 'H9 主动控图流', 'H10 压迫前压流', 'H11 从零进化'];
+  const HELL_STYLE = ['H1 热手', 'H2 渐入', 'H3 冠军', 'H4 保枪纪律', 'H5 经济纪律', 'H6 闪光配合', 'H7 转点反制', 'H8 保守架点流', 'H9 主动控图流', 'H10 压迫前压流', 'H11 从零进化', 'H12 团队配合流'];
   const showHellRow = (show) => { if (hellRow) hellRow.style.display = show ? 'flex' : 'none'; };
   if (hellSlider) {
     if (!game.opts.hellLevel) game.opts.hellLevel = 3;
@@ -755,32 +804,38 @@ function bindMenu() {
     if (botMinus) botMinus.onclick = (e) => { bots = clampBots(bots - 1); renderBots(); game.opts.bots = bots; e.currentTarget.blur(); };
     if (botPlus) botPlus.onclick = (e) => { bots = clampBots(bots + 1); renderBots(); game.opts.bots = bots; e.currentTarget.blur(); };
   }
-  muteBtn.onclick = (e) => {
+  if (muteBtn) muteBtn.onclick = (e) => {
     setMuted(!isMuted());
     game.ui.setMuteLabel();
     e.currentTarget.blur();
   };
-  const mapSel = el('mapSel');
-  if (mapSel) {
-    for (const c of mapSel.children) {
-      c.onclick = (e) => {
-        game.opts.mapId = c.getAttribute('data-map');
-        for (const cc of mapSel.children) cc.classList.remove('sel');
-        c.classList.add('sel');
-        try { localStorage.setItem('cs2d_map', game.opts.mapId); } catch (err) { /* 无存储环境 */ }
-        e.currentTarget.blur();
-      };
-    }
-    const savedMap = (() => { try { return localStorage.getItem('cs2d_map'); } catch (err) { return null; } })();
-    if (savedMap) game.opts.mapId = savedMap;
-    for (const c of mapSel.children) c.classList.toggle('sel', c.getAttribute('data-map') === game.opts.mapId);
-  }
   if (tut) {
     try { tut.checked = localStorage.getItem('cs2d_tutorial') !== '0'; } catch (err) { tut.checked = true; }
     tut.onchange = () => { try { localStorage.setItem('cs2d_tutorial', tut.checked ? '1' : '0'); } catch (err) { /* no storage */ } };
   }
-  startBtn.onclick = (e) => {
+  const fogCheck = el('fogCheck');
+  if (fogCheck) {
+    try {
+      fogCheck.checked = localStorage.getItem('cs2d_fog') === '1';
+    } catch (err) { fogCheck.checked = false; }
+    game.opts.fog = fogCheck.checked;
+    fogCheck.onchange = () => {
+      game.opts.fog = fogCheck.checked;
+      try { localStorage.setItem('cs2d_fog', fogCheck.checked ? '1' : '0'); } catch (err) { /* no storage */ }
+    };
+  }
+  if (startBtn) startBtn.onclick = (e) => {
     initAudio();
+    if (game.opts.mode === 'ranked') {
+      if (window.__openRanked) window.__openRanked();
+      e.currentTarget.blur();
+      return;
+    }
+    if (game.opts.mode === 'career') {
+      if (window.__openCareer) window.__openCareer();
+      e.currentTarget.blur();
+      return;
+    }
     if (game.opts.mode === 'editor') {
       if (window.__openMapEditor) window.__openMapEditor(game);
       e.currentTarget.blur();
@@ -799,23 +854,28 @@ function bindMenu() {
       if (o) o.classList.add('show');
       tutorialShown = true;
     }
+    if (!(tut && tut.checked && !tutorialShown)) requestFpsPointerLock(game);
     e.currentTarget.blur();
   };
 }
 
 function bindOverlays() {
   if (!doc) return;
-  el('resumeBtn').onclick = (e) => { game.ui.unpause(); e.currentTarget.blur(); };
-  el('restartBtn').onclick = (e) => { game.ui.unpause(); startMatch(game); e.currentTarget.blur(); };
+  el('resumeBtn').onclick = (e) => { game.ui.unpause(); requestFpsPointerLock(game); e.currentTarget.blur(); };
+  el('restartBtn').onclick = (e) => { game.ui.unpause(); startMatch(game); requestFpsPointerLock(game); e.currentTarget.blur(); };
   el('quitBtn').onclick = (e) => { game.ui.unpause(); game.ui.showMenu(); e.currentTarget.blur(); };
-  el('againBtn').onclick = (e) => { game.ui.hideEnd(); startMatch(game); e.currentTarget.blur(); };
+  el('againBtn').onclick = (e) => { game.ui.hideEnd(); startMatch(game); requestFpsPointerLock(game); e.currentTarget.blur(); };
   el('endMenuBtn').onclick = (e) => { game.ui.hideEnd(); game.ui.showMenu(); e.currentTarget.blur(); };
   const majorSim = el('majorSim');
   if (majorSim) majorSim.onclick = () => { majorAction(game, 'simRound'); };
   const majorMenu = el('majorMenu');
   if (majorMenu) majorMenu.onclick = () => { majorAction(game, 'menu'); };
   const majorNextBtn = el('majorNextBtn');
-  if (majorNextBtn) majorNextBtn.onclick = () => { majorAction(game, 'next'); };
+  if (majorNextBtn) majorNextBtn.onclick = () => {
+    if (game.opts && game.opts.mode === 'ranked' && window.__rankedEndMatch) window.__rankedEndMatch(game);
+    else if (game.opts && game.opts.mode === 'career' && window.__careerEndMatch) window.__careerEndMatch(game);
+    else majorAction(game, 'next');
+  };
   const lanStartBtn = el('lanStartBtn');
   if (lanStartBtn && window.__lanStart) lanStartBtn.onclick = () => window.__lanStart();
   const editorClose = el('editorClose');
@@ -828,9 +888,13 @@ function bindOverlays() {
   const tutorialOverlay = el('tutorialOverlay');
   const tutorialClose = el('tutorialClose');
   if (tutorialOverlay) {
-    if (tutorialClose) tutorialClose.onclick = () => tutorialOverlay.classList.remove('show');
+    const closeTutorial = () => tutorialOverlay.classList.remove('show');
+    if (tutorialClose) tutorialClose.onclick = closeTutorial;
     tutorialOverlay.addEventListener('mousedown', (e) => {
-      if (e.target === tutorialOverlay) tutorialOverlay.classList.remove('show');
+      if (e.target === tutorialOverlay) closeTutorial();
+    }, false);
+    doc.addEventListener('mousedown', (e) => {
+      if (tutorialOverlay.classList.contains('show') && !tutorialOverlay.querySelector('.panel').contains(e.target)) closeTutorial();
     }, false);
   }
   const helpBtn = el('helpBtn');
@@ -853,27 +917,10 @@ function bindOverlays() {
 let bindTarget = null;
 let bindBtn = null;
 
-const AUDIO_STORE = 'cs2d_audio';
-const AUDIO_DEFAULTS = { sfx: 1, ui: 0.8, amb: 0.6, mus: 0.5 };
-
 export function getAudioPrefs() {
-  try {
-    const raw = localStorage.getItem(AUDIO_STORE);
-    if (raw) {
-      const p = JSON.parse(raw);
-      const out = { ...AUDIO_DEFAULTS };
-      for (const k of Object.keys(AUDIO_DEFAULTS)) {
-        const v = Number(p[k]);
-        if (isFinite(v)) out[k] = Math.max(0, Math.min(1, v));
-      }
-      return out;
-    }
-  } catch (err) { /* 无存储环境 */ }
-  return { ...AUDIO_DEFAULTS };
-}
-
-function saveAudioPrefs() {
-  try { localStorage.setItem(AUDIO_STORE, JSON.stringify(getAudioPrefs())); } catch (err) { /* 忽略 */ }
+  const prefs = readAudioPrefs(localStorage);
+  writeAudioPrefs(prefs, localStorage);
+  return prefs;
 }
 
 // 设置面板：按键重绑定（点击按钮→按任意键→保存到 localStorage）
@@ -885,7 +932,7 @@ function bindSettings() {
   const resetBtn = el('resetBinds');
   const listEl = el('keybindList');
   if (settingsBtn && settings) {
-    settingsBtn.onclick = () => { settings.classList.add('show'); renderKeybindList(listEl); };
+    settingsBtn.onclick = () => { settings.classList.add('show'); renderKeybindList(listEl); refreshViewSel(); };
     settingsClose.onclick = () => {
       settings.classList.remove('show');
       cancelBindTarget();
@@ -902,8 +949,9 @@ function bindSettings() {
     const bus = s.getAttribute('data-bus');
     s.value = prefs[bus] !== undefined ? prefs[bus] : 1;
     s.addEventListener('input', () => {
-      prefs[bus] = parseFloat(s.value);
-      saveAudioPrefs();
+      const v = parseFloat(s.value);
+      prefs[bus] = Number.isFinite(v) ? Math.max(0, Math.min(1, v)) : prefs[bus];
+      writeAudioPrefs(prefs, localStorage);
       applyBusVolume(bus, prefs[bus]);
     });
   }
@@ -917,6 +965,106 @@ function bindSettings() {
     cancelBindTarget();
     renderKeybindList(listEl);
   }, true);
+  // 视角模式存档
+  try {
+    const fm = localStorage.getItem('cs2d_viewmode');
+    if (fm === 'fps') game.viewMode = 'fps';
+  } catch (err) { /* 无存储环境 */ }
+  // 视角切换按钮
+  const viewSel = el('viewModeSel');
+  const refreshViewSel = () => {
+    if (!viewSel) return;
+    for (const b of viewSel.querySelectorAll('.set-btn')) {
+      b.classList.toggle('sel', b.getAttribute('data-mode') === game.viewMode);
+    }
+  };
+  if (viewSel) {
+    viewSel.addEventListener('click', (e) => {
+      const b = e.target.closest('.set-btn');
+      if (!b) return;
+      const mode = b.getAttribute('data-mode');
+      if (mode !== 'fps' && mode !== 'follow' && mode !== 'top') return;
+      setViewMode(game, mode);
+      refreshViewSel();
+      b.blur(); // 焦点落在按钮上：避免后续 Space/Enter 合成 click 意外切换视角
+    }, false);
+    refreshViewSel();
+  }
+  // 鼠标灵敏度滑杆（0.5-5 → 0.0005~0.005 rad/px；默认 2=0.002，360°≈3200px 接近主流 FPS 手感）
+  const sensEl = el('fpsSens');
+  const sensVal = el('fpsSensVal');
+  if (sensEl) {
+    try {
+      const saved = parseFloat(localStorage.getItem('cs2d_fps_sens'));
+      if (isFinite(saved)) game.fpsSens = Math.min(0.005, Math.max(0.0005, saved));
+    } catch (err) { /* 无存储环境 */ }
+    sensEl.value = Math.min(5, Math.max(0.5, game.fpsSens * 1000));
+    if (sensVal) sensVal.textContent = (game.fpsSens * 1000).toFixed(1);
+    sensEl.addEventListener('input', () => {
+      game.fpsSens = parseFloat(sensEl.value) / 1000;
+      if (sensVal) sensVal.textContent = (game.fpsSens * 1000).toFixed(1);
+      try { localStorage.setItem('cs2d_fps_sens', String(game.fpsSens)); } catch (err) { /* 无存储环境 */ }
+    });
+  }
+  // 垂直灵敏度滑杆（默认与水平灵敏度一致，独立存档）
+  const sensYEl = el('fpsSensY');
+  const sensYVal = el('fpsSensYVal');
+  if (sensYEl) {
+    try {
+      const saved = parseFloat(localStorage.getItem('cs2d_fps_sens_y'));
+      if (isFinite(saved)) game.fpsSensY = Math.min(0.005, Math.max(0.0005, saved));
+    } catch (err) { /* 无存储环境 */ }
+    const baseY = game.fpsSensY || game.fpsSens || 0.002;
+    sensYEl.value = Math.min(5, Math.max(0.5, baseY * 1000));
+    if (sensYVal) sensYVal.textContent = (baseY * 1000).toFixed(1);
+    sensYEl.addEventListener('input', () => {
+      game.fpsSensY = parseFloat(sensYEl.value) / 1000;
+      if (sensYVal) sensYVal.textContent = (game.fpsSensY * 1000).toFixed(1);
+      try { localStorage.setItem('cs2d_fps_sens_y', String(game.fpsSensY)); } catch (err) { /* 无存储 */ }
+    });
+  }
+  // 反转 Y 轴
+  const invertEl = el('invertY');
+  if (invertEl) {
+    try {
+      if (localStorage.getItem('cs2d_invert_y') === '1') game.invertY = true;
+    } catch (err) { /* 无存储 */ }
+    invertEl.checked = !!game.invertY;
+    invertEl.addEventListener('change', () => {
+      game.invertY = invertEl.checked;
+      try { localStorage.setItem('cs2d_invert_y', game.invertY ? '1' : '0'); } catch (err) { /* 无存储 */ }
+    });
+  }
+  // 减少镜头动态（缓解眩晕）：关闭 bob/摆头/FOV 后坐踢/受击震动/镜内晃动
+  const rmEl = el('reduceMotion');
+  if (rmEl) {
+    try {
+      if (localStorage.getItem('cs2d_reduce_motion') === '1') game.opts.reduceMotion = true;
+    } catch (err) { /* 无存储 */ }
+    rmEl.checked = !!game.opts.reduceMotion;
+    rmEl.addEventListener('change', () => {
+      game.opts.reduceMotion = rmEl.checked;
+      try { localStorage.setItem('cs2d_reduce_motion', rmEl.checked ? '1' : '0'); } catch (err) { /* 无存储 */ }
+    });
+  }
+  // 视野 FOV 滑杆（70-110 → 弧度写入 game.fov）
+  const fovEl = el('fovSel');
+  const fovVal = el('fovSelVal');
+  if (fovEl) {
+    try {
+      const saved = parseFloat(localStorage.getItem('cs2d_fov'));
+      if (isFinite(saved) && saved >= 60 && saved <= 120) game.fov = saved * Math.PI / 180;
+    } catch (err) { /* 无存储 */ }
+    const deg = Math.round(((game.fov || Math.PI / 2) * 180 / Math.PI));
+    fovEl.value = Math.min(110, Math.max(70, deg));
+    if (fovVal) fovVal.textContent = deg + '°';
+    fovEl.addEventListener('input', () => {
+      const d = parseFloat(fovEl.value);
+      game.fov = d * Math.PI / 180;
+      if (fovVal) fovVal.textContent = d + '°';
+      try { localStorage.setItem('cs2d_fov', String(d)); } catch (err) { /* 无存储 */ }
+    });
+  }
 }
 
 let applyBusVolume = (bus, v) => { /* Phase 4 注入 */ };
@@ -981,14 +1129,40 @@ export function isBuyOpen() { return buyOpen; }
 export function isScoreboardOpen() { return sbOpen; }
 export function setMutedFnExposed(fn) { setMutedFn(fn); }
 
+export function updateFpsUi(game) {
+  const el = document.getElementById('fpsHint');
+  if (!el) return;
+  const inMatch = game.state === 'LIVE' || game.state === 'BUY';
+  if (game.viewMode === 'follow') {
+    // 跟随视角提示：复用 fpsHint 位（指针未锁定，作为跟随视角操作提示）
+    el.style.display = inMatch ? 'block' : 'none';
+    if (!inMatch) return;
+    const txt = game.player && game.player.dead
+      ? '观战（俯视）：V 切换视角'
+      : '个人视角：鼠标瞄准 · WASD 移动 · ←/→ 转向 · V 切换';
+    if (el.textContent !== txt) el.textContent = txt;
+    return;
+  }
+  const show = game.viewMode === 'fps' && inMatch;
+  if (show) el.style.display = 'block'; else { el.style.display = 'none'; return; }
+  if (game.player && game.player.dead) {
+    if (el.textContent !== '观战：鼠标转视角 · 左键切换 · V 回俯视') el.textContent = '观战：鼠标转视角 · 左键切换 · V 回俯视';
+    return;
+  }
+  const txt = '移动鼠标转向 · WASD 移动 · V 切换视角';
+  if (el.textContent !== txt) el.textContent = txt;
+}
+
 // 主菜单背景：三图缓存 + 6s 轮播（CSS cover 铺满，模糊压暗由 styles.css 处理）
 const menuBgCache = {};
+const menuBgLayerCache = {};
 let menuBgTimer = null;
 let menuBgIdx = 0;
 
 export function setMenuBackgroundFromLayer(mapId, layer, w, h) {
   const m = el('menu');
   if (!m || !layer || !mapId) return;
+  menuBgLayerCache[mapId] = { layer, w, h };
   try {
     if (typeof doc === 'undefined' || !doc.createElement) return;
     const c = doc.createElement('canvas');
@@ -1013,24 +1187,86 @@ function startMenuBgRotate() {
     const ids = Object.keys(menuBgCache);
     if (ids.length < 2) return;
     menuBgIdx = (menuBgIdx + 1) % ids.length;
-    m.style.backgroundImage = 'url(' + menuBgCache[ids[menuBgIdx]] + ')';
+    const nextId = ids[menuBgIdx];
+    m.classList.add('switching');
+    setTimeout(() => {
+      m.style.backgroundImage = 'url(' + menuBgCache[nextId] + ')';
+      requestAnimationFrame(() => m.classList.remove('switching'));
+    }, 320);
   }, 6000);
 }
 
 function drawMapPreview(mapId) {
   const cv = doc && doc.querySelector('.map-card[data-map="' + mapId + '"] .map-prev');
-  if (!cv || !menuBgCache[mapId]) return;
+  const src = menuBgLayerCache[mapId];
+  if (!cv || !src) return;
   try {
-    const img = new Image();
-    img.onload = () => {
-      const c2d = cv.getContext('2d');
-      c2d.clearRect(0, 0, cv.width, cv.height);
-      c2d.drawImage(img, 0, 0, cv.width, cv.height);
-    };
-    img.src = menuBgCache[mapId];
+    const c2d = cv.getContext('2d');
+    c2d.clearRect(0, 0, cv.width, cv.height);
+    c2d.drawImage(src.layer, 0, 0, src.w, src.h, 0, 0, cv.width, cv.height);
   } catch (err) { /* 忽略 */ }
 }
 
 export function refreshMapPreviews() {
-  for (const id of Object.keys(menuBgCache)) drawMapPreview(id);
+  for (const id of Object.keys(menuBgLayerCache)) drawMapPreview(id);
+}
+
+function mapCardDescription(m) {
+  if (m.tagline) return m.tagline;
+  if (m.id === 'forge') return '熔炉中枢 · 三路交汇 · 快节奏';
+  if (m.id === 'arctic') return '雪地主题变体 · 低能见度';
+  if (m.id === 'blast') return '工业主题变体 · 金属音效';
+  return '经典爆破 · 5v5 战术地图';
+}
+
+function safeAccent(color) {
+  return typeof color === 'string' && /^#[0-9a-fA-F]{3,8}$/.test(color) ? color : '#ffb545';
+}
+
+export function syncMapCards() {
+  if (!doc) return;
+  const mapSel = doc.getElementById('mapSel');
+  if (!mapSel) return;
+  const savedMap = (() => { try { return localStorage.getItem('cs2d_map'); } catch (err) { return null; } })();
+  let selected = game && game.opts && game.opts.mapId ? game.opts.mapId : (savedMap || 'dust2');
+  const bombMaps = MAPS.filter((m) => m.mode !== 'duel');
+  if (!bombMaps.some((m) => m.id === selected)) selected = bombMaps[0] ? bombMaps[0].id : 'dust2';
+  mapSel.innerHTML = '';
+  for (const m of bombMaps) {
+    const btn = doc.createElement('button');
+    btn.className = 'map-card' + (m.id === selected ? ' sel' : '');
+    btn.setAttribute('data-map', m.id);
+    const accent = doc.createElement('i');
+    accent.className = 'mc-accent';
+    accent.style.background = safeAccent(m.accent);
+    const prev = doc.createElement('canvas');
+    prev.className = 'map-prev';
+    prev.width = 280;
+    prev.height = 180;
+    const name = doc.createElement('div');
+    name.className = 'mc-name';
+    name.textContent = m.name || m.id;
+    const desc = doc.createElement('div');
+    desc.className = 'mc-desc';
+    desc.textContent = mapCardDescription(m);
+    const check = doc.createElement('span');
+    check.className = 'mc-check';
+    check.textContent = '✓';
+    btn.appendChild(accent);
+    btn.appendChild(prev);
+    btn.appendChild(name);
+    btn.appendChild(desc);
+    btn.appendChild(check);
+    btn.onclick = (e) => {
+      if (game) game.opts.mapId = m.id;
+      for (const cc of mapSel.children) cc.classList.remove('sel');
+      btn.classList.add('sel');
+      try { localStorage.setItem('cs2d_map', m.id); } catch (err) { /* 无存储环境 */ }
+      refreshMapPreviews();
+      if (btn.blur) btn.blur();
+    };
+    mapSel.appendChild(btn);
+  }
+  if (game && game.opts && game.opts.mapId !== selected) game.opts.mapId = selected;
+  refreshMapPreviews();
 }

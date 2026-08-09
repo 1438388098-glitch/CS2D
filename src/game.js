@@ -43,7 +43,7 @@ export function createGame(opts = {}) {
     over: false, spectateIdx: 0, lastPlantSite: null, dt: 0.016,
     lossStreakT: 0, lossStreakCT: 0,
     hitMarkT: 0, headshotT: 0, zoom: 0.75, hitPauseT: 0, dmgPops: [], scopeT: 0, lastKiller: null,
-    viewMode: 'top', fpsSens: 0.002, _mlookDx: 0, _mlookDy: 0, _specAngle: null, _specPitch: null,
+    viewMode: 'top', fpsSens: 0.002, fpsSensY: 0.002, invertY: false, _mlookDx: 0, _mlookDy: 0, _specAngle: null, _specPitch: null,
     stats: { hits: 0, shots: 0, headshots: 0 },
     time: 0,
     tAttackSite: 'A',
@@ -766,16 +766,18 @@ function updatePlayerAim(game, dt) {
     game._mlookDy = 0;
     if (game.state !== 'BUY' && game.state !== 'LIVE') return;
     const sens = game.fpsSens || 0.002;
+    const sensY = game.fpsSensY || sens;
+    const yDir = game.invertY ? -1 : 1;
     const p2 = game.player;
     if (p2 && !p2.dead) {
-      const aimSens = p2.scoped ? sens * 0.35 : sens;
-      p2.angle += dx * aimSens;
-      p2.pitch = clamp((p2.pitch || 0) - dy * aimSens, -FPS_PITCH_LIMIT, FPS_PITCH_LIMIT);
+      const scopeMul = p2.scoped ? 0.35 : 1;
+      p2.angle += dx * sens * scopeMul;
+      p2.pitch = clamp((p2.pitch || 0) - dy * sensY * scopeMul * yDir, -FPS_PITCH_LIMIT, FPS_PITCH_LIMIT);
     } else {
       if (game._specAngle == null) game._specAngle = game.player ? game.player.angle : 0;
       if (game._specPitch == null) game._specPitch = game.player ? (game.player.pitch || 0) : 0;
       game._specAngle += dx * sens;
-      game._specPitch = clamp(game._specPitch - dy * sens, -FPS_PITCH_LIMIT, FPS_PITCH_LIMIT);
+      game._specPitch = clamp(game._specPitch - dy * sensY * yDir, -FPS_PITCH_LIMIT, FPS_PITCH_LIMIT);
     }
     return;
   }

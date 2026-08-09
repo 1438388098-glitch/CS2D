@@ -20,6 +20,7 @@ function fresh() {
 {
   const g = createGame();
   ok('default pitch accumulators', g._mlookDy === 0 && g._specPitch === null);
+  ok('default vertical aim settings', g.fpsSensY === 0.002 && g.invertY === false);
 }
 
 {
@@ -34,6 +35,28 @@ function fresh() {
   ok('mouse yaw still applied', Math.abs((p.angle - a0) - 40 * g.fpsSens) < 1e-9);
   ok('mouse y moves pitch up', Math.abs(p.pitch - (0.1 + 60 * g.fpsSens)) < 1e-9);
   ok('pitch accumulator consumed', g._mlookDy === 0 && g._mlookDx === 0);
+}
+
+{
+  const g = fresh();
+  g.viewMode = 'fps';
+  g.invertY = true;
+  const p = g.player;
+  p.pitch = 0.1;
+  g._mlookDy = -40;
+  update(g, 1 / 60);
+  ok('invert Y flips vertical aim', Math.abs(p.pitch - (0.1 - 40 * g.fpsSensY)) < 1e-9);
+}
+
+{
+  const g = fresh();
+  g.viewMode = 'fps';
+  g.fpsSensY = 0.001;
+  const p = g.player;
+  p.pitch = 0;
+  g._mlookDy = -40;
+  update(g, 1 / 60);
+  ok('vertical sensitivity used', Math.abs(p.pitch - 0.04) < 1e-9);
 }
 
 {
