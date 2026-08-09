@@ -13,6 +13,7 @@ import {
   shouldEscortCarrier,
   shouldThrowUtility,
   shouldAttemptDefuse,
+  shouldSaveForEco,
   shouldRushPlant
 } from '../src/ai/rules.js';
 
@@ -125,5 +126,13 @@ assert.equal(shouldAttemptDefuse({ team: 'ct' }, true, 100, 5, true), false, 'ki
 assert.equal(shouldAttemptDefuse({ team: 'ct' }, false, 100, 15, false), false, 'unplanted bomb should not trigger defuse');
 assert.equal(shouldAttemptDefuse({ team: 't' }, true, 100, 15, false), false, 'T should not use CT defuse rule');
 assert.equal(shouldAttemptDefuse({ team: 'ct', defusing: true }, true, 100, 15, false), false, 'already defusing CT should stay on bomb');
+
+assert.equal(shouldSaveForEco({ team: 'ct' }, 1800, 2, 100), true, 'late low-money rifle holder should save');
+assert.equal(shouldSaveForEco({ team: 'ct' }, 1800, 0, 100), false, 'pistol holder should not save for economy');
+assert.equal(shouldSaveForEco({ team: 'ct' }, 4200, 2, 100), false, 'rich rifle holder can afford next buy');
+assert.equal(shouldSaveForEco({ team: 'ct' }, 1800, 2, 60), false, 'early round should not trigger eco save');
+assert.equal(shouldSaveForEco({ team: 't', hasBomb: true }, 1800, 2, 100), false, 'bomb carrier must keep playing the objective');
+assert.equal(shouldSaveForEco({ team: 'ct', defusing: true }, 1800, 2, 100), false, 'defusing CT should not abandon bomb');
+assert.equal(shouldSaveForEco({ team: 'ct', dead: true }, 1800, 2, 100), false, 'dead bot cannot save equipment');
 
 console.log('ai-rules: all PASS');

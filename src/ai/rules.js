@@ -98,3 +98,11 @@ export function shouldAttemptDefuse(e, planted, dist, timeLeft, kit, enAlive = 1
   if (dist <= safeRadius) return true;
   return enAlive <= 2 && timeLeft >= need + 8;
 }
+
+export function shouldSaveForEco(e, money, weaponTier, roundTime, roundDur = 115, lateAt = 20, minMoney = 3200) {
+  if (!e || e.dead) return false;
+  if (e.hasBomb || (e.bomb && (e.bomb.planted || e.bomb.dropped))) return false;
+  if (e.defusing) return false;
+  if (roundTime < roundDur - lateAt) return false;
+  return weaponTier >= 2 && money < minMoney;
+}
