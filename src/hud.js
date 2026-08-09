@@ -643,6 +643,15 @@ export function renderCrosshair(game) {
     ctx.fillRect(mx - 1, my - hg - 2, 2, 4);
     ctx.fillRect(mx - 1, my + hg - 2, 2, 4);
   }
+  // 命中闪光：命中时准星周围短暂扩散亮环（与 3D 反馈一致）
+  if (game.hitFlashT > 0) {
+    const fr = 14 + (1 - game.hitFlashT / 0.25) * 26;
+    ctx.strokeStyle = 'rgba(255,70,60,' + clamp(game.hitFlashT * 3, 0, 0.8) + ')';
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.arc(mx, my, fr, 0, Math.PI * 2);
+    ctx.stroke();
+  }
   ctx.fillStyle = 'rgba(0,0,0,0.6)';
   ctx.fillRect(mx - 2, my - 2, 4, 4);
   ctx.fillStyle = 'rgba(255,255,255,0.9)';
