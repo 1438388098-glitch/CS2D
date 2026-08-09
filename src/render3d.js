@@ -393,6 +393,7 @@ export function render3d(game) {
   drawSprites(F, zbuf, alive, p);
   const tSprites = performance.now() - m0;
   drawDmgPops(F); // B3 伤害数字（drawSprites 之后、后续屏效之前）
+  drawHitFlash(F);
   drawViewmodel(F, alive, p);
   drawMuzzle(F, alive, p);
   if (scopeT > 0.005) drawScope(F); // B5 开镜淡入/淡出期间也画
@@ -1080,6 +1081,27 @@ function drawDmgPops(F) {
   }
   t.globalAlpha = 1;
   t.textAlign = 'start';
+}
+
+// 命中闪光：命中时准星周围短暂扩散亮环，直接叠加在 3D 场景上
+function drawHitFlash(F) {
+  const g = F.g;
+  if (!g.hitFlashT || g.hitFlashT <= 0) return;
+  const a = clamp(g.hitFlashT / 0.18, 0, 1);
+  if (a <= 0.002) return;
+  const t = F.cctx;
+  const mx = F.iw / 2, my = F.ih / 2;
+  const r = 18 + (1 - a) * 36;
+  const glow = t.createRadialGradient(mx, my, 6, mx, my, r);
+  glow.addColorStop(0, 'rgba(255,220,120,' + (a * 0.22).toFixed(3) + ')');
+  glow.addColorStop(1, 'rgba(255,220,120,0)');
+  t.fillStyle = glow;
+  t.fillRect(mx - r, my - r, r * 2, r * 2);
+  t.strokeStyle = 'rgba(255,220,120,' + (a * 0.6).toFixed(3) + ')';
+  t.lineWidth = 2;
+  t.beginPath();
+  t.arc(mx, my, r, 0, Math.PI * 2);
+  t.stroke();
 }
 
 // ===== D3 观战名牌：相机实体头顶姓名 + HP 条（不加入 sprite 列表，避免遮挡，始终可见）=====

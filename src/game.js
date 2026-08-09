@@ -42,7 +42,7 @@ export function createGame(opts = {}) {
     bomb: null, flashT: 0, dmgT: 0, shake: 0, dmgSpreadT: 0, killRingT: 0,
     over: false, spectateIdx: 0, lastPlantSite: null, dt: 0.016,
     lossStreakT: 0, lossStreakCT: 0,
-    hitMarkT: 0, headshotT: 0, zoom: 0.75, hitPauseT: 0, dmgPops: [], scopeT: 0, lastKiller: null,
+    hitMarkT: 0, hitFlashT: 0, headshotT: 0, zoom: 0.75, hitPauseT: 0, dmgPops: [], scopeT: 0, lastKiller: null,
     viewMode: 'top', fpsSens: 0.002, fpsSensY: 0.002, invertY: false, _mlookDx: 0, _mlookDy: 0, _specAngle: null, _specPitch: null,
     stats: { hits: 0, shots: 0, headshots: 0 },
     time: 0,
@@ -462,6 +462,7 @@ export function update(game, dt) {
   if (game.dmgSpreadT > 0) game.dmgSpreadT -= dt;
   if (game.killRingT > 0) game.killRingT -= dt;
   if (game.hitMarkT > 0) game.hitMarkT -= dt;
+  if (game.hitFlashT > 0) game.hitFlashT -= dt;
   if (game.headshotT > 0) game.headshotT -= dt;
   if (game.flashT > 0) {
     game.flashT -= dt;

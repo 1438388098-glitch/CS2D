@@ -1,15 +1,15 @@
-import { WEAPONS, ECONOMY, DIFF, diffOf, MAX_DECALS, TILE } from './config.js';
-import { killRewardFor, addMoney, clearEquipment } from './economy.js';
-import { passableTolerant, collideCircle, los, tileAt, getGrid, getMap } from './map.js';
-import { weaponDef, wkey, ammoFor, reserveFor } from './entities.js';
-import { ctx } from './ctx.js';
-import { clamp, rand, angDiff, viewCap } from './utils.js';
-import { report, MSG } from './info.js';
+import {WEAPONS, diffOf, MAX_DECALS, TILE} from './config.js';
+import {killRewardFor, addMoney, clearEquipment} from './economy.js';
+import {passableTolerant, los, tileAt, getGrid, getMap, invalidatePathCache} from './map.js';
+import {weaponDef, wkey, ammoFor, reserveFor} from './entities.js';
+import {ctx} from './ctx.js';
+import {clamp, rand, angDiff, viewCap} from './utils.js';
+import {report, MSG} from './info.js';
 
-import { endRound, spawnParticle } from './game.js';
-import { dropBomb } from './bomb.js';
-import { throwGrenade } from './grenades.js';
-import { effectiveSpread, registerShot, updateShotStreak, headshotChance } from './ballistic.js';
+import {endRound, spawnParticle} from './game.js';
+import {dropBomb} from './bomb.js';
+import {throwGrenade} from './grenades.js';
+import {effectiveSpread, registerShot, headshotChance, distanceFalloff} from './ballistic.js';
 
 const emit = (evt, p) => ctx.bus.emit(evt, p);
 const mapTile = () => getMap()?.tile || TILE;
@@ -29,7 +29,7 @@ export function startReload(e, game) {
   }
   if (ammoFor(e) >= w.mag || r <= 0) return;
   e.reloading = true;
-  e.reloadT = w.reload / 1000;
+  e.reloadT = w.reload / 1000 * (e.reloadMult || 1);
   emit('sfx', { name: 'reload', vol: 0.5, x: e.x, y: e.y, game });
 }
 
@@ -49,7 +49,8 @@ export function finishReload(e, game) {
 export function fireWeapon(e, game) {
   if (e.dead) return;
   if (e.stunT > 0) return;
-  if (e.reloading || e.fireCd > 0) return;
+  if (e.fireCd > 0) return;
+  if (e.reloading) { e.reloading = false; e.reloadT = 0; }
   if (e.slot && e.slot.indexOf('nade:') === 0) {
     throwGrenade(e, game);
     e.fireCd = 0.5;
@@ -74,7 +75,6 @@ export function fireWeapon(e, game) {
   let spread = effectiveSpread(w, e);
   registerShot(e);
   if (e.bot) spread *= (e.aiParams || diffOf(game)).spreadMult;
-  if (e.bot && game.mapAi) spread *= e.team === 'ct' ? game.mapAi.ctSpread : game.mapAi.tSpread;
   // S3 微观增强：探身对枪精度（探身状态 peekT>0 时散布减免，H11 专用）
   if (e.bot && e.peekT > 0 && e.aiParams && e.aiParams.peekSkill !== undefined) {
     spread *= e.aiParams.peekSkill;
@@ -100,7 +100,8 @@ export function fireWeapon(e, game) {
     spawnParticle(game, { kind: 'shell', x: e.x + Math.cos(e.angle + 1.4) * 10, y: e.y + Math.sin(e.angle + 1.4) * 10, vx: Math.cos(e.angle + rand(1, 2.2)) * rand(60, 140), vy: Math.sin(e.angle + rand(1, 2.2)) * rand(60, 140), life: 0.5, size: 2, spin: rand(0, Math.PI * 2) });
   }
   if (w.kind === 'sniper') {
-    e.scoped = false;
+    e.scoped = !!(e === game.player && game.input && game.input.mouse && game.input.mouse.rdown);
+    if (e.scoped && game.zoom !== undefined) game.zoom = 0.75;
     emit('sfx', { name: 'awp', vol: 0.9, x: e.x, y: e.y, game, wid: e.weapons.primary || e.weapons.secondary });
     game.shake = Math.max(game.shake, 5);
   } else if (w.kind === 'shotgun') {
@@ -154,6 +155,10 @@ function fireRay(e, game, ang, w, dmg, isPellet) {
   const ox = e.x, oy = e.y;
   const range = w.range;
   const cos = Math.cos(ang), sin = Math.sin(ang);
+  const pitch = Number.isFinite(e.pitch) ? e.pitch : 0;
+  const pitchTan = Math.tan(pitch);
+  const tile = (getMap() && getMap().tile) || TILE;
+  const eyeH = (0.5 + (e.height || 0)) * tile;
   let best = null;
   for (const o of game.entities) {
     if (o === e || o.dead || o.team === e.team) continue;
@@ -163,6 +168,12 @@ function fireRay(e, game, ang, w, dmg, isPellet) {
     const effRad = (o.height >= 0.75 && e.height < 0.5) ? (o.rad + 2) * 0.75 : o.rad + 2;
     if (along < 0 || along > range + o.rad) continue;
     const perp = Math.abs(dx * sin - dy * cos);
+    if (Math.abs(pitch) > 0.02) {
+      const targetBase = (o.height || 0) * tile;
+      const rayZ = eyeH + along * pitchTan;
+      const targetCenter = targetBase + tile * 1.35;
+      if (Math.abs(rayZ - targetCenter) > tile) continue;
+    }
     if (perp < effRad && (best === null || along < best.t)) best = { t: along, ent: o, perp };
   }
   let wallT = range;
@@ -211,11 +222,7 @@ function fireRay(e, game, ang, w, dmg, isPellet) {
     let finalDmg = dmg * (e.dmgMult || 1);
     finalDmg *= penMult;
     const dd = best.t;
-    if (w.kind === 'pistol' || w.kind === 'smg') {
-      if (dd > 700) finalDmg *= 0.8;
-      else if (dd > 500) finalDmg *= 0.92;
-    }
-    if (isPellet && dd > 500) finalDmg *= 0.55;
+    finalDmg *= distanceFalloff(w, dd);
     applyDamage(hit, Math.max(1, finalDmg), { killer: e, weapon: wkey(e), head }, game);
     const hitLen = Math.max(4, best.t - Math.sqrt(Math.max(0, hit.rad * hit.rad - best.perp * best.perp)));
     const hx = ox + cos * hitLen, hy = oy + sin * hitLen;
@@ -278,6 +285,7 @@ export function destroyCrate(game, c, shooter) {
   game.crates = game.crates.filter((x) => x !== c);
   const grid = getGrid();
   grid[c.ty][c.tx] = '.';
+  invalidatePathCache();
   emit('sfx', { name: 'crateBreak', vol: 0.7, x: c.x, y: c.y, game });
   for (let i = 0; i < 10; i++) {
     spawnParticle(game, { kind: 'wood', x: c.x, y: c.y, vx: rand(-140, 140), vy: rand(-220, -20), life: rand(0.3, 0.6), size: rand(2, 5) });
@@ -304,6 +312,7 @@ export function explodeBarrel(game, b, shooter) {
   game.barrels = game.barrels.filter((x) => x !== b);
   const grid = getGrid();
   grid[b.ty][b.tx] = '.';
+  invalidatePathCache();
   emit('sfx', { name: 'boom', vol: 1, x: b.x, y: b.y, game });
   game.shake = Math.max(game.shake, 8);
   for (const c of game.crates.slice()) {
@@ -339,8 +348,11 @@ export function applyDamage(v, dmg, opt, game) {
   if (head && (!armor || !v.helmet)) {
     hpLoss = dmg * 4;
     armLoss = 0;
+  } else if (head && v.helmet) {
+    hpLoss = dmg * 4 * 0.75;
+    armLoss = 0;
   } else if (armor) {
-    const absorbed = Math.min(dmg * 0.5, v.armor);
+    const absorbed = Math.min(dmg * 0.4, v.armor);
     hpLoss = dmg - absorbed;
     armLoss = absorbed;
   } else {
@@ -353,6 +365,8 @@ export function applyDamage(v, dmg, opt, game) {
       if (head) emit('sfx', { name: 'head', vol: 0.9, x: v.x, y: v.y, game });
       else emit('sfx', { name: 'hit', vol: 0.7, x: v.x, y: v.y, game });
       game.hitMarkT = head ? 0.35 : 0.22;
+      game.hitFlashT = Math.max(game.hitFlashT || 0, head ? 0.22 : 0.14);
+      if (head) game.headshotT = 0.25;
       // 伤害报告统计（本回合造成的实际 HP 损失）
       game.player.dmgGiven = (game.player.dmgGiven || 0) + hpLoss;
       if (head) game.player.dmgHeads = (game.player.dmgHeads || 0) + 1;
@@ -373,6 +387,12 @@ export function applyDamage(v, dmg, opt, game) {
     v.lastDmgFrom = opt.killer;
     v.lastDmgT = game.time * 1000;
   }
+  if (game.viewMode === 'fps' && game.player && (v === game.player || (opt.killer && opt.killer === game.player)) && game.opts.hitstop !== false) {
+    const killerWeaponKind = typeof opt.weapon === 'object' ? opt.weapon.kind : (WEAPONS[opt.weapon] ? WEAPONS[opt.weapon].kind : opt.weapon);
+    game.hitPauseT = Math.max(game.hitPauseT || 0, head ? 0.08 : (killerWeaponKind === 'sniper' ? 0.12 : (killerWeaponKind === 'grenade' ? 0.1 : 0.05)));
+  }
+  game.dmgPops.push({ x: v.x, y: v.y, dmg: hpLoss, head: !!head, t: 0.8 });
+  if (game.dmgPops.length > 12) game.dmgPops.shift();
   if (v.bot && v.highPointT > 0) {
     v.highPointT -= 2;
     if (v.highPointT <= 0) { v.objCache = null; v.path = null; }
@@ -415,12 +435,13 @@ export function killEntity(v, killer, weapon, head, game) {
   }
   if (v === game.player) {
     v.streak = 0;
+    game.lastKiller = killer;
     emit('deathinfo', { killer: killer ? killer.name : '环境', weapon: wname, head: !!head });
     // 伤害报告：本回合造成总伤害 / 爆头数
     emit('damagereport', { dmg: Math.round(v.dmgGiven || 0), heads: v.dmgHeads || 0 });
   }
   // 队内报告：bot 阵亡 → 同队收到"击杀点"消息（队友据此调整）
-  if (v.bot) report(game, v, MSG.KILL, v.x, v.y);
+  if (v.bot) report(game, v, MSG.KILL, killer && killer.bot ? killer.x : v.x, killer && killer.bot ? killer.y : v.y);
   // 对手建模：记录玩家（敌方视角）击杀位置，供 CT 队长反制守点分配
   if (killer === game.player) {
     game.playerKills = game.playerKills || [];
@@ -526,22 +547,13 @@ function spawnBlood(x, y, ang, head, game) {
 
 function checkRoundEnd(game) {
   if (game.state === 'END') return;
+  // 炸弹爆炸结算中：爆炸造成的团灭统一由 explodeBomb 按 'bomb' 结算（奖励 3500 + 正确文案）
+  if (game._bombExploding) return;
   const tAlive = game.entities.filter((e) => e.team === 't' && !e.dead).length;
   const cAlive = game.entities.filter((e) => e.team === 'ct' && !e.dead).length;
   if (tAlive === 0 && cAlive === 0) { endRound(game, null, '同归于尽'); return; }
   if (tAlive === 0) { endRound(game, 'ct', '恐怖分子全灭', 'elimination'); return; }
   if (cAlive === 0) { endRound(game, 't', '反恐精英全灭', 'elimination'); return; }
-}
-
-export function tickDrops(game, dt) {
-  for (let i = game.drops.length - 1; i >= 0; i--) {
-    const d = game.drops[i];
-    if (d.noPickT > 0) d.noPickT = Math.max(0, d.noPickT - dt);
-    if (d.life !== undefined) {
-      d.life -= dt;
-      if (d.life <= 0) game.drops.splice(i, 1);
-    }
-  }
 }
 
 export { checkRoundEnd };
