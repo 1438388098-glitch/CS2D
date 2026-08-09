@@ -311,6 +311,9 @@ export function endRound(game, winner, reason, winType) {
     }
     game[winKey] = 0;
     game[lossKey] = lossStreak + 1;
+  } else {
+    // 平局（同归于尽）：双方获得固定补偿，不改变连胜/连败，避免"白打一回合"
+    for (const e of game.entities) addMoney(e, 1500);
   }
   const text = winner === 't' ? 'TERRORISTS WIN' : (winner === 'ct' ? 'COUNTER-TERRORISTS WIN' : 'DRAW');
   const col = winner === 't' ? '#ffb545' : (winner === 'ct' ? '#5ab0ff' : '#888');
