@@ -172,28 +172,99 @@ function netObjective(e, game, act) {
 export function botObjective(e, game) {
   const now = game.time * 1000;
   const bombState = game.bomb ? (game.bomb.planted ? (game.bomb.defusing ? 'pd' + game.bomb.site : 'p' + game.bomb.site) : (game.bomb.dropped ? 'd' : 'n')) : 'n';
-  if (e.objCache && e.objBombState === bombState && now - e.objAt < 3000) return e.objCache;
+  // 缓存 key 必须含攻击点/热区/持包状态：IGL 转点或 hotSite 变化后立即失效，防走过时目标
+  // objBombState 为旧字段名（测试/外部调用兼容），新代码统一写 objKey
+  const hot = game.hotSiteCache ? (game.hotSiteCache.site || '-') : '-';
+  const cacheKey = bombState + '|' + (game.tAttackSite || '') + '|' + hot + '|' + (e.hasBomb ? 1 : 0) + '|' + (e.netLane || '-');
+  const cacheTtl = e.objCache && e.objCache.search ? 600 : 3000;
+  const keyHit = e.objKey === cacheKey || e.objBombState === bombState;
+  // 新鲜个人情报强制失效：有近期目击记忆/枪声感知时跳过 3 秒缓存，让 CT 转点/T 执行即时响应
+  const freshIntel = e.lastKnown && e.lastKnownT !== undefined && now - e.lastKnownT < 1000;
+  if (e.objCache && keyHit && !freshIntel && now - e.objAt < cacheTtl) return e.objCache;
   const o = botObjectiveRaw(e, game);
+  if (o && (!Number.isFinite(o.x) || !Number.isFinite(o.y))) return null;
   e.objCache = o;
   e.objAt = now;
-  e.objBombState = bombState;
+  e.objKey = cacheKey;
   return o;
 }
 
-function retreatPoint(e, game) {
+export function retreatPoint(e, game) {
   const spawns = e.team === 't' ? getMap().spawns.t : getMap().spawns.ct;
-  if (spawns && spawns.length) {
-    let sx = 0, sy = 0;
-    for (const s of spawns) { sx += s.x; sy += s.y; }
-    return { x: sx / spawns.length, y: sy / spawns.length };
+  const cands = spawns && spawns.length ? spawns : [{ x: getMap().W / 2, y: getMap().H / 2 }];
+  const enemies = game.entities.filter((o) => o.team !== e.team && !o.dead);
+  let best = cands[0], bestScore = -Infinity;
+  for (const s of cands) {
+    let minD = 1e9;
+    for (const o of enemies) minD = Math.min(minD, Math.hypot(o.x - s.x, o.y - s.y));
+    const fromMe = Math.hypot(s.x - e.x, s.y - e.y);
+    const fromIntel = e.lastKnown ? Math.hypot(s.x - e.lastKnown.x, s.y - e.lastKnown.y) : 0;
+    const score = minD * 1.2 - fromMe * 0.15 + fromIntel * 0.6;
+    if (score > bestScore) { bestScore = score; best = s; }
   }
-  return { x: getMap().W / 2, y: getMap().H / 2 };
+  return { x: best.x, y: best.y, sneak: true };
 }
 
-function entryPoint(cs, game) {
+function nearestPreaim(cs, from) {
+  const pts = (getMap().preaimPoints || []).filter((pp) => pp.site === cs.label);
+  let best = null, bd = Infinity;
+  for (const pp of pts) {
+    const d = Math.hypot(pp.x - from.x, pp.y - from.y);
+    if (d < bd) { bd = d; best = pp; }
+  }
+  return best;
+}
+
+function nextClearPoint(e, cs) {
+  const pts = (getMap().clearChains && getMap().clearChains[cs.label]) || (getMap().clearPoints || []).filter((pp) => pp.site === cs.label);
+  if (!pts.length) return null;
+  const toCenter = Math.hypot(e.x - cs.cx, e.y - cs.cy);
+  let best = null, bestScore = Infinity;
+  for (const pp of pts) {
+    const pd = Math.hypot(pp.x - cs.cx, pp.y - cs.cy);
+    if (pd > toCenter - 20 || pd > toCenter + 240) continue;
+    const d = Math.hypot(pp.x - e.x, pp.y - e.y);
+    if (d < 100 || d > 460) continue;
+    const score = d + pd * 0.15;
+    if (score < bestScore) { bestScore = score; best = pp; }
+  }
+  if (!best) return null;
+  const pre = nearestPreaim(cs, best);
+  return {
+    x: best.x, y: best.y, face: best.face, peek: true, search: true,
+    preaimX: pre ? pre.x : best.x,
+    preaimY: pre ? pre.y : best.y
+  };
+}
+
+function tSitePoint(e, cs) {
+  const idx = e && e.laneIdx !== undefined ? e.laneIdx : 0;
+  const side = idx % 2 ? 1 : -1;
+  const r = 80 + (idx % 3) * 50;
+  const ang = Math.atan2(cs.cy - e.y, cs.cx - e.x) + Math.PI / 2 * side;
+  return { x: cs.cx + Math.cos(ang) * r, y: cs.cy + Math.sin(ang) * r, peek: true };
+}
+
+function entryPoint(cs, game, e) {
   const m = getMap();
   const key = cs && (cs.label === 'A' || cs.label === 'B') ? cs.label : (cs === m.sites.A ? 'A' : 'B');
   const realEntry = m.entries && m.entries[key];
+  const lanes = m.lanes && m.lanes[key];
+  if (lanes && lanes.length) {
+    let idx = e && e.laneIdx !== undefined ? e.laneIdx % lanes.length : 0;
+    const occ = lanes.map((p) => game.entities.filter((o) => o.bot && o.team === e.team && o !== e && Math.hypot(o.x - p.x, o.y - p.y) < 120).length);
+    if (occ[idx] > 0 && lanes.length > 1) idx = (idx + 1) % lanes.length;
+    const lane = lanes[idx];
+    const mid = Math.floor(lanes.length / 2);
+    const spreadIdx = e && (e.spreadIdx !== undefined ? e.spreadIdx : (e.laneIdx !== undefined ? e.laneIdx : 0));
+    const spread = (spreadIdx - mid) * 112;
+    const ang = Math.atan2(cs.cy - lane.y, cs.cx - lane.x) + Math.PI / 2;
+    return {
+      x: lane.x + Math.cos(ang) * spread,
+      y: lane.y + Math.sin(ang) * spread,
+      face: Math.atan2(cs.cy - lane.y, cs.cx - lane.x)
+    };
+  }
   if (realEntry) return { x: realEntry.x, y: realEntry.y };
   const sp = m.spawns.t[0];
   if (!sp) return { x: cs.cx - 380, y: cs.cy };
