@@ -178,8 +178,10 @@ function loadRows() {
 
 function editorMetrics() {
   const w = ed.rows[0].length, h = ed.rows.length;
-  const cell = Math.min(canvas.width / w, canvas.height / h);
-  return { w, h, cell, ox: (canvas.width - w * cell) / 2, oy: (canvas.height - h * cell) / 2 };
+  const zoom = Math.max(0.5, Math.min(4, ed.zoom || 1));
+  const base = Math.min(canvas.width / w, canvas.height / h);
+  const cell = base * zoom;
+  return { w, h, cell, ox: (canvas.width - w * cell) / 2, oy: (canvas.height - h * cell) / 2, zoom };
 }
 
 function drawEditor() {
@@ -358,6 +360,14 @@ export function openMapEditor(gameRef) {
 
 function bindCanvas() {
   if (!canvas) return;
+  // 画布缩放：滚轮缩放编辑器视图（0.5x–4x），以地图中心为锚点
+  canvas.onwheel = (ev) => {
+    ev.preventDefault();
+    const cur = ed.zoom || 1;
+    const next = Math.max(0.5, Math.min(4, cur + (ev.deltaY < 0 ? 0.2 : -0.2)));
+    ed.zoom = Math.round(next * 10) / 10;
+    drawEditor();
+  };
   canvas.onmousedown = (ev) => {
     ed.drawing = true;
     ed.anchor = null;
