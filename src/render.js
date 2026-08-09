@@ -405,13 +405,18 @@ function drawSmokes(game) {
     ctx.beginPath();
     ctx.arc(s.x, s.y, s.r * 0.72, 0, Math.PI * 2);
     ctx.fill();
-    // 边缘噪点（增强体积感）
+    // 边缘噪点（增强体积感）；用位置+索引确定性伪随机，保证同 seed 画面可复现
     ctx.fillStyle = 'rgba(212,214,217,' + (0.5 * fade) + ')';
+    const sHash = (n) => {
+      let h = (Math.floor(s.x) * 73856093 ^ Math.floor(s.y) * 19349663 ^ n * 83492791) >>> 0;
+      h = (h ^ (h >>> 15)) * 2246822519 >>> 0;
+      return (h >>> 0) / 4294967296;
+    };
     for (let i = 0; i < 6; i++) {
-      const na = Math.random() * Math.PI * 2;
-      const nr = s.r * (0.55 + Math.random() * 0.35);
+      const na = sHash(i) * Math.PI * 2;
+      const nr = s.r * (0.55 + sHash(i + 6) * 0.35);
       ctx.beginPath();
-      ctx.arc(s.x + Math.cos(na) * nr, s.y + Math.sin(na) * nr, 6 + Math.random() * 8, 0, Math.PI * 2);
+      ctx.arc(s.x + Math.cos(na) * nr, s.y + Math.sin(na) * nr, 6 + sHash(i + 12) * 8, 0, Math.PI * 2);
       ctx.fill();
     }
   }
