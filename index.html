@@ -352,11 +352,25 @@
           <button class="btn small" id="editorDownload">下载 .json</button>
           <button class="btn small" id="editorImportBtn">导入 .json</button>
           <input type="file" id="editorImportFile" accept=".json,application/json" hidden>
+          <button class="btn small" id="editorHelpBtn" title="快捷键帮助">?</button>
           <button class="btn small" id="editorValidate">校验</button>
           <button class="btn primary small" id="editorPlay">试玩</button>
           <button class="btn small" id="editorClose">关闭</button>
         </div>
         <div id="editorStatus" class="lan-status"></div>
+        <div id="editorHelp" class="editor-help" style="display:none">
+          <b>快捷键</b>
+          <span>B 笔刷</span>
+          <span>F 填充</span>
+          <span>R 矩形</span>
+          <span>L 直线</span>
+          <span>E 取色</span>
+          <span>X 地面</span>
+          <span>Z 撤销</span>
+          <span>Y 重做</span>
+          <span>[ / ] 笔刷大小</span>
+          <span>滚轮 缩放</span>
+        </div>
         <textarea id="editorJson" spellcheck="false" placeholder="地图 JSON 可在此粘贴并导入"></textarea>
       </div>
       <canvas id="editorCanvas" width="960" height="600"></canvas>

@@ -54,6 +54,12 @@ function status(text, warn) {
   if (st) { st.textContent = text; st.style.color = warn ? '#ff7d7d' : '#9ad0ff'; }
 }
 
+function toggleEditorHelp() {
+  const help = $('editorHelp');
+  if (!help) return;
+  help.style.display = help.style.display === 'none' ? 'block' : 'none';
+}
+
 function syncMetaInputs() {
   const name = $('editorName'), w = $('editorW'), h = $('editorH');
   if (name) name.value = ed.name || '自定义地图';
@@ -401,6 +407,7 @@ function bindCanvas() {
     else if (k === 'y') restore(ed.historyIdx + 1);
     else if (k === '[') { ed.brush = Math.max(1, (ed.brush || 1) - 1); const bs = $('editorBrush'); if (bs) bs.value = String(ed.brush); }
     else if (k === ']') { ed.brush = Math.min(4, (ed.brush || 1) + 1); const bs = $('editorBrush'); if (bs) bs.value = String(ed.brush); }
+    else if (k === '?' || k === 'f1') toggleEditorHelp();
     else return;
     ev.preventDefault();
   };
@@ -432,6 +439,7 @@ function bindButtons() {
   const importBtn = $('editorImportBtn'), importFile = $('editorImportFile');
   if (importBtn && importFile) importBtn.onclick = () => importFile.click();
   if (importFile) importFile.onchange = (ev) => { const f = ev.target.files && ev.target.files[0]; if (f) { const r = new FileReader(); r.onload = () => importMapText(String(r.result || '')); r.readAsText(f); } };
+  const helpBtn = $('editorHelpBtn'); if (helpBtn) helpBtn.onclick = toggleEditorHelp;
   const undo = $('editorUndo'); if (undo) undo.onclick = () => restore(ed.historyIdx - 1);
   const redo = $('editorRedo'); if (redo) redo.onclick = () => restore(ed.historyIdx + 1);
   const validate = $('editorValidate'); if (validate) validate.onclick = () => validateMap();
