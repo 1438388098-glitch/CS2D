@@ -2,24 +2,30 @@ import { spawn } from 'child_process';
 import http from 'http';
 import crypto from 'crypto';
 import net from 'net';
+import { createRequire } from 'module';
 
-export function launchBrowser() {
+const require = createRequire(import.meta.url);
+
+export function launchBrowser(opts = {}) {
+  const env = typeof process !== 'undefined' ? process.env : {};
+  const envExe = env.CDP_BROWSER;
   const candidates = [
     'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe',
     'C:/Program Files/Microsoft/Edge/Application/msedge.exe',
     'C:/Program Files/Google/Chrome/Application/chrome.exe',
     'C:/Program Files (x86)/Google/Chrome/Application/chrome.exe'
   ];
-  const exe = candidates.find((p) => require('fs').existsSync(p));
-  if (!exe) throw new Error('no edge/chrome found');
-  const port = 9223;
+  const exe = envExe && require('fs').existsSync(envExe) ? envExe : candidates.find((p) => require('fs').existsSync(p));
+  if (!exe) throw new Error('no edge/chrome found (set CDP_BROWSER)');
+  const port = opts.port || Number(env.CDP_PORT) || 9223;
+  const profile = opts.profile || env.CDP_PROFILE || 'C:/Users/20579/AppData/Local/Temp/opencode/cdp-profile';
   const proc = spawn(exe, [
     `--remote-debugging-port=${port}`,
     '--headless=new',
     '--disable-gpu',
     '--no-first-run',
     '--window-size=1600,900',
-    '--user-data-dir=C:/Users/20579/AppData/Local/Temp/opencode/cdp-profile',
+    `--user-data-dir=${profile}`,
     'about:blank'
   ], { stdio: 'ignore', detached: true });
   return { proc, port };
@@ -204,5 +210,3 @@ export class CDP {
 }
 
 function sleep(ms) { return new Promise((r) => setTimeout(r, ms)); }
-import { createRequire } from 'module';
-const require = createRequire(import.meta.url);
