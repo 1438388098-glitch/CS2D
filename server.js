@@ -66,12 +66,16 @@ function compressIfPossible(data, req, filePath) {
   }
 }
 
-function sendStatus(res, code, body) {
-  res.writeHead(code, { 'Content-Type': 'text/plain; charset=utf-8', ...SECURITY_HEADERS });
+function sendStatus(res, code, body, extraHeaders = {}) {
+  res.writeHead(code, { 'Content-Type': 'text/plain; charset=utf-8', ...SECURITY_HEADERS, ...extraHeaders });
   res.end(body);
 }
 
 const server = http.createServer((req, res) => {
+  if (req.method !== 'GET' && req.method !== 'HEAD') {
+    sendStatus(res, 405, 'Method Not Allowed', { 'Allow': 'GET, HEAD' });
+    return;
+  }
   let urlPath;
   try {
     urlPath = decodeURIComponent(req.url.split('?')[0]);
