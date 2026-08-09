@@ -55,22 +55,23 @@ const SECURITY_HEADERS = {
 const BLOCKED_PREFIXES = ['/.git', '/.autopilot', '/node_modules'];
 
 const COMPRESSIBLE_EXT = new Set(['.html', '.js', '.mjs', '.css', '.json', '.svg', '.txt', '.map']);
+const NO_CACHE_EXT = new Set(['.html', '.js', '.mjs', '.css']);
 
 function cacheControlFor(filePath) {
   const ext = path.extname(filePath).toLowerCase();
-  return ext === '.html' ? 'no-cache' : 'public, max-age=3600';
+  return NO_CACHE_EXT.has(ext) ? 'no-cache' : 'public, max-age=3600';
 }
 
-function compressIfPossible(data, req, filePath) {
+function compressIfPossible(data, req, filePath, cb) {
   const ext = path.extname(filePath).toLowerCase();
-  if (!COMPRESSIBLE_EXT.has(ext) || data.length < 1024) return null;
+  if (!COMPRESSIBLE_EXT.has(ext) || data.length < 1024) return cb(null);
   const acceptEncoding = String(req.headers['accept-encoding'] || '').toLowerCase();
-  if (!acceptEncoding.includes('gzip')) return null;
-  try {
-    return zlib.gzipSync(data);
-  } catch (err) {
-    return null;
-  }
+  if (!acceptEncoding.includes('gzip')) return cb(null);
+  // 异步 gzip：压缩大文件不阻塞 WS 中继事件循环
+  zlib.gzip(data, (err, out) => {
+    if (err) return cb(null);
+    cb(out);
+  });
 }
 
 function sendStatus(res, code, body, extraHeaders = {}) {
@@ -129,19 +130,20 @@ const server = http.createServer((req, res) => {
       'Vary': 'Accept-Encoding',
       ...SECURITY_HEADERS
     };
-    const body = compressIfPossible(data, req, filePath);
-    if (body) {
-      headers['Content-Encoding'] = 'gzip';
-      headers['Content-Length'] = body.length;
-    } else {
-      headers['Content-Length'] = data.length;
-    }
-    res.writeHead(200, headers);
-    if (req.method === 'HEAD') {
-      res.end();
-      return;
-    }
-    res.end(body || data);
+    compressIfPossible(data, req, filePath, (body) => {
+      if (body) {
+        headers['Content-Encoding'] = 'gzip';
+        headers['Content-Length'] = body.length;
+      } else {
+        headers['Content-Length'] = data.length;
+      }
+      res.writeHead(200, headers);
+      if (req.method === 'HEAD') {
+        res.end();
+        return;
+      }
+      res.end(body || data);
+    });
   });
 });
 
