@@ -182,6 +182,11 @@ export function render3dNext(game) {
       return !!(m && m.visible);
     }).length;
     const mapCullSafe = mapGroup ? mapGroup.children.filter((o) => o.isInstancedMesh && o.frustumCulled === false).length : 0;
+    const mapModelStats = {
+      wallSkirts: mapGroup ? mapGroup.children.filter((o) => o.name === 'wallSkirts').length : 0,
+      wallPipes: mapGroup ? mapGroup.children.filter((o) => o.name === 'wallPipes').length : 0,
+      wallConduits: mapGroup ? mapGroup.children.filter((o) => o.name === 'wallConduits').length : 0
+    };
     const dpr = game.dpr || 1;
     const cssW = canvasRef.width / dpr;
     const cssH = canvasRef.height / dpr;
@@ -213,6 +218,7 @@ export function render3dNext(game) {
       corpseObjects: corpseMeshes.size,
       decalObjects: decalPointMeshes.size,
       mapCullSafe,
+      mapModelStats,
       drawCalls: renderer && renderer.info && renderer.info.render ? renderer.info.render.calls : 0
     };
   } catch (err) {
@@ -415,6 +421,7 @@ function buildMapScene(map, layers) {
   addInstancedWater(mapGroup, T, grid, tile, counts.water, waterMat, deepWaterMat);
   addInstancedWallCaps(mapGroup, T, grid, tile, counts.wall, counts.thin, capMat);
   addInstancedWallBases(mapGroup, T, grid, tile, counts.wall, counts.thin);
+  addInstancedWallDetail(mapGroup, T, grid, tile, counts.wall, counts.thin);
   addInstancedSites(mapGroup, T, grid, tile);
   addSiteMarkers(mapGroup, T, map, tile);
   addInstancedDecos(mapGroup, T, layers && layers.decos, tile);
@@ -678,6 +685,92 @@ function addInstancedWallBases(group, T, grid, tile, wallCount, thinCount) {
   };
   add(wallCount, false);
   add(thinCount, true);
+}
+
+function addInstancedWallDetail(group, T, grid, tile, wallCount, thinCount) {
+  if (!wallCount && !thinCount) return;
+  const skirtMat = new T.MeshStandardMaterial({
+    color: 0x59616b,
+    roughness: 0.9,
+    metalness: 0.04
+  });
+  const pipeMat = new T.MeshStandardMaterial({
+    color: 0x343d47,
+    roughness: 0.55,
+    metalness: 0.34
+  });
+  const addSkirts = (count, isThin) => {
+    if (!count) return;
+    const geo = new T.BoxGeometry(tile * (isThin ? 1.18 : 1.24), tile * 0.07, tile * (isThin ? 1.18 : 1.24));
+    const mesh = new T.InstancedMesh(geo, skirtMat, count);
+    mesh.name = isThin ? 'thinWallSkirts' : 'wallSkirts';
+    mesh.frustumCulled = false;
+    mesh.receiveShadow = true;
+    let i = 0;
+    for (let ty = 0; ty < grid.length && i < count; ty++) {
+      const row = grid[ty] || [];
+      for (let tx = 0; tx < row.length && i < count; tx++) {
+        const c = row[tx];
+        if (isThin ? c !== '=' : c !== '#') continue;
+        setInstanceTransform(T, mesh, i, tx * tile + tile / 2, tile * 0.23, ty * tile + tile / 2, 1, 1, 1, 0, 0, 0);
+        mesh.setColorAt(i, new T.Color(isThin ? 0x5b554e : 0x5f6872));
+        i++;
+      }
+    }
+    group.add(mesh);
+  };
+  const addPipes = (count, isThin) => {
+    if (!count) return;
+    const geo = new T.CylinderGeometry(tile * 0.045, tile * 0.06, tile * (isThin ? 0.55 : 1.02), 6);
+    const mesh = new T.InstancedMesh(geo, pipeMat, count);
+    mesh.name = isThin ? 'thinWallPipes' : 'wallPipes';
+    mesh.frustumCulled = false;
+    mesh.castShadow = true;
+    mesh.receiveShadow = true;
+    let i = 0;
+    for (let ty = 0; ty < grid.length && i < count; ty++) {
+      const row = grid[ty] || [];
+      for (let tx = 0; tx < row.length && i < count; tx++) {
+        const c = row[tx];
+        if (isThin ? c !== '=' : c !== '#') continue;
+        const edgeX = tx % 2 ? tile * 0.9 : tile * 0.1;
+        const edgeZ = ty % 3 ? tile * 0.9 : tile * 0.1;
+        setInstanceTransform(T, mesh, i, tx * tile + edgeX, tile * 0.53, ty * tile + edgeZ, 1, 1, 1, 0, 0, 0);
+        i++;
+      }
+    }
+    group.add(mesh);
+  };
+  const addConduits = (count, isThin) => {
+    if (!count) return;
+    const geo = new T.CylinderGeometry(tile * 0.035, tile * 0.035, tile * 0.72, 6);
+    const mesh = new T.InstancedMesh(geo, pipeMat, count);
+    mesh.name = isThin ? 'thinWallConduits' : 'wallConduits';
+    mesh.frustumCulled = false;
+    mesh.castShadow = true;
+    mesh.receiveShadow = true;
+    let i = 0;
+    for (let ty = 0; ty < grid.length && i < count; ty++) {
+      const row = grid[ty] || [];
+      for (let tx = 0; tx < row.length && i < count; tx++) {
+        const c = row[tx];
+        if (isThin ? c !== '=' : c !== '#') continue;
+        const alongX = (tx + ty) % 2 === 0;
+        const edge = alongX ? (ty % 2 ? tile * 0.92 : tile * 0.08) : (tx % 2 ? tile * 0.92 : tile * 0.08);
+        const cx = tx * tile + (alongX ? tile / 2 : edge);
+        const cz = ty * tile + (alongX ? edge : tile / 2);
+        setInstanceTransform(T, mesh, i, cx, tile * (isThin ? 0.3 : 0.76), cz, 1, 1, 1, alongX ? Math.PI / 2 : 0, 0, alongX ? 0 : Math.PI / 2);
+        i++;
+      }
+    }
+    group.add(mesh);
+  };
+  addSkirts(wallCount, false);
+  addSkirts(thinCount, true);
+  addPipes(wallCount, false);
+  addPipes(thinCount, true);
+  addConduits(wallCount, false);
+  addConduits(thinCount, true);
 }
 
 function setInstanceTransform(T, mesh, index, x, y, z, sx, sy, sz, rx, ry, rz) {

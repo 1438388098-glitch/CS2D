@@ -77,6 +77,11 @@ try {
   } else {
     pass('map props present: ' + backend.stats.mapObjects);
   }
+  if (!backend || !backend.stats || !backend.stats.mapModelStats || backend.stats.mapModelStats.wallSkirts < 1 || backend.stats.mapModelStats.wallPipes < 1 || backend.stats.mapModelStats.wallConduits < 1) {
+    fail('three.js wall model detail missing: ' + JSON.stringify(backend && backend.stats && backend.stats.mapModelStats));
+  } else {
+    pass('wall model detail present: ' + JSON.stringify(backend.stats.mapModelStats));
+  }
 
   await cdp.eval(`(()=>{const g=window.__cs2d&&window.__cs2d.game;if(!g||!g.player)return false;g.decals.push({type:'corpse',x:g.player.x+96,y:g.player.y+48,angle:0.7,team:'t',life:60});return true})()`);
   await sleep(500);
@@ -141,6 +146,11 @@ try {
     fail('map props missing after map switch: ' + JSON.stringify(switched));
   } else {
     pass('map props after map switch: ' + switched.stats.mapObjects);
+  }
+  if (!switched || !switched.stats || !switched.stats.mapModelStats || switched.stats.mapModelStats.wallSkirts < 1 || switched.stats.mapModelStats.wallPipes < 1 || switched.stats.mapModelStats.wallConduits < 1) {
+    fail('wall model detail missing after map switch: ' + JSON.stringify(switched && switched.stats && switched.stats.mapModelStats));
+  } else {
+    pass('wall model detail after map switch: ' + JSON.stringify(switched.stats.mapModelStats));
   }
   if (!switched || !switched.stats || switched.stats.mapCullSafe < 1) {
     fail('instanced map meshes not frustum-safe after map switch: ' + JSON.stringify(switched));
