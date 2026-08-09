@@ -1,21 +1,31 @@
-import { ROUND, ECONOMY, MAX_PARTICLES, resolveDiff, MAP_AI } from './config.js';
-import { addMoney, clearEquipment } from './economy.js';
-import { getMap, loadMap, findMapById, collideCircle, los, pathTo, tileAt } from './map.js';
-import { createEntity, spawnEntity, weaponDef, ammoFor } from './entities.js';
-import { fireWeapon, startReload, finishReload, pickupWeapon, RECOIL_RECOVER } from './combat.js';
-import { updateShotStreak } from './ballistic.js';
-import { updateGrenades } from './grenades.js';
-import { updateBots, assignRoles, botBuyAll } from './ai.js';
-import { explodeBomb, plantBomb, defuseBomb, pickupBomb } from './bomb.js';
-import { ctx, seedWorld } from './ctx.js';
-import { getMode } from './registry.js';
-import { clamp, lerp, rand, angDiff } from './utils.js';
-import { pressed, getBindLabel } from './keymap.js';
-import { initInfo, prune, intelBroadcast } from './info.js';
-import { initOppModel } from './ai/oppmodel.js';
+import {ROUND, ECONOMY, MAX_PARTICLES, resolveDiff, MAP_CT_REACT} from './config.js';
+import {addMoney, clearEquipment} from './economy.js';
+import {getMap, loadMap, findMapById, collideCircle, los, pathTo, tileAt, passableTolerant, fallbackSpawn} from './map.js';
+import {createEntity, spawnEntity, weaponDef, ammoFor} from './entities.js';
+import {fireWeapon, startReload, finishReload, pickupWeapon, redrawDecals, RECOIL_RECOVER} from './combat.js';
+import {updateShotStreak} from './ballistic.js';
+import {updateGrenades} from './grenades.js';
+import {updateBots, assignRoles, botBuyAll, recordRoundResult} from './ai.js';
+import {explodeBomb, plantBomb, defuseBomb, pickupBomb} from './bomb.js';
+import {ctx, seedWorld} from './ctx.js';
+import {getMode} from './registry.js';
+import {clamp, lerp, rand, angDiff, rotateInputVector} from './utils.js';
+import {pressed, getBindLabel} from './keymap.js';
+import {initInfo, prune} from './info.js';
+import {initOppModel} from './ai/oppmodel.js';
+import {canSeeInFog} from './fog.js';
 import { shouldRerouteStuck } from './ai/rules.js';
 
 const emit = (evt, p) => ctx.bus.emit(evt, p);
+
+export const FPS_PITCH_LIMIT = 1.35;
+
+// FPS 移动缩放：速度按地图瓦片尺寸归一（官方图 tile=16，235px/s 等效 14.7 格/s 过快），
+// 并附加 0.9 的第一人称手感系数；俯视模式不变
+function fpsMoveScale(game) {
+  const tile = (getMap() && getMap().tile) || 40;
+  return 0.9 * tile / 40;
+}
 
 
 export function createGame(opts = {}) {
@@ -31,7 +41,8 @@ export function createGame(opts = {}) {
     bomb: null, flashT: 0, dmgT: 0, shake: 0, dmgSpreadT: 0, killRingT: 0,
     over: false, spectateIdx: 0, lastPlantSite: null, dt: 0.016,
     lossStreakT: 0, lossStreakCT: 0,
-    hitMarkT: 0, zoom: 1,
+    hitMarkT: 0, headshotT: 0, zoom: 0.75, hitPauseT: 0, dmgPops: [], scopeT: 0, lastKiller: null,
+    viewMode: 'top', fpsSens: 0.002, _mlookDx: 0, _mlookDy: 0, _specAngle: null, _specPitch: null,
     stats: { hits: 0, shots: 0, headshots: 0 },
     time: 0,
     tAttackSite: 'A',
@@ -78,6 +89,8 @@ export function startMatch(game) {
     emit('unpause');
   }
   const fresh = createGame();
+  // 保留调用者传入的世界种子（训练/回放确定性）：Object.assign 会用 fresh.seed=null 覆盖
+  const callerSeed = game.seed;
   fresh.opts = game.opts;
   fresh.opts.diffParams = resolveDiff(game.opts.diff, game.opts.hellLevel);
   fresh.mode = game.opts.mode || null;
@@ -89,14 +102,17 @@ export function startMatch(game) {
   fresh.onMapChanged = game.onMapChanged;
   fresh.lan = game.lan;
   Object.assign(game, fresh);
-  game.mapAi = MAP_AI[game.opts.mapId] || null;
   // 世界种子：整局随机流可复现（回放/调试/训练一致性）；可传 game.seed 固定复现
-  if (game.seed === null) game.seed = Math.floor(Math.random() * 0x7fffffff);
+  game.ctReactionMult = MAP_CT_REACT[game.opts.mapId] || 0.45;
+  game.mapId = game.opts.mapId;
+  if (callerSeed !== undefined && callerSeed !== null) game.seed = callerSeed;
+  else if (game.seed === null) game.seed = Math.floor(Math.random() * 0x7fffffff);
   seedWorld(game.seed);
   initInfo(game);
   initOppModel(game);
   game.over = false;
-  for (const k of ['br', 'rogue', 'boss', 'major', 'bossShots']) delete game[k];
+  // 清理模式残留（cyber/major 等按模式注入的 game 字段，避免跨模式泄漏）
+  for (const k of ['major', 'cyber']) delete game[k];
   const modeDef = game.mode ? getMode(game.mode) : null;
   if (modeDef && modeDef.start) {
     modeDef.start(game);
@@ -124,13 +140,38 @@ export function setupMatchEntities(game) {
     game.entities.push(createEntity('t', true));
     game.entities.push(createEntity('ct', true));
   }
+  // 快速对局注入实体级 AI 参数（对齐模式对局行为）：展开 diffParams 全字段，
+  // 使 S3 特性（intel/oppModel/peekSkill/counterStrafe/tradeSpeed/spreadCtrl/ecoDiscipline）
+  // 与回合变异性（applyRoundParams）在默认对局同样生效，消除"部署态≠评估态"
+  const diffParams = game.opts.diffParams || resolveDiff(game.opts.diff, game.opts.hellLevel);
+  for (const e of game.entities) {
+    if (e.bot && !e.aiParams) e.aiParams = { ...diffParams };
+  }
 }
 
 function spawnRound(game) {
   game.input.mouse.wasDown = game.input.mouse.down;
+  game.lastKiller = null;
+  game.dmgPops.length = 0;
+  game.tOrder = null;
+  const spawnTick = { t: 0, ct: 0 };
   for (const e of game.entities) {
-    const list = e.team === 'ct' ? getMap().spawns.ct : getMap().spawns.t;
-    spawnEntity(e, list);
+    e.lastNadeT = 0;
+    let list = e.team === 'ct' ? getMap().spawns.ct : getMap().spawns.t;
+    if (!list || !list.length) {
+      const fb = fallbackSpawn(e.team);
+      list = fb ? [fb] : null;
+    }
+    const teamKey = e.team === 'ct' ? 'ct' : 't';
+    spawnEntity(e, list, spawnTick[teamKey]++);
+    if (e.bot) {
+      const target = e.team === 't' ? getMap().spawns.ct[0] : getMap().spawns.t[0];
+      if (target) e.angle = Math.atan2(target.y - e.y, target.x - e.x);
+    } else if (game.viewMode === 'fps') {
+      // FPS 下玩家出生朝向敌方出生点（俯视模式一帧内被鼠标瞄准覆盖，无需处理）
+      const target = e.team === 't' ? getMap().spawns.ct[0] : getMap().spawns.t[0];
+      if (target) e.angle = Math.atan2(target.y - e.y, target.x - e.x);
+    }
   }
   assignRoles(game);
   botBuyAll(game);
@@ -144,7 +185,8 @@ function spawnRound(game) {
     for (const e of game.entities) {
       if (e.bot && e.team === 'ct' && !e.dead) {
         const hold = e.role === 'a' ? getMap().holds.A : (e.role === 'b' ? getMap().holds.B : null);
-        intel.roles.push({ role: e.role, x: hold ? hold.anchors[(e.anchorIdx || 0) % hold.anchors.length].x : e.x, y: hold ? hold.anchors[(e.anchorIdx || 0) % hold.anchors.length].y : e.y });
+        const ap = hold && hold.anchors && hold.anchors.length ? hold.anchors[(e.anchorIdx || 0) % hold.anchors.length] : null;
+        intel.roles.push({ role: e.role, x: ap ? ap.x : e.x, y: ap ? ap.y : e.y });
       }
     }
     game.h11Intel = intel;
@@ -156,6 +198,10 @@ function spawnRound(game) {
     carrier.hasBomb = true;
     carrier.role = game.tAttackSite;
     carrier.rushMode = game.tRush;
+    if (carrier.escort) {
+      const alt = tBots.find((e) => e !== carrier && e.role === game.tAttackSite);
+      if (alt) { carrier.escort = false; alt.escort = true; }
+    }
   }
   game.bomb = null;
   game.smokes.length = 0;
@@ -179,9 +225,16 @@ function spawnRound(game) {
   }
 }
 
+export function skipSpectatedRound(game) {
+  if (!game.player || !game.player.dead || game.over) return { ok: false };
+  let guard = 0;
+  while (guard++ < 5000 && game.state !== 'END' && !game.over) update(game, 0.05);
+  return { ok: game.state === 'END' };
+}
+
 export function startRound(game) {
   game.round++;
-  // 换边：常规第 13 回合；加时每 3 回合（16/19/22/25）再换
+  // 换边：常规第 ROUND.SIDE_SWAP_AFTER+1 回合；加时每 3 回合再换
   const swapRound = game.round === ROUND.SIDE_SWAP_AFTER + 1 ||
     (game.ot && (game.round - (ROUND.SIDE_SWAP_AFTER + 1)) % ROUND.OT_SWAP_EVERY === 0 && game.round > ROUND.SIDE_SWAP_AFTER + 1);
   if (swapRound) {
@@ -189,6 +242,12 @@ export function startRound(game) {
       e.team = e.team === 'ct' ? 't' : 'ct';
       clearEquipment(e);
       e.money = ECONOMY.START_MONEY;
+    }
+    const scoreT = game.score.T;
+    game.score.T = game.score.CT;
+    game.score.CT = scoreT;
+    if (Array.isArray(game.winHistory)) {
+      game.winHistory = game.winHistory.map((w) => w === 'T' ? 'C' : w === 'C' ? 'T' : w);
     }
     game.lossStreakT = 0;
     game.lossStreakCT = 0;
@@ -211,9 +270,10 @@ export function startRound(game) {
 export function endRound(game, winner, reason, winType) {
   if (game.state === 'END') return;
   game.state = 'END';
-  game.endedT = 6.5;
+  game.endedT = ROUND.END_DELAY;
   if (!game.winHistory) game.winHistory = [];
   game.winHistory.push(winner === 't' ? 'T' : winner === 'ct' ? 'C' : 'D');
+  recordRoundResult(game, winner, winType);
   if (winner) {
     game.score[winner === 't' ? 'T' : 'CT']++;
     const loser = winner === 't' ? 'ct' : 't';
@@ -245,7 +305,9 @@ export function endRound(game, winner, reason, winType) {
 export function finishMatch(game) {
   game.over = true;
   game.state = 'END';
-  const winAt = game.ot ? ROUND.OT_WIN : ROUND.MATCH_WIN;
+  const modeDef = game.mode ? getMode(game.mode) : null;
+  if (modeDef && modeDef.onFinish) modeDef.onFinish(game);
+  const winAt = game.ot ? (game.otWin || ROUND.OT_WIN) : (game.matchWin || ROUND.MATCH_WIN);
   const win = (game.score.T >= winAt && game.player.team === 't') ||
     (game.score.CT >= winAt && game.player.team === 'ct');
   const ui = game.ui;
@@ -293,8 +355,17 @@ export function updateBombHud(game) {
   emit('objtext', { main: ot.main, sub: ot.sub });
 }
 
+
 export function update(game, dt) {
   dt = Math.min(dt, 0.05);
+  if (game.hitPauseT > 0) {
+    game.hitPauseT -= dt;
+    return;
+  }
+  for (let i = game.dmgPops.length - 1; i >= 0; i--) {
+    game.dmgPops[i].t -= dt;
+    if (game.dmgPops[i].t <= 0) game.dmgPops.splice(i, 1);
+  }
   game.dt = dt;
   game.time += dt;
   if (game.over) return;
@@ -322,8 +393,10 @@ export function update(game, dt) {
     // 涉水减速：浅水/深水均为 40%（spec 4.3）
     if (curTile === '~' || curTile === '≈') { e.vx *= 0.6; e.vy *= 0.6; }
     if (e.stunT > 0) { e.vx *= 0.3; e.vy *= 0.3; }
-    e.x += e.vx * dt;
-    e.y += e.vy * dt;
+    // FPS 下 bot 与玩家同步减速（玩家已在 updatePlayer 内缩放，此处仅 bot）
+    const mvS = e.bot && game.viewMode === 'fps' ? fpsMoveScale(game) : 1;
+    e.x += e.vx * dt * mvS;
+    e.y += e.vy * dt * mvS;
     collideCircle(e);
     const prevH = e.height;
     e.height = curTile === '^' ? 1 : curTile === 'R' ? 0.5 : 0;
@@ -374,11 +447,21 @@ export function update(game, dt) {
     game.tracers[t2].life -= dt;
     if (game.tracers[t2].life <= 0) game.tracers.splice(t2, 1);
   }
+  // 弹孔/尸体渐隐：life 衰减，进入淡出窗口（<3s）或移除时重绘静态层
+  let decalDirty = false;
+  for (let di = game.decals.length - 1; di >= 0; di--) {
+    const d = game.decals[di];
+    d.life -= dt;
+    if (d.life <= 0) { game.decals.splice(di, 1); decalDirty = true; }
+    else if (d.life < 3) decalDirty = true;
+  }
+  if (decalDirty) redrawDecals(game);
   if (game.shake > 0) game.shake = Math.max(0, game.shake - dt * 20);
   if (game.dmgT > 0) game.dmgT -= dt;
   if (game.dmgSpreadT > 0) game.dmgSpreadT -= dt;
   if (game.killRingT > 0) game.killRingT -= dt;
   if (game.hitMarkT > 0) game.hitMarkT -= dt;
+  if (game.headshotT > 0) game.headshotT -= dt;
   if (game.flashT > 0) {
     game.flashT -= dt;
     emit('flash', { opacity: Math.min(0.9, game.flashT * 0.22) });
@@ -395,19 +478,29 @@ export function update(game, dt) {
   }
   let camTarget = game.player;
   if (game.player && game.player.dead) {
-    const mates = game.entities.filter((e) => e.team === game.player.team && !e.dead);
-    if (mates.length) camTarget = mates[game.spectateIdx % mates.length];
+    if (game.cyber && !game.cyber.ended) {
+      const bots = game.entities.filter((e) => e.bot && !e.dead);
+      if (bots.length) camTarget = bots[game.spectateIdx % bots.length];
+      game.zoom = 0.75;
+    } else {
+      const mates = game.entities.filter((e) => e.team === game.player.team && !e.dead);
+      if (mates.length) camTarget = mates[game.spectateIdx % mates.length];
+    }
   }
-  if (camTarget) {
+  // 跟随视角：相机以玩家为绝对中心（不 clamp，世界随朝向旋转由 render 完成）
+  if (game.viewMode === 'follow' && game.player && !game.player.dead && !game.cyber) {
+    game.camX = game.player.x;
+    game.camY = game.player.y;
+  } else if (camTarget) {
     game.camX = lerp(game.camX, camTarget.x, Math.min(1, 18 * dt));
     game.camY = lerp(game.camY, camTarget.y, Math.min(1, 18 * dt));
+    const z = game.zoom || 1;
+    const hw = game.canvasW / 2 / z;
+    const hh = game.canvasH / 2 / z;
+    game.camX = clamp(game.camX, hw, Math.max(hw, game.mapW - hw));
+    game.camY = clamp(game.camY, hh, Math.max(hh, game.mapH - hh));
   }
-  const z = game.zoom || 1;
-  const hw = game.canvasW / 2 / z;
-  const hh = game.canvasH / 2 / z;
-  game.camX = clamp(game.camX, hw, Math.max(hw, game.mapW - hw));
-  game.camY = clamp(game.camY, hh, Math.max(hh, game.mapH - hh));
-  updatePlayerAim(game);
+  updatePlayerAim(game, dt);
   updateBombHud(game);
   if (game.ui && game.ui.isScoreboardOpen && game.ui.isScoreboardOpen()) {
     emit('refreshScoreboard');
@@ -426,6 +519,11 @@ function updateCam(game, dt) {
     const mates = game.entities.filter((e) => e.team === game.player.team && !e.dead);
     if (mates.length) camTarget = mates[game.spectateIdx % mates.length];
   }
+  if (game.viewMode === 'follow' && camTarget && !camTarget.dead && !game.cyber) {
+    game.camX = camTarget.x;
+    game.camY = camTarget.y;
+    return;
+  }
   if (camTarget) {
     game.camX = lerp(game.camX, camTarget.x, Math.min(1, 18 * dt));
     game.camY = lerp(game.camY, camTarget.y, Math.min(1, 18 * dt));
@@ -433,8 +531,8 @@ function updateCam(game, dt) {
   const z = game.zoom || 1;
   const hw = game.canvasW / 2 / z;
   const hh = game.canvasH / 2 / z;
-  game.camX = clamp(game.camX, hw, game.mapW - hw);
-  game.camY = clamp(game.camY, hh, game.mapH - hh);
+  game.camX = clamp(game.camX, hw, Math.max(hw, game.mapW - hw));
+  game.camY = clamp(game.camY, hh, Math.max(hh, game.mapH - hh));
 }
 
 function updateTimers(game, dt) {
@@ -447,23 +545,21 @@ function updateTimers(game, dt) {
       emit('closeBuy');
     }
   } else if (game.state === 'LIVE') {
-    game.roundTime += dt;
-    if (game.roundTime >= game.roundDur) {
-      if (game.bomb && game.bomb.planted) {
-        explodeBomb(game);
-      } else {
-        endRound(game, 'ct', '时间耗尽', 'timeout');
-      }
+    const bombPlanted = !!(game.bomb && game.bomb.planted);
+    if (!bombPlanted) game.roundTime += dt;
+    if (!bombPlanted && game.roundTime >= game.roundDur) {
+      endRound(game, 'ct', '时间耗尽', 'timeout');
     }
   } else if (game.state === 'END') {
     game.endedT -= dt;
     if (game.endedT <= 0 && !game.over) {
-      if (game.score.T >= (game.ot ? ROUND.OT_WIN : ROUND.MATCH_WIN) || game.score.CT >= (game.ot ? ROUND.OT_WIN : ROUND.MATCH_WIN)) {
+      const winAt = game.ot ? (game.otWin || ROUND.OT_WIN) : (game.matchWin || ROUND.MATCH_WIN);
+      if (game.score.T >= winAt || game.score.CT >= winAt) {
         finishMatch(game);
-      } else if (!game.ot && game.score.T >= ROUND.MATCH_WIN - 1 && game.score.CT >= ROUND.MATCH_WIN - 1) {
-        // 12:12 进入加时（MR3，先到 16 分）
+      } else if (!game.ot && winAt >= 9 && game.score.T >= winAt - 1 && game.score.CT >= winAt - 1) {
+        // 平分进入加时（仅长赛制 MR9+ 保留；BO9 先 5 胜，4:4 直接打第 9 局决胜，无加时）
         game.ot = true;
-        emit('toast', { text: '进入加时赛！先赢 3 回合获胜（16 分）' });
+        emit('toast', { text: '进入加时赛！先赢 3 回合获胜（' + (winAt + 2) + ' 分）' });
         startRound(game);
       } else {
         startRound(game);
@@ -501,7 +597,7 @@ function updatePlayer(game, dt) {
   const keys = input.keys;
   const mouse = input.mouse;
   const w = weaponDef(p);
-  const spd = 235 * (w ? w.speed : 1);
+  const spd = 235 * (w ? w.speed : 1) * (game.viewMode === 'fps' ? fpsMoveScale(game) : 1);
   let ax = 0, ay = 0;
   if (game.freezeT > 0) {
     ax = 0; ay = 0;
@@ -510,6 +606,16 @@ function updatePlayer(game, dt) {
     if (pressed(keys, 'moveDown')) ay += 1;
     if (pressed(keys, 'moveLeft')) ax -= 1;
     if (pressed(keys, 'moveRight')) ax += 1;
+    if (game.viewMode === 'fps' || game.viewMode === 'follow') {
+      // FPS/跟随：W=朝角前进、D=右平移（复用 utils 纯函数，与单测同源）
+      const rv = rotateInputVector(ax, ay, p.angle);
+      ax = rv.x; ay = rv.y;
+    }
+  }
+  // FPS/跟随转向键：freeze 期间也允许原地转身（与鼠标视角行为一致）
+  if (game.viewMode === 'fps' || game.viewMode === 'follow') {
+    const turn = (pressed(keys, 'turnRight') ? 1 : 0) - (pressed(keys, 'turnLeft') ? 1 : 0);
+    if (turn) p.angle += turn * 2.8 * dt;
   }
   pickupWeapon(p, game);
   const len = Math.hypot(ax, ay);
@@ -518,11 +624,24 @@ function updatePlayer(game, dt) {
   p.walking = walk && len > 0;
   p.crouched = pressed(keys, 'crouch');
   p.scoped = mouse.rdown && p.slot === 'primary' && p.weapons.primary === 'awp';
-  game.zoom = p.scoped ? 1.7 : 1;
+  const wantScope = p.scoped ? 1 : 0;
+  game.scopeT = (game.scopeT || 0) + (wantScope - (game.scopeT || 0)) * Math.min(1, 10 * dt);
+  // 跟随视角：拉近到 1.0 突出"个人中心"（俯视 0.75 / FPS 由 render3d 接管）
+  game.zoom = game.viewMode === 'follow' ? 1.0 : 0.75;
   const curSpd = spd * (walk ? 0.55 : 1) * (p.scoped ? 0.5 : 1) * (p.crouched ? 0.5 : 1) * (p.speedMult || 1);
   const moving = len > 0 && game.freezeT <= 0;
-  p.vx = ax * curSpd;
-  p.vy = ay * curSpd;
+  const wantVx = ax * curSpd, wantVy = ay * curSpd;
+  if (game.viewMode === 'fps' || game.viewMode === 'follow') {
+    // FPS/跟随移动手感：速度指数趋近目标（起步/急停有重量感，不瞬移）
+    const k = 1 - Math.exp(-9 * dt);
+    p.vx = p.vx + (wantVx - p.vx) * k;
+    p.vy = p.vy + (wantVy - p.vy) * k;
+    // 步态相位：驱动渲染的头/身体 bob（仅移动时推进）
+    if (moving) p.bobPhase = (p.bobPhase || 0) + dt * (walk ? 9 : 12);
+  } else {
+    p.vx = wantVx;
+    p.vy = wantVy;
+  }
   p.stepT -= dt;
   if (moving && p.stepT <= 0) {
     p.stepT = walk ? 0.45 : 0.3;
@@ -532,14 +651,21 @@ function updatePlayer(game, dt) {
     else if (stTile === '=') stMat = 'thin';
     else if (stTile === 'M' || stTile === 'm') stMat = 'metal';
     emit('sfx', { name: 'step', vol: walk ? 0.14 : 0.4, x: p.x, y: p.y, game, mat: stMat });
+    game.lastStep = { x: p.x, y: p.y, t: game.time, walk, team: p.team };
   }
-  updatePlayerAim(game);
+  updatePlayerAim(game, dt);
+  const held = weaponDef(p);
+  if (held && held.kind !== 'knife') {
+    p.laserEnd = castLaserEnd(p, game);
+  } else {
+    p.laserEnd = null;
+  }
   input.lastMouse.x = mouse.x;
   input.lastMouse.y = mouse.y;
   const wantFire = mouse.down && game.freezeT <= 0 && (game.state === 'BUY' || game.state === 'LIVE');
   p.trigger = wantFire && (w.auto ? true : !mouse.wasDown);
   mouse.wasDown = mouse.down;
-  p.recoil = Math.max(0, p.recoil - RECOIL_RECOVER * dt * (p.recoil > 1.1 ? 1.8 : 0.55));
+  p.recoil = Math.max(0, p.recoil - RECOIL_RECOVER * dt * (p.recoil > 1.1 ? 1.8 : 0.55) * (p.recoverMult || 1));
   updateShotStreak(p, dt);
   if (p.fireCd > 0) p.fireCd -= dt;
   if (p.muzzleT > 0) p.muzzleT -= dt;
@@ -556,7 +682,17 @@ function updatePlayer(game, dt) {
     if (o === p || o.dead || o.team === p.team) continue;
     if (Math.hypot(o.x - p.x, o.y - p.y) < 600) {
       const a = Math.atan2(o.y - p.y, o.x - p.x);
-      if (Math.abs(angDiff(a, p.angle)) < 0.09 && los(game, p.x, p.y, o.x, o.y, p.height)) {
+      let verticalOk = true;
+      const pitch = p.pitch || 0;
+      if (Math.abs(pitch) > 0.02) {
+        const tile = (getMap() && getMap().tile) || 40;
+        const eyeH = (0.5 + (p.height || 0)) * tile;
+        const targetBase = (o.height || 0) * tile;
+        const dist = Math.hypot(o.x - p.x, o.y - p.y);
+        const rayZ = eyeH + dist * Math.tan(pitch);
+        verticalOk = Math.abs(rayZ - (targetBase + tile * 1.35)) <= tile;
+      }
+      if (Math.abs(angDiff(a, p.angle)) < 0.09 && verticalOk && los(game, p.x, p.y, o.x, o.y, p.height) && canSeeInFog(game, p, o, 560)) {
         p.aimTarget = o;
         break;
       }
@@ -602,13 +738,62 @@ function updatePlayer(game, dt) {
   }
 }
 
-function updatePlayerAim(game) {
+function castLaserEnd(p, game) {
+  const map = getMap();
+  if (!map || !map.W || !map.H) return { x: p.x, y: p.y };
+  const w = weaponDef(p);
+  const range = w && w.range ? w.range : 1500;
+  const cos = Math.cos(p.angle), sin = Math.sin(p.angle);
+  const step = 6;
+  let px = p.x, py = p.y;
+  for (let d = 0; d <= range; d += step) {
+    px = p.x + cos * d;
+    py = p.y + sin * d;
+    if (px < 0 || py < 0 || px > map.W || py > map.H) break;
+    if (!passableTolerant(px, py)) break;
+  }
+  return { x: px, y: py };
+}
+
+function updatePlayerAim(game, dt) {
+  if (game.viewMode === 'fps') {
+    // 标准 FPS 增量瞄准：指针锁定后仅消费 movementX/Y，鼠标停→朝向停，
+    // 鼠标动→转动 yaw/pitch；观战同样作用于 _specAngle
+    const dx = game._mlookDx || 0;
+    const dy = game._mlookDy || 0;
+    game._mlookDx = 0;
+    game._mlookDy = 0;
+    if (game.state !== 'BUY' && game.state !== 'LIVE') return;
+    const sens = game.fpsSens || 0.002;
+    const p2 = game.player;
+    if (p2 && !p2.dead) {
+      const aimSens = p2.scoped ? sens * 0.35 : sens;
+      p2.angle += dx * aimSens;
+      p2.pitch = clamp((p2.pitch || 0) - dy * aimSens, -FPS_PITCH_LIMIT, FPS_PITCH_LIMIT);
+    } else {
+      if (game._specAngle == null) game._specAngle = game.player ? game.player.angle : 0;
+      if (game._specPitch == null) game._specPitch = game.player ? (game.player.pitch || 0) : 0;
+      game._specAngle += dx * sens;
+      game._specPitch = clamp(game._specPitch - dy * sens, -FPS_PITCH_LIMIT, FPS_PITCH_LIMIT);
+    }
+    return;
+  }
   const p = game.player;
   if (!p || p.dead) return;
   if (game.state !== 'BUY' && game.state !== 'LIVE') return;
   const z = game.zoom || 1;
   const sx = game.canvasW / 2, sy = game.canvasH / 2;
   const shx = game._shx || 0, shy = game._shy || 0;
+  // 跟随视角：玩家恒居屏幕中心，相机朝向（=世界旋转）平滑跟随准星方向；
+  // 鼠标贴近角色（<70px）时保持原朝向，避免短向量角度抖动导致世界狂转
+  if (game.viewMode === 'follow') {
+    const mx = game.input.mouse.x - sx, my = game.input.mouse.y - sy;
+    if (mx * mx + my * my > 70 * 70) {
+      const target = Math.atan2(my, mx);
+      p.angle += angDiff(target, p.angle) * Math.min(1, 12 * dt);
+    }
+    return;
+  }
   // 屏幕几何：角色朝向 = 鼠标相对"玩家屏幕投影位置"的方向（与渲染同构）。
   // 枪口射线从玩家屏幕位置出发严格经过准星（鼠标）像素——任意相机/震动/缩放状态一致；
   // 鼠标靠近角色时短向量=大角度变化（灵敏），远离时亦然，方向始终=玩家→准星。
@@ -620,10 +805,10 @@ function updatePlayerAim(game) {
 function botObjectiveForStuck(e, game) {
   if (e.team === 't') {
     const cs = game.tAttackSite === 'A' ? getMap().sites.A : getMap().sites.B;
-    return { x: cs.cx, y: cs.cy };
+    if (cs) return { x: cs.cx, y: cs.cy };
+    const sp = getMap().spawns.t[0];
+    return { x: sp ? sp.x : 1200, y: sp ? sp.y : 900 };
   }
   if (game.bomb && game.bomb.planted) return { x: game.bomb.x, y: game.bomb.y };
   return { x: 1200, y: 900 };
 }
-
-
