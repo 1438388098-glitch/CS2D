@@ -144,6 +144,13 @@ export function renderMinimap(game) {
     mctx.lineWidth = 1.2;
     rr(mctx, px - 7, py - 7, 14, 14, 3);
     mctx.stroke();
+    // 站点外圈呼吸环：增强 A/B 可读性
+    mctx.strokeStyle = key === 'A' ? 'rgba(255,120,70,0.5)' : 'rgba(70,150,255,0.5)';
+    mctx.lineWidth = 1.5;
+    const pulseR = 12 + Math.sin(now / 300 + (key === 'A' ? 0 : Math.PI)) * 2;
+    mctx.beginPath();
+    mctx.arc(px, py, pulseR, 0, Math.PI * 2);
+    mctx.stroke();
     mctx.fillStyle = '#111';
     mctx.font = "bold 11px 'Segoe UI',sans-serif";
     mctx.textAlign = 'center';
