@@ -52,6 +52,11 @@ try {
   } else {
     pass('scene stats: ' + JSON.stringify(backend.stats));
   }
+  if (!backend || !backend.stats || backend.stats.textureCacheSize < 1 || backend.stats.geometryCacheSize < 1 || backend.stats.quality <= 0 || backend.stats.pixelRatio < 1 || backend.stats.webglHealthy !== true) {
+    fail('three.js resource/quality guards missing: ' + JSON.stringify(backend && backend.stats));
+  } else {
+    pass('resource caches and quality guards active: ' + JSON.stringify({ textureCache: backend.stats.textureCacheSize, geometryCache: backend.stats.geometryCacheSize, quality: backend.stats.quality, pixelRatio: backend.stats.pixelRatio }));
+  }
   if (!backend || !backend.stats || backend.stats.entityWeapons < 1) {
     fail('three.js entity weapon meshes missing: ' + JSON.stringify(backend && backend.stats));
   } else {

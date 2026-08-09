@@ -59,6 +59,12 @@ let decalPointMeshes = new Map();
 let viewmodelKey = '';
 let initGen = 0;
 const normalMapCache = new Map();
+const textureCache = new Map();
+const geometryCache = new Map();
+const MAX_TEXTURE_CACHE = 128;
+const MAX_GEOMETRY_CACHE = 512;
+let webglHealthy = true;
+let frameHealthTick = 0;
 
 function ensureThree() {
   if (THREE) return Promise.resolve(THREE);
@@ -101,6 +107,8 @@ function disposeRenderer() {
   corpseMeshes = new Map();
   decalPointMeshes = new Map();
   viewmodelKey = '';
+  clearResourceCaches();
+  webglHealthy = true;
 }
 
 export function render3dNextReady() {
@@ -134,6 +142,13 @@ export async function initRenderer3dNext(canvas, layers) {
     renderer.toneMapping = T.ACESFilmicToneMapping;
     renderer.toneMappingExposure = 0.92;
     renderer.setClearColor(0x1c2530, 1);
+    renderer.domElement.addEventListener('webglcontextlost', (e) => {
+      e.preventDefault();
+      webglHealthy = false;
+    }, false);
+    renderer.domElement.addEventListener('webglcontextrestored', () => {
+      webglHealthy = true;
+    }, false);
     scene = new T.Scene();
     scene.fog = new T.Fog(0x20262e, 500, 2400);
     camera = new T.PerspectiveCamera(75, 16 / 9, 0.05, 4000);
@@ -166,6 +181,10 @@ export async function initRenderer3dNext(canvas, layers) {
 
 export function render3dNext(game) {
   if (!render3dNextReady() || !game || !canvasRef) return;
+  if (!webglHealthy) {
+    game._render3dBackend = 'legacy';
+    return;
+  }
   game._render3dBackend = 'next';
   try {
     const map = getMap();
@@ -201,13 +220,14 @@ export function render3dNext(game) {
       sitePlates: mapGroup ? mapGroup.children.filter((o) => o.name === 'siteCornerBolts').length : 0
     };
     const effectObjects = shellMeshes.length + shockwaveMeshes.length + splashMeshes.length + particleMeshes.length + smokeMeshes.length;
-    const dpr = game.dpr || 1;
+    const dpr = Math.min(2, Math.max(1, game.dpr || 1));
+    const quality = renderQualityFor(game);
     const cssW = canvasRef.width / dpr;
     const cssH = canvasRef.height / dpr;
     const scale = game._renderScale >= 0.5 && game._renderScale <= 1 ? game._renderScale : 1;
-    const w = Math.max(320, Math.min(1920, Math.floor(cssW * scale)));
-    const h = Math.max(180, Math.min(1080, Math.floor(cssH * scale)));
-    renderer.setPixelRatio(Math.min(dpr, 2));
+    const w = Math.max(320, Math.min(1920, Math.floor(cssW * scale * quality)));
+    const h = Math.max(180, Math.min(1080, Math.floor(cssH * scale * quality)));
+    renderer.setPixelRatio(Math.min(dpr, 2, quality * 2));
     renderer.setSize(w, h, false);
     camera.aspect = w / h;
     const fovDeg = game.fov && isFinite(game.fov) ? game.fov * 180 / Math.PI : 75;
@@ -218,6 +238,7 @@ export function render3dNext(game) {
     const renderMs = performance.now() - renderT0;
     const ctx = canvasRef.getContext('2d');
     if (ctx) ctx.drawImage(renderer.domElement, 0, 0, canvasRef.width, canvasRef.height);
+    if (ctx) updateFrameHealth(game, ctx);
     if (ctx) drawFpsHud(ctx, game, THREE);
     game._renderStats = {
       total: renderMs,
@@ -243,7 +264,12 @@ export function render3dNext(game) {
       effectObjects,
       smokeVolumes: smokeMeshes.length,
       fpsHud: game._fpsHudStats || { teamBars: 0, siteMarkers: 0, bombMarkers: 0, damageNumbers: 0 },
-      drawCalls: renderer && renderer.info && renderer.info.render ? renderer.info.render.calls : 0
+      drawCalls: renderer && renderer.info && renderer.info.render ? renderer.info.render.calls : 0,
+      quality,
+      pixelRatio: renderer.getPixelRatio(),
+      textureCacheSize: textureCache.size,
+      geometryCacheSize: geometryCache.size,
+      webglHealthy
     };
   } catch (err) {
     console.error('[render3d-next] frame error:', err);
@@ -436,8 +462,66 @@ function clearGroup(group) {
 
 function disposeMaterial(mat) {
   if (!mat) return;
-  if (mat.map) mat.map.dispose();
+  if (mat.map && !mat.map.userData._cached) mat.map.dispose();
   mat.dispose();
+}
+
+function clearResourceCaches() {
+  for (const byRepeat of textureCache.values()) {
+    for (const tex of byRepeat.values()) {
+      try { tex.dispose(); } catch (err) { /* ignore */ }
+    }
+  }
+  textureCache.clear();
+  for (const geo of geometryCache.values()) {
+    try { geo.dispose(); } catch (err) { /* ignore */ }
+  }
+  geometryCache.clear();
+  for (const tex of normalMapCache.values()) {
+    try { tex.dispose(); } catch (err) { /* ignore */ }
+  }
+  normalMapCache.clear();
+}
+
+function renderQualityFor(game) {
+  let q = (typeof game.renderQuality === 'number' && isFinite(game.renderQuality)) ? game.renderQuality : 1;
+  q = Math.max(0.55, Math.min(1, q));
+  return q;
+}
+
+function updateFrameHealth(game, ctx) {
+  if (!game || !ctx || !canvasRef) return;
+  frameHealthTick++;
+  if (frameHealthTick % 45 !== 0) return;
+  try {
+    const w = canvasRef.width;
+    const h = canvasRef.height;
+    const step = Math.max(8, Math.floor(Math.min(w, h) / 22));
+    const data = ctx.getImageData(0, 0, w, h).data;
+    let checked = 0;
+    let lit = 0;
+    let white = 0;
+    for (let y = 0; y < h; y += step) {
+      for (let x = 0; x < w; x += step) {
+        const i = (y * w + x) * 4;
+        const sum = data[i] + data[i + 1] + data[i + 2];
+        checked++;
+        if (sum > 40) lit++;
+        if (sum > 720) white++;
+      }
+    }
+    if (checked > 0 && (lit === 0 || white / checked > 0.9)) {
+      game._renderHealthStrikes = (game._renderHealthStrikes || 0) + 1;
+      if (game._renderHealthStrikes >= 3) {
+        webglHealthy = false;
+        game._render3dBackend = 'legacy';
+      } else if (game._renderScale > 0.65) {
+        game._renderScale = Math.max(0.6, (game._renderScale || 1) - 0.1);
+      }
+    } else {
+      game._renderHealthStrikes = 0;
+    }
+  } catch (err) { /* sampling must never break rendering */ }
 }
 
 function updateCamera(game, ent, map) {
@@ -489,7 +573,7 @@ function buildMapScene(map, layers) {
     vertexColors: true
   });
   const floorSeg = Math.min(64, Math.max(24, Math.floor(Math.max(w, h) / 110)));
-  const floorGeo = new T.PlaneGeometry(w, h, floorSeg, floorSeg);
+  const floorGeo = planeGeometry(w, h, floorSeg, floorSeg);
   setGroundVertexColors(floorGeo, w, h, grid, tile, map);
   const ground = new T.Mesh(floorGeo, floorMat);
   ground.rotation.x = -Math.PI / 2;
@@ -555,22 +639,22 @@ function buildMapScene(map, layers) {
   });
 
   const wallMats = makeWallMaterials(T, layers);
-  addInstancedWallVariants(mapGroup, T, countWallVariants(grid, wallMats.length), new T.BoxGeometry(tile, tile, tile), wallMats,
+  addInstancedWallVariants(mapGroup, T, countWallVariants(grid, wallMats.length), boxGeometry(tile, tile, tile), wallMats,
     (tx, ty, c, cx, cz, i, mesh) => {
       setInstanceTransform(T, mesh, i, cx, tile * 0.5, cz, 1, 1, 1, 0, 0, 0);
       mesh.setColorAt(i, new T.Color(wallColor(c)));
     });
-  addInstancedBoxes(mapGroup, T, 'thin', counts.thin, new T.BoxGeometry(tile, tile, tile), wallMat,
+  addInstancedBoxes(mapGroup, T, 'thin', counts.thin, boxGeometry(tile, tile, tile), wallMat,
     (tx, ty, c, cx, cz, i, mesh) => {
       setInstanceTransform(T, mesh, i, cx, tile * 0.275, cz, 1, 0.55, 1, 0, 0, 0);
       mesh.setColorAt(i, new T.Color(wallColor(c)));
     });
-  addInstancedBoxes(mapGroup, T, 'crates', counts.crate, new T.BoxGeometry(tile, tile, tile), crateMat,
+  addInstancedBoxes(mapGroup, T, 'crates', counts.crate, boxGeometry(tile, tile, tile), crateMat,
     (tx, ty, c, cx, cz, i, mesh) => {
       setInstanceTransform(T, mesh, i, cx, tile * 0.275, cz, 0.92, 0.55, 0.92, 0, 0, (tx * 0.7 + ty * 0.3) % 1);
       mesh.setColorAt(i, new T.Color(0xb8865a));
     });
-  addInstancedBoxes(mapGroup, T, 'platforms', counts.platform, new T.BoxGeometry(tile, tile, tile), platformMat,
+  addInstancedBoxes(mapGroup, T, 'platforms', counts.platform, boxGeometry(tile, tile, tile), platformMat,
     (tx, ty, c, cx, cz, i, mesh) => {
       const hgt = c === '^' ? tile : tile * 0.5;
       setInstanceTransform(T, mesh, i, cx, hgt * 0.5, cz, 1, hgt / tile, 1, 0, 0, 0);
@@ -1305,6 +1389,15 @@ function addInstancedDecos(group, T, decos, tile) {
 
 function textureFrom(source, repeatX, repeatY) {
   if (!THREE || !source) return null;
+  const repeatKey = (repeatX || 1) + ',' + (repeatY || 1);
+  let byRepeat = textureCache.get(source);
+  if (byRepeat) {
+    const hit = byRepeat.get(repeatKey);
+    if (hit) return hit;
+  } else if (textureCache.size < MAX_TEXTURE_CACHE) {
+    byRepeat = new Map();
+    textureCache.set(source, byRepeat);
+  }
   const tex = new THREE.CanvasTexture(source);
   if (THREE.SRGBColorSpace) tex.colorSpace = THREE.SRGBColorSpace;
   tex.wrapS = THREE.RepeatWrapping;
@@ -1314,7 +1407,46 @@ function textureFrom(source, repeatX, repeatY) {
   tex.minFilter = THREE.LinearMipmapLinearFilter;
   tex.magFilter = THREE.LinearFilter;
   tex.anisotropy = 8;
+  tex.userData._cached = true;
+  if (byRepeat && byRepeat.size < 4) byRepeat.set(repeatKey, tex);
   return tex;
+}
+
+function cachedGeometry(key, create) {
+  const hit = geometryCache.get(key);
+  if (hit) return hit;
+  if (geometryCache.size >= MAX_GEOMETRY_CACHE) return create();
+  const geo = create();
+  if (geo) {
+    geo.userData._cached = true;
+    geometryCache.set(key, geo);
+  }
+  return geo;
+}
+
+function boxGeometry(w, h, d) {
+  const key = 'box:' + [w, h, d].map((n) => Number(n || 0).toFixed(3)).join(',');
+  return cachedGeometry(key, () => new THREE.BoxGeometry(w, h, d));
+}
+
+function planeGeometry(w, h, sw, sh) {
+  const key = 'plane:' + [w, h, sw, sh].map((n) => Number(n || 0).toFixed(3)).join(',');
+  return cachedGeometry(key, () => new THREE.PlaneGeometry(w, h, sw, sh));
+}
+
+function sphereGeometry(r, ws, hs) {
+  const key = 'sphere:' + [r, ws, hs].map((n) => Number(n || 0).toFixed(3)).join(',');
+  return cachedGeometry(key, () => new THREE.SphereGeometry(r, ws, hs));
+}
+
+function coneGeometry(r, h, seg) {
+  const key = 'cone:' + [r, h, seg].map((n) => Number(n || 0).toFixed(3)).join(',');
+  return cachedGeometry(key, () => new THREE.ConeGeometry(r, h, seg));
+}
+
+function ringGeometry(inner, outer, seg) {
+  const key = 'ring:' + [inner, outer, seg].map((n) => Number(n || 0).toFixed(3)).join(',');
+  return cachedGeometry(key, () => new THREE.RingGeometry(inner, outer, seg));
 }
 
 function buildSky(map) {
@@ -2021,7 +2153,7 @@ const glowCache = new Map();
 function disposeObject(obj) {
   if (!obj) return;
   obj.traverse((child) => {
-    if (child.geometry) child.geometry.dispose();
+    if (child.geometry && !child.geometry.userData._cached) child.geometry.dispose();
     if (child.material) {
       if (Array.isArray(child.material)) child.material.forEach(disposeMaterial);
       else disposeMaterial(child.material);
