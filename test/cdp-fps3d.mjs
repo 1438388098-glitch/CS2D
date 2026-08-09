@@ -55,6 +55,10 @@ try {
   if (!pixels || pixels.lit < 1) fail('3D canvas appears blank: ' + JSON.stringify(pixels));
   else pass('3D canvas pixels: ' + pixels.lit + '/' + pixels.total);
 
+  const bright = await cdp.eval(`(()=>{const c=document.querySelector('canvas');if(!c)return null;const w=Math.min(c.width,1600),h=Math.min(c.height,900);const d=c.getContext('2d').getImageData(0,0,w,h).data;let white=0,bright=0,checked=0;for(let y=0;y<h;y+=4){for(let x=0;x<w;x+=4){const i=(y*w+x)*4;const sum=d[i]+d[i+1]+d[i+2];checked++;if(sum>720)white++;else if(sum>540)bright++;}}return {white,bright,checked}})()`);
+  pass('3D bright histogram: ' + JSON.stringify(bright));
+  if (bright && bright.white > bright.checked * 0.30) fail('3D frame has too many near-white pixels: ' + JSON.stringify(bright));
+
   await cdp.close();
 } catch (e) {
   fail(e.message);
