@@ -9,7 +9,7 @@ import { report, query, MSG } from '../info.js';
 import { clamp, rand, angDiff, angNorm, viewCap } from '../utils.js';
 import { styleOf } from './shared.js';
 import { findVisibleEnemy } from './perception.js';
-import { shouldSaveForEco, shouldRepositionOnIntel } from './rules.js';
+import { shouldSaveForEco, shouldRepositionOnIntel, shouldPushLatePlant } from './rules.js';
 import { botObjective, ctReactsTo } from './decisions.js';
 import { botActions } from './actions.js';
 
@@ -202,6 +202,22 @@ function botThink(e, game, dt) {
       e.slot = 'primary';
     }
     return;
+  }
+  if (e.team === 't' && shouldPushLatePlant(e, game.roundTime || 0, game.roundDur || 115)) {
+    const plantSite = game.tAttackSite === 'A' ? getMap().sites.A : getMap().sites.B;
+    if (plantSite) {
+      e.trigger = false;
+      e.latePlantPush = true;
+      if (e.path === null && e.repathT <= 0) {
+        pathTo(e, plantSite.cx, plantSite.cy);
+        e.repathT = 1.2;
+      }
+      if (e.path) {
+        e.angle = angNorm(Math.atan2(plantSite.cy - e.y, plantSite.cx - e.x));
+        followPath(e, dt, weapon.speed * 235);
+        return;
+      }
+    }
   }
   if (e.team === 't' && shouldSaveForEco(e, e.money || 0, (e.weapons && (e.weapons.primary === 'ak' || e.weapons.primary === 'm4' || e.weapons.primary === 'awp')) ? 2 : 0, game.roundTime || 0, game.roundDur || 115)) {
     e.trigger = false;
