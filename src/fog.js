@@ -29,11 +29,18 @@ export function castRayEndpoint(game, x, y, angle, radius, step = 8) {
 
 export function canSeeInFog(game, viewer, target, radius = 560) {
   if (!fogEnabled(game)) return true;
+  radius = Math.min(radius, 560);
   const d = Math.hypot(target.x - viewer.x, target.y - viewer.y);
   if (d > radius) return false;
   // 兼容历史距离辅助：viewer 落在墙内时保留距离判断，实际对局中玩家/bot 始终在可行走格。
   if (!passableTolerant(viewer.x, viewer.y)) return true;
   return los(game, viewer.x, viewer.y, target.x, target.y, viewer.height || 0);
+}
+
+export function hasLineOfSight(game, viewer, target, radius = 560) {
+  if (!viewer || !target) return false;
+  if (!los(game, viewer.x, viewer.y, target.x, target.y, viewer.height || 0)) return false;
+  return canSeeInFog(game, viewer, target, radius);
 }
 
 export function castVisionPolygon(game, x, y, radius = 560, rays = 72) {

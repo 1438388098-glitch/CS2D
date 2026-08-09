@@ -13,7 +13,7 @@ import {clamp, lerp, rand, angDiff, rotateInputVector} from './utils.js';
 import {pressed, getBindLabel} from './keymap.js';
 import {initInfo, prune} from './info.js';
 import {initOppModel} from './ai/oppmodel.js';
-import {canSeeInFog} from './fog.js';
+import {hasLineOfSight} from './fog.js';
 import { shouldRerouteStuck } from './ai/rules.js';
 import { stuckObjective } from './ai/stability.js';
 import { castAimRay as castAimRayFps } from './fps-laser.js';
@@ -750,7 +750,7 @@ function updatePlayer(game, dt) {
         const rayZ = eyeH + dist * Math.tan(pitch);
         verticalOk = Math.abs(rayZ - (targetBase + tile * 1.35)) <= tile;
       }
-      if (Math.abs(angDiff(a, p.angle)) < 0.09 && verticalOk && los(game, p.x, p.y, o.x, o.y, p.height) && canSeeInFog(game, p, o, 560)) {
+      if (Math.abs(angDiff(a, p.angle)) < 0.09 && verticalOk && hasLineOfSight(game, p, o, 560)) {
         p.aimTarget = o;
         break;
       }

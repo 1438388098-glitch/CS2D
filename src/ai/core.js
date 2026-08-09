@@ -1,6 +1,6 @@
 // AI 主循环 + 感知→决策调度（botThink）
 import { DIFF, diffOf } from '../config.js';
-import { los, pathTo, followPath, getMap } from '../map.js';
+import { pathTo, followPath, getMap } from '../map.js';
 import { weaponDef, ammoFor } from '../entities.js';
 import { startReload } from '../combat.js';
 import { updateShotStreak } from '../ballistic.js';
@@ -12,6 +12,7 @@ import { findVisibleEnemy } from './perception.js';
 import { shouldSaveForEco } from './rules.js';
 import { botObjective, ctReactsTo } from './decisions.js';
 import { botActions } from './actions.js';
+import { hasLineOfSight } from '../fog.js';
 
 export function applyTeammateSeparation(e, game) {
   for (const o of game.entities) {
@@ -107,7 +108,7 @@ function botThink(e, game, dt) {
     e.memory.push({ x: vis.x, y: vis.y, t: game.time, conf: 1 });
     if (e.memory.length > 8) e.memory.shift();
   }
-  if (e.aimTarget && (e.aimTarget.dead || !los(game, e.x, e.y, e.aimTarget.x, e.aimTarget.y, e.height) || Math.hypot(e.aimTarget.x - e.x, e.aimTarget.y - e.y) > viewCap(game) * 1.2)) {
+  if (e.aimTarget && (e.aimTarget.dead || !hasLineOfSight(game, e, e.aimTarget, viewCap(game) * 1.2))) {
     if (e.aimLostT > 1.4) {
       if (e.aimLastPos) {
         e.lastKnown = { x: e.aimLastPos.x, y: e.aimLastPos.y };
@@ -139,7 +140,7 @@ function botThink(e, game, dt) {
     }
   }
   // LOS 有效才能进入战斗（拟合人类：看不到目标就停止对空 strafe，架枪/换位）
-  const canSeeTarget = e.aimTarget && !e.aimTarget.dead && los(game, e.x, e.y, e.aimTarget.x, e.aimTarget.y, e.height);
+  const canSeeTarget = e.aimTarget && !e.aimTarget.dead && hasLineOfSight(game, e, e.aimTarget, viewCap(game));
   const combat = canSeeTarget && e.reaction <= 0;
   if (combat && e.hasBomb) {
     const t = e.aimTarget;

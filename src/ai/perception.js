@@ -1,22 +1,59 @@
 // 感知层：视野判定（公平约束：感知距离 ≤ 玩家屏幕最远可视距离）
-import { BOT_AI, DIFF, diffOf } from '../config.js';
-import { los } from '../map.js';
-import { angDiff, viewCap } from '../utils.js';
-import { recordOppPos } from './oppmodel.js';
+import {BOT_AI, diffOf} from '../config.js';
+import {angDiff, viewCap} from '../utils.js';
+import {fogEnabled, hasLineOfSight} from '../fog.js';
+import {recordOppPos} from './oppmodel.js';
+
+const SPATIAL_CELL = 240;
+
+function buildSpatial(game, tick) {
+  const grid = new Map();
+  for (const o of game.entities) {
+    if (o.dead) continue;
+    const cx = Math.floor(o.x / SPATIAL_CELL), cy = Math.floor(o.y / SPATIAL_CELL);
+    const k = cx + ',' + cy;
+    const list = grid.get(k);
+    if (list) list.push(o);
+    else grid.set(k, [o]);
+  }
+  game.spatial = { tick, grid };
+}
+
+function nearbySpatial(e, game, radius) {
+  const cell = SPATIAL_CELL;
+  const cx = Math.floor(e.x / cell), cy = Math.floor(e.y / cell);
+  const span = Math.max(1, Math.ceil(radius / cell));
+  const out = [];
+  for (let dx = -span; dx <= span; dx++) {
+    for (let dy = -span; dy <= span; dy++) {
+      const list = game.spatial.grid.get((cx + dx) + ',' + (cy + dy));
+      if (list) out.push(...list);
+    }
+  }
+  return out;
+}
 
 export function findVisibleEnemy(e, game) {
   let best = null;
-  // 感知距离上限 = min(难度视野, 玩家屏幕最远可视距离)——不开"屏幕外透视"
-  let bestD = Math.min((e.aiParams || diffOf(game)).view, viewCap(game));
-  for (const o of game.entities) {
+  let bestD = Math.min((e.aiParams || diffOf(game)).view, viewCap(game), BOT_AI.MAX_VIEW || Infinity);
+  if (fogEnabled(game)) bestD = Math.min(bestD, 560);
+  let bestScore = -Infinity;
+  const tick = Math.floor(game.time * 30);
+  if (!game.spatial || game.spatial.tick !== tick) buildSpatial(game, tick);
+  for (const o of nearbySpatial(e, game, bestD)) {
     if (o === e || o.dead || o.team === e.team) continue;
     const d = Math.hypot(o.x - e.x, o.y - e.y);
     if (d > bestD) continue;
     const a = Math.atan2(o.y - e.y, o.x - e.x);
     if (Math.abs(angDiff(a, e.angle)) > BOT_AI.FOV) continue;
-    if (!los(game, e.x, e.y, o.x, o.y, e.height)) continue;
-    if (d < bestD) { bestD = d; best = o; }
+    if (!hasLineOfSight(game, e, o, bestD)) continue;
+    const priority = -d
+      + (o.hasBomb ? 1000 : 0)
+      + (o.plantT > 0 || o.defuseT > 0 ? 1200 : 0)
+      + (o.hp < 40 ? 200 : 0);
+    if (priority > bestScore) { bestScore = priority; best = o; }
   }
+
   // S3 对手建模：H11 队目击到 CT 时记录站位（合法情报，非透视）
   if (best && e.aiParams && e.aiParams.oppModel) {
     recordOppPos(game, best.x, best.y, 1);
