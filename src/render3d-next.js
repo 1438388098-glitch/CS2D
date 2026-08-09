@@ -209,6 +209,7 @@ export function render3dNext(game) {
       teamMarkers,
       entityWeapons,
       entityMuzzles,
+      bakedGround: layersRef && layersRef.staticLayer ? 1 : 0,
       corpseObjects: corpseMeshes.size,
       decalObjects: decalPointMeshes.size,
       mapCullSafe,
@@ -307,10 +308,12 @@ function buildMapScene(map, layers) {
 
   buildSky(map);
 
-  const floorRX = Math.max(2, Math.round(w / 180));
-  const floorRY = Math.max(2, Math.round(h / 180));
-  const floorTex = textureFrom(layers && layers.floorTex, floorRX, floorRY);
-  const floorNorm = normalMapFor(layers && layers.floorTex, floorRX, floorRY);
+  const baked = layers && layers.staticLayer;
+  const floorRX = baked ? 1 : Math.max(2, Math.round(w / 180));
+  const floorRY = baked ? 1 : Math.max(2, Math.round(h / 180));
+  const floorSrc = baked ? layers.staticLayer : layers && layers.floorTex;
+  const floorTex = textureFrom(floorSrc, floorRX, floorRY);
+  const floorNorm = normalMapFor(floorSrc, floorRX, floorRY);
   const floorMat = new T.MeshStandardMaterial({
     map: floorTex,
     normalMap: floorNorm,

@@ -57,6 +57,11 @@ try {
   } else {
     pass('entity weapon meshes present: ' + backend.stats.entityWeapons);
   }
+  if (!backend || !backend.stats || backend.stats.bakedGround !== 1) {
+    fail('three.js baked ground layer missing: ' + JSON.stringify(backend && backend.stats));
+  } else {
+    pass('baked ground layer present: ' + backend.stats.bakedGround);
+  }
   if (!backend || !backend.stats || backend.stats.teamMarkers < 1) {
     fail('three.js teammate markers missing: ' + JSON.stringify(backend && backend.stats));
   } else {
