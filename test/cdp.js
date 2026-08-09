@@ -6,6 +6,19 @@ import { createRequire } from 'module';
 
 const require = createRequire(import.meta.url);
 
+export function getFreePort() {
+  return new Promise((resolve, reject) => {
+    const srv = net.createServer();
+    srv.unref();
+    srv.once('error', reject);
+    srv.listen(0, '127.0.0.1', () => {
+      const address = srv.address();
+      const port = typeof address === 'object' && address ? address.port : 0;
+      srv.close((err) => (err ? reject(err) : resolve(port)));
+    });
+  });
+}
+
 export function launchBrowser(opts = {}) {
   const env = typeof process !== 'undefined' ? process.env : {};
   const envExe = env.CDP_BROWSER;

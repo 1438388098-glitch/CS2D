@@ -1,8 +1,8 @@
-import { launchBrowser, waitForDebug, newTab, CDP } from './cdp.js';
+import { getFreePort, launchBrowser, waitForDebug, newTab, CDP } from './cdp.js';
 import { spawn } from 'child_process';
 
-const APP_PORT = 8097;
-const DBG_PORT = 9237;
+const APP_PORT = await getFreePort();
+const DBG_PORT = await getFreePort();
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 async function waitForApp(cdp, timeout = 12000) {
