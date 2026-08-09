@@ -539,8 +539,17 @@ function updateCam(game, dt) {
     if (mates.length) camTarget = mates[game.spectateIdx % mates.length];
   }
   if (game.viewMode === 'follow' && camTarget && !camTarget.dead && !game.cyber) {
-    game.camX = camTarget.x;
-    game.camY = camTarget.y;
+    // follow 相机 look-ahead：沿瞄准方向前置一小段，提升前方视野感知；空闲时平滑回落
+    const laDist = camTarget === game.player ? 90 : 40;
+    const lookX = Math.cos(camTarget.angle || 0) * laDist;
+    const lookY = Math.sin(camTarget.angle || 0) * laDist;
+    game.camX = lerp(game.camX, camTarget.x + lookX, Math.min(1, 5 * dt));
+    game.camY = lerp(game.camY, camTarget.y + lookY, Math.min(1, 5 * dt));
+    const z2 = game.zoom || 1;
+    const hw2 = game.canvasW / 2 / z2;
+    const hh2 = game.canvasH / 2 / z2;
+    game.camX = clamp(game.camX, hw2, Math.max(hw2, game.mapW - hw2));
+    game.camY = clamp(game.camY, hh2, Math.max(hh2, game.mapH - hh2));
     return;
   }
   if (camTarget) {
