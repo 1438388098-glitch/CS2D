@@ -454,11 +454,24 @@ export function killEntity(v, killer, weapon, head, game) {
   if (v.weapons.primary) {
     const pw = WEAPONS[v.weapons.primary];
     game.drops.push({
-      x: v.x, y: v.y, wid: v.weapons.primary,
+      x: v.x, y: v.y, kind: 'primary', wid: v.weapons.primary,
       ammo: Math.min(pw.mag, (v.ammoMap[v.weapons.primary] === undefined ? pw.mag : v.ammoMap[v.weapons.primary])),
       reserve: Math.min(pw.reserve, v.reserveMap[v.weapons.primary] === undefined ? pw.reserve : v.reserveMap[v.weapons.primary]),
       life: 45
     });
+  }
+  // CS 规则：死亡掉落副武器与拆弹钳（增加回合内拾取深度）
+  if (v.weapons.secondary) {
+    const sw = WEAPONS[v.weapons.secondary];
+    game.drops.push({
+      x: v.x, y: v.y, kind: 'secondary', wid: v.weapons.secondary,
+      ammo: Math.min(sw.mag, (v.ammoMap[v.weapons.secondary] === undefined ? sw.mag : v.ammoMap[v.weapons.secondary])),
+      reserve: Math.min(sw.reserve, v.reserveMap[v.weapons.secondary] === undefined ? sw.reserve : v.reserveMap[v.weapons.secondary]),
+      life: 45
+    });
+  }
+  if (v.weapons.kit) {
+    game.drops.push({ x: v.x, y: v.y, kind: 'kit', life: 45 });
   }
   clearEquipment(v);
   if (!game.noRoundEnd) checkRoundEnd(game);
@@ -470,7 +483,26 @@ export function pickupWeapon(e, game) {
     const d = game.drops[i];
     if (d.noPickT > 0) continue;
     if (Math.hypot(e.x - d.x, e.y - d.y) > 46) continue;
+    if (d.kind === 'kit') {
+      if (e.team === 'ct' && !e.weapons.kit) {
+        e.weapons.kit = true;
+        if (e === game.player) { emit('toast', { text: '拾取了拆弹钳' }); emit('sysfeed', { text: 'You 捡起了拆弹钳' }); }
+        game.drops.splice(i, 1);
+      }
+      continue;
+    }
     const w = WEAPONS[d.wid];
+    if (!w) { game.drops.splice(i, 1); continue; }
+    if (d.kind === 'secondary') {
+      if (!e.weapons.secondary) {
+        e.weapons.secondary = d.wid;
+        e.ammoMap[d.wid] = d.ammo;
+        e.reserveMap[d.wid] = d.reserve;
+        if (e === game.player) { emit('toast', { text: '拾取了 ' + w.name }); emit('sysfeed', { text: 'You 捡起了 ' + w.name }); }
+        game.drops.splice(i, 1);
+      }
+      continue;
+    }
     if (e.weapons.primary === d.wid) {
       e.ammoMap[d.wid] = Math.min(w.mag, (e.ammoMap[d.wid] || 0) + d.ammo);
       e.reserveMap[d.wid] = Math.min(w.reserve, (e.reserveMap[d.wid] || 0) + d.reserve);
@@ -478,7 +510,7 @@ export function pickupWeapon(e, game) {
       if (e.weapons.primary) {
         const ow = WEAPONS[e.weapons.primary];
         game.drops.push({
-          x: e.x, y: e.y, wid: e.weapons.primary,
+          x: e.x, y: e.y, kind: 'primary', wid: e.weapons.primary,
           ammo: Math.min(ow.mag, (e.ammoMap[e.weapons.primary] === undefined ? ow.mag : e.ammoMap[e.weapons.primary])),
           reserve: e.reserveMap[e.weapons.primary] === undefined ? ow.reserve : e.reserveMap[e.weapons.primary],
           life: 45, noPickT: 0.5
