@@ -50,6 +50,8 @@ let dropMeshes = new Map();
 let grenadeMeshes = new Map();
 let smokeMeshes = [];
 let particleMeshes = [];
+let corpseMeshes = new Map();
+let decalPointMeshes = new Map();
 let viewmodelKey = '';
 let initGen = 0;
 const normalMapCache = new Map();
@@ -89,6 +91,8 @@ function disposeRenderer() {
   grenadeMeshes = new Map();
   smokeMeshes = [];
   particleMeshes = [];
+  corpseMeshes = new Map();
+  decalPointMeshes = new Map();
   viewmodelKey = '';
 }
 
@@ -169,6 +173,7 @@ export function render3dNext(game) {
       const m = g.getObjectByName('teamMarker');
       return !!(m && m.visible);
     }).length;
+    const mapCullSafe = mapGroup ? mapGroup.children.filter((o) => o.isInstancedMesh && o.frustumCulled === false).length : 0;
     const dpr = game.dpr || 1;
     const cssW = canvasRef.width / dpr;
     const cssH = canvasRef.height / dpr;
@@ -194,6 +199,9 @@ export function render3dNext(game) {
       dynamicObjects: dynamicGroup ? dynamicGroup.children.length : 0,
       viewmodelObjects: viewmodelGroup ? viewmodelGroup.children.length : 0,
       teamMarkers,
+      corpseObjects: corpseMeshes.size,
+      decalObjects: decalPointMeshes.size,
+      mapCullSafe,
       drawCalls: renderer && renderer.info && renderer.info.render ? renderer.info.render.calls : 0
     };
   } catch (err) {
@@ -230,11 +238,15 @@ function disposeAllDynamic() {
   for (const mesh of grenadeMeshes.values()) disposeObject(mesh);
   for (const mesh of smokeMeshes) disposeObject(mesh);
   for (const mesh of particleMeshes) disposeObject(mesh);
+  for (const mesh of corpseMeshes.values()) disposeObject(mesh);
+  for (const mesh of decalPointMeshes.values()) disposeObject(mesh);
   entityMeshes = new Map();
   dropMeshes = new Map();
   grenadeMeshes = new Map();
   smokeMeshes = [];
   particleMeshes = [];
+  corpseMeshes = new Map();
+  decalPointMeshes = new Map();
 }
 
 function clearGroup(group) {
@@ -300,7 +312,7 @@ function buildMapScene(map, layers) {
   });
   const floorSeg = Math.min(64, Math.max(24, Math.floor(Math.max(w, h) / 110)));
   const floorGeo = new T.PlaneGeometry(w, h, floorSeg, floorSeg);
-  setGroundVertexColors(floorGeo, w, h);
+  setGroundVertexColors(floorGeo, w, h, grid, tile, map);
   const ground = new T.Mesh(floorGeo, floorMat);
   ground.rotation.x = -Math.PI / 2;
   ground.receiveShadow = true;
@@ -461,6 +473,7 @@ function addInstancedWallVariants(group, T, counts, geometry, materials, fill) {
     if (count < 1) continue;
     const mesh = new T.InstancedMesh(geometry, materials[vi], count);
     mesh.name = 'walls:' + vi;
+    mesh.frustumCulled = false;
     mesh.castShadow = true;
     mesh.receiveShadow = true;
     let i = 0;
@@ -480,21 +493,46 @@ function addInstancedWallVariants(group, T, counts, geometry, materials, fill) {
   }
 }
 
-function setGroundVertexColors(geo, w, h) {
+function groundAOAt(grid, tx, ty) {
+  let minDist = 4;
+  for (let dy = -2; dy <= 2; dy++) {
+    for (let dx = -2; dx <= 2; dx++) {
+      const c = tileToChar(grid, tx + dx, ty + dy);
+      if (c === '#' || c === '=' || c === 'C' || c === 'o' || c === '^' || c === 'R') {
+        minDist = Math.min(minDist, Math.max(Math.abs(dx), Math.abs(dy)));
+      }
+    }
+  }
+  if (minDist <= 1) return 0.78 + minDist * 0.08;
+  if (minDist === 2) return 0.92;
+  return 1;
+}
+
+function setGroundVertexColors(geo, w, h, grid, tile, map) {
   const pos = geo.attributes.position;
   const colors = new Float32Array(pos.count * 3);
   const hash = (x, y) => {
     const s = Math.sin(x * 12.9898 + y * 78.233) * 43758.5453;
     return s - Math.floor(s);
   };
+  const theme = themeOf((map && map.id) || 'dust2');
+  const floor = theme.floor || [36, 39, 44];
   for (let i = 0; i < pos.count; i++) {
     const wx = pos.getX(i) + w / 2;
     const wy = pos.getY(i) + h / 2;
-    const n = hash(Math.floor(wx / 80), Math.floor(wy / 80));
+    const tx = Math.floor(wx / tile);
+    const ty = Math.floor(wy / tile);
+    const n = hash(Math.floor(wx / 90), Math.floor(wy / 90));
+    const ao = groundAOAt(grid, tx, ty);
     const grain = 0.92 + n * 0.16 + Math.sin(wx * 0.0018 + wy * 0.0011) * 0.03;
-    colors[i * 3] = 0.88 * grain;
-    colors[i * 3 + 1] = 0.84 * grain;
-    colors[i * 3 + 2] = 0.76 * grain;
+    const c = tileToChar(grid, tx, ty);
+    let tr = 1, tg = 1, tb = 1;
+    if (c === 'a') { tr = 1.07; tg = 0.94; tb = 0.86; }
+    if (c === 'b') { tr = 0.9; tg = 0.96; tb = 1.08; }
+    if (c === '~' || c === '\u2248' || c === '\u224b') { tr = 0.82; tg = 0.94; tb = 1.12; }
+    colors[i * 3] = Math.min(1.15, (floor[0] / 255) * grain * ao * tr);
+    colors[i * 3 + 1] = Math.min(1.15, (floor[1] / 255) * grain * ao * tg);
+    colors[i * 3 + 2] = Math.min(1.15, (floor[2] / 255) * grain * ao * tb);
   }
   geo.setAttribute('color', new THREE.BufferAttribute(colors, 3));
 }
@@ -548,6 +586,7 @@ function addInstancedBoxes(group, T, name, count, geometry, material, fill) {
   if (!count || count < 1) return;
   const mesh = new T.InstancedMesh(geometry, material, count);
   mesh.name = name;
+  mesh.frustumCulled = false;
   mesh.castShadow = true;
   mesh.receiveShadow = true;
   let i = 0;
@@ -576,6 +615,7 @@ function addInstancedWallCaps(group, T, grid, tile, wallCount, thinCount, materi
     const geo = new T.BoxGeometry(tile * 1.06, tile * 0.07, tile * 1.06);
     const mesh = new T.InstancedMesh(geo, material, count);
     mesh.name = isThin ? 'thinWallCaps' : 'wallCaps';
+    mesh.frustumCulled = false;
     mesh.receiveShadow = true;
     let i = 0;
     for (let ty = 0; ty < grid.length && i < count; ty++) {
@@ -607,6 +647,7 @@ function addInstancedWallBases(group, T, grid, tile, wallCount, thinCount) {
     const geo = new T.BoxGeometry(tile * (isThin ? 1.12 : 1.18), tile * 0.09, tile * (isThin ? 1.12 : 1.18));
     const mesh = new T.InstancedMesh(geo, baseMat, count);
     mesh.name = isThin ? 'thinWallBases' : 'wallBases';
+    mesh.frustumCulled = false;
     mesh.receiveShadow = true;
     let i = 0;
     for (let ty = 0; ty < grid.length && i < count; ty++) {
@@ -646,6 +687,7 @@ function addInstancedBarrels(group, T, count, material) {
   if (!count) return;
   const geo = new T.CylinderGeometry(0.34, 0.34, 1, 10);
   const mesh = new T.InstancedMesh(geo, material, count);
+  mesh.frustumCulled = false;
   mesh.castShadow = true;
   mesh.receiveShadow = true;
   let i = 0;
@@ -670,6 +712,7 @@ function addInstancedWater(group, T, grid, tile, waterCount, shallowMat, deepMat
   const add = (count, mat, isDeep) => {
     if (!count) return;
     const mesh = new T.InstancedMesh(plane, mat, count);
+    mesh.frustumCulled = false;
     mesh.receiveShadow = true;
     let i = 0;
     for (let ty = 0; ty < grid.length && i < count; ty++) {
@@ -699,6 +742,7 @@ function addInstancedSites(group, T, grid, tile) {
   if (!count) return;
   const mat = new T.MeshBasicMaterial({ transparent: true, opacity: 0.22, depthWrite: false });
   const mesh = new T.InstancedMesh(new T.PlaneGeometry(tile, tile), mat, count);
+  mesh.frustumCulled = false;
   let i = 0;
   for (let ty = 0; ty < grid.length && i < count; ty++) {
     const row = grid[ty] || [];
@@ -817,6 +861,7 @@ function addInstancedDecos(group, T, decos, tile) {
     if (!items.length) continue;
     const mat = new T.MeshLambertMaterial({ color: colorFor(kind) });
     const mesh = new T.InstancedMesh(geometryFor(kind), mat, items.length);
+    mesh.frustumCulled = false;
     mesh.castShadow = true;
     mesh.receiveShadow = true;
     for (let i = 0; i < items.length; i++) {
@@ -886,6 +931,7 @@ function buildSky(map) {
   const geo = new THREE.SphereGeometry(2200, 24, 16);
   const mat = new THREE.MeshBasicMaterial({ map: tex, side: THREE.BackSide, fog: false });
   skyMesh = new THREE.Mesh(geo, mat);
+  skyMesh.frustumCulled = false;
   skyMesh.renderOrder = -20;
   scene.add(skyMesh);
   const fog = theme.atmo && theme.atmo.fogColor;
@@ -902,6 +948,7 @@ function updateDynamicNext(game) {
   updateSmokes(game);
   updateParticles(game);
   updateTracers(game);
+  updateDecalsNext(game);
 }
 
 function updateViewmodelNext(game) {
@@ -1179,6 +1226,86 @@ function updateTracers(game) {
   }
   lines.geometry.attributes.position.needsUpdate = true;
   lines.geometry.setDrawRange(0, tracers.length * 2);
+}
+
+function updateDecalsNext(game) {
+  if (!dynamicGroup || !THREE) return;
+  const tile = (getMap() && getMap().tile) || 16;
+  const seenCorpse = new Set();
+  const seenPoint = new Set();
+  for (const d of game.decals || []) {
+    if (d.type === 'corpse') {
+      seenCorpse.add(d);
+      let mesh = corpseMeshes.get(d);
+      if (!mesh) {
+        mesh = makeCorpseMesh(THREE, d.team, tile);
+        corpseMeshes.set(d, mesh);
+        dynamicGroup.add(mesh);
+      }
+      mesh.visible = true;
+      mesh.position.set(d.x || 0, groundElevationAt(d.x || 0, d.y || 0) + tile * 0.05, d.y || 0);
+      mesh.rotation.set(0, -(d.angle || 0) - Math.PI / 2, 0);
+    } else if (d.type === 'spark' || d.type === 'hole') {
+      seenPoint.add(d);
+      let mesh = decalPointMeshes.get(d);
+      if (!mesh) {
+        mesh = makeDecalPointMesh(THREE, d.type);
+        decalPointMeshes.set(d, mesh);
+        dynamicGroup.add(mesh);
+      }
+      mesh.visible = true;
+      mesh.position.set(d.x || 0, groundElevationAt(d.x || 0, d.y || 0) + tile * 0.06, d.y || 0);
+      mesh.scale.setScalar(tile * (d.type === 'hole' ? 0.3 : 0.58));
+      mesh.material.opacity = Math.max(0.18, Math.min(1, (d.life || 1) * 0.12));
+    }
+  }
+  for (const [d, mesh] of corpseMeshes) {
+    if (seenCorpse.has(d) || !dynamicGroup.children.includes(mesh)) continue;
+    dynamicGroup.remove(mesh);
+    disposeObject(mesh);
+    corpseMeshes.delete(d);
+  }
+  for (const [d, mesh] of decalPointMeshes) {
+    if (seenPoint.has(d) || !dynamicGroup.children.includes(mesh)) continue;
+    dynamicGroup.remove(mesh);
+    disposeObject(mesh);
+    decalPointMeshes.delete(d);
+  }
+}
+
+function makeCorpseMesh(T, team, tile) {
+  const group = new T.Group();
+  const bodyMat = new T.MeshLambertMaterial({ color: team === 't' ? 0x9d6b3f : 0x3c6f92 });
+  const darkMat = new T.MeshLambertMaterial({ color: team === 't' ? 0x5f3d25 : 0x21455f });
+  const body = new T.Mesh(new T.BoxGeometry(tile * 0.82, tile * 0.10, tile * 0.34), bodyMat);
+  body.position.y = tile * 0.05;
+  const head = new T.Mesh(new T.BoxGeometry(tile * 0.24, tile * 0.16, tile * 0.26), darkMat);
+  head.position.set(tile * 0.42, tile * 0.05, 0);
+  const legA = new T.Mesh(new T.BoxGeometry(tile * 0.18, tile * 0.08, tile * 0.22), darkMat);
+  legA.position.set(-tile * 0.28, tile * 0.04, tile * 0.08);
+  const legB = legA.clone();
+  legB.position.z = -tile * 0.08;
+  group.add(body, head, legA, legB);
+  group.traverse((o) => {
+    if (o.isMesh) {
+      o.castShadow = true;
+      o.receiveShadow = true;
+    }
+  });
+  return group;
+}
+
+function makeDecalPointMesh(T, type) {
+  const mat = new T.SpriteMaterial({
+    map: makeGlowTexture(),
+    color: type === 'hole' ? 0x0b0d0f : 0xffd166,
+    transparent: true,
+    opacity: 0.9,
+    depthWrite: false
+  });
+  const sprite = new T.Sprite(mat);
+  sprite.name = 'decal:' + type;
+  return sprite;
 }
 
 function buildViewmodel(p) {

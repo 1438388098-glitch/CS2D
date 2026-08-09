@@ -57,10 +57,24 @@ try {
   } else {
     pass('teammate markers visible: ' + backend.stats.teamMarkers);
   }
+  if (!backend || !backend.stats || backend.stats.mapCullSafe < 1) {
+    fail('instanced map meshes are not frustum-safe: ' + JSON.stringify(backend && backend.stats));
+  } else {
+    pass('instanced map meshes frustum-safe: ' + backend.stats.mapCullSafe);
+  }
   if (!backend || !backend.stats || backend.stats.mapObjects < 4) {
     fail('three.js map props missing: ' + JSON.stringify(backend && backend.stats));
   } else {
     pass('map props present: ' + backend.stats.mapObjects);
+  }
+
+  await cdp.eval(`(()=>{const g=window.__cs2d&&window.__cs2d.game;if(!g||!g.player)return false;g.decals.push({type:'corpse',x:g.player.x+96,y:g.player.y+48,angle:0.7,team:'t',life:60});return true})()`);
+  await sleep(500);
+  const decalStats = await cdp.eval(`(()=>{const g=window.__cs2d&&window.__cs2d.game;return g&&g._renderStats?g._renderStats:null})()`);
+  if (!decalStats || decalStats.corpseObjects < 1) {
+    fail('three.js corpse decal missing: ' + JSON.stringify(decalStats));
+  } else {
+    pass('three.js corpse decal rendered: ' + decalStats.corpseObjects);
   }
 
   const pixels = await cdp.eval(`(()=>{const c=document.querySelector('canvas');if(!c)return null;const w=Math.min(c.width,1600),h=Math.min(c.height,900);const d=c.getContext('2d').getImageData(0,0,w,h).data;let lit=0,bright=0,white=0,colors=new Set(),checked=0;for(let y=0;y<h;y+=3){for(let x=0;x<w;x+=3){const i=(y*w+x)*4;const r=d[i],g=d[i+1],b=d[i+2];const sum=r+g+b;checked++;if(sum>40)lit++;if(sum>540)bright++;if(sum>720)white++;colors.add((r>>4)+','+(g>>4)+','+(b>>4));}}return {lit,bright,white,checked,colors:colors.size}})()`);
@@ -98,6 +112,11 @@ try {
     fail('map props missing after map switch: ' + JSON.stringify(switched));
   } else {
     pass('map props after map switch: ' + switched.stats.mapObjects);
+  }
+  if (!switched || !switched.stats || switched.stats.mapCullSafe < 1) {
+    fail('instanced map meshes not frustum-safe after map switch: ' + JSON.stringify(switched));
+  } else {
+    pass('instanced map meshes frustum-safe after map switch: ' + switched.stats.mapCullSafe);
   }
 
   await cdp.eval(`(()=>{const g=window.__cs2d&&window.__cs2d.game;if(!g)return false;g.tracers=Array.from({length:80},(_,i)=>({x1:100+i*2,y1:100+i,x2:100+i,y2:120+i}));return true})()`);
