@@ -44,11 +44,38 @@ export function render(game) {
   drawDrops(game);
   drawGrenades(game);
   drawEntities(game);
+  drawLaser(game);
   drawSmokes(game);
   drawParticles(game);
-  drawBossShots(game);
   drawTracers(game);
+  drawFog(game);
+  drawDmgPops2D(game);
   ctx.restore();
+}
+
+// 2D 伤害数字：命中处上浮淡出（描黑边可读），与 3D 的 B3 反馈一致
+function drawDmgPops2D(game) {
+  const pops = game.dmgPops;
+  if (!pops || !pops.length) return;
+  const t = ctx;
+  t.font = '12px Arial';
+  t.textAlign = 'center';
+  t.lineJoin = 'round';
+  t.lineWidth = 3;
+  const n = Math.min(pops.length, 12);
+  for (let i = 0; i < n; i++) {
+    const pop = pops[i];
+    if (!pop || pop.t === undefined || pop.t > 0.8) continue;
+    let sy = pop.y - (1 - pop.t / 0.8) * 30;
+    t.globalAlpha = clamp(pop.t / 0.3, 0, 1);
+    t.strokeStyle = '#000';
+    t.fillStyle = pop.head ? '#ffd34d' : '#ffffff';
+    const txt = String(Math.round(pop.dmg));
+    t.strokeText(txt, pop.x, sy);
+    t.fillText(txt, pop.x, sy);
+  }
+  t.globalAlpha = 1;
+  t.textAlign = 'start';
 }
 
 // 动态水面：可见浅水瓦片叠加移动亮线（时间相位差），裁剪到相机视口
