@@ -135,7 +135,10 @@ function botThink(e, game, dt) {
     const lead = td > 500 ? 0.05 : 0;
     const leadX = t.x + t.vx * lead, leadY = t.y + t.vy * lead;
     const wantAng = Math.atan2(leadY - e.y, leadX - e.x);
-    const err = (d.spreadMult * (0.5 + td / 900) + weapon.spread * 0.3) * (Math.PI / 180);
+    // 瞄准误差 = 基础散布 + 距离衰减 + 目标横向移动预测误差（移动目标更难打，近距离不再必中）
+    const tvx = t.vx || 0, tvy = t.vy || 0;
+    const latErr = td > 20 ? (Math.abs(tvx * Math.cos(e.angle + Math.PI / 2) + tvy * Math.sin(e.angle + Math.PI / 2)) / (120 + td * 0.35)) : 0;
+    const err = (d.spreadMult * (0.5 + td / 900) + weapon.spread * 0.3 + latErr * 0.9) * (Math.PI / 180);
     const diff = angDiff(wantAng, e.angle);
     // 甩枪 + 微调（拟合人类瞄准）：大角度快速转向，小角度精细逼近
     // S3 补枪加速：tradeBoost 期间角速度 ×(1 + tradeBoost*(tradeSpeed-1))
