@@ -1043,6 +1043,23 @@ function bindSettings() {
       try { localStorage.setItem('cs2d_fps_sens_y', String(game.fpsSensY)); } catch (err) { /* 无存储 */ }
     });
   }
+  // 跟随视角死区滑杆（20-160px，默认 70）
+  const fzEl = el('followDeadzone');
+  const fzVal = el('followDeadzoneVal');
+  if (fzEl) {
+    try {
+      const saved = parseInt(localStorage.getItem('cs2d_follow_deadzone'), 10);
+      if (isFinite(saved)) game.opts.followDeadzone = Math.min(160, Math.max(20, saved));
+    } catch (err) { /* 无存储环境 */ }
+    const dz = game.opts.followDeadzone || 70;
+    fzEl.value = dz;
+    if (fzVal) fzVal.textContent = dz;
+    fzEl.addEventListener('input', () => {
+      game.opts.followDeadzone = parseInt(fzEl.value, 10);
+      if (fzVal) fzVal.textContent = game.opts.followDeadzone;
+      try { localStorage.setItem('cs2d_follow_deadzone', String(game.opts.followDeadzone)); } catch (err) { /* 无存储 */ }
+    });
+  }
   // 反转 Y 轴
   const invertEl = el('invertY');
   if (invertEl) {

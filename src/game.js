@@ -819,12 +819,14 @@ function updatePlayerAim(game, dt) {
   const sx = game.canvasW / 2, sy = game.canvasH / 2;
   const shx = game._shx || 0, shy = game._shy || 0;
   // 跟随视角：玩家恒居屏幕中心，相机朝向（=世界旋转）平滑跟随准星方向；
-  // 鼠标贴近角色（<70px）时保持原朝向，避免短向量角度抖动导致世界狂转
+  // 鼠标贴近角色（死区内）保持原朝向，避免短向量角度抖动导致世界狂转；死区与平滑可调
   if (game.viewMode === 'follow') {
+    const dead = game.opts.followDeadzone || 70;
+    const smooth = game.opts.followAimSmooth || 12;
     const mx = game.input.mouse.x - sx, my = game.input.mouse.y - sy;
-    if (mx * mx + my * my > 70 * 70) {
+    if (mx * mx + my * my > dead * dead) {
       const target = Math.atan2(my, mx);
-      p.angle += angDiff(target, p.angle) * Math.min(1, 12 * dt);
+      p.angle += angDiff(target, p.angle) * Math.min(1, smooth * dt);
     }
     return;
   }
