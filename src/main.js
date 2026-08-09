@@ -116,18 +116,29 @@ async function boot() {
 let frameMsEma = 16.7; let statsT = 0; let scaleCur = 1.0; let scaleT = 0; // E4 自适应：默认全分辨率（1080P），超预算降档
 let lastT = performance.now();
 function startLoop() {
+  let acc = 0;
+  const FIXED = 1 / 30;
   function loop(t) {
     const now = t || performance.now();
-    const dt = Math.min((now - lastT) / 1000, 0.05);
+    let frame = Math.min((now - lastT) / 1000, 0.1);
     lastT = now;
+    acc += frame;
     try {
       const speed = Math.max(1, Math.min(8, Math.floor((game.cyber && game.cyber.speed) || (game.spectate && game.spectate.speed) || 1)));
-      for (let i = 0; i < speed; i++) {
-        update(game, dt);
+      // 固定步长模拟（1/30）：可变 dt 会破坏 seedWorld 确定性重放；累积真实时间按固定步进
+      let steps = 0;
+      while (acc >= FIXED && steps < 8) {
+        acc -= FIXED;
+        update(game, FIXED);
+        steps++;
         if (game.over) break;
+        if (speed > 1) { for (let s = 1; s < speed; s++) { update(game, FIXED); steps++; if (game.over) break; } }
+      }
+      if (steps === 0 && frame > 0 && acc > 0 && !game.over) {
+        // 无整步可执行时不推进模拟，但若长时间无步（如低帧率）避免冻结
       }
       const tR0 = performance.now();
-      smoothRemote(game, dt);
+      smoothRemote(game, FIXED);
       if (game.viewMode === 'fps' && fpsCameraEntity(game)) {
         if (render3dNextReady()) {
           render3dNext(game);
