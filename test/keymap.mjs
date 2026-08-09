@@ -27,4 +27,9 @@ assert.equal(keymap.matches('KeyW', 'moveUp'), true, 'reset should restore the d
 assert.equal(keymap.getBindLabel('moveUp'), 'W', 'label should strip the Key prefix');
 assert.match(keymap.getBindLabel('crouch'), /ControlLeft/, 'multi-key binding should keep non-key aliases');
 
+assert.equal(keymap.bind('moveUp', 'KeyD'), false, 'bind should reject a key already used by moveRight');
+assert.deepEqual(keymap.getBindCodes('moveRight'), ['KeyD'], 'conflict should not steal the existing binding');
+assert.equal(keymap.bind('moveUp', 'KeyX'), true, 'bind should accept a free key');
+assert.deepEqual(keymap.getBindCodes('moveUp'), ['KeyX'], 'free key should bind successfully');
+
 console.log('keymap: all PASS');

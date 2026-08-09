@@ -980,9 +980,10 @@ function bindSettings() {
     e.preventDefault();
     e.stopPropagation();
     if (e.code === 'Escape') { cancelBindTarget(); return; }
-    bind(bindTarget, e.code);
+    const okBind = bind(bindTarget, e.code);
     cancelBindTarget();
     renderKeybindList(listEl);
+    if (!okBind) { const st = el('editorStatus'); if (st) st.textContent = '该键已被其他操作使用'; }
   }, true);
   // 视角模式存档
   try {

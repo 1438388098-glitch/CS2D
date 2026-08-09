@@ -69,8 +69,13 @@ export function getBindCodes(action) {
 }
 
 export function bind(action, code) {
+  // 冲突确定性处理：拒绝把键绑给已在用的动作（避免一个键同时触发两个操作）
+  for (const a of Object.keys(map)) {
+    if (a !== action && map[a] && map[a].includes(code)) return false;
+  }
   map[action] = [code];
   persist();
+  return true;
 }
 
 export function resetBinds() {
