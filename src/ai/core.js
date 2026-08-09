@@ -36,7 +36,7 @@ export function applyTeammateSeparation(e, game) {
 
 export function updateBots(game, dt) {
   for (const e of game.entities) {
-    if (!e.bot || e.dead) continue;
+    if (!e.bot || e.dead || e.netControlled) continue;
     if (e.repathT > 0) e.repathT -= dt;
     updateShotStreak(e, dt);
     botThink(e, game, dt);
@@ -44,7 +44,7 @@ export function updateBots(game, dt) {
     applyTeammateSeparation(e, game);
   }
   for (const e of game.entities) {
-    if (!e.bot || e.dead) continue;
+    if (!e.bot || e.dead || e.netControlled) continue;
     const w = weaponDef(e);
     if (w.mag > 0 && ammoFor(e) <= 0 && !e.reloading) startReload(e, game);
   }
