@@ -136,7 +136,9 @@ export function initLan(gameRef) {
     const p = game.player;
     if (!p) return;
     send({ type: 'input', team: p.team, x: p.x, y: p.y, vx: p.vx, vy: p.vy, angle: p.angle, hp: p.hp, dead: p.dead, weapon: p.weapons.primary, ammo: p.ammoMap[p.weapons.primary || p.weapons.secondary || 'glock'] });
-  }, 66);
+  }, 33);
+  // 页面卸载时清理心跳与连接
+  if (typeof window !== 'undefined') window.addEventListener('pagehide', closeLan);
 }
 
 export function closeLan() {
