@@ -24,7 +24,10 @@ assert.equal(ballisticOf(weapon), weapon.ballistic, 'ballisticOf should return w
 assert.equal(moveFactor(weapon, { vx: 0, vy: 0, crouched: false }), 1, 'standing still should use stand factor');
 assert.equal(moveFactor(weapon, { vx: 20, vy: 0, crouched: false }), 0.5, 'slow movement should use walk factor');
 assert.equal(moveFactor(weapon, { vx: 100, vy: 0, crouched: false, walking: false }), 2, 'fast movement should use run factor');
-assert.equal(moveFactor(weapon, { vx: 100, vy: 0, crouched: true }), 0.75, 'crouching should use crouch factor');
+assert.equal(moveFactor(weapon, { vx: 0, vy: 0, crouched: true }), 0.75, 'standing while crouching should use crouch factor');
+assert.equal(moveFactor(weapon, { vx: 100, vy: 0, crouched: true, walking: false }), 2, 'moving while crouching should lose the crouch accuracy bonus');
+assert.equal(moveFactor(weapon, { vx: 20, vy: 0, crouched: true, walking: true }), 0.75, 'slow crouch movement should keep crouch accuracy');
+assert.equal(moveFactor(weapon, { vx: 0, vy: 0, crouched: false, airborneT: 0.1 }), 2.4, 'airborne state should use the airborne penalty');
 
 assert.equal(effectiveSpread(weapon, { vx: 0, vy: 0, shotStreak: 0, crouched: false, spreadMult: 1 }), 1, 'first shot spread should use first and stand factors');
 assert.equal(effectiveSpread(weapon, { vx: 0, vy: 0, shotStreak: 2, crouched: false, spreadMult: 1 }), 2.8, 'streak spread should scale with perShot');

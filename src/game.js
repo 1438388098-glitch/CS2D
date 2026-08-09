@@ -434,6 +434,8 @@ export function update(game, dt) {
     const prevH = e.height;
     e.height = curTile === '^' ? 1 : curTile === 'R' ? 0.5 : 0;
     if (prevH === 1 && e.height === 0) e.stunT = 0.4;
+    if (e.height < prevH) e.airborneT = 0.35;
+    else if (e.airborneT > 0) e.airborneT = Math.max(0, e.airborneT - dt);
     if (e.stunT > 0) e.stunT = Math.max(0, e.stunT - dt);
     e.vx *= Math.max(0, 1 - 7 * dt);
     e.vy *= Math.max(0, 1 - 7 * dt);

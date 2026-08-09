@@ -3,7 +3,7 @@ const DEFAULTS = {
   perShot: 0.18,
   max: 3.0,
   recover: 1.8,
-  move: { stand: 1.0, walk: 0.55, run: 2.2, crouch: 0.75 }
+  move: { stand: 1.0, walk: 0.55, run: 2.2, crouch: 0.75, airborne: 2.4 }
 };
 
 export function ballisticOf(w) {
@@ -14,7 +14,11 @@ export function moveFactor(w, ent) {
   const b = ballisticOf(w);
   const spd = Math.hypot(ent.vx, ent.vy);
   let key = 'stand';
-  if (ent.crouched) {
+  if (ent.airborneT > 0) {
+    key = 'airborne';
+  } else if (ent.crouched && spd > 60) {
+    key = ent.walking ? 'walk' : 'run';
+  } else if (ent.crouched) {
     key = 'crouch';
   } else if (spd > 60) {
     key = ent.walking ? 'walk' : 'run';
@@ -23,6 +27,9 @@ export function moveFactor(w, ent) {
   }
   let v = b.move[key];
   if (v === undefined) v = DEFAULTS.move[key];
+  if (ent.crouched && spd > 60) {
+    v = Math.max(v, b.move.crouch !== undefined ? b.move.crouch : DEFAULTS.move.crouch);
+  }
   // S3 微观增强：急停质量（bot 急停时移动散布惩罚减免，H11 专用）
   if (ent.bot && spd <= 10 && ent.aiParams && ent.aiParams.counterStrafe !== undefined) {
     v *= ent.aiParams.counterStrafe;
@@ -39,7 +46,7 @@ export function effectiveSpread(w, ent) {
     mult *= Math.min(1 + b.perShot * ent.shotStreak, b.max);
   }
   mult *= moveFactor(w, ent);
-  return w.spread * mult;
+  return w.spread * mult * (ent.spreadMult || 1);
 }
 
 export function updateShotStreak(ent, dt) {
@@ -60,6 +67,29 @@ export function headshotChance(w, ent, perp, dist) {
   const aim = clamp(1 - perp / (ent.rad * 0.75), 0.15, 1);
   const far = clamp(1.2 - dist / w.range, 0.25, 1);
   return clamp(base * aim * far, 0.03, 0.85);
+}
+
+
+export function distanceFalloff(w, dist) {
+  if (w && w.falloff) {
+    const f = w.falloff;
+    if (dist <= f.start) return 1;
+    if (dist >= f.end) return f.min;
+    const t = (dist - f.start) / (f.end - f.start);
+    return 1 - (1 - f.min) * t;
+  }
+  const defs = {
+    pistol: { start: 500, end: 900, min: 0.75 },
+    smg: { start: 450, end: 850, min: 0.7 },
+    rifle: { start: 700, end: 1200, min: 0.7 },
+    sniper: { start: 900, end: 1400, min: 0.95 },
+    shotgun: { start: 300, end: 700, min: 0.5 }
+  };
+  const d = defs[w && w.kind] || { start: Infinity, end: Infinity, min: 1 };
+  if (dist <= d.start) return 1;
+  if (dist >= d.end) return d.min;
+  const t = (dist - d.start) / (d.end - d.start);
+  return 1 - (1 - d.min) * t;
 }
 
 function clamp(v, a, b) { return v < a ? a : (v > b ? b : v); }
