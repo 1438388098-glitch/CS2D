@@ -49,3 +49,9 @@ export function canRerouteAgain(e, lastRerouteAt, now, cooldown = 0.8) {
   if (!e) return false;
   return !lastRerouteAt || now - lastRerouteAt >= cooldown;
 }
+
+export function shouldUnstuck(e, stuckTime, movedDist, minTime = 1.5, minDist = 24) {
+  if (!e || !e.path || e.pathI >= e.path.length) return false;
+  if (e.dead) return false;
+  return stuckTime >= minTime && movedDist < minDist;
+}

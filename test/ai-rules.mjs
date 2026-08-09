@@ -8,6 +8,7 @@ import {
   shouldRushDefuser,
   shouldKeepPath,
   shouldRotateToHot,
+  shouldUnstuck,
   shouldRushPlant
 } from '../src/ai/rules.js';
 
@@ -79,5 +80,11 @@ assert.equal(canRerouteAgain({}, null, 10), true, 'bot without reroute history m
 assert.equal(canRerouteAgain({}, 9.2, 10), true, 'cooldown boundary should allow reroute');
 assert.equal(canRerouteAgain({}, 9.3, 10), false, 'reroute within cooldown should be blocked');
 assert.equal(canRerouteAgain(null, 9.3, 10), false, 'missing bot should not reroute');
+
+assert.equal(shouldUnstuck({ path: [{ x: 0, y: 0 }, { x: 50, y: 0 }], pathI: 0 }, 2, 5), true, 'stuck active-path bot should be unstuck');
+assert.equal(shouldUnstuck({ path: [{ x: 0, y: 0 }, { x: 50, y: 0 }], pathI: 0 }, 1, 5), false, 'short stuck time should not teleport');
+assert.equal(shouldUnstuck({ path: [{ x: 0, y: 0 }, { x: 50, y: 0 }], pathI: 0 }, 2, 40), false, 'moving bot should not be treated as stuck');
+assert.equal(shouldUnstuck({ path: null, pathI: 0 }, 2, 5), false, 'bot without path should not be teleported');
+assert.equal(shouldUnstuck({ path: [{ x: 0, y: 0 }], pathI: 1 }, 2, 5), false, 'completed-path bot should not be teleported');
 
 console.log('ai-rules: all PASS');
