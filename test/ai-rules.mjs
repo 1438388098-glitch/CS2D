@@ -5,6 +5,7 @@ import {
   shouldRetreatWithoutBomb,
   shouldRetakeBomb,
   shouldRushDefuser,
+  shouldKeepPath,
   shouldRotateToHot,
   shouldRushPlant
 } from '../src/ai/rules.js';
@@ -67,5 +68,10 @@ assert.equal(shouldRotateToHot({ team: 'ct' }, 'A', 700, 8), false, 'CT should n
 assert.equal(shouldRotateToHot({ team: 'ct' }, 'A', 700, 30, true), false, 'CT should not rotate after bomb is planted');
 assert.equal(shouldRotateToHot({ team: 't' }, 'A', 700, 30), false, 'T should not use CT hot-rotate rule');
 assert.equal(shouldRotateToHot({ team: 'ct', dead: true }, 'A', 700, 30), false, 'dead CT cannot rotate');
+
+assert.equal(shouldKeepPath({ path: [{ x: 0, y: 0 }, { x: 100, y: 0 }], pathI: 0 }, 10, 10, 70, 10), true, 'moving bot should keep current path');
+assert.equal(shouldKeepPath({ path: [{ x: 0, y: 0 }, { x: 100, y: 0 }], pathI: 0 }, 10, 10, 12, 10), false, 'stationary bot should be eligible for reroute');
+assert.equal(shouldKeepPath({ path: null, pathI: 0 }, 10, 10, 70, 10), false, 'bot without path should not keep path');
+assert.equal(shouldKeepPath({ path: [{ x: 0, y: 0 }], pathI: 1 }, 10, 10, 70, 10), false, 'completed path should not be kept');
 
 console.log('ai-rules: all PASS');

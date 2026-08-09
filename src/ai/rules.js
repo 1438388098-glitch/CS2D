@@ -39,3 +39,8 @@ export function shouldRotateToHot(e, hotSite, dist, timeLeft, planted = false, m
   if (e.dead || e.defusing) return false;
   return timeLeft > minTime && dist > far;
 }
+
+export function shouldKeepPath(e, startX, startY, x, y, minProgress = 30) {
+  if (!e || !e.path || e.pathI >= e.path.length) return false;
+  return Math.hypot(x - startX, y - startY) >= minProgress;
+}
