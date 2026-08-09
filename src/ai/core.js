@@ -13,6 +13,27 @@ import { shouldSaveForEco } from './rules.js';
 import { botObjective, ctReactsTo } from './decisions.js';
 import { botActions } from './actions.js';
 
+export function applyTeammateSeparation(e, game) {
+  for (const o of game.entities) {
+    if (o === e || o.dead || o.team !== e.team) continue;
+    const dx = e.x - o.x, dy = e.y - o.y;
+    const d = Math.hypot(dx, dy);
+    if (d === 0) {
+      const ang = (e.anchorIdx || 0) * 1.7 + 0.7;
+      e.x += Math.cos(ang) * 3;
+      e.y += Math.sin(ang) * 3;
+      continue;
+    }
+    if (d > 0 && d < 72) {
+      const f = (72 - d) / 72 * 0.85;
+      const nx = dx / d, ny = dy / d;
+      const side = (e.anchorIdx || 0) % 2 ? 1 : -1;
+      e.x += nx * f + (-ny) * f * 0.4 * side;
+      e.y += ny * f + nx * f * 0.4 * side;
+    }
+  }
+}
+
 export function updateBots(game, dt) {
   for (const e of game.entities) {
     if (!e.bot || e.dead) continue;
@@ -20,6 +41,7 @@ export function updateBots(game, dt) {
     updateShotStreak(e, dt);
     botThink(e, game, dt);
     botActions(e, game, dt);
+    applyTeammateSeparation(e, game);
   }
   for (const e of game.entities) {
     if (!e.bot || e.dead) continue;
@@ -288,6 +310,7 @@ function botThink(e, game, dt) {
   if (e.lastKnown && !e.aimTarget && !e.hasBomb && (e.team !== 'ct' || ctReactsTo(e, game, e.lastKnown.x, e.lastKnown.y))) {
     const lk = e.lastKnown;
     const lkd = Math.hypot(e.x - lk.x, e.y - lk.y);
+    e.walking = lkd < 400;
     if (e.lastKnownT < 3 && lkd > 70 && lkd < 700) {
       if (e.path === null && e.repathT <= 0) {
         pathTo(e, lk.x, lk.y);
@@ -309,7 +332,13 @@ function botThink(e, game, dt) {
       }
     }
   }
-  if (e.lastKnown) e.lastKnownT += dt;
+  if (e.lastKnown) {
+    e.lastKnownT += dt;
+    if (e.lastKnownT > 4) {
+      e.lastKnown = null;
+      e.lastKnownT = 99;
+    }
+  }
   // 记忆遗忘（目击记忆 3s 内有效，置信度衰减）
   if (e.memory && e.memory.length) {
     for (let i = e.memory.length - 1; i >= 0; i--) {

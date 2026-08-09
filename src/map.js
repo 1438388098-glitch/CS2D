@@ -713,6 +713,12 @@ export function followPath(e, dt, speed, skip = 0, scan = 0) {
       e.vy = (nwp.y * tileSize() + tileSize() / 2 - e.y) / Math.max(1, Math.hypot(nwp.x * tileSize() + tileSize() / 2 - e.x, nwp.y * tileSize() + tileSize() / 2 - e.y)) * speed * (e.walking ? 0.55 : 1);
       e.moving = true;
       e.angle = Math.atan2(nwp.y * tileSize() + tileSize() / 2 - e.y, nwp.x * tileSize() + tileSize() / 2 - e.x);
+      if (scan) {
+        let a = e.angle + scan;
+        const twoPi = Math.PI * 2;
+        a = ((a % twoPi) + twoPi) % twoPi;
+        e.angle = a;
+      }
       const moved2 = Math.hypot(e.x - (e.lastSample ? e.lastSample.x : e.x), e.y - (e.lastSample ? e.lastSample.y : e.y));
       if (shouldKeepPath(e, e.lastSample ? e.lastSample.x : e.x, e.lastSample ? e.lastSample.y : e.y, e.x, e.y)) {
         e.stuckT = Math.max(0, (e.stuckT || 0) - dt);
