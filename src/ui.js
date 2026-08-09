@@ -1018,21 +1018,56 @@ export function getAudioPrefs() {
   return prefs;
 }
 
+export function settingsRowMatches(text, query) {
+  const q = String(query || '').trim().toLowerCase();
+  if (!q) return true;
+  return String(text || '').toLowerCase().includes(q);
+}
+
 // 设置面板：按键重绑定（点击按钮→按任意键→保存到 localStorage）
 function bindSettings() {
   if (!doc) return;
   const settingsBtn = el('settingsBtn');
   const settings = el('settings');
   const settingsClose = el('settingsClose');
+  const searchEl = el('settingsSearch');
+  const emptyEl = el('settingsEmpty');
   const resetBtn = el('resetBinds');
   const listEl = el('keybindList');
+  const applySettingsFilter = () => {
+    if (!settings) return;
+    const q = searchEl ? searchEl.value : '';
+    let any = false;
+    for (const sec of settings.querySelectorAll('.settings-sec')) {
+      const secHead = sec.querySelector('.sec-head');
+      const secHit = settingsRowMatches(secHead ? secHead.textContent : '', q);
+      let showSec = secHit;
+      for (const row of sec.querySelectorAll('.row, .set-row')) {
+        const hit = secHit || settingsRowMatches(row.textContent, q);
+        row.style.display = hit ? '' : 'none';
+        if (hit) showSec = true;
+      }
+      sec.style.display = showSec ? '' : 'none';
+      if (showSec) any = true;
+    }
+    if (emptyEl) emptyEl.style.display = any ? 'none' : '';
+  };
   if (settingsBtn && settings) {
-    settingsBtn.onclick = () => { settings.classList.add('show'); renderKeybindList(listEl); refreshViewSel(); };
+    settingsBtn.onclick = () => {
+      settings.classList.add('show');
+      if (searchEl) searchEl.value = '';
+      applySettingsFilter();
+      renderKeybindList(listEl);
+      refreshViewSel();
+    };
     settingsClose.onclick = () => {
       settings.classList.remove('show');
       cancelBindTarget();
+      if (searchEl) searchEl.value = '';
+      applySettingsFilter();
     };
   }
+  if (searchEl) searchEl.addEventListener('input', applySettingsFilter);
   if (resetBtn) resetBtn.onclick = () => {
     resetBinds();
     renderKeybindList(listEl);
