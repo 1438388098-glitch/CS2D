@@ -165,6 +165,23 @@ function spawnRound(game) {
     }
     const teamKey = e.team === 'ct' ? 'ct' : 't';
     spawnEntity(e, list, spawnTick[teamKey]++);
+    // 出生拥挤偏移：官方图每队仅 4 个出生点，5v5 第 5 人会与队友重叠；
+    // 从出生点沿可通行方向偏移到最近不重叠的位置，避免叠罗汉出生
+    if (spawnTick[teamKey] > list.length) {
+      const occ = new Set();
+      for (const o of game.entities) if (o !== e && !o.dead) occ.add(Math.round(o.x / 16) + ',' + Math.round(o.y / 16));
+      outer:
+      for (let r = 16; r <= 96; r += 16) {
+        for (let dy = -r; dy <= r; dy += 16) {
+          for (let dx = -r; dx <= r; dx += 16) {
+            if (Math.max(Math.abs(dx), Math.abs(dy)) !== r) continue;
+            const nx = e.x + dx, ny = e.y + dy;
+            if (occ.has(Math.round(nx / 16) + ',' + Math.round(ny / 16))) continue;
+            if (passableTolerant(nx, ny)) { e.x = nx; e.y = ny; break outer; }
+          }
+        }
+      }
+    }
     if (e.bot) {
       const target = e.team === 't' ? getMap().spawns.ct[0] : getMap().spawns.t[0];
       if (target) e.angle = Math.atan2(target.y - e.y, target.x - e.x);
