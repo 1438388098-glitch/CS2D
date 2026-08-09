@@ -28,6 +28,15 @@ export function setMiniZoom(z) {
 
 export function isMiniZoomed() { return mmZoom === 2; }
 
+export function minimapEntityIcon(e) {
+  const team = e && e.team;
+  return {
+    team,
+    fill: team === 'ct' ? '#4da6ff' : '#ffb84d',
+    shape: team === 'ct' ? 'square' : 'triangle'
+  };
+}
+
 // FPS mode interaction target: pure logic used by HUD and tests.
 export function fpsInteractAction(game) {
   const p = game && game.player;
@@ -237,10 +246,25 @@ export function renderMinimap(game) {
         const d = Math.hypot(e.x - p.x, e.y - p.y);
         if (d >= 300 && (!canSee || !los(game, p.x, p.y, e.x, e.y, p.height))) continue;
       }
-      mctx.fillStyle = e.team === 'ct' ? '#4da6ff' : '#ffb84d';
+      const icon = minimapEntityIcon(e);
+      mctx.save();
+      mctx.translate(ox + e.x * s, oy + e.y * s);
+      mctx.rotate(e.angle || 0);
+      mctx.fillStyle = icon.fill;
+      mctx.strokeStyle = 'rgba(0,0,0,.7)';
+      mctx.lineWidth = 1;
       mctx.beginPath();
-      mctx.arc(ox + e.x * s, oy + e.y * s, 3, 0, Math.PI * 2);
+      if (icon.shape === 'square') {
+        mctx.rect(-3.2, -3.2, 6.4, 6.4);
+      } else {
+        mctx.moveTo(6, 0);
+        mctx.lineTo(-4, -4);
+        mctx.lineTo(-4, 4);
+        mctx.closePath();
+      }
       mctx.fill();
+      mctx.stroke();
+      mctx.restore();
     }
   }
 
