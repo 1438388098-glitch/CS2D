@@ -57,6 +57,11 @@ try {
   } else {
     pass('resource caches and quality guards active: ' + JSON.stringify({ textureCache: backend.stats.textureCacheSize, geometryCache: backend.stats.geometryCacheSize, quality: backend.stats.quality, pixelRatio: backend.stats.pixelRatio }));
   }
+  if (!backend || !backend.stats || !backend.stats.atmosphere || backend.stats.atmosphere.mapId !== 'dust2' || backend.stats.weatherKind === 'none' || backend.stats.weatherPoints < 1) {
+    fail('three.js map atmosphere/weather missing: ' + JSON.stringify(backend && backend.stats));
+  } else {
+    pass('map atmosphere and weather active: ' + JSON.stringify({ atmosphere: backend.stats.atmosphere, weatherKind: backend.stats.weatherKind, weatherPoints: backend.stats.weatherPoints }));
+  }
   if (!backend || !backend.stats || backend.stats.entityWeapons < 1) {
     fail('three.js entity weapon meshes missing: ' + JSON.stringify(backend && backend.stats));
   } else {
@@ -197,6 +202,11 @@ try {
     fail('instanced map meshes not frustum-safe after map switch: ' + JSON.stringify(switched));
   } else {
     pass('instanced map meshes frustum-safe after map switch: ' + switched.stats.mapCullSafe);
+  }
+  if (!switched || !switched.stats || !switched.stats.atmosphere || switched.stats.atmosphere.mapId !== 'canal' || switched.stats.weatherKind === 'none' || switched.stats.weatherPoints < 1) {
+    fail('map atmosphere/weather not synced after switch: ' + JSON.stringify(switched && switched.stats));
+  } else {
+    pass('map atmosphere/weather synced after switch: ' + JSON.stringify({ atmosphere: switched.stats.atmosphere, weatherKind: switched.stats.weatherKind, weatherPoints: switched.stats.weatherPoints }));
   }
 
   await cdp.eval(`(()=>{const g=window.__cs2d&&window.__cs2d.game;if(!g)return false;g.tracers=Array.from({length:80},(_,i)=>({x1:100+i*2,y1:100+i,x2:100+i,y2:120+i}));return true})()`);

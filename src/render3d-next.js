@@ -41,6 +41,18 @@ let mapGroup = null;
 let dynamicGroup = null;
 let viewmodelGroup = null;
 let skyMesh = null;
+let hemiLight = null;
+let weatherPoints = null;
+let weatherKey = '';
+let atmosphere = {
+  mapId: '',
+  fogColor: 0x20262e,
+  fogNear: 500,
+  fogFar: 2400,
+  sun: [255, 214, 150],
+  hemiIntensity: 1.05,
+  sunIntensity: 2.4
+};
 let mapKey = '';
 let canvasRef = null;
 let layersRef = null;
@@ -93,6 +105,18 @@ function disposeRenderer() {
   dynamicGroup = null;
   viewmodelGroup = null;
   skyMesh = null;
+  hemiLight = null;
+  weatherPoints = null;
+  weatherKey = '';
+  atmosphere = {
+    mapId: '',
+    fogColor: 0x20262e,
+    fogNear: 500,
+    fogFar: 2400,
+    sun: [255, 214, 150],
+    hemiIntensity: 1.05,
+    sunIntensity: 2.4
+  };
   cameraLight = null;
   cameraFill = null;
   mapKey = '';
@@ -159,8 +183,8 @@ export async function initRenderer3dNext(canvas, layers) {
     scene.add(mapGroup, dynamicGroup);
     scene.add(camera);
     camera.add(viewmodelGroup);
-    const hemi = new T.HemisphereLight(0xcfe8ff, 0x59615a, 1.05);
-    scene.add(hemi);
+    hemiLight = new T.HemisphereLight(0xcfe8ff, 0x59615a, 1.05);
+    scene.add(hemiLight);
     cameraLight = new T.DirectionalLight(0xfff1d6, 2.4);
     cameraLight.castShadow = true;
     cameraLight.shadow.mapSize.set(2048, 2048);
@@ -263,6 +287,9 @@ export function render3dNext(game) {
       groundModelStats,
       effectObjects,
       smokeVolumes: smokeMeshes.length,
+      weatherPoints: weatherPoints ? weatherPoints.geometry.attributes.position.count : 0,
+      weatherKind: weatherKey || 'none',
+      atmosphere,
       fpsHud: game._fpsHudStats || { teamBars: 0, siteMarkers: 0, bombMarkers: 0, damageNumbers: 0 },
       drawCalls: renderer && renderer.info && renderer.info.render ? renderer.info.render.calls : 0,
       quality,
@@ -449,6 +476,8 @@ function disposeAllDynamic() {
   splashMeshes = [];
   corpseMeshes = new Map();
   decalPointMeshes = new Map();
+  weatherPoints = null;
+  weatherKey = '';
 }
 
 function clearGroup(group) {
@@ -538,13 +567,34 @@ function updateLighting(map) {
   if (!cameraLight || !map) return;
   const cx = map.W / 2;
   const cz = map.H / 2;
-  cameraLight.position.set(cx + 420, 520, cz + 260);
+  const theme = themeOf(map.id);
+  const sky = theme.sky || {};
+  const sun = sky.sun || [255, 214, 150];
+  const atmo = theme.atmo || {};
+  const haze = atmo.haze || 0.5;
+  cameraLight.position.set(cx + 420 + haze * 220, 420 + haze * 260, cz + 260);
   cameraLight.target.position.set(cx, 0, cz);
+  cameraLight.color.setRGB(sun[0] / 255, sun[1] / 255, sun[2] / 255);
+  cameraLight.intensity = 1.7 + haze * 0.9;
   cameraLight.shadow.camera.left = -Math.max(map.W, 900);
   cameraLight.shadow.camera.right = Math.max(map.W, 900);
   cameraLight.shadow.camera.top = Math.max(map.H, 900);
   cameraLight.shadow.camera.bottom = -Math.max(map.H, 900);
   cameraLight.shadow.camera.updateProjectionMatrix();
+  if (hemiLight) {
+    const ground = atmo.fogColor || [89, 97, 90];
+    hemiLight.color.setRGB(0.81 + haze * 0.16, 0.85 + haze * 0.1, 0.95);
+    hemiLight.groundColor.setRGB(ground[0] / 255, ground[1] / 255, ground[2] / 255);
+    hemiLight.intensity = 0.85 + haze * 0.45;
+  }
+  if (cameraFill) {
+    cameraFill.color.setRGB(sun[0] / 255, sun[1] / 255, sun[2] / 255);
+    cameraFill.intensity = 0.42 + haze * 0.34;
+  }
+  atmosphere.mapId = map.id;
+  atmosphere.sun = sun.slice();
+  atmosphere.hemiIntensity = hemiLight ? hemiLight.intensity : 1.05;
+  atmosphere.sunIntensity = cameraLight.intensity;
 }
 
 function buildMapScene(map, layers) {
@@ -1462,6 +1512,7 @@ function buildSky(map) {
   const top = sky.top || '#182838';
   const horizon = sky.horizon || '#52606b';
   const sun = sky.sun || [255, 214, 150];
+  const atmo = theme.atmo || {};
   const canvas = document.createElement('canvas');
   canvas.width = 512;
   canvas.height = 256;
@@ -1493,8 +1544,56 @@ function buildSky(map) {
   scene.add(skyMesh);
   const fog = theme.atmo && theme.atmo.fogColor;
   if (fog) {
-    scene.fog = new THREE.Fog(new THREE.Color(fog[0] / 255, fog[1] / 255, fog[2] / 255), 420, Math.max(900, map.W * 0.8));
+    const fogNear = 260 + (atmo.haze || 0.5) * 300;
+    const fogFar = Math.max(900, map.W * 0.9);
+    scene.fog = new THREE.Fog(new THREE.Color(fog[0] / 255, fog[1] / 255, fog[2] / 255), fogNear, fogFar);
+    atmosphere.mapId = map.id;
+    atmosphere.fogColor = [fog[0], fog[1], fog[2]];
+    atmosphere.fogNear = fogNear;
+    atmosphere.fogFar = fogFar;
+    atmosphere.sun = sun.slice();
   }
+  buildWeather(map, theme);
+}
+
+function buildWeather(map, theme) {
+  if (!dynamicGroup || !THREE) return;
+  const weather = theme.weather || {};
+  const kind = weather.kind || 'none';
+  const key = (map && map.id) + ':' + kind;
+  if (weatherKey === key) return;
+  if (weatherPoints) {
+    dynamicGroup.remove(weatherPoints);
+    weatherPoints.geometry.dispose();
+    weatherPoints.material.dispose();
+    weatherPoints = null;
+  }
+  weatherKey = key;
+  if (!kind) return;
+  const count = 260;
+  const positions = new Float32Array(count * 3);
+  const rangeW = Math.max(900, map.W * 0.65);
+  const rangeH = Math.max(700, map.H * 0.55);
+  for (let i = 0; i < count; i++) {
+    positions[i * 3] = ((i * 173 + Math.sin(i * 17) * 991) % rangeW + rangeW) % rangeW - rangeW / 2;
+    positions[i * 3 + 1] = 0.8 + ((i * 91) % 70) / 70 * (map.tile || 16) * 2.2;
+    positions[i * 3 + 2] = ((i * 257 + Math.cos(i * 11) * 577) % rangeH + rangeH) % rangeH - rangeH / 2;
+  }
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+  const color = weather.color || [180, 180, 180];
+  const mat = new THREE.PointsMaterial({
+    color: new THREE.Color(color[0] / 255, color[1] / 255, color[2] / 255),
+    size: 3,
+    transparent: true,
+    opacity: 0.45,
+    depthWrite: false,
+    sizeAttenuation: true
+  });
+  weatherPoints = new THREE.Points(geo, mat);
+  weatherPoints.name = 'weather:' + kind;
+  weatherPoints.frustumCulled = false;
+  dynamicGroup.add(weatherPoints);
 }
 
 function updateDynamicNext(game) {
@@ -1504,8 +1603,36 @@ function updateDynamicNext(game) {
   updateBomb(game);
   updateSmokes(game);
   updateParticles(game);
+  updateWeather(game);
   updateTracers(game);
   updateDecalsNext(game);
+}
+
+function updateWeather(game) {
+  if (!weatherPoints || !THREE) return;
+  const map = getMap();
+  if (!map) return;
+  const tile = map.tile || 16;
+  const theme = themeOf(map.id);
+  const weather = theme.weather || {};
+  const kind = weather.kind || 'dust';
+  const speed = (weather.wind && weather.wind[0]) || 0.3;
+  const dirY = (weather.wind && weather.wind[1]) || 0.1;
+  const cam = camera;
+  const pos = weatherPoints.geometry.attributes.position;
+  const arr = pos.array;
+  const count = pos.count;
+  const rangeW = Math.max(900, map.W * 0.65);
+  const rangeH = Math.max(700, map.H * 0.55);
+  for (let i = 0; i < count; i++) {
+    const i3 = i * 3;
+    arr[i3] = cam.position.x + (((i * 173 + arr[i3] + (game.time || 0) * speed * 45) % rangeW + rangeW) % rangeW) - rangeW / 2;
+    arr[i3 + 1] = 0.8 + ((i * 91 + arr[i3 + 1] * 31 + (game.time || 0) * dirY * 20) % 70) / 70 * tile * 2.2;
+    arr[i3 + 2] = cam.position.z + (((i * 257 + arr[i3 + 2] + (game.time || 0) * speed * 36) % rangeH + rangeH) % rangeH) - rangeH / 2;
+  }
+  pos.needsUpdate = true;
+  weatherPoints.material.size = tile * (kind === 'snow' ? 0.16 : kind === 'sand' ? 0.13 : 0.2);
+  weatherPoints.material.opacity = Math.max(0.18, Math.min(0.55, (weather.density || 0.5) * 0.85));
 }
 
 function updateViewmodelNext(game) {
