@@ -13,3 +13,9 @@ export function shouldRushPlant(e, dist, roundTime, roundDur = 115, endWindow = 
   if (e.bomb && e.bomb.planted) return false;
   return roundTime > roundDur - endWindow && dist > farDist;
 }
+
+export function shouldRetreatWithoutBomb(e, roundTime, enAlive, myAlive, roundDur = 115, lateAt = 18) {
+  if (!e || e.hasBomb) return false;
+  if (e.bomb && (e.bomb.planted || e.bomb.dropped)) return false;
+  return roundTime > roundDur - lateAt && enAlive >= myAlive;
+}
