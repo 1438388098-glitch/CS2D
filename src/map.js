@@ -1,5 +1,6 @@
 import { TILE, MAPS } from './config.js';
 import { clamp } from './utils.js';
+import { shouldKeepPath, canRerouteAgain, shouldUnstuck } from './ai/rules.js';
 
 let MAP = null;
 const DEFAULT_TILE = TILE;
@@ -455,6 +456,7 @@ export function pathTo(e, tx, ty) {
 
 export function followPath(e, dt, speed) {
   if (!MAP || !e.path || e.pathI >= e.path.length) { e.path = null; return false; }
+  e.navTime = (e.navTime || 0) + dt;
   const wp = e.path[e.pathI];
   const wx = wp.x * tileSize() + tileSize() / 2, wy = wp.y * tileSize() + tileSize() / 2;
   const dx = wx - e.x, dy = wy - e.y;
@@ -468,6 +470,30 @@ export function followPath(e, dt, speed) {
   e.vx = dx / d * spd;
   e.vy = dy / d * spd;
   e.moving = true;
+  const moved = Math.hypot(e.x - (e.lastSample ? e.lastSample.x : e.x), e.y - (e.lastSample ? e.lastSample.y : e.y));
+  if (shouldKeepPath(e, e.lastSample ? e.lastSample.x : e.x, e.lastSample ? e.lastSample.y : e.y, e.x, e.y)) {
+    e.stuckT = Math.max(0, (e.stuckT || 0) - dt);
+    e.lastSample = { x: e.x, y: e.y };
+  } else if (moved < Math.max(4, speed * dt * 0.3)) {
+    e.stuckT = (e.stuckT || 0) + dt;
+    if (shouldUnstuck(e, e.stuckT, moved) && canRerouteAgain(e, e.lastRerouteAt, e.navTime)) {
+      e.stuckEscapes = (e.stuckEscapes || 0) + 1;
+      e.lastRerouteAt = e.navTime;
+      const sideDir = (e.anchorIdx || 0) % 2 ? 1 : -1;
+      const sideAng = e.stuckEscapes > 2 ? Math.atan2(wy - e.y, wx - e.x) + Math.PI / 2 * sideDir : 0;
+      pathTo(e, wx + Math.cos(sideAng) * 80, wy + Math.sin(sideAng) * 80);
+      e.stuckT = 0;
+      e.lastSample = { x: e.x, y: e.y };
+      return true;
+    }
+    if (e.stuckT > 1.5) {
+      e.path = null;
+      e.pathI = 0;
+      e.stuckT = 0;
+      e.lastSample = { x: e.x, y: e.y };
+      return false;
+    }
+  }
   return true;
 }
 
