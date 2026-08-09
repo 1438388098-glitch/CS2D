@@ -9,6 +9,12 @@ import zlib from 'zlib';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = __dirname;
 const PORT = process.env.PORT || 8080;
+function envInt(name, fallback) {
+  const n = Number.parseInt(process.env[name] || '', 10);
+  return Number.isFinite(n) ? n : fallback;
+}
+const GZIP_THRESHOLD = Math.max(0, envInt('CS2D_GZIP_THRESHOLD', 1024));
+const GZIP_LEVEL = Math.max(1, Math.min(9, envInt('CS2D_GZIP_LEVEL', 6)));
 
 // Major 模式自检：modes.js 若被外部还原为旧版（缺 48 队赛制），启动时自动修复
 try {
@@ -66,11 +72,11 @@ function cacheControlFor(filePath) {
 
 function compressIfPossible(data, req, filePath, cb) {
   const ext = path.extname(filePath).toLowerCase();
-  if (!COMPRESSIBLE_EXT.has(ext) || data.length < 1024) return cb(null);
+  if (!COMPRESSIBLE_EXT.has(ext) || data.length < GZIP_THRESHOLD) return cb(null);
   const acceptEncoding = String(req.headers['accept-encoding'] || '').toLowerCase();
   if (!acceptEncoding.includes('gzip')) return cb(null);
   // 异步 gzip：压缩大文件不阻塞 WS 中继事件循环
-  zlib.gzip(data, (err, out) => {
+  zlib.gzip(data, { level: GZIP_LEVEL }, (err, out) => {
     if (err) return cb(null);
     cb(out);
   });
