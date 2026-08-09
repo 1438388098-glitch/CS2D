@@ -20,7 +20,7 @@ const args = process.argv.slice(2);
 const listMode = args.includes('--list');
 const helpMode = args.includes('--help');
 const unknown = args.filter((arg) => arg.startsWith('-') && arg !== '--list' && arg !== '--help');
-const filter = args.find((arg) => !arg.startsWith('-')) || null;
+const filters = args.filter((arg) => !arg.startsWith('-'));
 
 if (unknown.length > 0) {
   console.error(`run-tests: unknown option(s): ${unknown.join(', ')}`);
@@ -45,8 +45,8 @@ let tests = fs.readdirSync(testDir)
   .filter((name) => !skipFiles.has(name))
   .sort();
 
-if (filter) {
-  tests = tests.filter((name) => name.includes(filter));
+if (filters.length > 0) {
+  tests = tests.filter((name) => filters.every((filter) => name.includes(filter)));
 }
 
 if (listMode) {
