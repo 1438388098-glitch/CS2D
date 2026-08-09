@@ -130,6 +130,12 @@ export function fpsSpectateInfo(game) {
   };
 }
 
+export function recoilControlInfo(p, wd) {
+  if (!p || !wd || wd.kind === 'knife') return { visible: false, ratio: 0, hot: false };
+  const ratio = clamp((p.recoil || 0) / 2.4, 0, 1);
+  return { visible: true, ratio, hot: ratio > 0.45 };
+}
+
 function rr(mctx, x, y, w, h, r) {
   mctx.beginPath();
   mctx.moveTo(x + r, y);
@@ -604,6 +610,32 @@ export function renderHud(game) {
     ctx.strokeText('C4  ' + t.toFixed(1), w2 / 2, 54);
     ctx.fillStyle = urgent ? 'rgba(255,70,60,' + pulse + ')' : '#ffffff';
     ctx.fillText('C4  ' + t.toFixed(1), w2 / 2, 54);
+    ctx.restore();
+  }
+  const recoil = recoilControlInfo(p, weaponDef(p));
+  if (recoil.visible) {
+    const bw = 132;
+    const bh = 7;
+    const bx = w2 / 2 - bw / 2;
+    const by = h2 - 34;
+    ctx.save();
+    ctx.fillStyle = 'rgba(4,8,12,0.55)';
+    rr(ctx, bx - 2, by - 2, bw + 4, bh + 4, 4);
+    ctx.fill();
+    ctx.fillStyle = 'rgba(255,255,255,0.10)';
+    rr(ctx, bx, by, bw, bh, 3);
+    ctx.fill();
+    const fillW = Math.max(0, Math.round(bw * recoil.ratio));
+    if (fillW > 0) {
+      ctx.fillStyle = recoil.hot ? '#ff5540' : '#ffb545';
+      rr(ctx, bx, by, fillW, bh, 3);
+      ctx.fill();
+    }
+    ctx.fillStyle = 'rgba(255,255,255,0.8)';
+    ctx.font = "10px 'Microsoft YaHei',sans-serif";
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'bottom';
+    ctx.fillText('后座', w2 / 2, by - 3);
     ctx.restore();
   }
   ctx.restore();
