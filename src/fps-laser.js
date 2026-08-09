@@ -1,6 +1,6 @@
 // Pure FPS laser ray helper: casts along yaw and pitch so the red laser
 // stays aligned with the crosshair in 3D view instead of always lying flat.
-import { getMap, passableTolerant } from './map.js';
+import { getMap, passableTolerant, groundElevationAt } from './map.js';
 import { weaponDef } from './entities.js';
 
 export function castLaserEnd(p, game) {
@@ -13,7 +13,7 @@ export function castLaserEnd(p, game) {
   const cos = Math.cos(p.angle), sin = Math.sin(p.angle);
   const pitch = Number.isFinite(p.pitch) ? p.pitch : 0;
   const tanP = Math.tan(pitch);
-  const eyeH = (0.5 + (p.height || 0)) * tile;
+  const eyeH = (0.5 + (p.height || 0)) * tile + groundElevationAt(p.x, p.y);
   const step = 6;
   let px = p.x, py = p.y, z = eyeH;
   for (let d = 0; d <= range; d += step) {

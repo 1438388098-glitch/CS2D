@@ -2,7 +2,7 @@
 // 与 render.js 共用 game 状态；模块顶层零 DOM 依赖（node 可导入纯函数）
 import { TILE, DROP_COL, WEAPONS } from './config.js';
 import { clamp } from './utils.js';
-import { getGrid, getMap, walkableChar } from './map.js';
+import { getGrid, getMap, walkableChar, groundElevationAt } from './map.js';
 import { weaponDef } from './entities.js';
 import { gunLen } from './render-utils.js';
 // 主题色板：textures.js 并行新增 themeOf 导出；命名空间导入+兜底，避免链接期缺失炸模块
@@ -309,7 +309,7 @@ export function render3d(game) {
   pitch = clamp(pitch, -PITCH_LIMIT, PITCH_LIMIT);
   // 眼高：站姿 0.5 格 + 高台高度；蹲下 0.35（按地图瓦片尺寸，官方图 tile=16）
   const crouchBase = ent === p && alive && ent.crouched ? 0.35 : 0.5;
-  let eyeH = (crouchBase + (ent.height || 0)) * mapTile();
+  let eyeH = (crouchBase + (ent.height || 0)) * mapTile() + groundElevationAt(ent.x, ent.y);
   const fogMax = game.opts && game.opts.fog ? 560 : 950;
   const wNow = weaponDef(p);
   const scoped = alive && p.scoped && wNow && wNow.kind === 'sniper';
@@ -823,7 +823,8 @@ function updateFpsMarkers(F, zbuf) {
     const depth = dx * F.cos + dy * F.sin;
     if (depth < NEAR || depth > F.fogMax) continue;
     const perp = -dx * F.sin + dy * F.cos;
-    const headH = 44 * F.U + (e.height || 0) * T;
+    const elev = groundElevationAt(e.x, e.y);
+    const headH = 44 * F.U + (e.height || 0) * T + elev;
     const pt = projectAt(F, depth, perp, headH, false);
     if (!pt) continue;
     const sx = pt.sx;
@@ -842,6 +843,7 @@ function updateFpsMarkers(F, zbuf) {
       nx: sx / F.iw,
       ny: pt.sy / F.ih,
       occluded,
+      elev,
       isKiller: g.lastKiller === e && p.dead
     });
   }
@@ -1056,7 +1058,7 @@ function drawSpectatePlate(F) {
   if (depth < NEAR || depth > F.fogMax) return;
   const perp = -dx * F.sin + dy * F.cos;
   const sx = F.iw / 2 + perp / depth * F.focal;
-  const headH = 44 * F.U + (ent.height || 0) * mapTile();
+  const headH = 44 * F.U + (ent.height || 0) * mapTile() + groundElevationAt(ent.x, ent.y);
   const sy = projectAt(F, depth, perp, headH, true).sy;
   const t = F.cctx;
   const col = ent.team === 'ct' ? '#7ab8ff' : '#ffb35c';
@@ -1385,7 +1387,7 @@ function collectEntities(F, out) {
     const depth = dx * F.cos + dy * F.sin;
     if (depth < NEAR || depth > F.fogMax) continue;
     const perp = -dx * F.sin + dy * F.cos;
-    const s = { depth, perp, cv: entitySprite(F.g, e), sw: 44 * F.U, sh: 44 * F.U, baseH: (e.height || 0) * mapTile() };
+    const s = { depth, perp, cv: entitySprite(F.g, e), sw: 44 * F.U, sh: 44 * F.U, baseH: groundElevationAt(e.x, e.y) + (e.height || 0) * mapTile() };
     if (killHi && e === killHi) s.isKiller = true;
     out.push(s);
   }

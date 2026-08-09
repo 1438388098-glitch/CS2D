@@ -2,7 +2,7 @@
 // （纯函数测试只覆盖数学，此测试覆盖 drawSky/drawGroundQuads(近平面裁剪+高台skirt)/drawWalls/drawSprite(逐列裁剪)/粒子/曳光/激光/开镜/观战 全部代码路径）
 import { installStubs, registerDomIds } from './stubdom.js';
 import { registerMap } from '../src/registry.js';
-import { loadMap, getMap } from '../src/map.js';
+import { loadMap, getMap, groundElevationAt } from '../src/map.js';
 import { createGame, setupMatchEntities, startMatch, update } from '../src/game.js';
 import { initTextures, themeOf } from '../src/textures.js';
 import { initRenderer3d, render3d, fpsCameraEntity } from '../src/render3d.js';
@@ -30,6 +30,9 @@ const rows = [
 ];
 registerMap({ id: 'smoke3d', name: 'smoke3d', accent: '#888', rows, tile: 40 });
 loadMap({ id: 'smoke3d', name: 'smoke3d', rows, tile: 40 });
+ok('ground elevation full platform', groundElevationAt(180, 140) === 40);
+ok('ground elevation half platform', groundElevationAt(340, 220) === 20);
+ok('ground elevation flat', groundElevationAt(60, 60) === 0);
 
 const game = createGame({ mapId: 'smoke3d', bots: 2, team: 'ct', diff: 'easy' });
 setupMatchEntities(game);
@@ -242,5 +245,6 @@ ok('fps entity markers generated', Array.isArray(game._fpsEntityMarkers) && game
 ok('fps teammate marker present', game._fpsEntityMarkers.some((m) => m.team === p.team));
 ok('fps enemy marker present', game._fpsEntityMarkers.some((m) => m.team !== p.team));
 ok('fps enemy edge alert', game._fpsEnemyAlert && game._fpsEnemyAlert.count > 0);
+ok('fps marker elevation fields', game._fpsEntityMarkers.every((m) => typeof m.elev === 'number'));
 
 console.log('render3d-smoke: all PASS');
