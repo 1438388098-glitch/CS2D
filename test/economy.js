@@ -1,9 +1,12 @@
 import { createGame, startMatch, startRound, endRound } from '../src/game.js';
-import { ECONOMY } from '../src/config.js';
+import { ECONOMY, ROUND } from '../src/config.js';
 import { killEntity } from '../src/combat.js';
+import { buyItem } from '../src/economy.js';
 import { plantBomb, defuseBomb } from '../src/bomb.js';
 import { getMap } from '../src/map.js';
 import { defaultPistol } from '../src/entities.js';
+import { botBuyAll } from '../src/ai.js';
+import { ctx } from '../src/ctx.js';
 
 const errors = [];
 function ok(name, cond) {
@@ -123,6 +126,18 @@ for (const [winType, expected] of [
 
 {
   const g = fresh();
+  const p = g.player;
+  p.team = 't';
+  p.money = 2000;
+  g.state = 'BUY';
+  const before = p.money;
+  ok('t cannot buy kit', buyItem(g, 'kit') === false && p.money === before && p.weapons.kit === false);
+  p.team = 'ct';
+  ok('ct can buy kit', buyItem(g, 'kit') === true && p.weapons.kit === true);
+}
+
+{
+  const g = fresh();
   const victim = g.entities.find((e) => e.bot && e.team === 'ct');
   const killer = g.entities.find((e) => e.bot && e.team === 't');
   victim.money = 2222;
@@ -161,7 +176,8 @@ for (const [winType, expected] of [
   p.helmet = true;
   g.lossStreakT = 3;
   g.lossStreakCT = 4;
-  g.round = 12;
+  g.round = ROUND.SIDE_SWAP_AFTER;
+  g.score.T = 6; g.score.CT = 3;
   startRound(g);
   ok('half reset money', p.money === ECONOMY.START_MONEY);
   ok('half reset equipment',
@@ -174,6 +190,154 @@ for (const [winType, expected] of [
     p.armor === 0 &&
     p.helmet === false);
   ok('half reset loss streak', g.lossStreakT === 0 && g.lossStreakCT === 0);
+  ok('half swap score', g.score.T === 3 && g.score.CT === 6);
+}
+
+{
+  const g = fresh();
+  g.round = 3;
+  for (const e of g.entities.filter((x) => x.bot)) {
+    e.money = 2000;
+    e.weapons.primary = null;
+    e.weapons.nades = { he: 0, flash: 0, smoke: 0 };
+  }
+  botBuyAll(g);
+  ok('bot eco buy no debt', g.entities.filter((x) => x.bot).every((e) => e.money >= 0));
+  ok('bot eco buys something', g.entities.filter((x) => x.bot).every((e) => e.weapons.primary || e.weapons.secondary));
+}
+
+{
+  const g = fresh();
+  g.round = 3;
+  g.roundPlan = { rush: true };
+  const bot = g.entities.find((x) => x.bot && x.team === 't');
+  bot.money = 10000;
+  bot.weapons.primary = null;
+  bot.weapons.nades = { he: 0, flash: 0, smoke: 0 };
+  const savedRand = ctx.rand;
+  ctx.rand = () => 0.1;
+  botBuyAll(g);
+  ctx.rand = savedRand;
+  ok('rush buys flash', bot.weapons.nades.flash > 0 && bot.money >= 0);
+}
+
+{
+  const g = createGame({ mapId: 'dust2', bots: 5 });
+  startMatch(g);
+  g.round = 3;
+  g.roundPlan = {};
+  const cts = g.entities.filter((e) => e.bot && e.team === 'ct');
+  for (const e of cts) {
+    e.archetype = 'rifler';
+    e.money = 10000;
+    e.weapons.primary = null;
+    e.weapons.kit = false;
+    e.weapons.nades = { he: 0, flash: 0, smoke: 0 };
+    e.armor = 0;
+    e.helmet = false;
+  }
+  const savedRand = ctx.rand;
+  ctx.rand = () => 0.9;
+  botBuyAll(g);
+  ctx.rand = savedRand;
+  const kits = cts.filter((e) => e.weapons.kit);
+  ok('ct buys single kit', kits.length === 1 && cts.every((e) => e.money >= 0));
+  ok('ct kit goes to roamer or igl', kits.length === 1 && (kits[0].ctRoamer || kits[0].igl));
+}
+
+{
+  const g = createGame({ mapId: 'dust2', bots: 5 });
+  startMatch(g);
+  g.round = 3;
+  g.roundPlan = {};
+  const cts = g.entities.filter((e) => e.bot && e.team === 'ct');
+  for (const e of cts) {
+    e.archetype = 'rifler';
+    e.money = (e.ctRoamer || e.role === 'mid' || e.igl) ? 0 : 10000;
+    e.weapons.primary = null;
+    e.weapons.kit = false;
+    e.weapons.nades = { he: 0, flash: 0, smoke: 0 };
+    e.armor = 0;
+    e.helmet = false;
+  }
+  const savedRand = ctx.rand;
+  ctx.rand = () => 0.2;
+  botBuyAll(g);
+  ctx.rand = savedRand;
+  const kits = cts.filter((e) => e.weapons.kit);
+  ok('ct backup kit buyer', kits.length === 1 && !(kits[0] && (kits[0].ctRoamer || kits[0].role === 'mid' || kits[0].igl)));
+}
+{
+  const g = fresh();
+  g.round = 4;
+  g.roundPlan = {};
+  g.lossStreakT = 3;
+  const bot = g.entities.find((e) => e.bot && e.team === 't');
+  bot.archetype = 'rifler';
+  bot.money = 2200;
+  bot.weapons.primary = null;
+  bot.weapons.nades = { he: 0, flash: 0, smoke: 0 };
+  botBuyAll(g);
+  ok('force buys smg after loss streak', bot.weapons.primary === 'mac10' && bot.money >= 0);
+}
+
+{
+  const g = fresh();
+  g.round = 4;
+  g.roundPlan = {};
+  g.lossStreakT = 0;
+  const bot = g.entities.find((e) => e.bot && e.team === 't');
+  bot.archetype = 'rifler';
+  bot.money = 2200;
+  bot.weapons.primary = null;
+  bot.weapons.nades = { he: 0, flash: 0, smoke: 0 };
+  botBuyAll(g);
+  ok('no force saves for pistol', bot.weapons.primary === 'p250' && bot.money >= 0);
+}
+{
+  const g = createGame({ mapId: 'dust2', bots: 5 });
+  startMatch(g);
+  g.round = 3;
+  g.roundPlan = {};
+  const cts = g.entities.filter((e) => e.bot && e.team === 'ct');
+  for (const e of cts) {
+    e.archetype = 'rifler';
+    e.money = 10000;
+    e.weapons.primary = null;
+    e.weapons.kit = false;
+    e.weapons.nades = { he: 0, flash: 0, smoke: 0 };
+    e.armor = 0;
+    e.helmet = false;
+  }
+  const roamer = cts.find((e) => e.ctRoamer);
+  const savedRand = ctx.rand;
+  ctx.rand = () => 0.8;
+  botBuyAll(g);
+  ctx.rand = savedRand;
+  ok('ct roamer buys smoke', !!roamer && roamer.weapons.nades.smoke > 0 && roamer.money >= 0);
+}
+{
+  const g = createGame({ mapId: 'dust2', bots: 5 });
+  startMatch(g);
+  g.round = 5;
+  g.roundPlan = { slow: true };
+  const ts = g.entities.filter((e) => e.bot && e.team === 't');
+  for (const e of ts) {
+    e.archetype = 'rifler';
+    e.money = 10000;
+    e.weapons.primary = null;
+    e.weapons.nades = { he: 0, flash: 0, smoke: 0 };
+    e.armor = 0;
+    e.helmet = false;
+  }
+  const savedRand = ctx.rand;
+  ctx.rand = () => 0.1;
+  botBuyAll(g);
+  ctx.rand = savedRand;
+  const smokes = ts.reduce((n, e) => n + e.weapons.nades.smoke, 0);
+  const flashes = ts.reduce((n, e) => n + e.weapons.nades.flash, 0);
+  const hes = ts.reduce((n, e) => n + e.weapons.nades.he, 0);
+  ok('team utility budget', smokes <= 3 && flashes <= 3 && hes <= 2);
 }
 
 if (errors.length) {

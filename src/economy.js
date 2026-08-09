@@ -42,6 +42,7 @@ export function buyItem(game, what) {
     p.helmet = true;
     bought = true;
   } else if (what === 'kit') {
+    if (p.team !== 'ct') return false;
     if (p.weapons.kit || p.money < PRICES.KIT) return false;
     p.money -= PRICES.KIT;
     p.weapons.kit = true;
