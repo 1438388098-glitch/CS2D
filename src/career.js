@@ -2870,6 +2870,119 @@ export function seasonTrends(history) {
   });
 }
 
+export function careerReview(s) {
+  const mh = Array.isArray(s && s.matchHistory) ? s.matchHistory : [];
+  const history = Array.isArray(s && s.history) ? s.history : [];
+  const currentSeasonId = s && s.season ? s.season.id : null;
+  const rows = [];
+  const seen = new Set();
+  const list = sortedStandings(s);
+  const playerRow = list.find((x) => x.teamId === 'player');
+  const currentRank = playerRow ? list.indexOf(playerRow) + 1 : null;
+  const currentCupRound = s && s.season && s.season.cupResult !== undefined ? Number(s.season.cupResult) : -1;
+
+  for (const h of history) {
+    if (!h || h.seasonId == null || seen.has(h.seasonId)) continue;
+    seen.add(h.seasonId);
+    const st = seasonStats(mh, h.seasonId);
+    const cup = cupHistory([h])[0] || {};
+    const score = reviewSeasonScore(h.rank, h.cupRound == null ? -1 : Number(h.cupRound), st.winRate, st.kd, st.avgDmg);
+    rows.push({
+      seasonId: h.seasonId,
+      league: h.league || '',
+      rank: h.rank == null ? null : Number(h.rank),
+      cupRound: h.cupRound == null ? -1 : Number(h.cupRound),
+      cupLabel: cup.cupLabel || '',
+      winRate: st.winRate,
+      kd: st.kd,
+      avgDmg: st.avgDmg,
+      score,
+      arrow: '→'
+    });
+  }
+  if (currentSeasonId != null && !seen.has(currentSeasonId) && mh.some((m) => m && m.seasonId === currentSeasonId)) {
+    seen.add(currentSeasonId);
+    const st = seasonStats(mh, currentSeasonId);
+    const score = reviewSeasonScore(currentRank, currentCupRound, st.winRate, st.kd, st.avgDmg);
+    rows.push({
+      seasonId: currentSeasonId,
+      league: s.team.league || '',
+      rank: currentRank,
+      cupRound: currentCupRound,
+      cupLabel: cupRoundLabelForReview(currentCupRound),
+      winRate: st.winRate,
+      kd: st.kd,
+      avgDmg: st.avgDmg,
+      score,
+      arrow: '→'
+    });
+  }
+
+  for (let i = 1; i < rows.length; i++) {
+    const delta = rows[i].score - rows[i - 1].score;
+    rows[i].arrow = delta >= 5 ? '↑' : (delta <= -5 ? '↓' : '→');
+  }
+
+  const goals = Array.isArray(s && s.goalHistory) ? s.goalHistory : [];
+  const goalsAchieved = goals.filter((g) => g && g.achieved).length;
+  const goalRate = goals.length ? Math.round((goalsAchieved / goals.length) * 100) : 0;
+  const overallStats = careerSummary(mh);
+  const trophy = trophyCase(history);
+  const unlocked = Array.isArray(s && s.player && s.player.achievements) ? s.player.achievements.length : 0;
+  const score = rows.length ? Math.round(rows.reduce((a, r) => a + r.score, 0) / rows.length) : 0;
+  const recent = rows.slice(-2);
+  const earlier = rows.slice(0, Math.max(0, rows.length - 2));
+  const recentAvg = recent.length ? recent.reduce((a, r) => a + r.score, 0) / recent.length : score;
+  const earlierAvg = earlier.length ? earlier.reduce((a, r) => a + r.score, 0) / earlier.length : recentAvg;
+  const delta = Math.round(recentAvg - earlierAvg);
+  const growth = delta >= 5 ? 'up' : (delta <= -5 ? 'down' : 'flat');
+  const growthText = growth === 'up' ? '成长 ↑ 近两季评分提升' : (growth === 'down' ? '成长 ↓ 近期表现回落' : '成长 → 表现稳定');
+  let verdict = '生涯正处上升期，保持训练与关键战节奏即可';
+  if (score >= 80) verdict = '生涯状态出色，已具备争冠和稳定运营的配置';
+  else if (score >= 65) verdict = '生涯竞争力稳定，可围绕阵容短板继续补强';
+  else if (score >= 45) verdict = '生涯仍有明显成长空间，优先稳定胜率与场均伤害';
+  else if (rows.length >= 3) verdict = '近期战绩回落，建议收紧阵容投入并优先重建稳定轮换';
+
+  return {
+    score,
+    growth,
+    growthText,
+    delta,
+    goalRate,
+    goalsAchieved,
+    goalsTotal: goals.length,
+    rows,
+    honors: {
+      bestRank: Math.min(...history.filter((h) => h && h.rank != null).map((h) => Number(h.rank)), currentRank == null ? 99 : currentRank),
+      championCount: trophy.championCount,
+      runnerUpCount: trophy.runnerUpCount,
+      mvpTotal: mh.reduce((a, m) => a + (m && m.mvp ? 1 : 0), 0),
+      achievementsUnlocked: unlocked,
+      totalPrize: overallStats.totalMoney
+    },
+    metrics: {
+      matches: overallStats.matches,
+      winRate: overallStats.winRate,
+      kd: overallStats.kd,
+      avgDmg: overallStats.avgDmg
+    },
+    verdict
+  };
+}
+
+function reviewSeasonScore(rank, cupRound, winRate, kd, avgDmg) {
+  const rankScore = rank == null ? 30 : clamp((11 - Number(rank)) * 5, 5, 50);
+  const cupScore = cupRound == null || cupRound < 0 ? 2 : clamp(Number(cupRound) * 5, 0, 15);
+  const winScore = clamp(Math.round((Number(winRate) || 0) * 0.25), 0, 25);
+  const kdScore = clamp(Math.round((Number(kd) || 0) * 2), 0, 10);
+  const dmgScore = clamp(Math.round((Number(avgDmg) || 0) / 40), 0, 10);
+  return clamp(rankScore + cupScore + winScore + kdScore + dmgScore, 0, 100);
+}
+
+function cupRoundLabelForReview(n) {
+  return n === 3 ? '冠军' : n === 2 ? '亚军' : n === 1 ? '四强' : n === 0 ? '八强' : '未结束';
+}
+
 function promoteLeague(league, rank) {
   if (league === '甲级') return rank >= 7 ? '乙级' : '甲级';
   if (league === '乙级') return rank <= 2 ? '甲级' : (rank >= 7 ? '丙级' : '乙级');

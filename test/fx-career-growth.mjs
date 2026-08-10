@@ -2,7 +2,7 @@ import {
   resetCareer, setStorage, setRng, getState, settlePlayerMatch, train, trainTeammate, sellPlayer, sellPreview, buyPlayer, candidates, filterCandidates,
   nextSeason, save, loadCareer, __clearStateForTest, candidateProfile,
   sponsorIncome, sponsorPreview, sponsorSeasonPreview, homeTicketIncome, ticketPreview, cashflowForecast, seasonBudget, financialRisk, financeTrend, seasonFinancialSummary, remainingPrizePreview, transferProfit, facilityStatus, upgradeFacility, formBonus, fatiguePenalty, careerMorale, restPlayer, seasonGoals, goalProgress, trainingPreview, trainingSuggestion, rotationAdvice, trainingHistory, rosterStatus, transferBudget, contractStatus, renewPlayer, rosterContribution, positionBalance,
-  achievementDefs, achievements, achievementCatalog, achievementProgress, careerRecords, honorTitle, migrateCareerState, matchReadiness, seasonGoalHistory, goalAdvice, lastRecordAlerts, seasonRecordAlerts, recordDetails, seasonHighlights
+  achievementDefs, achievements, achievementCatalog, achievementProgress, careerRecords, honorTitle, migrateCareerState, matchReadiness, seasonGoalHistory, goalAdvice, lastRecordAlerts, seasonRecordAlerts, recordDetails, seasonHighlights, careerReview
 } from '../src/career.js';
 
 const ok = (name, cond) => {
@@ -262,6 +262,18 @@ const recordAlertCompare = lastRecordAlerts(s);
 ok('record refresh compare', recordAlertCompare.some((x) => x.type === 'bestKills' && x.oldValue === 4 && x.newValue === 6) && recordAlertCompare.some((x) => x.type === 'longestWinStreak' && x.oldValue === 0 && x.newValue === 1));
 const recordDetailRows = recordDetails(s);
 ok('record details table', recordDetailRows.length >= 7 && recordDetailRows.some((r) => r.key === 'bestKills' && r.value === 6 && r.achievedSeason === 1) && recordDetailRows.some((r) => r.key === 'bestDmg' && r.value === 420));
+
+s = resetCareer();
+s.history.push({ seasonId: 1, league: '乙级', rank: 1, cupRound: 3, prize: 30000 });
+s.history.push({ seasonId: 2, league: '甲级', rank: 8, cupRound: 0, prize: 5000 });
+s.goalHistory = [
+  { seasonId: 1, achieved: true, reward: 10000 },
+  { seasonId: 2, achieved: false, reward: 12000 }
+];
+s.matchHistory.push({ seasonId: 1, win: true, kills: 10, deaths: 3, dmg: 800, money: 2000, mvp: true });
+s.matchHistory.push({ seasonId: 2, win: false, kills: 4, deaths: 8, dmg: 300, money: 500 });
+const review = careerReview(s);
+ok('career review report', review && review.rows.length === 2 && review.goalRate === 50 && review.honors.bestRank === 1 && review.honors.championCount === 1 && review.honors.mvpTotal === 1 && review.rows.every((r) => r.arrow && r.score > 0));
 
 const rest = restPlayer();
 ok('rest player', rest.ok && s.player.fatigue === 0 && s.team.rested === true);

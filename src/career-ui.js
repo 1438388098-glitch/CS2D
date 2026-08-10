@@ -2,7 +2,7 @@ import {
   loadCareer, getState, titleFor, startCareerMatch, careerEndMatch, abandonPendingMatch, simulatePlayerMatch, resetCareer,
   train, sellPlayer, sellPreview, buyPlayer, renewPlayer, candidates, filterCandidates, candidateProfile, nextSeason, seasonReport, nextMatch, nextMatchInfo, matchImportance, teamRecentForm, matchReadiness, teamProfile, leagueRules,
   transferWindowOpen, transferWindowInfo, transferBudget, transferProfit, contractStatus, isStorageAvailable, cupMap, cupPrizeInfo, cupMapForRound, fixtureMapFor, fixtureMatchRecord, winChance, trainingTiers, trainingPreview, trainingSuggestion, rotationAdvice, trainingHistory, rosterStatus, facilityStatus, upgradeFacility, xpNeeded,
-  seasonStats, seasonAwards, seasonPerformanceSummary, seasonSeries, seasonStreaks, careerSummary, matchDetail, seasonTimeline, headToHead, importantMatches, seasonTrends, favoriteMatches, cupHistory, trophyCase, careerTimeline,
+  seasonStats, seasonAwards, seasonPerformanceSummary, seasonSeries, seasonStreaks, careerSummary, matchDetail, seasonTimeline, headToHead, importantMatches, seasonTrends, favoriteMatches, cupHistory, trophyCase, careerTimeline, careerReview,
   sponsorIncome, sponsorPreview, sponsorSeasonPreview, homeTicketIncome, ticketPreview, cashflowForecast, seasonBudget, financialRisk, financeTrend, seasonFinancialSummary, remainingPrizePreview, formBonus, fatiguePenalty, careerMorale, restPlayer, seasonGoals, seasonPace, goalProgress, goalAdvice, relegationProjection, rosterContribution,
   seasonGoalHistory,
   positionBalance,
@@ -738,8 +738,20 @@ function renderSeasonStats(s) {
     '<div class="career-kpi"><b>' + awards.avgKills + '</b><span>场均击杀</span></div>' +
     '<div class="career-kpi"><b>' + awards.avgDmg + '</b><span>场均伤害</span></div>' +
     '</div>' + (awards.topPerformance ? '<div class="career-row"><span>最佳单场 · ' + esc(awards.topPerformance.oppName || awards.topPerformance.oppId || '-') + ' · ' + esc(mapName(awards.topPerformance.mapId || '')) + '</span><b>' + awards.topPerformance.kills + 'K / ' + awards.topPerformance.deaths + 'D · ' + awards.topPerformance.dmg + ' 伤 · ' + (awards.topPerformance.mvp ? 'MVP' : awards.topPerformance.win ? '胜利' : '失利') + '</b></div>' : '<div class="career-news">暂无比赛数据</div>') + '</div>';
+  const review = careerReview(s);
+  const reviewRows = review.rows.slice().reverse().map((r) => '<div class="career-row' + (r.score >= 70 ? ' win' : r.score < 45 ? ' lose' : '') + '"><span>第 ' + r.seasonId + ' 赛季 · ' + esc(r.league) + ' · 第 ' + (r.rank == null ? '-' : r.rank) + ' 名 · 杯赛 ' + esc(r.cupLabel || '未结束') + '</span><b>' + r.score + ' 分 ' + esc(r.arrow) + ' · ' + r.winRate + '% · K/D ' + r.kd + '</b></div>').join('') || '<div class="career-news">暂无赛季记录</div>';
+  const reviewHtml = '<div class="career-card"><h4>生涯回顾报告</h4><div class="career-kpis">' +
+    '<div class="career-kpi"><b>' + review.score + '</b><span>生涯评分</span></div>' +
+    '<div class="career-kpi"><b>' + esc(review.growthText) + '</b><span>成长箭头</span></div>' +
+    '<div class="career-kpi"><b>' + review.goalRate + '%</b><span>目标达成率</span></div>' +
+    '<div class="career-kpi"><b>' + review.honors.bestRank + '</b><span>最佳排名</span></div>' +
+    '<div class="career-kpi"><b>' + review.honors.championCount + '</b><span>杯赛冠军</span></div>' +
+    '<div class="career-kpi"><b>' + review.honors.achievementsUnlocked + '</b><span>已解锁成就</span></div></div>' +
+    '<div class="career-stats"><span>' + esc(review.verdict) + ' · 目标 ' + review.goalsAchieved + ' / ' + review.goalsTotal + ' · 奖金 ' + money(review.honors.totalPrize) + '</span></div>' +
+    reviewRows + '</div>';
   return '<div class="career-card"><h4>赛季数据统计</h4><div class="career-season">' + selBtns + '</div><div class="career-kpis">' + kpiHtml + '</div></div>' +
     awardHtml +
+    reviewHtml +
     '<div class="career-card"><h4>单场走势 · 第 ' + sel + ' 赛季（共 ' + stats.matches + ' 场）</h4><div class="career-series">' + seriesHtml + '</div><div class="career-stats"><span>当前连胜 ' + streaks.current + ' · 最长连胜 ' + streaks.longest + '</span><span>绿 = 胜 · 红 = 负 · 描金 = 杯赛 · 高度 = 击杀数</span></div></div>' +
     '<div class="career-card"><h4>赛季比赛时间线</h4>' + timelineRows + '</div>' +
     '<div class="career-card"><h4>赛季近场明细</h4>' + detailRows + '</div>' +
