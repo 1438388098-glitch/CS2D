@@ -1183,6 +1183,22 @@ export function favoriteMatches(history, limit = 20) {
   return list.slice(-Math.max(0, limit)).reverse().map(matchDetail);
 }
 
+export function cupHistory(seasonHistory) {
+  const labels = { 0: '八强', 1: '四强', 2: '亚军', 3: '冠军' };
+  return (Array.isArray(seasonHistory) ? seasonHistory : [])
+    .filter((h) => h && h.cupRound != null)
+    .slice()
+    .reverse()
+    .map((h) => ({
+      seasonId: h.seasonId,
+      league: h.league,
+      rank: h.rank,
+      cupRound: h.cupRound,
+      cupLabel: labels[h.cupRound] || '未参加',
+      prize: h.prize || 0
+    }));
+}
+
 export function seasonStreaks(series) {
   const list = Array.isArray(series) ? series : [];
   let current = 0;

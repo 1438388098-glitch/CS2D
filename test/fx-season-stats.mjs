@@ -1,7 +1,7 @@
 import {
   resetCareer, setStorage, setRng, getState, settlePlayerMatch, nextSeason,
   save, loadCareer, __clearStateForTest,
-  seasonStats, seasonSeries, seasonStreaks, careerSummary, matchDetail, seasonTimeline, headToHead, importantMatches, seasonTrends, favoriteMatches
+  seasonStats, seasonSeries, seasonStreaks, careerSummary, matchDetail, seasonTimeline, headToHead, importantMatches, seasonTrends, favoriteMatches, cupHistory
 } from '../src/career.js';
 
 const ok = (name, cond) => {
@@ -107,6 +107,12 @@ const fav = favoriteMatches([
 ]);
 ok('favoriteMatches criteria', fav.length === 2 && fav[0].kills === 16 && fav[1].mvp === true);
 ok('matchDetail highlight fallback', matchDetail({ win: true, kills: 15, deaths: 5, dmg: 1050, money: 1500 }).highlight === true);
+
+const cups = cupHistory([
+  { seasonId: 1, league: '乙级', rank: 2, cupRound: 3, prize: 45000 },
+  { seasonId: 2, league: '甲级', rank: 6, cupRound: 2, prize: 20000 }
+]);
+ok('cupHistory champion', cups.length === 2 && cups[0].seasonId === 2 && cups[0].cupLabel === '亚军' && cups[1].cupLabel === '冠军');
 
 const trends = seasonTrends(h);
 ok('seasonTrends seasons', trends.length === 2 && trends[0].seasonId === 1 && trends[1].seasonId === 2);
