@@ -786,6 +786,10 @@ export function applyPlayerResult(s, r) {
   const { win, kills, deaths, mvp, score, isCup, noReward } = r;
   const match = currentMatch(s, !!isCup);
   const opp = matchOpponent(match, !!isCup);
+  const oppTeam = opp ? s.season.teams.find((x) => x.id === opp) : null;
+  const matchMapId = isCup ? cupMap(s) : fixtureMapFor(s, match);
+  const matchImportanceLabel = isCup ? '杯赛' : matchImportance(s, match);
+  const preMatchRating = Math.round(effectiveTeamRating(s));
   s.player.seasonStats.played++;
   if (win) s.player.seasonStats.w++; else s.player.seasonStats.l++;
   s.player.seasonStats.kills += kills;
@@ -844,7 +848,11 @@ export function applyPlayerResult(s, r) {
     mvp: !!mvp,
     dmg: r.dmg != null ? Math.round(r.dmg) : Math.round((kills || 0) * 70),
     money: bankGain,
-    score: score || null
+    score: score || null,
+    mapId: matchMapId || null,
+    oppRating: oppTeam ? oppTeam.rating : null,
+    playerRating: preMatchRating,
+    importance: matchImportanceLabel
   });
   if (s.matchHistory.length > 500) s.matchHistory.splice(0, s.matchHistory.length - 500);
   updateRecords(s, win, kills, bankGain + sponsor, isCup && s.season.cup.champion === 'player');

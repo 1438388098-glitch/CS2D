@@ -83,7 +83,7 @@ for (let i = 0; i < 3; i++) {
 }
 const s1 = getState();
 ok('matchHistory recorded', Array.isArray(s1.matchHistory) && s1.matchHistory.length === 3);
-ok('matchHistory fields', s1.matchHistory.every((m) => m.seasonId === 1 && typeof m.win === 'boolean' && m.kills === 6 && m.deaths === 4 && m.money === (m.win ? 1500 : 300) && m.dmg === 420 && (m.venue === 'home' || m.venue === 'away')));
+ok('matchHistory fields', s1.matchHistory.every((m) => m.seasonId === 1 && typeof m.win === 'boolean' && m.kills === 6 && m.deaths === 4 && m.money === (m.win ? 1500 : 300) && m.dmg === 420 && (m.venue === 'home' || m.venue === 'away') && m.mapId && m.oppRating > 0 && m.playerRating > 0 && m.importance));
 const st1 = seasonStats(s1.matchHistory, 1);
 ok('integrate seasonStats', st1.matches === 3 && st1.wins === 2 && st1.losses === 1 && st1.kills === 18 && st1.deaths === 12 && st1.totalMoney === 3300 && st1.avgDmg === 420);
 ok('integrate kd', st1.kd === Math.round(18 / 12 * 100) / 100);
