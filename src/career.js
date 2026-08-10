@@ -611,11 +611,42 @@ export function nextMatchInfo(s) {
   };
 }
 
+export function cupMapForRound(round) {
+  const order = { QF: 0, SF: 1, F: 2 };
+  return MAP_IDS[order[round] != null ? order[round] : 0];
+}
+
+export function cupPrizeInfo() {
+  return {
+    perRound: 5000,
+    champion: 30000,
+    rounds: [
+      { key: 'QF', label: '八强', prize: 5000, map: cupMapForRound('QF') },
+      { key: 'SF', label: '四强', prize: 5000, map: cupMapForRound('SF') },
+      { key: 'F', label: '决赛', prize: 35000, map: cupMapForRound('F') }
+    ]
+  };
+}
+
+export function cupPreview(s) {
+  const b = s.season && s.season.cup && Array.isArray(s.season.cup.bracket) ? s.season.cup.bracket : [];
+  return b.map((m) => ({
+    round: m.round,
+    roundName: cupMapForRound(m.round) ? (m.round === 'QF' ? '八强' : m.round === 'SF' ? '四强' : '决赛') : m.round,
+    a: m.a,
+    b: m.b,
+    map: cupMapForRound(m.round),
+    prize: m.round === 'F' ? 35000 : 5000,
+    played: !!m.played,
+    winner: m.winner || null,
+    score: m.score || null
+  }));
+}
+
 export function cupMap(s) {
   // 杯赛地图按轮次固定：八强 dust2、四强 canal、决赛 metro（避免连续场次重复地图）
   const m = findCupMatch(s);
-  const order = { QF: 0, SF: 1, F: 2 };
-  return MAP_IDS[order[m && m.round] != null ? order[m.round] : 0];
+  return cupMapForRound(m && m.round);
 }
 
 function gainXp(s, amount) {

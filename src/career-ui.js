@@ -1,7 +1,7 @@
 import {
   loadCareer, getState, titleFor, startCareerMatch, careerEndMatch, abandonPendingMatch, simulatePlayerMatch, resetCareer,
   train, sellPlayer, buyPlayer, candidates, nextSeason, seasonReport, nextMatch, nextMatchInfo, matchImportance, teamRecentForm,
-  transferWindowOpen, isStorageAvailable, cupMap, trainingTiers, xpNeeded,
+  transferWindowOpen, isStorageAvailable, cupMap, cupPrizeInfo, cupMapForRound, trainingTiers, xpNeeded,
   seasonStats, seasonSeries, seasonStreaks, careerSummary,
   sponsorIncome, formBonus, fatiguePenalty, careerMorale, restPlayer, seasonGoals, seasonPace,
   achievementDefs, achievements, careerRecords
@@ -321,6 +321,7 @@ function renderStandings(s) {
 function renderCup(s) {
   const b = s.season.cup.bracket || [];
   if (!b.length) return '<div class="career-card"><h4>杯赛</h4><p>第 14 轮结束后进入。</p></div>';
+  const prizes = cupPrizeInfo();
   const names = (m, side) => {
     const id = side === 'a' ? m.a : m.b;
     if (!id) return '待定';
@@ -328,19 +329,20 @@ function renderCup(s) {
   };
   let html = '<div class="career-card"><h4>淘汰赛</h4>';
   for (const round of ['QF', 'SF', 'F']) {
-    html += '<div class="career-cup-round"><b>' + cn(round, CUP_CN) + '</b>';
+    const roundPrize = prizes.rounds.find((x) => x.key === round);
+    html += '<div class="career-cup-round"><b>' + cn(round, CUP_CN) + ' · 晋级奖 ' + money(roundPrize ? roundPrize.prize : 0) + '</b>';
     for (const m of b.filter((x) => x.round === round)) {
       const mine = !m.played && (m.a === 'player' || m.b === 'player');
-      html += '<div class="career-cup-match' + (mine ? ' mine' : '') + '">' + names(m, 'a') + ' 对 ' + names(m, 'b') + (m.played ? ' · ' + m.score[0] + ':' + m.score[1] : '');
+      html += '<div class="career-cup-match' + (mine ? ' mine' : '') + '">' + names(m, 'a') + ' 对 ' + names(m, 'b') + ' <span>地图 ' + esc(mapName(cupMapForRound(m.round))) + '</span>' + (m.played ? ' · ' + m.score[0] + ':' + m.score[1] : '');
       if (mine) {
         const opp = m.a === 'player' ? m.b : m.a;
-        html += ' <span>地图 ' + esc(mapName(cupMap(s))) + '</span> <button class="btn small" data-act="play" data-opp="' + opp + '" data-venue="home" data-cup="1">开赛</button> <button class="btn small" data-act="sim">模拟本场</button>';
+        html += ' <button class="btn small" data-act="play" data-opp="' + opp + '" data-venue="home" data-cup="1">开赛</button> <button class="btn small" data-act="sim">模拟本场</button>';
       }
       html += '</div>';
     }
     html += '</div>';
   }
-  return html + '</div><div class="career-card"><h4>奖金</h4><p>每场晋级奖 5000 · 冠军另奖 30000</p></div>';
+  return html + '</div><div class="career-card"><h4>奖金</h4><p>每轮晋级奖 ' + money(prizes.perRound) + ' · 冠军另奖 ' + money(prizes.champion) + ' · 决赛单场最高 ' + money(35000) + '</p></div>';
 }
 
 function renderSettlement(s) {
