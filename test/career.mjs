@@ -252,7 +252,7 @@ openCareer();
 const panelHtml = document.getElementById('careerPanel').innerHTML;
 ok('career ui renders', panelHtml.includes('生涯模式') && panelHtml.includes('赛季结算'));
 const dashHtml = __renderTabForTest('dash');
-ok('career readiness renders', dashHtml.includes('赛前状态') && dashHtml.includes('最终评级') && dashHtml.includes('对手评级'));
+ok('career readiness renders', dashHtml.includes('赛前状态') && dashHtml.includes('最终评级') && dashHtml.includes('对手评级') && dashHtml.includes('career-team-chip'));
 for (const key of ['dash', 'schedule', 'training', 'roster', 'standings', 'cup', 'finance', 'stats']) {
   const html = __renderTabForTest(key);
   ok('career tab renders ' + key, html && html.length > 0);
@@ -266,7 +266,7 @@ ok('career training radar renders', trainingHtml.includes('career-radar') && tra
 const financeHtml = __renderTabForTest('finance');
 ok('career finance renders', financeHtml.includes('财务概览') && financeHtml.includes('资金流水') && financeHtml.includes('赞助目标') && financeHtml.includes('财务风险提示') && financeHtml.includes('建议模式'));
 const standingsHtml = __renderTabForTest('standings');
-ok('career standings form column', standingsHtml.includes('近5') && standingsHtml.includes('预测最终') && standingsHtml.includes('升降级预测'));
+ok('career standings form column', standingsHtml.includes('近5') && standingsHtml.includes('预测最终') && standingsHtml.includes('升降级预测') && standingsHtml.includes('联赛规则') && standingsHtml.includes('career-team-sub'));
 const schedState = getState();
 const schedFi = schedState.season.fixtures.find((f) => f.home === 'player' || f.away === 'player');
 schedFi.played = true;
@@ -289,6 +289,6 @@ schedState.matchHistory.push({
 });
 save();
 const scheduleHtml = __renderTabForTest('schedule');
-ok('career schedule calendar', scheduleHtml.includes('主场') && scheduleHtml.includes('future') && scheduleHtml.includes('地图') && scheduleHtml.includes('data-act="fixture-detail"'));
+ok('career schedule calendar', scheduleHtml.includes('主场') && scheduleHtml.includes('future') && scheduleHtml.includes('地图') && scheduleHtml.includes('data-act="fixture-detail"') && scheduleHtml.includes('战队档案') && scheduleHtml.includes('career-team-chip'));
 
 console.log('career: all PASS');

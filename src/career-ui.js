@@ -1,6 +1,6 @@
 import {
   loadCareer, getState, titleFor, startCareerMatch, careerEndMatch, abandonPendingMatch, simulatePlayerMatch, resetCareer,
-  train, sellPlayer, sellPreview, buyPlayer, renewPlayer, candidates, filterCandidates, candidateProfile, nextSeason, seasonReport, nextMatch, nextMatchInfo, matchImportance, teamRecentForm, matchReadiness,
+  train, sellPlayer, sellPreview, buyPlayer, renewPlayer, candidates, filterCandidates, candidateProfile, nextSeason, seasonReport, nextMatch, nextMatchInfo, matchImportance, teamRecentForm, matchReadiness, teamProfile, leagueRules,
   transferWindowOpen, transferWindowInfo, transferBudget, transferProfit, contractStatus, isStorageAvailable, cupMap, cupPrizeInfo, cupMapForRound, fixtureMapFor, fixtureMatchRecord, winChance, trainingTiers, trainingPreview, trainingSuggestion, rotationAdvice, trainingHistory, rosterStatus, facilityStatus, upgradeFacility, xpNeeded,
   seasonStats, seasonAwards, seasonPerformanceSummary, seasonSeries, seasonStreaks, careerSummary, matchDetail, seasonTimeline, headToHead, importantMatches, seasonTrends, favoriteMatches, cupHistory, trophyCase, careerTimeline,
   sponsorIncome, sponsorPreview, sponsorSeasonPreview, homeTicketIncome, ticketPreview, cashflowForecast, seasonBudget, financialRisk, financeTrend, seasonFinancialSummary, remainingPrizePreview, formBonus, fatiguePenalty, careerMorale, restPlayer, seasonGoals, seasonPace, goalProgress, relegationProjection, rosterContribution,
@@ -26,6 +26,25 @@ function esc(s) {
 function toast(t) { if (game && game.ui) game.ui.showToast(t); }
 function money(n) { return Number(n || 0).toLocaleString('zh-CN'); }
 function teamName(s, id) { const t = s.season.teams.find((x) => x.id === id); return t ? t.name : id; }
+function profileChip(p) {
+  if (!p) return '';
+  const maps = (p.mapPrefs || []).slice(0, 3).map(mapName).join(' / ');
+  const core = p.corePlayer ? p.corePlayer.name + ' (' + p.corePlayer.rating + ')' : '未定';
+  return '<div class="career-team-chip"><b>' + esc(p.name) + '</b>' +
+    '<span>' + esc(p.style || '未知风格') + ' · ' + esc(p.tactics || '待定战术') + ' · 核心 ' + esc(core) + '</span>' +
+    '<span>地图 ' + esc(maps || '-') + ' · 青训 ' + p.youthCount + ' · ' + esc(p.status || '健康') + ' · 状态 ' + esc(p.recentForm || '-') + '</span></div>';
+}
+function leagueRulesHtml(s) {
+  const rules = leagueRules(s.team && s.team.league);
+  return '<div class="career-card"><h4>' + esc(rules.key) + '联赛规则</h4><div class="career-kpis">' +
+    '<div class="career-kpi"><b>' + esc(rules.identity) + '</b><span>联赛定位</span></div>' +
+    '<div class="career-kpi"><b>' + esc(rules.competition) + '</b><span>竞争格局</span></div>' +
+    '<div class="career-kpi"><b>' + rules.mediaPressure + '</b><span>媒体压力</span></div>' +
+    '<div class="career-kpi"><b>' + Math.round(rules.youthBias * 100) + '%</b><span>青训倾向</span></div>' +
+    '<div class="career-kpi"><b>' + Math.round(rules.tacticalBias * 100) + '</b><span>战术倾向</span></div>' +
+    '<div class="career-kpi"><b>' + money(rules.sponsor) + '</b><span>每场赞助</span></div></div>' +
+    '<div class="career-stats"><span>胜 ' + money(rules.matchWin) + ' · 负 ' + money(rules.matchLose) + ' · 主场票房 ' + money(rules.ticketBase) + ' · 赛季预算 ' + money(rules.budgetBase) + ' · 奖金系数 ' + rules.prizeScale + '</span></div></div>';
+}
 const ATTR_CN = { aim: '射击', move: '移速', react: '反应', nade: '道具' };
 const ROLE_CN = ['突破', '补枪', '指挥', '自由人'];
 const CUP_CN = { QF: '八强', SF: '四强', F: '决赛' };
@@ -250,6 +269,7 @@ function renderDash(s) {
     const venue = info ? info.venue : (s.season.cup.phase === 'active' ? 'home' : (nm.home === 'player' ? 'home' : 'away'));
     matchHtml += '<p>对阵 <b>' + esc(info ? info.oppName : oppId) + '</b> · 评级 ' + (info && info.rating != null ? info.rating : '-') + (info ? ' · ' + info.threat : '') + ' · ' + (venue === 'home' ? '主场' : '客场') + ' · ' + esc(mapName((info && info.mapId) || (opp || {}).homeMap || '')) + (s.season.cup.phase === 'active' ? ' · 杯赛' : '') + '</p>';
     if (info) matchHtml += '<p class="career-scout">对手排名 ' + (info.rank || '-') + ' · 近 5 场 ' + (info.form || '暂无') + ' · 场均击杀 ' + (info.scout ? info.scout.avgKills : '-') + ' · 主场图 ' + esc(mapName((info.scout && info.scout.homeMap) || '')) + ' · 重要性 ' + info.importance + ' · 预估胜率 ' + (info.winChance != null ? info.winChance + '%' : '-') + '</p>';
+    if (info && teamProfile(s, info.oppId)) matchHtml += profileChip(teamProfile(s, info.oppId));
     matchHtml += '<div class="career-actions"><button class="btn primary small" data-act="play" data-opp="' + oppId + '" data-venue="' + venue + '" data-cup="' + (s.season.cup.phase === 'active' ? '1' : '0') + '">开赛</button><button class="btn small" data-act="sim">模拟本场</button></div>';
   } else {
     matchHtml += '<p>' + (s.season.cup.phase === 'finished' ? '本赛季已结束' : (s.season.cup.phase === 'active' ? '杯赛已淘汰，等待赛季结算' : '当前轮次已打完')) + '</p>';
@@ -283,7 +303,10 @@ function renderDash(s) {
 }
 
 function renderSchedule(s) {
-  let html = '<div class="career-card"><h4>联赛赛程</h4>';
+  let html = leagueRulesHtml(s) +
+    '<div class="career-card"><h4>战队档案</h4>' +
+    s.season.teams.map((t) => profileChip(teamProfile(s, t.id))).join('') +
+    '</div><div class="career-card"><h4>联赛赛程</h4>';
   for (let r = 1; r <= s.season.totalRounds; r++) {
     const fs = s.season.fixtures.filter((f) => f.round === r);
     html += '<div class="career-round' + (r === s.season.round ? ' cur' : '') + '"><b>第 ' + r + ' 轮</b><div class="career-fixtures">';
@@ -422,7 +445,7 @@ function renderStandings(s) {
   const list = [...s.season.standings].sort((a, b) => b.pts - a.pts || b.w - a.w);
   const pace = seasonPace(s);
   const proj = relegationProjection(s);
-  let html = '<div class="career-card"><h4>积分榜</h4><div class="career-table">';
+  let html = leagueRulesHtml(s) + '<div class="career-card"><h4>积分榜</h4><div class="career-table">';
   html += '<div class="career-row head"><span>球队</span><b>场</b><b>胜</b><b>平</b><b>负</b><b>近5</b><b>分</b></div>';
   for (let i = 0; i < list.length; i++) {
     const x = list[i];
@@ -430,7 +453,10 @@ function renderStandings(s) {
     const promo = (s.team.league === '丙级' || s.team.league === '乙级') && rank <= 2;
     const releg = (s.team.league === '甲级' || s.team.league === '乙级') && rank >= 7;
     const cls = 'career-row' + (x.teamId === 'player' ? ' mine' : '') + (promo ? ' promo' : '') + (releg ? ' releg' : '');
-    html += '<div class="' + cls + '"><span>' + esc(teamName(s, x.teamId)) + '</span><b>' + x.played + '</b><b>' + x.w + '</b><b>' + x.d + '</b><b>' + x.l + '</b><b>' + (teamRecentForm(s, x.teamId) || '-') + '</b><b>' + x.pts + '</b></div>';
+    const profile = teamProfile(s, x.teamId);
+    html += '<div class="' + cls + '"><span>' + esc(teamName(s, x.teamId)) +
+      (profile ? '<i class="career-team-sub">' + esc(profile.style || '') + ' · ' + esc((profile.corePlayer && profile.corePlayer.name) || '') + '</i>' : '') +
+      '</span><b>' + x.played + '</b><b>' + x.w + '</b><b>' + x.d + '</b><b>' + x.l + '</b><b>' + (teamRecentForm(s, x.teamId) || '-') + '</b><b>' + x.pts + '</b></div>';
   }
   const riskHtml = '<div class="career-card"><h4>升降级预测</h4><div class="career-kpis">' +
     '<div class="career-kpi"><b>' + proj.rank + '</b><span>当前排名</span></div>' +

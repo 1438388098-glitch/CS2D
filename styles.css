@@ -264,6 +264,7 @@ td.money{color:var(--gold);font-family:var(--f-num)}
 #fovSel{flex:1;min-width:120px;accent-color:var(--accent);cursor:pointer}
 #fovSelVal{min-width:34px;text-align:right;color:var(--txt-1);font-family:var(--f-num)}
 #fpsHint{position:fixed;bottom:14px;left:50%;transform:translateX(-50%);background:rgba(10,13,17,.72);border:1px solid var(--line-1);border-radius:var(--r-m);padding:6px 14px;font-size:12px;color:var(--txt-2);letter-spacing:1px;white-space:nowrap;pointer-events:none;z-index:8}
+#perfMonitor{position:fixed;top:10px;left:12px;min-width:128px;padding:7px 10px;background:rgba(8,11,15,.78);border:1px solid rgba(255,255,255,.16);border-radius:6px;font:12px/1.45 var(--f-num),Consolas,monospace;color:#dfe6ee;letter-spacing:0;white-space:pre;pointer-events:none;z-index:60}
 #keybindList{max-height:34vh;overflow-y:auto;padding-right:4px}
 #end .panel{width:520px;text-align:center;padding:26px 34px}
 #end .final{font-size:40px;font-weight:800;letter-spacing:8px;margin:10px 0 4px}
@@ -523,6 +524,10 @@ td.money{color:var(--gold);font-family:var(--f-num)}
 .career-grid2{display:grid;grid-template-columns:1fr 1fr;gap:12px;align-items:start}
 .career-card{background:rgba(15,19,26,.9);border:1px solid var(--line-2);border-radius:8px;padding:12px 14px;min-width:0}
 .career-card h4{margin:0 0 10px;font-size:14px;letter-spacing:.5px}
+.career-team-chip{display:flex;flex-direction:column;gap:3px;padding:8px 10px;margin:6px 0;border:1px solid var(--line-2);border-radius:6px;background:rgba(255,255,255,.03)}
+.career-team-chip b{font-size:13px;color:#fff}
+.career-team-chip span{color:var(--txt-2);font-size:11px}
+.career-team-sub{display:block;font-style:normal;color:var(--txt-2);font-size:11px;margin-top:2px}
 .career-attr{display:flex;align-items:center;gap:8px;margin:5px 0;font-size:12px}
 .career-attr span{width:44px;color:var(--txt-2)}
 .career-bar{flex:1;height:8px;background:rgba(255,255,255,.08);border-radius:4px;overflow:hidden}
@@ -580,6 +585,17 @@ td.money{color:var(--gold);font-family:var(--f-num)}
 .career-row.releg{background:rgba(255,93,93,.08)}
 .career-row.releg b:last-child{color:#ff5d5d}
 .career-player-card.empty{border-style:dashed;color:var(--txt-2);font-size:12px;justify-content:center;min-height:76px}
+.career-season{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px}
+.career-season .btn{border:1px solid var(--line-2);background:rgba(255,255,255,.03);color:var(--txt-2)}
+.career-season .btn.sel{border-color:var(--accent);color:#fff;background:rgba(255,138,42,.14)}
+.career-kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(108px,1fr));gap:8px}
+.career-kpi{background:rgba(255,255,255,.04);border:1px solid var(--line-2);border-radius:7px;padding:8px 10px;display:flex;flex-direction:column;gap:2px;min-width:0}
+.career-kpi b{font-size:16px;font-family:var(--f-num);color:var(--gold);white-space:nowrap}
+.career-kpi span{font-size:11px;color:var(--txt-2)}
+.career-series{display:flex;gap:3px;align-items:flex-end;flex-wrap:wrap;margin-top:8px}
+.career-series i{display:inline-block;width:14px;height:24px;min-height:6px;border-radius:3px;background:#ff5d5d;vertical-align:bottom}
+.career-series i.win{background:#58d68d}
+.career-series i.cup{border:1px solid #ffd75e}
 /* ---------- 主菜单 UI 优化 ---------- */
 .menu-panel{width:min(1120px,96vw);padding:18px 0 22px}
 .menu-badges{display:flex;justify-content:center;gap:8px;margin-top:10px;flex-wrap:wrap}
