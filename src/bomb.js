@@ -73,6 +73,8 @@ export function defuseBomb(e, game) {
   if (e.defuseT - (e.defuseSoundAt || 0) > 0.5) {
     e.defuseSoundAt = e.defuseT;
     game.lastSound = { x: game.bomb.x, y: game.bomb.y, t: game.time, radius: 600, conf: 0.5 };
+    // 拆弹进度音效：每 0.5s 一声低频咔哒，让拆弹过程有听觉反馈
+    emit('sfx', { name: 'plantTic', vol: 0.55, x: game.bomb.x, y: game.bomb.y, game });
   }
   game.bomb.defusing = true;
   if (e.defuseT >= speed) {

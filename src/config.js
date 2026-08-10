@@ -53,7 +53,7 @@ export const ROUND = {
   DURATION: 115,
   BUY_TIME: 20,
   FREEZE: 3,
-  BOMB_FUSE: 20,
+  BOMB_FUSE: 40,
   END_DELAY: 3.0,
   MATCH_WIN: 5,   // 九局五胜（BO9）：先赢 5 局获胜，单图最多 9 局
   OT_WIN: 11,     // 长赛制备用加时（MR9 8:8 起先赢 3 到 11）；BO9 4:4 直接打决胜局不触发

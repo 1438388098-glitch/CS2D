@@ -13,6 +13,18 @@ import {shouldAttemptDefuse} from './rules.js';
 import {chooseDefuser} from './decisions.js';
 import {hasLineOfSight} from '../fog.js';
 
+// 假拆弹决策（纯函数，可测试）：拆弹手在炸弹旁、拆弹时间尚足、存在 T 威胁且
+// 队友能架枪配合时，佯装拆弹诱导 T 探身。拆弹时间不足或敌人已贴脸时不做。
+export function shouldFakeDefuse(opts) {
+  const {
+    defuseT = 0, aimTarget = null, bombT = 0, defuseSpeed = 5,
+    hasAliveT = false, allyCover = 0, riskT = 0.65, teamwork = 0.65
+  } = opts;
+  if (defuseT !== 0 || aimTarget || bombT <= defuseSpeed + 2.5 || !hasAliveT) return false;
+  const fakeChance = 0.4 * (0.6 + riskT) * (allyCover > 0 ? 1.6 : 0.8);
+  return fakeChance > 0.3;
+}
+
 function throwAt(e, game, kind, x, y) {
   if (!e.weapons.nades[kind]) return false;
   e.angle = angNorm(Math.atan2(y - e.y, x - e.x));
@@ -306,6 +318,40 @@ export function botActions(e, game, dt) {
       // 非拆弹手：继续执行通用帧更新（reload/fireCd/recoil/开火），不得提前 return
     } else if (Math.hypot(e.x - game.bomb.x, e.y - game.bomb.y) < 55) {
       const defuseSpeedNow = e.weapons.kit ? 2.5 : 5;
+      const bombT = game.bomb.timer || 0;
+      // 假拆弹骗枪（fake defuse）：拆弹时间尚足 + 存在 T 威胁时，佯装拆弹诱导 T 探身/干拉，
+      // 短暂后取消并转为架枪预瞄。拆弹时间不足或敌人已贴脸时不做，避免弄巧成拙。
+      if (e.defuseT === 0 && !e.aimTarget && bombT > defuseSpeedNow + 2.5 && e.fakeDefuseT === undefined) {
+        const tAlive = game.entities.filter((o) => o.team === 't' && !o.dead);
+        // 诱导价值：有 T 存活且在可疑接近方向（或队友能架枪接敌）
+        const anyThreat = tAlive.some((o) => Math.hypot(o.x - e.x, o.y - e.y) < 900);
+        const allyCover = game.entities.filter((o) => o.bot && o.team === 'ct' && !o.dead && o !== e &&
+          Math.hypot(o.x - e.x, o.y - e.y) < 700 && hasLineOfSight(game, o, e, 700)).length;
+        // 人格乘子：谨慎型 bot 少假拆；团队型 bot 在有队友架枪时更愿意假拆
+        const st = styleOf(e);
+        const fakeChance = 0.4 * (0.6 + st.p.riskT) * (allyCover > 0 ? 1.6 : 0.8);
+        if (anyThreat && rand() < fakeChance * dt * 1.5) {
+          e.fakeDefuseT = 0;
+          e.defuseT = Math.max(0.2, defuseSpeedNow - 0.8); // 制造"快拆完"的假象
+          if (game.bomb) game.bomb.defusing = true;
+          e.fakeDefuseAim = null;
+          logAct(game, e, 'fakedefuse', '佯装拆弹骗枪');
+        }
+      }
+      // 假拆进行中：维持 defusing 假象，短窗口后取消并预瞄最近 T 方向
+      if (e.fakeDefuseT !== undefined) {
+        e.fakeDefuseT += dt;
+        if (e.fakeDefuseT > 0.55 + rand() * 0.4) {
+          e.defuseT = 0;
+          e.fakeDefuseT = undefined;
+          if (game.bomb) game.bomb.defusing = false;
+          const tClose = game.entities.filter((o) => o.team === 't' && !o.dead)
+            .sort((a, b) => Math.hypot(a.x - e.x, a.y - e.y) - Math.hypot(b.x - e.x, b.y - e.y))[0];
+          if (tClose) e.angle = angNorm(Math.atan2(tClose.y - e.y, tClose.x - e.x));
+          logAct(game, e, 'fakedefuse', '取消假拆，架枪');
+        }
+        return; // 假拆期间不执行真实拆弹/其他动作
+      }
       if (e.defuseT > defuseSpeedNow - 0.35) {
         defuseBomb(e, game);
         return;
@@ -321,7 +367,7 @@ export function botActions(e, game, dt) {
         e,
         true,
         Math.hypot(e.x - game.bomb.x, e.y - game.bomb.y),
-        game.bomb.timer || 0,
+        bombT,
         !!(e.weapons && e.weapons.kit),
         game.entities.filter((o) => o.team === 't' && !o.dead).length
       )) {
