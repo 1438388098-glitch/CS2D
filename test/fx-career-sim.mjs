@@ -1,5 +1,5 @@
 import {
-  resetCareer, setStorage, setRng, teamProfile, simulateCareerMatch, simulatePlayerMatch, matchDetail, getState
+  resetCareer, setStorage, setRng, teamProfile, simulateCareerMatch, simulatePlayerMatch, matchDetail, getState, nextMatch
 } from '../src/career.js';
 
 const ok = (name, cond) => {
@@ -59,5 +59,20 @@ tired.team.morale = 20;
 tired.player.form = Array.from({ length: 5 }, (_, i) => ({ win: false, kills: 4, deaths: 14 - i }));
 const badStateSim = simulatePlayerMatch();
 ok('player state affects simulation', goodStateSim.win !== badStateSim.win || goodStateSim.kills !== badStateSim.kills);
+
+const dyn = resetCareer();
+const dynOppId = (() => {
+  const nm = nextMatch(dyn);
+  return nm && nm.home === 'player' ? nm.away : (nm ? nm.home : null);
+})();
+const dynOppBefore = dyn.season.teams.find((t) => t.id === dynOppId);
+const dynFormBefore = dynOppBefore.form.length;
+const dynMoraleBefore = dynOppBefore.morale;
+const dynRatingBefore = dynOppBefore.rating;
+simulatePlayerMatch();
+const dynOppAfter = getState().season.teams.find((t) => t.id === dynOppId);
+ok('opponent dynamic state updates', dynOppAfter.form.length === dynFormBefore + 1 && dynOppAfter.morale !== dynMoraleBefore && dynOppAfter.rating !== dynRatingBefore && !!dynOppAfter.recentForm);
+const otherFormAfter = getState().season.teams.filter((t) => t.id !== 'player' && t.id !== dynOppId).some((t) => t.form.length === dynFormBefore + 1);
+ok('non-player league state updates', otherFormAfter);
 
 console.log('fx-career-sim: all PASS');

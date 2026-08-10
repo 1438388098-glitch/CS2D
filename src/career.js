@@ -2137,6 +2137,25 @@ export function simulateCareerMatch(home, away, options = {}) {
   };
 }
 
+function updateTeamDynamics(s, homeId, awayId, winner, opts = {}) {
+  const rules = leagueRules(s.team.league);
+  const [lo, hi] = rules.ratingRange;
+  for (const teamId of [homeId, awayId]) {
+    if (opts.skipPlayer && teamId === 'player') continue;
+    const team = s.season.teams.find((t) => t.id === teamId);
+    if (!team) continue;
+    const won = winner === teamId;
+    const form = Array.isArray(team.form) ? team.form.slice() : [];
+    form.push(won ? 'W' : 'L');
+    if (form.length > 5) form.splice(0, form.length - 5);
+    team.form = form;
+    team.recentForm = form.join('');
+    team.morale = clamp(Number(team.morale || 50) + (won ? 2 : -2), 20, 100);
+    const formScore = form.reduce((a, f) => a + (f === 'W' ? 1 : -1), 0);
+    team.rating = clamp(Math.round(Number(team.rating || 70) + (won ? 0.8 : -0.8) + formScore * 0.1), lo - 5, hi + 5);
+  }
+}
+
 function gainXp(s, amount) {
   s.player.xp += amount;
   while (s.player.level < TITLES.length && s.player.xp >= xpNeeded(s.player.level)) {
@@ -2155,6 +2174,7 @@ function markFixture(s, f, score, winner) {
   // 积分判定以 winner 为准（比分方向在客场/模拟路径可能不同，score 仅作显示）
   if (winner === f.home) { home.w++; away.l++; home.pts += 3; }
   else { away.w++; home.l++; away.pts += 3; }
+  updateTeamDynamics(s, f.home, f.away, winner, { skipPlayer: true });
 }
 
 function simulateLeagueRound(s) {
@@ -2186,6 +2206,7 @@ function markCupMatch(s, m, score, win) {
   m.played = true;
   m.score = score;
   m.winner = win ? 'player' : (m.a === 'player' ? m.b : m.a);
+  updateTeamDynamics(s, m.a, m.b, m.winner, { skipPlayer: true });
   if (!win) {
     s.season.cupResult = m.round === 'QF' ? 0 : (m.round === 'SF' ? 1 : 2);
   }
@@ -2209,6 +2230,7 @@ function simulateRemainingCup(s) {
     m.score = r.score;
     m.winner = r.winner;
     m.simRounds = r.rounds.length;
+    updateTeamDynamics(s, m.a, m.b, m.winner, { skipPlayer: true });
     refreshCup(s);
   }
 }
