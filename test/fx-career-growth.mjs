@@ -1,5 +1,5 @@
 import {
-  resetCareer, setStorage, setRng, getState, settlePlayerMatch, train, sellPlayer, buyPlayer, candidates, filterCandidates,
+  resetCareer, setStorage, setRng, getState, settlePlayerMatch, train, sellPlayer, sellPreview, buyPlayer, candidates, filterCandidates,
   nextSeason, save, loadCareer, __clearStateForTest, candidateProfile,
   sponsorIncome, sponsorPreview, formBonus, fatiguePenalty, careerMorale, restPlayer, seasonGoals, goalProgress, trainingPreview, trainingSuggestion, rotationAdvice, transferBudget, contractStatus, renewPlayer, rosterContribution, positionBalance,
   achievementDefs, achievements, careerRecords, migrateCareerState, matchReadiness
@@ -116,7 +116,11 @@ const cand = candidates()[0];
 buyPlayer(cand.id);
 ok('buy ledger and morale', s.team.bank > 0 && s.team.ledger.some((x) => x.label.includes('买入')) && s.team.morale === 67);
 const sell = s.team.roster[0];
-sellPlayer(sell.id);
+s.team.transfersLeft = 1;
+const sellPreviewRow = sellPreview(s, sell.id);
+const bankBeforeSell = s.team.bank;
+const sellRes = sellPlayer(sell.id);
+ok('sell preview', sellPreviewRow && sellPreviewRow.refund > 0 && sellPreviewRow.ratingImpact < 0 && sellRes.refund === sellPreviewRow.refund && s.team.bank === bankBeforeSell + sellPreviewRow.refund);
 ok('sell ledger and morale', s.team.ledger.some((x) => x.label.includes('卖出')) && s.team.morale === 65);
 
 s = resetCareer();

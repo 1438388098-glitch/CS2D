@@ -353,7 +353,8 @@ export function careerMapPool() { return MAP_IDS.slice(); }
 function makeRoster() {
   return ROLES.map((role, i) => {
     const rating = randInt(60, 75);
-    return { id: 'r' + (i + 1), name: PLAYER_LINEUP[i], team: PLAYER_TEAM.name, role, rating, price: playerPrice(rating), contractYears: 2 + (i % 2), renewalCost: Math.round(rating * 45) };
+    const price = playerPrice(rating);
+    return { id: 'r' + (i + 1), name: PLAYER_LINEUP[i], team: PLAYER_TEAM.name, role, rating, price, costBasis: price, contractYears: 2 + (i % 2), renewalCost: Math.round(rating * 45) };
   });
 }
 
@@ -770,15 +771,42 @@ export function sellPlayer(id) {
   const idx = s.team.roster.findIndex((p) => p.id === id);
   if (idx < 0) return { ok: false, error: '队友不存在' };
   const p = s.team.roster[idx];
-  s.team.bank += Math.floor(p.price * 0.5);
+  const preview = sellPreview(s, id);
+  const refund = preview ? preview.refund : Math.floor(p.price * 0.5);
+  s.team.bank += refund;
   s.team.roster.splice(idx, 1);
   s.team.transfersLeft--;
   s.team.morale = clamp(Number(s.team.morale) - 2, 20, 100);
   refreshPlayerRating(s);
-  addLedger(s, 'income', Math.floor(p.price * 0.5), '卖出：' + p.name);
-  addNews(s, 'info', '卖出 ' + p.name + '，返还 ' + Math.floor(p.price * 0.5));
+  addLedger(s, 'income', refund, '卖出：' + p.name);
+  addNews(s, 'info', '卖出 ' + p.name + '，返还 ' + refund);
   save();
-  return { ok: true, refund: Math.floor(p.price * 0.5) };
+  return { ok: true, refund };
+}
+
+export function sellPreview(s, id) {
+  const p = Array.isArray(s.team && s.team.roster) ? s.team.roster.find((x) => x.id === id) : null;
+  if (!p) return null;
+  const roster = Array.isArray(s.team.roster) ? s.team.roster : [];
+  const afterRoster = roster.filter((x) => x.id !== id);
+  const attrs = s.player && s.player.attrs ? s.player.attrs : { aim: 0, move: 0, react: 0, nade: 0 };
+  const ratingBefore = Math.round(effectiveRatingFor(roster, attrs) + formBonus(s) + moraleModifier(s));
+  const ratingAfter = Math.round(effectiveRatingFor(afterRoster, attrs) + formBonus(s) + moraleModifier(s));
+  const costBasis = Number.isFinite(Number(p.costBasis)) ? Number(p.costBasis) : Number(p.price) || 0;
+  const refund = Math.floor((Number(p.price) || 0) * 0.5);
+  return {
+    id: p.id,
+    name: p.name,
+    role: p.role,
+    price: Number(p.price) || 0,
+    costBasis,
+    refund,
+    valueDelta: refund - costBasis,
+    ratingBefore,
+    ratingAfter,
+    ratingImpact: ratingAfter - ratingBefore,
+    roleCountAfter: afterRoster.filter((x) => x.role === p.role).length
+  };
 }
 
 export function buyPlayer(candId) {
@@ -793,11 +821,12 @@ export function buyPlayer(candId) {
   let refund = 0;
   let slot = s.team.roster.find((p) => p.role === cand.role && p.id !== cand.id);
   if (slot) {
-    refund = Math.floor(slot.price * 0.5);
+    const oldPreview = sellPreview(s, slot.id);
+    refund = oldPreview ? oldPreview.refund : Math.floor(slot.price * 0.5);
     s.team.bank += refund;
-    slot.name = cand.name; slot.team = cand.team || s.team.name; slot.rating = cand.rating; slot.price = cand.price; slot.potential = profile.potential; slot.youth = profile.youth; slot.contractYears = 3; slot.renewalCost = Math.round(cand.price * 0.12);
+    slot.name = cand.name; slot.team = cand.team || s.team.name; slot.rating = cand.rating; slot.price = cand.price; slot.costBasis = cand.price; slot.potential = profile.potential; slot.youth = profile.youth; slot.contractYears = 3; slot.renewalCost = Math.round(cand.price * 0.12);
   } else {
-    s.team.roster.push({ id: 'r' + Date.now(), name: cand.name, team: cand.team || s.team.name, role: cand.role, rating: cand.rating, price: cand.price, potential: profile.potential, youth: profile.youth, contractYears: 3, renewalCost: Math.round(cand.price * 0.12) });
+    s.team.roster.push({ id: 'r' + Date.now(), name: cand.name, team: cand.team || s.team.name, role: cand.role, rating: cand.rating, price: cand.price, costBasis: cand.price, potential: profile.potential, youth: profile.youth, contractYears: 3, renewalCost: Math.round(cand.price * 0.12) });
   }
   s.team.bank -= cand.price;
   s.team.transfersLeft--;
