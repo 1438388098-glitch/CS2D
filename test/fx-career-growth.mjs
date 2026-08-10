@@ -2,7 +2,7 @@ import {
   resetCareer, setStorage, setRng, getState, settlePlayerMatch, train, trainTeammate, sellPlayer, sellPreview, buyPlayer, candidates, filterCandidates,
   nextSeason, save, loadCareer, __clearStateForTest, candidateProfile,
   sponsorIncome, sponsorPreview, sponsorSeasonPreview, homeTicketIncome, ticketPreview, cashflowForecast, seasonBudget, financialRisk, financeTrend, seasonFinancialSummary, remainingPrizePreview, transferProfit, facilityStatus, upgradeFacility, formBonus, fatiguePenalty, careerMorale, restPlayer, seasonGoals, goalProgress, trainingPreview, trainingSuggestion, rotationAdvice, trainingHistory, rosterStatus, transferBudget, contractStatus, renewPlayer, rosterContribution, positionBalance,
-  achievementDefs, achievements, achievementCatalog, achievementProgress, careerRecords, honorTitle, migrateCareerState, matchReadiness, seasonGoalHistory, goalAdvice, lastRecordAlerts, seasonRecordAlerts, recordDetails, seasonHighlights, careerReview, cupSeasonRecord, cupOpponentScouting
+  achievementDefs, achievements, achievementCatalog, achievementProgress, careerRecords, honorTitle, migrateCareerState, matchReadiness, seasonGoalHistory, goalAdvice, lastRecordAlerts, seasonRecordAlerts, recordDetails, seasonHighlights, careerReview, cupSeasonRecord, cupOpponentScouting, seasonTransitionPreview
 } from '../src/career.js';
 
 const ok = (name, cond) => {
@@ -318,6 +318,27 @@ s.season.cup = {
 s.pendingMatch = { oppId: 't1', venue: 'home', isCup: true };
 const cupScout = cupOpponentScouting(s);
 ok('cup opponent scouting', cupScout && cupScout.oppId === 't1' && cupScout.round === 'QF' && cupScout.map === 'dust2' && cupScout.profile && cupScout.profile.mapPrefs.length > 0 && cupScout.winChance > 0 && typeof cupScout.threat === 'string' && cupScout.h2h.matches >= 0);
+
+s = resetCareer();
+s.season.standings.forEach((row, i) => {
+  row.played = 14;
+  if (row.teamId === 'player') { row.pts = 30; row.w = 10; }
+  else { row.pts = 20 - i; row.w = 5; }
+});
+const transitionUp = seasonTransitionPreview(s);
+ok('transition preview promotion', transitionUp && transitionUp.rank === 1 && transitionUp.nextLeague === '甲级' && transitionUp.status === '升级' && transitionUp.goalRank === 6 && transitionUp.sponsor > 0 && transitionUp.budget > 0);
+s.season.standings.forEach((row, i) => {
+  if (row.teamId === 'player') { row.pts = 10; row.w = 1; }
+  else { row.pts = 30 - i; row.w = 10; }
+});
+const transitionDown = seasonTransitionPreview(s);
+ok('transition preview relegation', transitionDown && transitionDown.rank === 8 && transitionDown.nextLeague === '丙级' && transitionDown.status === '降级' && transitionDown.statusText.includes('丙级'));
+s.season.standings.forEach((row, i) => {
+  if (row.teamId === 'player') { row.pts = 22; row.w = 8; }
+  else { row.pts = 25 - i; row.w = 8; }
+});
+const transitionStay = seasonTransitionPreview(s);
+ok('transition preview stay', transitionStay && transitionStay.nextLeague === '乙级' && transitionStay.status === '保级' && transitionStay.arrow === '→');
 
 s = resetCareer();
 let goals = seasonGoals(s);

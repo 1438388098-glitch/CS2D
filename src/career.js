@@ -3083,6 +3083,51 @@ function promoteLeague(league, rank) {
   return rank <= 2 ? '乙级' : '丙级';
 }
 
+export function seasonTransitionPreview(s) {
+  const league = s && s.team ? s.team.league : '乙级';
+  const list = sortedStandings(s);
+  const row = list.find((x) => x.teamId === 'player');
+  const rank = row ? list.indexOf(row) + 1 : null;
+  const nextLeague = rank == null ? league : promoteLeague(league, rank);
+  const rules = leagueRules(nextLeague);
+  const goals = rules.goal || { rank: 4, cup: 0, reward: 7000 };
+  let status = '保级';
+  let statusText = '留在 ' + league;
+  let arrow = '→';
+  if (rank != null && league !== '甲级' && rank <= 2) {
+    status = '升级';
+    statusText = '升入 ' + nextLeague;
+    arrow = '↑';
+  } else if (rank != null && league !== '丙级' && rank >= 7) {
+    status = '降级';
+    statusText = '降至 ' + nextLeague;
+    arrow = '↓';
+  }
+  const cupGoalText = goals.cup >= 1 ? '至少四强' : '至少八强';
+  const message = status === '升级'
+    ? '下季进入更高级别联赛，目标前 ' + goals.rank + '，奖金与媒体压力同步上升'
+    : (status === '降级'
+      ? '下季转入竞争强度更低的联赛，先稳住前 ' + goals.rank + ' 和基础训练投入'
+      : '下季继续留在 ' + league + '，目标前 ' + goals.rank + '，保持现有运营节奏');
+  return {
+    league,
+    rank,
+    nextLeague,
+    status,
+    statusText,
+    arrow,
+    goalRank: goals.rank,
+    cupGoal: goals.cup,
+    cupGoalText,
+    sponsor: rules.sponsor,
+    budget: rules.budgetBase,
+    mediaPressure: rules.mediaPressure,
+    ratingRange: rules.ratingRange,
+    identity: rules.identity,
+    message
+  };
+}
+
 export function nextSeason() {
   const s = getState();
   const report = seasonReport();

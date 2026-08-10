@@ -253,6 +253,11 @@ s.season.cup = {
   ],
   champion: 'player'
 };
+s.season.standings.forEach((row, i) => {
+  row.played = 14;
+  if (row.teamId === 'player') { row.pts = 30; row.w = 10; }
+  else { row.pts = 20 - i; row.w = 5; }
+});
 s.history.push({ seasonId: 1, league: '乙级', rank: 1, cupRound: 3, prize: 45000 });
 s.player.achievements = [{ id: 'first_win', title: '首胜', unlockedAt: 1, seasonId: 1 }];
 s.player.recordAlertLog = [{ matchSeq: 1, seasonId: 1, round: 1, type: 'bestKills', label: '单场最高击杀', oldValue: 4, newValue: 9 }];
@@ -260,6 +265,7 @@ save();
 const settleHtml = __renderTabForTest('settlement');
 ok('settlement renders history', settleHtml.includes('赛季结算') && settleHtml.includes('历史记录') && settleHtml.includes('赛季个人表现') && settleHtml.includes('赛季财务总结') && settleHtml.includes('累计收入') && settleHtml.includes('本季成就与纪录高亮') && settleHtml.includes('单场最高击杀'));
 ok('settlement cup season record', settleHtml.includes('杯赛赛季战绩') && settleHtml.includes('当季结果') && settleHtml.includes('历届杯赛对比') && settleHtml.includes('夺冠'));
+ok('settlement transition preview', settleHtml.includes('升降级预告') && settleHtml.includes('下赛季') && settleHtml.includes('升降级状态') && settleHtml.includes('目标排名'));
 
 installStubs();
 registerDomIds('careerPanel');
