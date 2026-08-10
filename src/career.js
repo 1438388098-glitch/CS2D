@@ -361,6 +361,41 @@ export function trainingHistory(s) {
     totalSpend: logs.reduce((a, x) => a + (Number(x.cost) || 0), 0)
   };
 }
+
+export function rosterStatus(s) {
+  const roster = Array.isArray(s.team && s.team.roster) ? s.team.roster : [];
+  const attrs = s.player && s.player.attrs ? s.player.attrs : { aim: 0, move: 0, react: 0, nade: 0 };
+  const attrsAvg = Math.round((attrs.aim + attrs.move + attrs.react + attrs.nade) / 4);
+  const morale = careerMorale(s);
+  const rows = [{
+    id: 'player',
+    name: s.player && s.player.name || '玩家',
+    type: '玩家',
+    rating: attrsAvg,
+    ratingLabel: '属性 ' + attrsAvg,
+    fatigue: Number(s.player && s.player.fatigue) || 0,
+    morale
+  }];
+  for (const p of roster) {
+    rows.push({
+      id: p.id,
+      name: p.name,
+      type: p.role,
+      rating: p.rating,
+      ratingLabel: '评级 ' + p.rating,
+      fatigue: Number(p.fatigue) || 0,
+      morale
+    });
+  }
+  return {
+    rows,
+    rosterAvg: teamAvgRating(roster),
+    attrsAvg,
+    morale,
+    fatigue: Number(s.player && s.player.fatigue) || 0
+  };
+}
+
 export function careerMapPool() { return MAP_IDS.slice(); }
 
 function makeRoster() {

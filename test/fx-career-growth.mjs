@@ -1,7 +1,7 @@
 import {
   resetCareer, setStorage, setRng, getState, settlePlayerMatch, train, trainTeammate, sellPlayer, sellPreview, buyPlayer, candidates, filterCandidates,
   nextSeason, save, loadCareer, __clearStateForTest, candidateProfile,
-  sponsorIncome, sponsorPreview, formBonus, fatiguePenalty, careerMorale, restPlayer, seasonGoals, goalProgress, trainingPreview, trainingSuggestion, rotationAdvice, trainingHistory, transferBudget, contractStatus, renewPlayer, rosterContribution, positionBalance,
+  sponsorIncome, sponsorPreview, formBonus, fatiguePenalty, careerMorale, restPlayer, seasonGoals, goalProgress, trainingPreview, trainingSuggestion, rotationAdvice, trainingHistory, rosterStatus, transferBudget, contractStatus, renewPlayer, rosterContribution, positionBalance,
   achievementDefs, achievements, careerRecords, migrateCareerState, matchReadiness
 } from '../src/career.js';
 
@@ -70,6 +70,10 @@ const mateForHistory = s.team.roster[0];
 trainTeammate(mateForHistory.id, 'basic');
 const history = trainingHistory(s);
 ok('training history', history && history.totalCount === 2 && history.playerCount === 1 && history.teammateCount === 1 && history.recent.length === 2 && history.logs.some((x) => x.target === mateForHistory.name));
+
+s = resetCareer();
+const rosterState = rosterStatus(s);
+ok('roster status table', rosterState && rosterState.rows.length === 5 && rosterState.rows[0].type === '玩家' && rosterState.rows[0].morale === 65 && rosterState.rows.slice(1).every((r) => r.rating > 0 && r.fatigue === 0 && r.morale === 65));
 
 s = resetCareer();
 const rotation = rotationAdvice(s);
