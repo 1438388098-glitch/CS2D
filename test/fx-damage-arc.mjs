@@ -1,8 +1,8 @@
 // 受击方向红弧特效纯逻辑测试（candidate-308，不依赖真实渲染）：
-// 契约：damageArc(directionRad, t) 确定性返回 { alpha, angle, spread, r0, r1 }，
+// 契约：damageArc(directionRad, t, power) 确定性返回 { alpha, angle, spread, r0, r1 }，
 //       t 为受击后流逝秒数，0.3s 内 alpha 从 1 线性衰减到 0（闪现渐隐），
 //       angle 为伤害来源方向角，spread 为弧半宽，r0/r1 为弧带内外半径（相对 min(w,h)/2）；
-//       drawDamageArc(ctx, w, h, fx) 仅在 alpha>0 时绘制受击方向弧形扇带。
+//       power 越高红弧越醒目；drawDamageArc(ctx, w, h, fx) 仅在 alpha>0 时绘制受击方向弧形扇带。
 import { damageArc, drawDamageArc, HIT_ARC_DURATION } from '../src/damage-fx.js';
 
 function ok(name, cond) {
@@ -45,6 +45,18 @@ function ok(name, cond) {
   ok('NaN t falls back to t=0', damageArc(0, NaN).alpha === damageArc(0, 0).alpha);
   ok('Infinity t falls back to t=0', damageArc(0, Infinity).alpha === damageArc(0, 0).alpha);
   ok('NaN angle falls back to 0', damageArc(NaN, 0.1).angle === 0);
+}
+
+// 强度分级：高伤害红弧更亮、更宽、弧带更厚；非有限/越界强度安全回退
+{
+  const low = damageArc(0, 0, 0.2);
+  const high = damageArc(0, 0, 1);
+  ok('severity raises alpha', low.alpha < high.alpha);
+  ok('severity widens spread', low.spread < high.spread);
+  ok('severity thickens radial band', low.r0 > high.r0 && low.r1 < high.r1);
+  ok('severity clamps below 0', damageArc(0, 0, -2).alpha === damageArc(0, 0, 0).alpha);
+  ok('severity clamps above 1', damageArc(0, 0, 3).alpha === damageArc(0, 0, 1).alpha);
+  ok('NaN severity falls back to max', damageArc(0, 0, NaN).alpha === damageArc(0, 0, 1).alpha);
 }
 
 // drawDamageArc：alpha>0 时创建径向渐变 + 内外弧扇带填充；save/restore 平衡

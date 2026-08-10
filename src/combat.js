@@ -397,6 +397,7 @@ export function applyDamage(v, dmg, opt, game) {
     if (v === game.player) {
       v.lastHitAng = Math.atan2(opt.killer.y - v.y, opt.killer.x - v.x);
       v.hitFxT = HIT_ARC_DURATION;
+      v.hitFxPower = head ? 1 : clamp(hpLoss / 30, 0.35, 1);
     }
   }
   v.armor = Math.max(0, v.armor - armLoss);

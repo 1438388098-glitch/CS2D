@@ -18,7 +18,7 @@ export function createEntity(team, bot) {
     deathT: 0,
     hasBomb: false, walking: false, blind: 0, scoped: false, lossStreak: 0,
     stepT: 0, stepFlip: false, lastDmgFrom: null, lastDmgT: -99999, muzzleT: 0, switchT: 0,
-    lastHitAng: 0, hitFxT: 0,
+    lastHitAng: 0, hitFxT: 0, hitFxPower: 1,
     strafeDir: 1, strafeT: 0, reaction: 0, aimTarget: null, aimLostT: 0, aimLastPos: null,
     lastKnown: null, lastKnownT: 99,
     path: null, pathI: 0, role: 'a', repathT: 0, stuckT: 0, lastSample: { x: 0, y: 0 },

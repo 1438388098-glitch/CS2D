@@ -698,7 +698,7 @@ export function renderHud(game) {
   if (p && !p.dead && p.hitFxT > 0) {
     let ang = p.lastHitAng || 0;
     if (game.viewMode !== 'top') ang = ang - p.angle - Math.PI / 2;
-    const fx = damageArc(ang, HIT_ARC_DURATION - p.hitFxT);
+    const fx = damageArc(ang, HIT_ARC_DURATION - p.hitFxT, p.hitFxPower || 1);
     drawDamageArc(ctx, w2, h2, fx);
   }
   // D6 低血量屏幕边缘红边脉冲警示：血量 <30% 时出现，越低越明显，死亡后消失

@@ -16,17 +16,20 @@ const HIT_ARC_R1 = 1; // 外半径（相对 min(w,h)/2 的比例，1 = 屏幕短
 // angle 为伤害来源方向角（弧度），spread 为弧半宽，r0/r1 为弧带内外半径（相对 min(w,h)/2）。
 // t 为受击后流逝秒数：t ≤ 0 视为刚受击（alpha=1 闪现），t ≥ 0.3 视为结束（alpha=0 隐去），
 // 期间 alpha 从 1 线性衰减到 0（闪现渐隐）。非有限 t 回退为 0。
-export function damageArc(directionRad, t) {
+// power 为伤害强度（0..1）：越高提示越醒目（更亮、更宽、弧带更厚），默认 1 保持原强度。
+export function damageArc(directionRad, t, power = 1) {
   const ts = Number.isFinite(t) ? t : 0;
+  const k = Number.isFinite(power) ? clamp(power, 0, 1) : 1;
   if (ts >= HIT_ARC_DURATION) {
     return { alpha: 0, angle: 0, spread: 0, r0: 0, r1: 0 };
   }
+  const fade = clamp(1 - ts / HIT_ARC_DURATION, 0, 1);
   return {
-    alpha: clamp(1 - ts / HIT_ARC_DURATION, 0, 1),
+    alpha: fade * (0.55 + 0.45 * k),
     angle: Number.isFinite(directionRad) ? directionRad : 0,
-    spread: HIT_ARC_SPREAD,
-    r0: HIT_ARC_R0,
-    r1: HIT_ARC_R1
+    spread: HIT_ARC_SPREAD * (0.75 + 0.25 * k),
+    r0: HIT_ARC_R0 * (1.08 - 0.08 * k),
+    r1: HIT_ARC_R1 * (0.9 + 0.1 * k)
   };
 }
 
