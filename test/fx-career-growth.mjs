@@ -1,5 +1,5 @@
 import {
-  resetCareer, setStorage, setRng, getState, settlePlayerMatch, train, sellPlayer, buyPlayer, candidates,
+  resetCareer, setStorage, setRng, getState, settlePlayerMatch, train, sellPlayer, buyPlayer, candidates, filterCandidates,
   nextSeason, save, loadCareer, __clearStateForTest,
   sponsorIncome, formBonus, fatiguePenalty, careerMorale, restPlayer, seasonGoals, goalProgress, trainingPreview, rosterContribution,
   achievementDefs, achievements, careerRecords, migrateCareerState
@@ -55,6 +55,18 @@ ok('roster contribution fields', rc && rc.rating > 0 && rc.members.length === 4 
 s.team.roster.forEach((p, i) => { p.rating = [100, 80, 60, 60][i]; });
 rc = rosterContribution(s);
 ok('roster contribution split', rc.rosterAvg === 75 && rc.members[0].delta === 25 && rc.members[3].delta === -15 && rc.members[0].sharePct > rc.members[3].sharePct && rc.player.contribution >= 9);
+
+const filterPool = [
+  { id: 'a', role: '突破', rating: 82, price: 9000 },
+  { id: 'b', role: '补枪', rating: 70, price: 4000 },
+  { id: 'c', role: '指挥', rating: 91, price: 18000 },
+  { id: 'd', role: '自由人', rating: 76, price: 12000 }
+];
+ok('candidate filter role', filterCandidates(filterPool, { role: '突破' }).shown === 1);
+ok('candidate filter rating', filterCandidates(filterPool, { minRating: 80 }).shown === 2);
+ok('candidate filter price', filterCandidates(filterPool, { maxPrice: 10000 }).shown === 2);
+ok('candidate filter combined', filterCandidates(filterPool, { role: '指挥', minRating: 90, maxPrice: 20000 }).shown === 1);
+ok('candidate filter empty', filterCandidates(filterPool, { role: '指挥', minRating: 99 }).shown === 0);
 
 s = resetCareer();
 s.season.round = 5;

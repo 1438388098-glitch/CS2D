@@ -83,6 +83,8 @@ s = resetCareer();
   ok('career blocks future fixture', bad && bad.ok === false);
 }
 s.season.round = 5;
+const rosterFilterHtml = __renderTabForTest('roster');
+ok('career transfer filters render', rosterFilterHtml.includes('data-filter="role"') && rosterFilterHtml.includes('data-filter="min-rating"') && rosterFilterHtml.includes('data-filter="max-price"'));
 
 const pool = candidates();
 ok('candidate pool 8', pool.length === 8);

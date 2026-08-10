@@ -1,6 +1,6 @@
 import {
   loadCareer, getState, titleFor, startCareerMatch, careerEndMatch, abandonPendingMatch, simulatePlayerMatch, resetCareer,
-  train, sellPlayer, buyPlayer, candidates, nextSeason, seasonReport, nextMatch, nextMatchInfo, matchImportance, teamRecentForm,
+  train, sellPlayer, buyPlayer, candidates, filterCandidates, nextSeason, seasonReport, nextMatch, nextMatchInfo, matchImportance, teamRecentForm,
   transferWindowOpen, transferWindowInfo, isStorageAvailable, cupMap, cupPrizeInfo, cupMapForRound, fixtureMapFor, fixtureMatchRecord, winChance, trainingTiers, trainingPreview, xpNeeded,
   seasonStats, seasonSeries, seasonStreaks, careerSummary, matchDetail, seasonTimeline, headToHead, importantMatches, seasonTrends, favoriteMatches, cupHistory, careerTimeline,
   sponsorIncome, formBonus, fatiguePenalty, careerMorale, restPlayer, seasonGoals, seasonPace, goalProgress, rosterContribution,
@@ -12,6 +12,9 @@ let game = null;
 let tab = 'dash';
 let statsSeason = null;
 let scheduleDetail = null;
+let transferRole = '';
+let transferMinRating = 0;
+let transferMaxPrice = 30000;
 
 function el(id) { return doc ? doc.getElementById(id) : null; }
 function esc(s) {
@@ -21,6 +24,7 @@ function toast(t) { if (game && game.ui) game.ui.showToast(t); }
 function money(n) { return Number(n || 0).toLocaleString('zh-CN'); }
 function teamName(s, id) { const t = s.season.teams.find((x) => x.id === id); return t ? t.name : id; }
 const ATTR_CN = { aim: '射击', move: '移速', react: '反应', nade: '道具' };
+const ROLE_CN = ['突破', '补枪', '指挥', '自由人'];
 const CUP_CN = { QF: '八强', SF: '四强', F: '决赛' };
 const MAP_CN = { dust2: '沙漠遗址', canal: '运河小镇', metro: '地铁枢纽' };
 function cn(v, map) { return map[v] || v; }
@@ -36,6 +40,7 @@ export function initCareerUi(documentRef, gameRef) {
   const panel = el('careerPanel');
   if (!panel) return;
   panel.addEventListener('click', onClick, false);
+  panel.addEventListener('change', onChange, false);
   window.__openCareer = openCareer;
   window.__careerEndMatch = (g) => { const r = careerEndMatch(g); if (r && r.ok) openCareer(); };
 }
@@ -50,6 +55,16 @@ export function openCareer() {
   if (el('end')) el('end').classList.remove('show');
   tab = s.season.cup.phase === 'finished' ? 'settlement' : 'dash';
   statsSeason = s.season.id;
+  render();
+}
+
+function onChange(e) {
+  const target = e && e.target;
+  const filter = target && target.getAttribute ? target.getAttribute('data-filter') : null;
+  if (!filter) return;
+  if (filter === 'role') transferRole = target.value || '';
+  else if (filter === 'min-rating') transferMinRating = Math.max(0, Math.min(100, Number(target.value) || 0));
+  else if (filter === 'max-price') transferMaxPrice = Math.max(0, Math.min(30000, Number(target.value) || 30000));
   render();
 }
 
@@ -326,8 +341,13 @@ function renderRoster(s) {
   while (contrib.members.length < 4) html += '<div class="career-player-card empty">空位 · 可在转会窗补入</div>';
   html += '</div></div>';
   if (transferWindowOpen(s)) {
-    html += '<div class="career-card"><h4>转会窗 · 剩余 ' + s.team.transfersLeft + ' 次</h4><div class="career-pool">';
-    const pool = candidates();
+    const roleOptions = ROLE_CN.map((role) => '<option value="' + esc(role) + '"' + (transferRole === role ? ' selected' : '') + '>' + esc(role) + '</option>').join('');
+    const filterHtml = '<div class="career-train-row"><b>筛选</b><select data-filter="role"><option value="">全部角色</option>' + roleOptions + '</select>' +
+      '<span>最低评级 <input type="number" data-filter="min-rating" min="0" max="100" value="' + transferMinRating + '"></span>' +
+      '<span>最高价格 <input type="number" data-filter="max-price" min="0" max="30000" step="500" value="' + transferMaxPrice + '"></span></div>';
+    html += '<div class="career-card"><h4>转会窗 · 剩余 ' + s.team.transfersLeft + ' 次</h4>' + filterHtml + '<div class="career-pool">';
+    const poolResult = filterCandidates(candidates(), { role: transferRole, minRating: transferMinRating, maxPrice: transferMaxPrice });
+    const pool = poolResult.list;
     if (pool.length) {
       for (const c of pool) {
         html += '<div class="career-player-card"><b>' + esc(c.name) + '</b><span>' + esc(c.role) + '</span><i>' + esc(c.team || '') + ' · 评级 ' + c.rating + ' · ' + money(c.price) + '</i>';
@@ -335,9 +355,9 @@ function renderRoster(s) {
         html += '</div>';
       }
     } else {
-      html += '<div class="career-news">候选已清空</div>';
+      html += '<div class="career-news">筛选结果 0 / ' + poolResult.total + '</div>';
     }
-    html += '</div></div>';
+    html += '</div><div class="career-stats"><span>显示 ' + poolResult.shown + ' / ' + poolResult.total + ' 名候选</span></div></div>';
   } else {
     const win = transferWindowInfo(s);
     html += '<div class="career-card"><h4>转会窗</h4><p>第 ' + win.opensRound + '-' + win.closesRound + ' 轮开放 · ' + win.text + '</p></div>';

@@ -459,6 +459,25 @@ export function candidates() {
   }
   return s.team.pool;
 }
+
+export function filterCandidates(pool, filters = {}) {
+  const source = Array.isArray(pool) ? pool : [];
+  const role = filters.role || '';
+  const minRating = Number.isFinite(Number(filters.minRating)) ? Number(filters.minRating) : 0;
+  const maxPrice = Number.isFinite(Number(filters.maxPrice)) ? Number(filters.maxPrice) : 30000;
+  const list = source.filter((c) =>
+    (!role || c.role === role) &&
+    (c.rating || 0) >= minRating &&
+    (c.price || 0) <= maxPrice
+  );
+  return {
+    list,
+    total: source.length,
+    shown: list.length,
+    filters: { role, minRating, maxPrice }
+  };
+}
+
 export function transferWindowOpen(s) { return s.season.round >= 5 && s.season.round <= 8; }
 
 export function transferWindowInfo(s) {
