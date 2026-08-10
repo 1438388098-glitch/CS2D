@@ -1,6 +1,7 @@
 import {
   resetCareer, setStorage, setRng, nextSeason, migrateCareerState,
-  fixtureMapFor, assignFixtureMaps, startCareerMatch, findPlayerFixture
+  fixtureMapFor, assignFixtureMaps, startCareerMatch, findPlayerFixture,
+  nextMatchInfo, teamRecentForm, opponentStanding
 } from '../src/career.js';
 import { createGame, startMatch } from '../src/game.js';
 
@@ -65,5 +66,15 @@ ok('legacy migration fills map', legacy.season.fixtures[0].mapId === 'dust2');
 const partial = { season: { fixtures: [{ round: 1, home: 'a', away: 'b' }] } };
 assignFixtureMaps(partial);
 ok('assign without teams safe', partial.season.fixtures[0].mapId == null);
+
+const info = nextMatchInfo(s);
+ok('next match info fields', info && info.oppId && info.oppName && info.rank >= 1 && info.rank <= 8 && typeof info.form === 'string');
+ok('next match info map', info && info.mapId === fixtureMapFor(s, findPlayerFixture(s)));
+ok('opponent standing deterministic', opponentStanding(s, 'player') >= 1 && opponentStanding(s, 'player') <= 8);
+
+s.season.fixtures[0].played = true;
+s.season.fixtures[0].winner = s.season.fixtures[0].home;
+const formHome = teamRecentForm(s, s.season.fixtures[0].home);
+ok('recent form reads fixtures', formHome === 'W');
 
 console.log('fx-career-schedule: all PASS');

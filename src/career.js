@@ -540,6 +540,57 @@ export function nextMatch(s) {
   if (s.season.cup.phase === 'active') return findCupMatch(s);
   return findPlayerFixture(s);
 }
+
+export function teamRecentForm(s, teamId, max = 5) {
+  const out = [];
+  const add = (f, team, winner) => {
+    if (team !== teamId || !winner) return;
+    out.push(winner === team ? 'W' : 'L');
+  };
+  for (const f of Array.isArray(s.season && s.season.fixtures) ? s.season.fixtures : []) {
+    if (!f.played) continue;
+    add(f, f.home, f.winner);
+    add(f, f.away, f.winner);
+  }
+  const bracket = s.season && s.season.cup && Array.isArray(s.season.cup.bracket) ? s.season.cup.bracket : [];
+  for (const m of bracket) {
+    if (!m.played || !m.a || !m.b || !m.winner) continue;
+    add(m, m.a, m.winner);
+    add(m, m.b, m.winner);
+  }
+  return out.slice(-Math.max(1, Number(max) || 5)).join('');
+}
+
+export function opponentStanding(s, teamId) {
+  const list = sortedStandings(s);
+  const idx = list.findIndex((x) => x.teamId === teamId);
+  return idx < 0 ? null : idx + 1;
+}
+
+export function nextMatchInfo(s) {
+  const nm = nextMatch(s);
+  if (!nm) return null;
+  const isCup = s.season.cup.phase === 'active';
+  const oppId = isCup ? (nm.a === 'player' ? nm.b : nm.a) : (nm.home === 'player' ? nm.away : nm.home);
+  const venue = isCup ? 'home' : (nm.home === 'player' ? 'home' : 'away');
+  const opp = s.season.teams.find((x) => x.id === oppId);
+  const playerTeam = s.season.teams.find((x) => x.id === 'player');
+  const ratingDiff = opp && playerTeam ? opp.rating - playerTeam.rating : 0;
+  const threat = ratingDiff > 10 ? '强敌' : (ratingDiff < -10 ? '弱旅' : '势均力敌');
+  return {
+    oppId,
+    oppName: opp ? opp.name : oppId,
+    venue,
+    isCup,
+    mapId: isCup ? cupMap(s) : fixtureMapFor(s, nm),
+    rating: opp ? opp.rating : null,
+    rank: opponentStanding(s, oppId),
+    form: teamRecentForm(s, oppId),
+    ratingDiff,
+    threat
+  };
+}
+
 export function cupMap(s) {
   // 杯赛地图按轮次固定：八强 dust2、四强 canal、决赛 metro（避免连续场次重复地图）
   const m = findCupMatch(s);

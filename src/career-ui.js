@@ -1,6 +1,6 @@
 import {
   loadCareer, getState, titleFor, startCareerMatch, careerEndMatch, abandonPendingMatch, simulatePlayerMatch, resetCareer,
-  train, sellPlayer, buyPlayer, candidates, nextSeason, seasonReport, nextMatch,
+  train, sellPlayer, buyPlayer, candidates, nextSeason, seasonReport, nextMatch, nextMatchInfo,
   transferWindowOpen, isStorageAvailable, cupMap, trainingTiers, xpNeeded,
   seasonStats, seasonSeries, seasonStreaks, careerSummary,
   sponsorIncome, formBonus, fatiguePenalty, careerMorale, restPlayer, seasonGoals,
@@ -194,17 +194,12 @@ function renderDash(s) {
     matchHtml += '<p>待结算：对阵 ' + esc(opp ? opp.name : pending.oppId) + (pending.isCup ? '（杯赛）' : '') + '</p>';
     matchHtml += '<div class="career-actions"><button class="btn primary small" data-act="continue">继续本场</button><button class="btn small" data-act="sim">模拟本场</button><button class="btn small" data-act="abandon">放弃本场</button></div>';
   } else if (nm) {
-    // 联赛对手来自 fixture 的 home/away；杯赛对手来自 cup match 的 a/b（勿混用）
-    const oppId = s.season.cup.phase === 'active'
-      ? (nm.a === 'player' ? nm.b : nm.a)
-      : (nm.home === 'player' ? nm.away : nm.home);
-    const opp = s.season.teams.find((x) => x.id === oppId);
-    const venue = s.season.cup.phase === 'active' ? 'home' : (nm.home === 'player' ? 'home' : 'away');
-    const mapId = s.season.cup.phase === 'active' ? cupMap(s) : (venue === 'home' ? (s.season.teams.find((x) => x.id === 'player') || {}).homeMap : (opp || {}).homeMap);
-    const playerTeamRating = (s.season.teams.find((x) => x.id === 'player') || {}).rating || 0;
-    const diff = opp ? opp.rating - playerTeamRating : 0;
-    const threat = diff > 10 ? ' · 强敌' : (diff < -10 ? ' · 弱旅' : ' · 势均力敌');
-    matchHtml += '<p>对阵 <b>' + esc(opp ? opp.name : oppId) + '</b> · 评级 ' + (opp ? opp.rating : '-') + threat + ' · ' + (venue === 'home' ? '主场' : '客场') + ' · ' + esc(mapName(mapId || '')) + (s.season.cup.phase === 'active' ? ' · 杯赛' : '') + '</p>';
+    const info = nextMatchInfo(s);
+    const opp = info ? s.season.teams.find((x) => x.id === info.oppId) : null;
+    const oppId = info ? info.oppId : (s.season.cup.phase === 'active' ? (nm.a === 'player' ? nm.b : nm.a) : (nm.home === 'player' ? nm.away : nm.home));
+    const venue = info ? info.venue : (s.season.cup.phase === 'active' ? 'home' : (nm.home === 'player' ? 'home' : 'away'));
+    matchHtml += '<p>对阵 <b>' + esc(info ? info.oppName : oppId) + '</b> · 评级 ' + (info && info.rating != null ? info.rating : '-') + (info ? ' · ' + info.threat : '') + ' · ' + (venue === 'home' ? '主场' : '客场') + ' · ' + esc(mapName((info && info.mapId) || (opp || {}).homeMap || '')) + (s.season.cup.phase === 'active' ? ' · 杯赛' : '') + '</p>';
+    if (info) matchHtml += '<p class="career-scout">对手排名 ' + (info.rank || '-') + ' · 近 5 场 ' + (info.form || '暂无') + ' · 胜率预估待评级差' + '</p>';
     matchHtml += '<div class="career-actions"><button class="btn primary small" data-act="play" data-opp="' + oppId + '" data-venue="' + venue + '" data-cup="' + (s.season.cup.phase === 'active' ? '1' : '0') + '">开赛</button><button class="btn small" data-act="sim">模拟本场</button></div>';
   } else {
     matchHtml += '<p>' + (s.season.cup.phase === 'finished' ? '本赛季已结束' : (s.season.cup.phase === 'active' ? '杯赛已淘汰，等待赛季结算' : '当前轮次已打完')) + '</p>';
