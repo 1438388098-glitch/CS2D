@@ -7,6 +7,7 @@ import {logAct, styleOf, canFinishDefuse, aliveCount, hasGoodGun, redistributeTL
 import {dqnFromJSON} from '../dqn.js';
 import {oppAimPoint} from './oppmodel.js';
 import {shouldRetakeBomb, shouldRushDefuser, shouldRetreatWithoutBomb, pickPlantSite, shouldEscortCarrier, shouldPushLatePlant, shouldRushPlant} from './rules.js';
+import {retakeRoute} from '../retake-route.js';
 ;
 const CT_HOLD_RADIUS = 380;
 
@@ -624,6 +625,24 @@ export function botObjectiveRaw(e, game) {
         return spreadPoint(e, game.bomb.x, game.bomb.y, 90, 180);
       }
       const retakeSite = getMap().sites[game.bomb.site];
+      // metro 特化：CT 回防 A 点推荐路线（candidate-156）——按寻路路径选进点（近+安全侧夹击），
+      // 避免旧逻辑按欧氏距离排序把"看着近、绕远路"的进点排到前面；侧翼由 anchorIdx 分配，
+      // 强制侧绕行超过上限时 retakeRoute 自动退回最短侧。
+      if (getMap().id === 'metro' && game.bomb.site === 'A' && retakeSite) {
+        const metroSide = ((e.anchorIdx || 0) % 2) ? 'lane' : 'east';
+        const rr = retakeRoute(getMap(), e.x, e.y, retakeSite, { side: metroSide });
+        if (rr && rr.route && rr.route.length) {
+          if (e.path === null && rr.tiles && rr.tiles.length > 1) {
+            e.path = rr.tiles;
+            e.pathI = 0;
+            e.stuckT = 0;
+            e.lastSample = { x: e.x, y: e.y };
+            e.repathT = 0;
+          }
+          logAct(game, e, 'retake', 'metro A ' + rr.side + ' ' + rr.entryName + ' entryLen ' + rr.entryLen);
+          return { x: rr.target.x, y: rr.target.y, face: rr.face !== undefined ? rr.face : Math.atan2(retakeSite.cy - rr.entry.y, retakeSite.cx - rr.entry.x), peek: true, nade: true };
+        }
+      }
       const retakePts = retakeSite ? (((getMap().clearChains && getMap().clearChains[retakeSite.label]) || (getMap().clearPoints || []).filter((pp) => pp.site === retakeSite.label)) || []).slice().sort((a, b) => Math.hypot(a.x - e.x, a.y - e.y) - Math.hypot(b.x - e.x, b.y - e.y)) : [];
       if (retakePts.length) {
         const rr = retakePts[(e.anchorIdx || 0) % Math.min(3, retakePts.length)];
