@@ -580,6 +580,36 @@ export function trainingPreview(s, attr, tierKey) {
   };
 }
 
+export function trainingSuggestion(s) {
+  const attrs = s.player.attrs || {};
+  const tiers = trainingTiers();
+  const options = [];
+  for (const attr of Object.keys(attrs)) {
+    for (const tier of tiers) {
+      const pre = trainingPreview(s, attr, tier.key);
+      if (!pre || pre.blocked || pre.gained <= 0 || !pre.affordable || pre.trainingLeft <= 0) continue;
+      options.push({
+        attr,
+        tierKey: tier.key,
+        label: tier.label,
+        cost: pre.cost,
+        gained: pre.gained,
+        fatigueGain: pre.fatigueGain,
+        value: pre.before,
+        score: pre.gained / Math.max(1, pre.cost + pre.fatigueGain * 120)
+      });
+    }
+  }
+  options.sort((a, b) => b.score - a.score || a.value - b.value || a.cost - b.cost || a.fatigueGain - b.fatigueGain);
+  return {
+    suggestion: options[0] || null,
+    options: options.slice(0, 3),
+    bank: Number(s.team.bank) || 0,
+    fatigue: Number(s.player.fatigue) || 0,
+    trainingLeft: Number(s.team.trainingLeft) || 0
+  };
+}
+
 export function restPlayer() {
   const s = getState();
   if (s.team.rested) return { ok: false, error: '本轮已经休息过' };

@@ -1,7 +1,7 @@
 import {
   resetCareer, setStorage, setRng, getState, settlePlayerMatch, train, sellPlayer, buyPlayer, candidates, filterCandidates,
   nextSeason, save, loadCareer, __clearStateForTest,
-  sponsorIncome, sponsorPreview, formBonus, fatiguePenalty, careerMorale, restPlayer, seasonGoals, goalProgress, trainingPreview, rosterContribution,
+  sponsorIncome, sponsorPreview, formBonus, fatiguePenalty, careerMorale, restPlayer, seasonGoals, goalProgress, trainingPreview, trainingSuggestion, rosterContribution,
   achievementDefs, achievements, careerRecords, migrateCareerState, matchReadiness
 } from '../src/career.js';
 
@@ -57,6 +57,10 @@ ok('training preview invalids', trainingPreview(s, 'nope', 'basic') === null && 
 s.player.attrs.aim = 99;
 const cappedPreview = trainingPreview(s, 'aim', 'elite');
 ok('training preview caps', cappedPreview.after === 100 && cappedPreview.gained === 1 && cappedPreview.fatigueGain === 10);
+
+s = resetCareer();
+const suggestion = trainingSuggestion(s);
+ok('training suggestion', suggestion && suggestion.suggestion && suggestion.suggestion.attr === 'nade' && suggestion.suggestion.tierKey === 'elite' && suggestion.options.length >= 1 && suggestion.trainingLeft === 2);
 
 s = resetCareer();
 const ready = matchReadiness(s);
