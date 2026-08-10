@@ -2,7 +2,8 @@ import {
   resetCareer, setStorage, setRng, getState, settlePlayerMatch, train, trainTeammate, sellPlayer, sellPreview, buyPlayer, candidates, filterCandidates,
   nextSeason, save, loadCareer, __clearStateForTest, candidateProfile,
   sponsorIncome, sponsorPreview, sponsorSeasonPreview, homeTicketIncome, ticketPreview, cashflowForecast, seasonBudget, financialRisk, financeTrend, seasonFinancialSummary, remainingPrizePreview, transferProfit, facilityStatus, upgradeFacility, formBonus, fatiguePenalty, careerMorale, restPlayer, seasonGoals, goalProgress, trainingPreview, trainingSuggestion, rotationAdvice, trainingHistory, rosterStatus, transferBudget, contractStatus, renewPlayer, rosterContribution, positionBalance,
-  achievementDefs, achievements, achievementCatalog, achievementProgress, careerRecords, honorTitle, migrateCareerState, matchReadiness, seasonGoalHistory, goalAdvice, lastRecordAlerts, seasonRecordAlerts, recordDetails, seasonHighlights, careerReview, cupSeasonRecord, cupOpponentScouting, seasonTransitionPreview
+  achievementDefs, achievements, achievementCatalog, achievementProgress, careerRecords, honorTitle, migrateCareerState, matchReadiness, seasonGoalHistory, goalAdvice, lastRecordAlerts, seasonRecordAlerts, recordDetails, seasonHighlights, careerReview, cupSeasonRecord, cupOpponentScouting, seasonTransitionPreview,
+  leagueEconomy, trainingTiers
 } from '../src/career.js';
 
 const ok = (name, cond) => {
@@ -24,6 +25,20 @@ setStorage(fakeStorage());
 setRng(() => 0.5);
 
 let s = resetCareer();
+const econA = leagueEconomy('甲级');
+const econB = leagueEconomy('乙级');
+const econC = leagueEconomy('丙级');
+ok('league economy spread', econA.basicTrainingCost > econB.basicTrainingCost && econB.basicTrainingCost > econC.basicTrainingCost && econA.academyFirstCost > econB.academyFirstCost && econB.academyFirstCost > econC.academyFirstCost && econA.rating80Price > econB.rating80Price && econB.rating80Price > econC.rating80Price);
+s = resetCareer();
+s.team.league = '甲级';
+s.team.bank = 100000;
+const proTierCost = trainingTiers(s)[0].cost;
+const proFacilityCost = facilityStatus(s)[0].nextCost;
+s = resetCareer();
+s.team.league = '丙级';
+s.team.bank = 100000;
+ok('league live cost scale', proTierCost > trainingTiers(s)[0].cost && proFacilityCost > facilityStatus(s)[0].nextCost);
+s = resetCareer();
 ok('new career fields', s.version === 3 && Array.isArray(s.team.ledger) && s.team.morale === 65 && Array.isArray(s.player.form) && s.player.fatigue === 0 && Array.isArray(s.player.achievements) && s.player.records && typeof s.player.records === 'object');
 ok('achievement defs', achievementDefs().length >= 6 && achievementDefs()[0].id === 'first_win');
 const honorStart = honorTitle(s);

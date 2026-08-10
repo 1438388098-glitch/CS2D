@@ -46,7 +46,7 @@ function leagueRulesHtml(s) {
     '<div class="career-kpi"><b>' + Math.round(rules.youthBias * 100) + '%</b><span>青训倾向</span></div>' +
     '<div class="career-kpi"><b>' + Math.round(rules.tacticalBias * 100) + '</b><span>战术倾向</span></div>' +
     '<div class="career-kpi"><b>' + money(rules.sponsor) + '</b><span>每场赞助</span></div></div>' +
-    '<div class="career-stats"><span>胜 ' + money(rules.matchWin) + ' · 负 ' + money(rules.matchLose) + ' · 主场票房 ' + money(rules.ticketBase) + ' · 赛季预算 ' + money(rules.budgetBase) + ' · 奖金系数 ' + rules.prizeScale + '</span></div></div>';
+    '<div class="career-stats"><span>胜 ' + money(rules.matchWin) + ' · 负 ' + money(rules.matchLose) + ' · 主场票房 ' + money(rules.ticketBase) + ' · 赛季预算 ' + money(rules.budgetBase) + ' · 奖金系数 ' + rules.prizeScale + ' · 成本系数 ' + rules.costScale + '</span></div></div>';
 }
 const ATTR_CN = { aim: '射击', move: '移速', react: '反应', nade: '道具' };
 const ROLE_CN = ['突破', '补枪', '指挥', '自由人'];
@@ -400,7 +400,7 @@ function renderTraining(s) {
   html += '<div class="career-train-row"><b>轮换</b><span>' + rotation.advice + ' · ' + rotation.reason + (rotation.importance ? ' · 下一场 ' + rotation.importance : '') + '</span></div>';
   for (const [attr, v] of Object.entries(s.player.attrs)) {
     html += '<div class="career-train-row"><b>' + cn(attr, ATTR_CN) + ' (' + v + ')</b>';
-    for (const tier of trainingTiers()) {
+    for (const tier of trainingTiers(s)) {
       const pre = trainingPreview(s, attr, tier.key);
       const label = tier.label + ' ' + tier.cost + ' / +' + tier.points + ' (' + (pre ? pre.before + '→' + pre.after : '-') + ' · 疲劳+' + (pre ? pre.fatigueGain : tier.fatigue || 3) + ')';
       const disabled = !pre || pre.blocked || !pre.affordable || pre.trainingLeft <= 0;

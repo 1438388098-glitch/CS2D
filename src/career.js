@@ -72,6 +72,9 @@ const LEAGUE_RULES = {
     matchLose: 500,
     mvpBonus: 250,
     prizeScale: 1.45,
+    costScale: 1.35,
+    priceCap: 30000,
+    refundScale: 0.55,
     budgetBase: 28000,
     cupRoundPrize: 6500,
     cupFinalPrize: 42000,
@@ -90,6 +93,9 @@ const LEAGUE_RULES = {
     matchLose: 300,
     mvpBonus: 200,
     prizeScale: 1,
+    costScale: 1,
+    priceCap: 20000,
+    refundScale: 0.5,
     budgetBase: 20000,
     cupRoundPrize: 5000,
     cupFinalPrize: 30000,
@@ -108,6 +114,9 @@ const LEAGUE_RULES = {
     matchLose: 200,
     mvpBonus: 150,
     prizeScale: 0.72,
+    costScale: 0.72,
+    priceCap: 16000,
+    refundScale: 0.45,
     budgetBase: 15000,
     cupRoundPrize: 3500,
     cupFinalPrize: 18000,
@@ -159,7 +168,16 @@ function pickUnique(arr, count) {
   }
   return out;
 }
-function playerPrice(rating) { return Math.min(rating * 300, 20000); }
+function leagueCost(league) {
+  return Number(leagueRules(league).costScale) || 1;
+}
+
+function playerPrice(rating, league) {
+  const rules = leagueRules(league || '乙级');
+  const scale = Number(rules.costScale) || 1;
+  const cap = Number(rules.priceCap) || 20000;
+  return Math.min(Math.round(rating * 300 * scale), cap);
+}
 function teamAvgRating(roster) {
   if (!roster || !roster.length) return 65;
   return Math.round(roster.reduce((a, p) => a + p.rating, 0) / roster.length);
@@ -249,6 +267,18 @@ export function leagueInfo() {
     league,
     ...leagueRules(league)
   }));
+}
+export function leagueEconomy(league) {
+  const rules = leagueRules(league);
+  return {
+    league: rules.key,
+    costScale: rules.costScale,
+    priceCap: rules.priceCap,
+    refundScale: rules.refundScale,
+    basicTrainingCost: Math.round(500 * (rules.costScale || 1)),
+    academyFirstCost: Math.round(4000 * (rules.costScale || 1)),
+    rating80Price: playerPrice(80, rules.key)
+  };
 }
 function rankPrizeFor(league, rank) {
   return Math.round((PRIZE[rank] || 0) * leagueRules(league).prizeScale);
@@ -955,7 +985,10 @@ export function migrateCareerState(parsed) {
 
 export function xpNeeded(level) { return level * 500; }
 export function titleFor(level) { return TITLES[Math.max(0, Math.min(level - 1, TITLES.length - 1))]; }
-export function trainingTiers() { return TRAIN_TIERS.map((t) => ({ ...t })); }
+export function trainingTiers(s) {
+  const scale = s && s.team ? leagueCost(s.team.league) : 1;
+  return TRAIN_TIERS.map((t) => ({ ...t, cost: Math.round(t.cost * scale) }));
+}
 export function trainingHistory(s) {
   const logs = Array.isArray(s && s.team && s.team.trainingLog) ? s.team.trainingLog : [];
   const sorted = [...logs].sort((a, b) => (b.t || 0) - (a.t || 0));
@@ -976,10 +1009,11 @@ function facilityLevel(s, key) {
 
 export function facilityStatus(s) {
   const bank = Number(s.team && s.team.bank) || 0;
+  const scale = s && s.team ? leagueCost(s.team.league) : 1;
   return Object.keys(FACILITIES).map((key) => {
     const cfg = FACILITIES[key];
     const level = facilityLevel(s, key);
-    const nextCost = Math.round(cfg.baseCost * (1 + level * 0.8));
+    const nextCost = Math.round(cfg.baseCost * (1 + level * 0.8) * scale);
     return {
       key,
       label: cfg.label,
@@ -999,7 +1033,7 @@ export function upgradeFacility(key) {
   if (!cfg) return { ok: false, error: '设施不存在' };
   const level = facilityLevel(s, key);
   if (level >= cfg.max) return { ok: false, error: '该设施已满级' };
-  const cost = Math.round(cfg.baseCost * (1 + level * 0.8));
+  const cost = Math.round(cfg.baseCost * (1 + level * 0.8) * leagueCost(s.team.league));
   if (s.team.bank < cost) return { ok: false, error: '资金不足' };
   s.team.bank -= cost;
   s.team.facilities[key] = level + 1;
@@ -1226,7 +1260,12 @@ function refreshCup(s) {
   }
 }
 
-function makeCandidates() {
+function makeCandidates(s) {
+  const state = s || getState();
+  const rules = leagueRules(state && state.team ? state.team.league : '乙级');
+  const [lo, hi] = rules.ratingRange;
+  const candLo = Math.max(50, lo - 6);
+  const candHi = Math.min(97, hi + 7);
   // 名字与所属队伍必须同源配对：随机抽取 CAND_NAMES 的索引，再同时取名字与队伍
   const idxPool = CAND_NAMES.map((_, i) => i);
   const picks = pickUnique(idxPool, 8);
@@ -1235,9 +1274,9 @@ function makeCandidates() {
     for (let j = 0; j < 2; j++) {
       const idx = ri * 2 + j;
       const pi = picks[idx];
-      const rating = randInt(55, 85);
-      const potential = Math.min(96, rating + randInt(3, 12));
-      out.push({ id: 'c' + (idx + 1), name: CAND_NAMES[pi], team: teamDisplay(CAND_TEAMS[pi]), role, rating, price: playerPrice(rating), potential, youth: rng() < 0.35 });
+      const rating = randInt(candLo, candHi);
+      const potential = Math.min(99, rating + randInt(3, 12));
+      out.push({ id: 'c' + (idx + 1), name: CAND_NAMES[pi], team: teamDisplay(CAND_TEAMS[pi]), role, rating, price: playerPrice(rating, state.team.league), potential, youth: rng() < (rules.youthBias || 0.35), league: state.team.league });
     }
   });
   return out;
@@ -1317,7 +1356,7 @@ export function resetCareer() {
 export function candidates() {
   const s = getState();
   if (!s.team.pool) {
-    s.team.pool = makeCandidates();
+    s.team.pool = makeCandidates(s);
     save();
   }
   return s.team.pool;
@@ -1432,9 +1471,10 @@ export function transferProfit(s) {
 
 export function contractStatus(s) {
   const list = Array.isArray(s.team && s.team.roster) ? s.team.roster : [];
+  const scale = leagueCost(s.team.league);
   return list.map((p) => {
     const years = Number.isInteger(p.contractYears) ? p.contractYears : 3;
-    const renewalCost = Number.isFinite(Number(p.renewalCost)) ? Number(p.renewalCost) : Math.round((Number(p.price) || 0) * 0.12);
+    const renewalCost = Number.isFinite(Number(p.renewalCost)) ? Number(p.renewalCost) : Math.round((Number(p.price) || 0) * 0.12 * scale);
     return {
       ...p,
       yearsLeft: years,
@@ -1450,11 +1490,11 @@ export function renewPlayer(id) {
   if (!p) return { ok: false, error: '队友不存在' };
   const years = Number.isInteger(p.contractYears) ? p.contractYears : 3;
   if (years > 1) return { ok: false, error: '合同尚未到期' };
-  const renewalCost = Number.isFinite(Number(p.renewalCost)) ? Number(p.renewalCost) : Math.round((Number(p.price) || 0) * 0.12);
+  const renewalCost = Number.isFinite(Number(p.renewalCost)) ? Number(p.renewalCost) : Math.round((Number(p.price) || 0) * 0.12 * leagueCost(s.team.league));
   if (s.team.bank < renewalCost) return { ok: false, error: '资金不足' };
   s.team.bank -= renewalCost;
   p.contractYears = 3;
-  p.renewalCost = Math.round((Number(p.price) || 0) * 0.12);
+  p.renewalCost = Math.round((Number(p.price) || 0) * 0.12 * leagueCost(s.team.league));
   s.team.morale = clamp(Number(s.team.morale) + 1, 20, 100);
   addLedger(s, 'expense', -renewalCost, '续约：' + p.name);
   addNews(s, 'info', '续约完成：' + p.name + ' 3 年');
@@ -1469,17 +1509,18 @@ export function train(attr, tierKey) {
   if (!(attr in s.player.attrs)) return { ok: false, error: '属性不存在' };
   if (s.player.attrs[attr] >= 100) return { ok: false, error: '属性已满' };
   if (s.team.trainingLeft <= 0) return { ok: false, error: '本轮训练次数已用完' };
-  if (s.team.bank < tier.cost) return { ok: false, error: '资金不足' };
+  const cost = Math.round(tier.cost * leagueCost(s.team.league));
+  if (s.team.bank < cost) return { ok: false, error: '资金不足' };
   const gained = Math.min(15, tier.points + facilityLevel(s, 'academy'));
   const fatigueGain = Math.max(1, (tier.fatigue || 3) - facilityLevel(s, 'medical'));
-  s.team.bank -= tier.cost;
+  s.team.bank -= cost;
   s.player.attrs[attr] = Math.min(100, s.player.attrs[attr] + gained);
   s.player.fatigue = clamp(Number(s.player.fatigue) + fatigueGain, 0, 100);
   s.team.trainingLeft--;
   refreshPlayerRating(s);
-  addLedger(s, 'expense', -tier.cost, '训练：' + attr);
+  addLedger(s, 'expense', -cost, '训练：' + attr);
   if (!Array.isArray(s.team.trainingLog)) s.team.trainingLog = [];
-  s.team.trainingLog.push({ t: Date.now(), type: 'player', attr, tierKey: tier.key, label: tier.label, cost: tier.cost, gained });
+  s.team.trainingLog.push({ t: Date.now(), type: 'player', attr, tierKey: tier.key, label: tier.label, cost, gained });
   addNews(s, 'info', '训练完成：' + attr + ' +' + gained);
   save();
   return { ok: true };
@@ -1489,6 +1530,7 @@ export function trainingPreview(s, attr, tierKey) {
   const tier = TRAIN_TIERS.find((t) => t.key === tierKey);
   if (!tier || !s || !s.player || !s.player.attrs || !(attr in s.player.attrs)) return null;
   const before = Number(s.player.attrs[attr]) || 0;
+  const cost = Math.round(tier.cost * leagueCost(s.team.league));
   const gained = Math.min(15, tier.points + facilityLevel(s, 'academy'));
   const after = Math.min(100, before + gained);
   const fatigueGain = Math.max(1, (tier.fatigue || 3) - facilityLevel(s, 'medical'));
@@ -1497,13 +1539,13 @@ export function trainingPreview(s, attr, tierKey) {
     attr,
     tierKey,
     label: tier.label,
-    cost: tier.cost,
+    cost,
     before,
     after,
     gained: after - before,
     fatigueAfter,
     fatigueGain: fatigueAfter - (Number(s.player.fatigue) || 0),
-    affordable: Number(s.team && s.team.bank) >= tier.cost,
+    affordable: Number(s.team && s.team.bank) >= cost,
     trainingLeft: Number(s.team && s.team.trainingLeft) || 0,
     blocked: before >= 100
   };
@@ -1511,7 +1553,7 @@ export function trainingPreview(s, attr, tierKey) {
 
 export function trainingSuggestion(s) {
   const attrs = s.player.attrs || {};
-  const tiers = trainingTiers();
+  const tiers = trainingTiers(s);
   const options = [];
   for (const attr of Object.keys(attrs)) {
     for (const tier of tiers) {
@@ -1590,16 +1632,17 @@ export function trainTeammate(id, tierKey) {
   const p = s.team.roster.find((x) => x.id === id);
   if (!p) return { ok: false, error: '队友不存在' };
   if (s.team.trainingLeft <= 0) return { ok: false, error: '本轮训练次数已用完' };
-  if (s.team.bank < tier.cost) return { ok: false, error: '资金不足' };
+  const cost = Math.round(tier.cost * leagueCost(s.team.league));
+  if (s.team.bank < cost) return { ok: false, error: '资金不足' };
   if (p.rating >= 97) return { ok: false, error: '该队友已接近上限' };
   const gained = Math.min(15, tier.points + facilityLevel(s, 'academy'));
-  s.team.bank -= tier.cost;
+  s.team.bank -= cost;
   p.rating = Math.min(97, p.rating + gained);
   s.team.trainingLeft--;
   refreshPlayerRating(s);
-  addLedger(s, 'expense', -tier.cost, '训练：' + p.name);
+  addLedger(s, 'expense', -cost, '训练：' + p.name);
   if (!Array.isArray(s.team.trainingLog)) s.team.trainingLog = [];
-  s.team.trainingLog.push({ t: Date.now(), type: 'teammate', target: p.name, role: p.role, tierKey: tier.key, label: tier.label, cost: tier.cost, gained });
+  s.team.trainingLog.push({ t: Date.now(), type: 'teammate', target: p.name, role: p.role, tierKey: tier.key, label: tier.label, cost, gained });
   addNews(s, 'info', '训练完成：' + p.name + ' rating +' + gained);
   save();
   return { ok: true };
@@ -1613,7 +1656,7 @@ export function sellPlayer(id) {
   if (idx < 0) return { ok: false, error: '队友不存在' };
   const p = s.team.roster[idx];
   const preview = sellPreview(s, id);
-  const refund = preview ? preview.refund : Math.floor(p.price * 0.5);
+  const refund = preview ? preview.refund : Math.floor(p.price * (Number(leagueRules(s.team.league).refundScale) || 0.5));
   ensureTransferLog(s).push({ type: 'sell', name: p.name, role: p.role, refund, round: s.season.round, t: Date.now() });
   s.team.bank += refund;
   s.team.roster.splice(idx, 1);
@@ -1629,13 +1672,14 @@ export function sellPlayer(id) {
 export function sellPreview(s, id) {
   const p = Array.isArray(s.team && s.team.roster) ? s.team.roster.find((x) => x.id === id) : null;
   if (!p) return null;
+  const refundScale = Number(leagueRules(s.team.league).refundScale) || 0.5;
   const roster = Array.isArray(s.team.roster) ? s.team.roster : [];
   const afterRoster = roster.filter((x) => x.id !== id);
   const attrs = s.player && s.player.attrs ? s.player.attrs : { aim: 0, move: 0, react: 0, nade: 0 };
   const ratingBefore = Math.round(effectiveRatingFor(roster, attrs) + formBonus(s) + moraleModifier(s));
   const ratingAfter = Math.round(effectiveRatingFor(afterRoster, attrs) + formBonus(s) + moraleModifier(s));
   const costBasis = Number.isFinite(Number(p.costBasis)) ? Number(p.costBasis) : Number(p.price) || 0;
-  const refund = Math.floor((Number(p.price) || 0) * 0.5);
+  const refund = Math.floor((Number(p.price) || 0) * refundScale);
   return {
     id: p.id,
     name: p.name,
@@ -1664,7 +1708,7 @@ export function buyPlayer(candId) {
   let slot = s.team.roster.find((p) => p.role === cand.role && p.id !== cand.id);
   if (slot) {
     const oldPreview = sellPreview(s, slot.id);
-    refund = oldPreview ? oldPreview.refund : Math.floor(slot.price * 0.5);
+    refund = oldPreview ? oldPreview.refund : Math.floor(slot.price * (Number(leagueRules(s.team.league).refundScale) || 0.5));
     ensureTransferLog(s).push({ type: 'sell', name: slot.name, role: slot.role, refund, round: s.season.round, t: Date.now() });
     s.team.bank += refund;
     slot.name = cand.name; slot.team = cand.team || s.team.name; slot.rating = cand.rating; slot.price = cand.price; slot.costBasis = cand.price; slot.potential = profile.potential; slot.youth = profile.youth; slot.contractYears = 3; slot.renewalCost = Math.round(cand.price * 0.12);
