@@ -1,7 +1,7 @@
 import {
   resetCareer, setStorage, setRng, getState, settlePlayerMatch, train, trainTeammate, sellPlayer, sellPreview, buyPlayer, candidates, filterCandidates,
   nextSeason, save, loadCareer, __clearStateForTest, candidateProfile,
-  sponsorIncome, sponsorPreview, sponsorSeasonPreview, cashflowForecast, seasonBudget, financeTrend, remainingPrizePreview, transferProfit, formBonus, fatiguePenalty, careerMorale, restPlayer, seasonGoals, goalProgress, trainingPreview, trainingSuggestion, rotationAdvice, trainingHistory, rosterStatus, transferBudget, contractStatus, renewPlayer, rosterContribution, positionBalance,
+  sponsorIncome, sponsorPreview, sponsorSeasonPreview, cashflowForecast, seasonBudget, financeTrend, remainingPrizePreview, transferProfit, facilityStatus, upgradeFacility, formBonus, fatiguePenalty, careerMorale, restPlayer, seasonGoals, goalProgress, trainingPreview, trainingSuggestion, rotationAdvice, trainingHistory, rosterStatus, transferBudget, contractStatus, renewPlayer, rosterContribution, positionBalance,
   achievementDefs, achievements, careerRecords, migrateCareerState, matchReadiness
 } from '../src/career.js';
 
@@ -99,6 +99,15 @@ ok('training history', history && history.totalCount === 2 && history.playerCoun
 s = resetCareer();
 const rosterState = rosterStatus(s);
 ok('roster status table', rosterState && rosterState.rows.length === 5 && rosterState.rows[0].type === '玩家' && rosterState.rows[0].morale === 65 && rosterState.rows.slice(1).every((r) => r.rating > 0 && r.fatigue === 0 && r.morale === 65));
+
+s = resetCareer();
+s.team.bank = 100000;
+const facilities = facilityStatus(s);
+ok('facility status', facilities.length === 3 && facilities.every((f) => f.level === 0 && f.nextCost > 0 && f.affordable === true));
+const academyUpgrade = upgradeFacility('academy');
+ok('facility upgrade', academyUpgrade.ok && s.team.facilities.academy === 1 && s.team.bank < 100000 && s.team.ledger.some((x) => x.label.includes('设施投资')));
+const boostedPreview = trainingPreview(s, 'aim', 'basic');
+ok('facility training bonus', boostedPreview && boostedPreview.gained === 3);
 
 s = resetCareer();
 const rotation = rotationAdvice(s);

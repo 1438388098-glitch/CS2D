@@ -1,7 +1,7 @@
 import {
   loadCareer, getState, titleFor, startCareerMatch, careerEndMatch, abandonPendingMatch, simulatePlayerMatch, resetCareer,
   train, sellPlayer, sellPreview, buyPlayer, renewPlayer, candidates, filterCandidates, candidateProfile, nextSeason, seasonReport, nextMatch, nextMatchInfo, matchImportance, teamRecentForm, matchReadiness,
-  transferWindowOpen, transferWindowInfo, transferBudget, transferProfit, contractStatus, isStorageAvailable, cupMap, cupPrizeInfo, cupMapForRound, fixtureMapFor, fixtureMatchRecord, winChance, trainingTiers, trainingPreview, trainingSuggestion, rotationAdvice, trainingHistory, rosterStatus, xpNeeded,
+  transferWindowOpen, transferWindowInfo, transferBudget, transferProfit, contractStatus, isStorageAvailable, cupMap, cupPrizeInfo, cupMapForRound, fixtureMapFor, fixtureMatchRecord, winChance, trainingTiers, trainingPreview, trainingSuggestion, rotationAdvice, trainingHistory, rosterStatus, facilityStatus, upgradeFacility, xpNeeded,
   seasonStats, seasonAwards, seasonPerformanceSummary, seasonSeries, seasonStreaks, careerSummary, matchDetail, seasonTimeline, headToHead, importantMatches, seasonTrends, favoriteMatches, cupHistory, trophyCase, careerTimeline,
   sponsorIncome, sponsorPreview, sponsorSeasonPreview, cashflowForecast, seasonBudget, financeTrend, remainingPrizePreview, formBonus, fatiguePenalty, careerMorale, restPlayer, seasonGoals, seasonPace, goalProgress, relegationProjection, rosterContribution,
   positionBalance,
@@ -120,6 +120,10 @@ function onClick(e) {
   } else if (act === 'renew') {
     const res = renewPlayer(t.getAttribute('data-id'));
     toast(res.ok ? '续约成功' : (res.error || '续约失败'));
+    render();
+  } else if (act === 'upgrade-facility') {
+    const res = upgradeFacility(t.getAttribute('data-facility'));
+    toast(res.ok ? '设施升级成功' : (res.error || '设施升级失败'));
     render();
   } else if (act === 'continue') {
     const s = getState();
@@ -337,6 +341,7 @@ function renderTraining(s) {
   const rotation = rotationAdvice(s);
   const history = trainingHistory(s);
   const status = rosterStatus(s);
+  const facilities = facilityStatus(s);
   let html = '<div class="career-card"><h4>训练课</h4><p>本轮剩余 ' + s.team.trainingLeft + ' 次 · 资金 ' + money(s.team.bank) + ' · 疲劳 ' + fat + '%</p>' + attrsRadar(s.player.attrs);
   html += '<div class="career-train-row"><b>恢复</b><button class="btn small"' + (s.team.rested ? ' disabled' : '') + ' data-act="rest">休息（疲劳清零）</button><span>' + (s.team.rested ? '本轮已休息' : '每轮最多一次') + '</span></div>';
   if (suggestion.suggestion) html += '<div class="career-train-row"><b>建议</b><span>训练 ' + cn(suggestion.suggestion.attr, ATTR_CN) + ' ' + suggestion.suggestion.label + ' · +' + suggestion.suggestion.gained + ' 属性 · 花费 ' + money(suggestion.suggestion.cost) + ' · 疲劳+' + suggestion.suggestion.fatigueGain + '</span></div>';
@@ -355,6 +360,8 @@ function renderTraining(s) {
   html += '<div class="career-card"><h4>训练履历</h4><div class="career-stats"><span>累计 ' + history.totalCount + ' 次 · 玩家 ' + history.playerCount + ' · 队友 ' + history.teammateCount + ' · 花费 ' + money(history.totalSpend) + '</span></div>' + historyRows + '</div>';
   const statusRows = status.rows.map((r) => '<div class="career-row"><span>' + esc(r.name) + ' · ' + esc(r.type) + ' · ' + r.ratingLabel + '</span><b>疲劳 ' + r.fatigue + '% · 士气 ' + r.morale + '</b></div>').join('');
   html += '<div class="career-card"><h4>主力状态</h4><div class="career-stats"><span>队友均评 ' + status.rosterAvg + ' · 玩家属性 ' + status.attrsAvg + ' · 队伍士气 ' + status.morale + '</span></div>' + statusRows + '</div>';
+  const facilityRows = facilities.map((f) => '<div class="career-row"><span>' + esc(f.label) + ' Lv.' + f.level + ' / ' + f.max + ' · ' + esc(f.desc) + '</span><b>' + (f.maxed ? '已满级' : money(f.nextCost)) + '</b><button class="btn small"' + (f.maxed || !f.affordable ? ' disabled' : '') + ' data-act="upgrade-facility" data-facility="' + f.key + '">升级</button></div>').join('');
+  html += '<div class="career-card"><h4>球队设施</h4><div class="career-stats"><span>设施加成会立即作用于训练、比赛疲劳与候选潜力</span></div>' + facilityRows + '</div>';
   return html + '</div><div class="career-card"><h4>收益预览</h4><p>训练会提升指定属性，同时累积疲劳；精英训练收益最高但疲劳代价也更大。</p></div>';
 }
 

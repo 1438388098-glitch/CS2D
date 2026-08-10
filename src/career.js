@@ -51,6 +51,11 @@ const TRAIN_TIERS = [
   { key: 'pro', label: '进阶', cost: 1200, points: 6, fatigue: 6 },
   { key: 'elite', label: '精英', cost: 2500, points: 15, fatigue: 10 }
 ];
+const FACILITIES = {
+  academy: { label: '青训', desc: '训练点数 +1/级', baseCost: 4000, max: 3 },
+  medical: { label: '医疗', desc: '比赛疲劳 -2/级', baseCost: 3500, max: 3 },
+  scouting: { label: '球探', desc: '候选潜力 +1/级', baseCost: 3000, max: 3 }
+};
 const PRIZE = { 1: 30000, 2: 20000, 3: 15000, 4: 8000, 5: 8000, 6: 8000, 7: 4000, 8: 4000 };
 const LEAGUE_RATING = { '甲级': [80, 92], '乙级': [70, 85], '丙级': [60, 74] };
 const TITLES = ['新兵', '列兵', '下士', '中士', '上尉', '少校', '上校', '准将', '少将', '中将', '上将', '传奇'];
@@ -510,6 +515,7 @@ export function migrateCareerState(parsed) {
   parsed.team.pool = parsed.team.pool || null;
   parsed.team.trainingLog = Array.isArray(parsed.team.trainingLog) ? parsed.team.trainingLog : [];
   parsed.team.transferLog = Array.isArray(parsed.team.transferLog) ? parsed.team.transferLog : [];
+  parsed.team.facilities = parsed.team.facilities && typeof parsed.team.facilities === 'object' ? parsed.team.facilities : { academy: 0, medical: 0, scouting: 0 };
   parsed.season.cup = parsed.season.cup || { phase: 'idle', bracket: [] };
   assignFixtureMaps(parsed);
   parsed.matchHistory = Array.isArray(parsed.matchHistory) ? parsed.matchHistory : [];
@@ -530,6 +536,46 @@ export function trainingHistory(s) {
     totalCount: logs.length,
     totalSpend: logs.reduce((a, x) => a + (Number(x.cost) || 0), 0)
   };
+}
+
+function facilityLevel(s, key) {
+  const facilities = s && s.team && s.team.facilities ? s.team.facilities : {};
+  return Math.min(3, Number(facilities[key]) || 0);
+}
+
+export function facilityStatus(s) {
+  const bank = Number(s.team && s.team.bank) || 0;
+  return Object.keys(FACILITIES).map((key) => {
+    const cfg = FACILITIES[key];
+    const level = facilityLevel(s, key);
+    const nextCost = Math.round(cfg.baseCost * (1 + level * 0.8));
+    return {
+      key,
+      label: cfg.label,
+      desc: cfg.desc,
+      level,
+      max: cfg.max,
+      nextCost,
+      affordable: level < cfg.max && bank >= nextCost,
+      maxed: level >= cfg.max
+    };
+  });
+}
+
+export function upgradeFacility(key) {
+  const s = getState();
+  const cfg = FACILITIES[key];
+  if (!cfg) return { ok: false, error: '设施不存在' };
+  const level = facilityLevel(s, key);
+  if (level >= cfg.max) return { ok: false, error: '该设施已满级' };
+  const cost = Math.round(cfg.baseCost * (1 + level * 0.8));
+  if (s.team.bank < cost) return { ok: false, error: '资金不足' };
+  s.team.bank -= cost;
+  s.team.facilities[key] = level + 1;
+  addLedger(s, 'expense', -cost, '设施投资：' + cfg.label);
+  addNews(s, 'info', cfg.label + '设施升级至 ' + (level + 1) + ' 级');
+  save();
+  return { ok: true, cost, level: level + 1 };
 }
 
 export function rosterStatus(s) {
@@ -696,7 +742,7 @@ export function newCareerState() {
     team: {
       name: PLAYER_TEAM.name, league: '乙级', bank: 12000,
       roster, trainingLeft: 2, transfersLeft: 2, transferWindow: false, pool: null,
-      ledger: [], trainingLog: [], morale: 65, rested: false
+      ledger: [], trainingLog: [], transferLog: [], facilities: { academy: 0, medical: 0, scouting: 0 }, morale: 65, rested: false
     },
     season: {
       id: 1, round: 1, totalRounds: 14,
@@ -749,7 +795,10 @@ export function candidates() {
 export function candidateProfile(c) {
   if (!c) return null;
   const rating = Number(c.rating) || 70;
-  const potential = Number.isFinite(Number(c.potential)) ? Number(c.potential) : Math.min(96, rating + 5);
+  const facilities = getState().team && getState().team.facilities ? getState().team.facilities : {};
+  const scouting = Number(facilities.scouting) || 0;
+  const basePotential = Number.isFinite(Number(c.potential)) ? Number(c.potential) : Math.min(96, rating + 5);
+  const potential = Math.min(96, basePotential + scouting);
   return {
     ...c,
     potential,
@@ -890,15 +939,17 @@ export function train(attr, tierKey) {
   if (s.player.attrs[attr] >= 100) return { ok: false, error: '属性已满' };
   if (s.team.trainingLeft <= 0) return { ok: false, error: '本轮训练次数已用完' };
   if (s.team.bank < tier.cost) return { ok: false, error: '资金不足' };
+  const gained = Math.min(15, tier.points + facilityLevel(s, 'academy'));
+  const fatigueGain = Math.max(1, (tier.fatigue || 3) - facilityLevel(s, 'medical'));
   s.team.bank -= tier.cost;
-  s.player.attrs[attr] = Math.min(100, s.player.attrs[attr] + tier.points);
-  s.player.fatigue = clamp(Number(s.player.fatigue) + (tier.fatigue || 3), 0, 100);
+  s.player.attrs[attr] = Math.min(100, s.player.attrs[attr] + gained);
+  s.player.fatigue = clamp(Number(s.player.fatigue) + fatigueGain, 0, 100);
   s.team.trainingLeft--;
   refreshPlayerRating(s);
   addLedger(s, 'expense', -tier.cost, '训练：' + attr);
   if (!Array.isArray(s.team.trainingLog)) s.team.trainingLog = [];
-  s.team.trainingLog.push({ t: Date.now(), type: 'player', attr, tierKey: tier.key, label: tier.label, cost: tier.cost, gained: tier.points });
-  addNews(s, 'info', '训练完成：' + attr + ' +' + tier.points);
+  s.team.trainingLog.push({ t: Date.now(), type: 'player', attr, tierKey: tier.key, label: tier.label, cost: tier.cost, gained });
+  addNews(s, 'info', '训练完成：' + attr + ' +' + gained);
   save();
   return { ok: true };
 }
@@ -907,8 +958,10 @@ export function trainingPreview(s, attr, tierKey) {
   const tier = TRAIN_TIERS.find((t) => t.key === tierKey);
   if (!tier || !s || !s.player || !s.player.attrs || !(attr in s.player.attrs)) return null;
   const before = Number(s.player.attrs[attr]) || 0;
-  const after = Math.min(100, before + tier.points);
-  const fatigueAfter = Math.min(100, (Number(s.player.fatigue) || 0) + (tier.fatigue || 3));
+  const gained = Math.min(15, tier.points + facilityLevel(s, 'academy'));
+  const after = Math.min(100, before + gained);
+  const fatigueGain = Math.max(1, (tier.fatigue || 3) - facilityLevel(s, 'medical'));
+  const fatigueAfter = Math.min(100, (Number(s.player.fatigue) || 0) + fatigueGain);
   return {
     attr,
     tierKey,
@@ -1008,14 +1061,15 @@ export function trainTeammate(id, tierKey) {
   if (s.team.trainingLeft <= 0) return { ok: false, error: '本轮训练次数已用完' };
   if (s.team.bank < tier.cost) return { ok: false, error: '资金不足' };
   if (p.rating >= 97) return { ok: false, error: '该队友已接近上限' };
+  const gained = Math.min(15, tier.points + facilityLevel(s, 'academy'));
   s.team.bank -= tier.cost;
-  p.rating = Math.min(97, p.rating + tier.points);
+  p.rating = Math.min(97, p.rating + gained);
   s.team.trainingLeft--;
   refreshPlayerRating(s);
   addLedger(s, 'expense', -tier.cost, '训练：' + p.name);
   if (!Array.isArray(s.team.trainingLog)) s.team.trainingLog = [];
-  s.team.trainingLog.push({ t: Date.now(), type: 'teammate', target: p.name, role: p.role, tierKey: tier.key, label: tier.label, cost: tier.cost, gained: tier.points });
-  addNews(s, 'info', '训练完成：' + p.name + ' rating +' + tier.points);
+  s.team.trainingLog.push({ t: Date.now(), type: 'teammate', target: p.name, role: p.role, tierKey: tier.key, label: tier.label, cost: tier.cost, gained });
+  addNews(s, 'info', '训练完成：' + p.name + ' rating +' + gained);
   save();
   return { ok: true };
 }
@@ -1391,7 +1445,7 @@ export function applyPlayerResult(s, r) {
   if (!Array.isArray(s.player.form)) s.player.form = [];
   s.player.form.push({ win: !!win, kills: kills || 0, deaths: deaths || 0 });
   if (s.player.form.length > 5) s.player.form.splice(0, s.player.form.length - 5);
-  s.player.fatigue = clamp(Number(s.player.fatigue) + (isCup ? 10 : 6) + (win ? 0 : 2), 0, 100);
+  s.player.fatigue = clamp(Number(s.player.fatigue) + Math.max(1, (isCup ? 10 : 6) + (win ? 0 : 2) - facilityLevel(s, 'medical') * 2), 0, 100);
   s.team.morale = clamp(Number(s.team.morale) + (win ? 4 : -3) + (mvp ? 2 : 0) + (isCup && win ? 3 : 0), 20, 100);
   s.team.rested = false;
   refreshPlayerRating(s);
