@@ -244,12 +244,22 @@ s = resetCareer();
 s.season.cup.phase = 'finished';
 s.season.cupResult = 3;
 s.season.cupPrizeEarned = 15000;
+s.season.cup = {
+  phase: 'finished',
+  bracket: [
+    { round: 'QF', a: 'player', b: 't1', score: [13, 9], played: true, winner: 'player' },
+    { round: 'SF', a: 'player', b: 't2', score: [13, 9], played: true, winner: 'player' },
+    { round: 'F', a: 'player', b: 't3', score: [13, 9], played: true, winner: 'player' }
+  ],
+  champion: 'player'
+};
 s.history.push({ seasonId: 1, league: '乙级', rank: 1, cupRound: 3, prize: 45000 });
 s.player.achievements = [{ id: 'first_win', title: '首胜', unlockedAt: 1, seasonId: 1 }];
 s.player.recordAlertLog = [{ matchSeq: 1, seasonId: 1, round: 1, type: 'bestKills', label: '单场最高击杀', oldValue: 4, newValue: 9 }];
 save();
 const settleHtml = __renderTabForTest('settlement');
 ok('settlement renders history', settleHtml.includes('赛季结算') && settleHtml.includes('历史记录') && settleHtml.includes('赛季个人表现') && settleHtml.includes('赛季财务总结') && settleHtml.includes('累计收入') && settleHtml.includes('本季成就与纪录高亮') && settleHtml.includes('单场最高击杀'));
+ok('settlement cup season record', settleHtml.includes('杯赛赛季战绩') && settleHtml.includes('当季结果') && settleHtml.includes('历届杯赛对比') && settleHtml.includes('夺冠'));
 
 installStubs();
 registerDomIds('careerPanel');

@@ -1217,9 +1217,9 @@ function makeCup(teams, standings) {
 
 function refreshCup(s) {
   const b = s.season.cup.bracket;
-  if (b[0].played && b[1].played) { b[4].a = b[0].winner; b[4].b = b[1].winner; }
-  if (b[2].played && b[3].played) { b[5].a = b[2].winner; b[5].b = b[3].winner; }
-  if (b[4].played && b[5].played) { b[6].a = b[4].winner; b[6].b = b[5].winner; }
+  if (b[4] && !b[4].played && b[0].played && b[1].played) { b[4].a = b[0].winner; b[4].b = b[1].winner; }
+  if (b[5] && !b[5].played && b[2].played && b[3].played) { b[5].a = b[2].winner; b[5].b = b[3].winner; }
+  if (b[6] && !b[6].played && b[4].played && b[5].played) { b[6].a = b[4].winner; b[6].b = b[5].winner; }
   if (b[6].played) {
     s.season.cup.phase = 'finished';
     s.season.cup.champion = b[6].winner;
@@ -2753,8 +2753,71 @@ export function cupHistory(seasonHistory) {
       rank: h.rank,
       cupRound: h.cupRound,
       cupLabel: labels[h.cupRound] || '未参加',
-      prize: h.prize || 0
+      prize: h.prize || 0,
+      cupPrize: h.cupPrize != null ? h.cupPrize : null,
+      rankPrize: h.rankPrize != null ? h.rankPrize : null
     }));
+}
+
+export function cupSeasonRecord(s) {
+  const bracket = Array.isArray(s && s.season && s.season.cup && s.season.cup.bracket) ? s.season.cup.bracket : [];
+  if (!bracket.length) return null;
+  const league = s.team.league || '乙级';
+  const prizes = cupPrizeInfo(s);
+  const list = sortedStandings(s);
+  const playerRow = list.find((x) => x.teamId === 'player');
+  const rank = playerRow ? list.indexOf(playerRow) + 1 : null;
+  const resultRound = s.season.cupResult === undefined ? -1 : Number(s.season.cupResult);
+  const path = bracket.map((m) => {
+    const involvesPlayer = m.a === 'player' || m.b === 'player';
+    const prize = m.round === 'F' ? prizes.perRound + prizes.champion : prizes.perRound;
+    let status = '未赛';
+    if (m.played && involvesPlayer) {
+      status = m.winner === 'player' ? (m.round === 'F' ? '夺冠' : '晋级') : (m.round === 'F' ? '亚军' : '淘汰');
+    } else if (m.played) {
+      status = '已结束';
+    } else if (involvesPlayer) {
+      status = '待赛';
+    }
+    return {
+      round: m.round,
+      roundName: m.round === 'QF' ? '八强' : m.round === 'SF' ? '四强' : '决赛',
+      map: cupMapForRound(m.round),
+      prize,
+      played: !!m.played,
+      winner: m.winner || null,
+      score: m.score || null,
+      involvesPlayer,
+      status
+    };
+  });
+  const currentRow = {
+    seasonId: s.season.id,
+    league,
+    rank,
+    cupRound: resultRound,
+    cupLabel: cupResultLabel(resultRound),
+    prize: Number(s.season.cupPrizeEarned) || 0,
+    cupPrize: Number(s.season.cupPrizeEarned) || 0,
+    current: true
+  };
+  const comparisons = [currentRow, ...cupHistory(s.history).filter((h) => h.seasonId !== s.season.id)];
+  return {
+    seasonId: s.season.id,
+    league,
+    phase: s.season.cup.phase,
+    champion: s.season.cup.champion || null,
+    resultRound,
+    resultLabel: cupResultLabel(resultRound),
+    earned: currentRow.cupPrize,
+    maxPrize: prizes.perRound * 3 + prizes.champion,
+    path,
+    comparisons
+  };
+}
+
+function cupResultLabel(n) {
+  return n === 3 ? '冠军' : n === 2 ? '亚军' : n === 1 ? '四强' : n === 0 ? '八强' : '未结束';
 }
 
 export function trophyCase(seasonHistory) {
@@ -3016,7 +3079,7 @@ export function nextSeason() {
   const rec = careerRecords(s);
   rec.bestSeasonRank = Math.min(Number(rec.bestSeasonRank) || 99, report.rank);
   rec.totalPrize = Math.round((Number(rec.totalPrize) || 0) + report.prize + goals.reward);
-  s.history.push({ seasonId: s.season.id, league: report.league, rank: report.rank, cupRound: report.cupRound, prize: report.prize });
+  s.history.push({ seasonId: s.season.id, league: report.league, rank: report.rank, cupRound: report.cupRound, prize: report.prize, rankPrize: report.rankPrize, cupPrize: report.cupPrize });
   addNews(s, 'info', '第 ' + s.season.id + ' 赛季结束：第 ' + report.rank + ' 名，总奖金 ' + report.prize);
   s.team.league = promoteLeague(report.league, report.rank);
   if (s.team.league !== oldLeague) unlockAchievement(s, 'promotion');

@@ -2,7 +2,7 @@ import {
   resetCareer, setStorage, setRng, getState, settlePlayerMatch, train, trainTeammate, sellPlayer, sellPreview, buyPlayer, candidates, filterCandidates,
   nextSeason, save, loadCareer, __clearStateForTest, candidateProfile,
   sponsorIncome, sponsorPreview, sponsorSeasonPreview, homeTicketIncome, ticketPreview, cashflowForecast, seasonBudget, financialRisk, financeTrend, seasonFinancialSummary, remainingPrizePreview, transferProfit, facilityStatus, upgradeFacility, formBonus, fatiguePenalty, careerMorale, restPlayer, seasonGoals, goalProgress, trainingPreview, trainingSuggestion, rotationAdvice, trainingHistory, rosterStatus, transferBudget, contractStatus, renewPlayer, rosterContribution, positionBalance,
-  achievementDefs, achievements, achievementCatalog, achievementProgress, careerRecords, honorTitle, migrateCareerState, matchReadiness, seasonGoalHistory, goalAdvice, lastRecordAlerts, seasonRecordAlerts, recordDetails, seasonHighlights, careerReview
+  achievementDefs, achievements, achievementCatalog, achievementProgress, careerRecords, honorTitle, migrateCareerState, matchReadiness, seasonGoalHistory, goalAdvice, lastRecordAlerts, seasonRecordAlerts, recordDetails, seasonHighlights, careerReview, cupSeasonRecord
 } from '../src/career.js';
 
 const ok = (name, cond) => {
@@ -307,6 +307,8 @@ s.pendingMatch = { oppId: 't1', venue: 'home', isCup: true };
 settlePlayerMatch(true, 6, 3, { mvp: true });
 ok('cup champion record', careerRecords(s).cupChampions === 1 && achievements(s).some((a) => a.id === 'cup_champion'));
 ok('honor title champion', honorTitle(s).title.includes('冠军') && honorTitle(s).badges.includes('杯赛冠军'));
+const cupSeason = cupSeasonRecord(s);
+ok('cup season record', cupSeason && cupSeason.resultLabel === '冠军' && cupSeason.earned > 0 && cupSeason.maxPrize > cupSeason.earned && cupSeason.path.some((p) => p.status === '夺冠') && cupSeason.comparisons.some((h) => h.current && h.cupLabel === '冠军'));
 
 s = resetCareer();
 let goals = seasonGoals(s);
