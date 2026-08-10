@@ -9,9 +9,15 @@ import {fogEnabled, castVisionPolygon} from './fog.js';
 import {drawAmbientDust} from './ambient-fx.js';
 import {weaponSwitchPop, muzzleSmoke, drawMuzzleSmoke, drawWeaponPop, MUZZLE_SMOKE_LIFE} from './weapon-fx.js';
 import {nadeTrajectory, drawNadeTrajectory, NADE_SPEED, NADE_ORIGIN_DIST} from './nade-fx.js';
+import {drawRipple, rippleRing, RIPPLE_LIFE} from './water-fx.js';
+import {smokeDissolveTrail, drawSmokeTrail, SMOKE_DISSOLVE_LIFE} from './smoke-fx.js';
+import {stepCycle, stepDust, drawStepFx, DUST_PER_STEP} from './anim-fx.js';
 
 let ctx = null;
 let layers = null;
+
+// 脚步动画渲染态：每实体累积移动距离 + 稳定 seed（渲染私有，不影响游戏逻辑）
+const stepFXState = new Map();
 
 export function initRenderer(canvas, layersRef) {
   ctx = canvas.getContext('2d');
@@ -45,6 +51,7 @@ export function render(game) {
   ctx.drawImage(layers.staticLayer, 0, 0);
   ctx.drawImage(layers.decalLayer, 0, 0);
   drawWaterOverlay(game);
+  drawWaterRipples(game);
   drawBombSiteMarks(game);
   drawCrates(game);
   drawBomb(game);
@@ -135,6 +142,21 @@ function drawWaterOverlay(game) {
       ctx.fillStyle = 'rgba(255,255,255,0.12)';
       ctx.fillRect(px + ((off + 16) % 30) - 12, py + 4 + ((seed + 3) % 6) * 4, 6, 1);
     }
+  }
+  ctx.restore();
+}
+
+// 涟漪环：遍历 game.ripples，按 game.time 推进纯函数 rippleRing 生成扩散圆环
+// （半径增大/透明度衰减），确定性相位（同 seed 可复现），叠加在浅水微光之上
+function drawWaterRipples(game) {
+  const ripples = game.ripples;
+  if (!ripples || !ripples.length) return;
+  ctx.save();
+  ctx.globalCompositeOperation = 'lighter';
+  for (const rp of ripples) {
+    const el = (game.time || 0) - (rp.t0 || 0);
+    if (el < 0 || el >= RIPPLE_LIFE) continue;
+    drawRipple(ctx, rippleRing(rp.x, rp.y, el, rp.r0));
   }
   ctx.restore();
 }
@@ -470,10 +492,31 @@ function drawNadePreview(game) {
   drawNadeTrajectory(ctx, pts);
 }
 
+// 脚步动画渲染态：计算实体累积移动距离与脚步特效参数（渲染私有，确定性）。
+// 实体移动时累积位移（推动 stepCycle/stepDust 的 phase 与尘埃生成），站立/死亡时归零。
+// seed 取实体首次出现时位置哈希，之后固定，保证同一实体脚步特效稳定可复现。
+function getStepFX(e, tSec) {
+  let st = stepFXState.get(e);
+  if (!st) {
+    st = { acc: 0, px: e.x, py: e.y, seed: ((Math.floor(e.x) * 73856093 ^ Math.floor(e.y) * 19349663) >>> 0) || 1 };
+    stepFXState.set(e, st);
+  }
+  if (e.dead) { st.acc = 0; st.px = e.x; st.py = e.y; return null; }
+  const moving = Math.hypot(e.vx || 0, e.vy || 0) > 18;
+  if (moving) st.acc += Math.hypot(e.x - st.px, e.y - st.py);
+  else st.acc = 0;
+  st.px = e.x; st.py = e.y;
+  const cyc = stepCycle(st.acc, tSec, st.seed);
+  const dust = moving ? stepDust(st.acc, tSec, st.seed, DUST_PER_STEP) : [];
+  return { phase: cyc.phase, swinging: cyc.swinging, dust };
+}
 
 function drawEntities(game) {
+  const tSec = performance.now() / 1000;
   for (const e of game.entities) {
+    const stFx = getStepFX(e, tSec);
     if (e.dead) continue;
+    if (stFx) drawStepFx(ctx, e, stFx);
     const isP = e === game.player;
     const darkCol = e.team === 'ct' ? '#4d9bff' : '#ffa03d';
     ctx.save();
@@ -596,6 +639,18 @@ function drawSmokes(game) {
       ctx.beginPath();
       ctx.arc(s.x + Math.cos(na) * nr, s.y + Math.sin(na) * nr, 6 + sHash(i + 12) * 8, 0, Math.PI * 2);
       ctx.fill();
+    }
+    // 生命末段（life<2s）：边缘飘散尾迹，取代整团突然淡出——小烟团从柔边剥落、向外漂移消散。
+    // 位置/尺寸/透明度由位置+seed 确定性哈希导出（见 smoke-fx.js），同 seed 同 t 画面可复现。
+    if (s.life < SMOKE_DISSOLVE_LIFE) {
+      const sSeed = (Math.floor(s.x) * 374761393 ^ Math.floor(s.y) * 668265263) >>> 0;
+      const t = clamp((SMOKE_DISSOLVE_LIFE - s.life) / SMOKE_DISSOLVE_LIFE, 0, 1);
+      const n = clamp(Math.round(s.r / 25), 4, 12);
+      const trail = smokeDissolveTrail(s, t, sSeed, n);
+      if (trail.length) {
+        const trailPts = trail.map((p) => ({ x: p.x, y: p.y, r: p.r, alpha: p.alpha * fade }));
+        drawSmokeTrail(ctx, trailPts);
+      }
     }
   }
 }

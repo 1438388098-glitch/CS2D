@@ -12,6 +12,7 @@ import {HIT_ARC_DURATION} from './damage-fx.js';
 import {dropBomb} from './bomb.js';
 import {throwGrenade} from './grenades.js';
 import {effectiveSpread, registerShot, headshotChance, distanceFalloff} from './ballistic.js';
+import {addRipple} from './water-fx.js';
 
 const emit = (evt, p) => ctx.bus.emit(evt, p);
 const mapTile = () => getMap()?.tile || TILE;
@@ -178,10 +179,19 @@ function fireRay(e, game, ang, w, dmg, isPellet) {
   let wallT = range;
   let penMult = 1;
   let inWall = false;
+  let inWater = false;
   const steps = Math.ceil(range / 6);
   for (let s = 1; s <= steps; s++) {
     const px = ox + cos * s * 6, py = oy + sin * s * 6;
     const c = tileAt(px, py);
+    // 子弹入水：射线跨入浅/深水瓦片时在入水点产生涟漪环（浅水穿透、深水被挡）
+    const water = c === '~' || c === '≈';
+    if (water && !inWater) {
+      addRipple(game, px, py, 2);
+      inWater = true;
+    } else if (!water) {
+      inWater = false;
+    }
     if (c === '=') {
       if (!inWall) {
         inWall = true;
@@ -196,7 +206,7 @@ function fireRay(e, game, ang, w, dmg, isPellet) {
     if (c === 'C' && e.height >= 0.75) continue;
     if (c === 'D') { hitCrateByShot(game, px, py, e); wallT = s * 6; break; }
     // 深水挡弹（spec 4.3：水下隐蔽 + 弹丸被水阻挡）；浅水 ~ 可穿透
-    if (c === '≈') { wallT = s * 6; break; }
+    if (c === '≈') { addRipple(game, px, py, 5); wallT = s * 6; break; }
     if (!passableTolerant(px, py)) {
       if (c === 'o') hitBarrelByShot(game, px, py, e);
       wallT = s * 6;

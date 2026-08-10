@@ -18,6 +18,7 @@ import {hasLineOfSight} from './fog.js';
 import { shouldRerouteStuck } from './ai/rules.js';
 import { stuckObjective } from './ai/stability.js';
 import { castAimRay as castAimRayFps } from './fps-laser.js';
+import { addRipple, pruneRipples } from './water-fx.js';
 
 const emit = (evt, p) => ctx.bus.emit(evt, p);
 
@@ -34,7 +35,7 @@ function fpsMoveScale(game) {
 export function createGame(opts = {}) {
   const game = {
     state: 'MENU',
-    entities: [], grenades: [], particles: [], tracers: [], smokes: [], decals: [], drops: [], barrels: [], crates: [], _particlePool: [],
+    entities: [], grenades: [], particles: [], tracers: [], smokes: [], decals: [], drops: [], barrels: [], crates: [], _particlePool: [], ripples: [],
     lastSplash: null,
     player: null,
     camX: 1200, camY: 900,
@@ -260,6 +261,7 @@ function spawnRound(game) {
   game._particlePool.push(...game.particles);
   game.particles.length = 0;
   game.tracers.length = 0;
+  game.ripples.length = 0;
   game.drops.length = 0;
   game.lastPlantSite = null;
   game.decals.length = 0;
@@ -462,15 +464,18 @@ export function update(game, dt) {
     if (e.stunT > 0) e.stunT = Math.max(0, e.stunT - dt);
     e.vx *= Math.max(0, 1 - 7 * dt);
     e.vy *= Math.max(0, 1 - 7 * dt);
-    // 溅水：仅浅水发声/水花（深水静音，spec 4.3）
+    // 溅水：浅水发声/水花 + 涟漪环；深水静音（仅涟漪环，spec 4.3）
     if (e.splashCd > 0) e.splashCd = Math.max(0, e.splashCd - dt);
-    if (e.splashCd <= 0 && curTile === '~' && Math.hypot(e.vx, e.vy) > 60) {
+    if (e.splashCd <= 0 && (curTile === '~' || curTile === '≈') && Math.hypot(e.vx, e.vy) > 60) {
       e.splashCd = 0.5;
-      game.lastSplash = { team: e.team, x: e.x, y: e.y, t: game.time };
-      for (let i = 0; i < 4; i++) {
-        spawnParticle(game, { kind: 'splash', x: e.x + rand(-8, 8), y: e.y + rand(-4, 6), vx: rand(-40, 40), vy: rand(-140, -40), life: 0.4, size: rand(2, 4) });
+      addRipple(game, e.x, e.y);
+      if (curTile === '~') {
+        game.lastSplash = { team: e.team, x: e.x, y: e.y, t: game.time };
+        for (let i = 0; i < 4; i++) {
+          spawnParticle(game, { kind: 'splash', x: e.x + rand(-8, 8), y: e.y + rand(-4, 6), vx: rand(-40, 40), vy: rand(-140, -40), life: 0.4, size: rand(2, 4) });
+        }
+        emit('sfx', { name: 'splash', vol: 0.5, x: e.x, y: e.y, game });
       }
-      emit('sfx', { name: 'splash', vol: 0.5, x: e.x, y: e.y, game });
     }
     if (e.bot) {
       e.stuckT += dt;
@@ -527,6 +532,8 @@ export function update(game, dt) {
     game.tracers[t2].life -= dt;
     if (game.tracers[t2].life <= 0) game.tracers.splice(t2, 1);
   }
+  // 涟漪环：逐帧按 game.time 剪除已过期的扩散环（纯函数相位，无需逐环递减）
+  pruneRipples(game);
   // 尸体死亡特效倒计时：死亡实体 deathT 逐帧衰减，归零后死亡标记消失（由 render 的 deathMarkerSpec 驱动）
   for (const e of game.entities) {
     if (!e.dead || !(e.deathT > 0)) continue;
@@ -755,8 +762,10 @@ function updatePlayer(game, dt) {
     p.stepT = walk ? 0.45 : 0.3;
     const stTile = tileAt(p.x, p.y);
     let stMat = 'flat';
-    if (stTile === '≈' || stTile === '~') stMat = 'water';
-    else if (stTile === '=') stMat = 'thin';
+    if (stTile === '≈' || stTile === '~') {
+      stMat = 'water';
+      addRipple(game, p.x, p.y, 3);
+    } else if (stTile === '=') stMat = 'thin';
     else if (stTile === 'M' || stTile === 'm') stMat = 'metal';
     emit('sfx', { name: 'step', vol: walk ? 0.14 : 0.4, x: p.x, y: p.y, game, mat: stMat });
     game.lastStep = { x: p.x, y: p.y, t: game.time, walk, team: p.team };

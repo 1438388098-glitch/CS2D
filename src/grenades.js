@@ -2,6 +2,7 @@ import { passable, los, tileAt } from './map.js';
 import { applyDamage } from './combat.js';
 import { ctx } from './ctx.js';
 import { rand, angDiff } from './utils.js';
+import { addRipple } from './water-fx.js';
 
 const emit = (evt, p) => ctx.bus.emit(evt, p);
 import { BOT_AI } from './config.js';
@@ -106,6 +107,20 @@ export function updateGrenades(game, dt) {
     }
     g.vx *= Math.max(0, 1 - 1.6 * dt);
     g.vy *= Math.max(0, 1 - 1.6 * dt);
+    // 手雷落水：跨入浅/深水瓦片时入水涟漪；停在水面低速时周期性扩散环
+    const gTile = tileAt(g.x, g.y);
+    const inWater = gTile === '~' || gTile === '≈';
+    if (inWater && !g._wasWater) {
+      g._wasWater = true;
+      addRipple(game, g.x, g.y, 6);
+    }
+    if (!inWater) g._wasWater = false;
+    const gSpd = Math.hypot(g.vx, g.vy);
+    if (inWater && gSpd < 40 && (g._restCd || 0) <= 0) {
+      g._restCd = 0.35;
+      addRipple(game, g.x, g.y, 4);
+    }
+    if (g._restCd > 0) g._restCd = Math.max(0, g._restCd - dt);
   }
   for (let s = game.smokes.length - 1; s >= 0; s--) {
     const sm = game.smokes[s];
