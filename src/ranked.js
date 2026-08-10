@@ -2,6 +2,7 @@ import { ROUND } from './config.js';
 import { registerMode } from './registry.js';
 import { setupMatchEntities, startRound, startMatch } from './game.js';
 import { teamDiffParams, simScore } from './modes.js';
+import { computePerformanceScore, computeMvp } from './mvp-score.js';
 
 const SAVE_KEY = 'cs2d_ranked';
 const BACKUP_KEY = 'cs2d_ranked_backup';
@@ -193,6 +194,7 @@ function addHistory(s, r) {
     kills: r.kills,
     deaths: r.deaths,
     mvp: r.mvp,
+    perf: r.perf,
     placement: r.placement
   };
   s.player.history.unshift(entry);
@@ -243,6 +245,30 @@ export function applyRankedResult(s, r) {
   return { delta, placementDone: s.player.placement.left === 0 && placement, tierChange, lossProtect };
 }
 
+export function statsFromEntity(e) {
+  return {
+    name: e.name || '玩家',
+    team: e.team,
+    kills: e.kills || 0,
+    deaths: e.deaths || 0,
+    assists: e.assists || 0,
+    plants: e.plants || 0,
+    defuses: e.defuses || 0,
+    damage: e.dmgGiven || 0
+  };
+}
+
+function allMatchStats(game) {
+  const p = game.player;
+  const list = [];
+  for (const e of game.entities) {
+    if (e === p) list.push(statsFromEntity(p));
+    else if (e.bot) list.push(statsFromEntity(e));
+  }
+  if (list.length === 0) list.push(statsFromEntity(p));
+  return list;
+}
+
 export function rankedEndMatch(game) {
   const s = loadRanked();
   const rm = game.rankedMatch;
@@ -251,11 +277,11 @@ export function rankedEndMatch(game) {
   const win = (p.team === 't' && game.score.T >= ROUND.MATCH_WIN) || (p.team === 'ct' && game.score.CT >= ROUND.MATCH_WIN);
   const kills = p.kills || 0;
   const deaths = p.deaths || 0;
-  const teamBots = game.entities.filter((e) => e.bot && e.team === p.team);
-  const maxTeammateKills = teamBots.reduce((m, e) => Math.max(m, e.kills || 0), 0);
-  const mvp = kills >= 5 && kills > maxTeammateKills;
+  const mvp = computeMvp(allMatchStats(game));
+  const isMvp = mvp && mvp.player === p;
+  const perf = computePerformanceScore(statsFromEntity(p));
   const score = [game.score.T, game.score.CT];
-  const res = applyRankedResult(s, { win, kills, deaths, mvp, oppMmr: rm.oppMmr, oppName: rm.oppName, mapId: rm.mapId, score });
+  const res = applyRankedResult(s, { win, kills, deaths, mvp: isMvp, perf, oppMmr: rm.oppMmr, oppName: rm.oppName, mapId: rm.mapId, score });
   rm.settled = true;
   s.next = null;
   save();
@@ -265,10 +291,12 @@ export function rankedEndMatch(game) {
     if (res.tierChange === 'up') msg += ' · 段位晋升 ' + tierOf(s.player.mmr).name;
     else if (res.tierChange === 'down') msg += ' · 段位跌落 ' + tierOf(s.player.mmr).name;
     if (s.player.placement.left > 0) msg += ' · 剩余定级 ' + s.player.placement.left + ' 场';
+    msg += ' · 综合评分 ' + perf;
+    if (isMvp) msg += '（本场 MVP）';
     if (res.lossProtect) msg += ' \u00b7 \u8fde\u8d25\u4fdd\u62a4';
     game.ui.showToast(msg);
   }
-  return { ok: true, win, mvp, delta: res.delta, tierChange: res.tierChange };
+  return { ok: true, win, mvp: isMvp, perf, delta: res.delta, tierChange: res.tierChange };
 }
 
 export function simulateRankedMatch() {
@@ -281,11 +309,26 @@ export function simulateRankedMatch() {
   const score = r.score;
   const kills = 3 + Math.floor(rng() * 6);
   const deaths = Math.floor(rng() * 8);
-  const mvp = kills >= 5;
-  const res = applyRankedResult(s, { win, kills, deaths, mvp, oppMmr: pending.oppMmr, oppName: pending.oppName, mapId: pending.mapId, score });
+  const simStats = { kills, deaths, assists: Math.floor(rng() * 3), plants: 0, defuses: 0, damage: kills * 70 };
+  const perf = computePerformanceScore(simStats);
+  const mvp = perf >= 60;
+  const res = applyRankedResult(s, { win, kills, deaths, mvp, perf, oppMmr: pending.oppMmr, oppName: pending.oppName, mapId: pending.mapId, score });
   s.next = null;
   save();
-  return { ok: true, win, kills, deaths, score, delta: res.delta, placementDone: res.placementDone };
+  return { ok: true, win, kills, deaths, score, perf, delta: res.delta, placementDone: res.placementDone };
+}
+
+function rankedFinish(game) {
+  if (!game.rankedMatch) return;
+  const players = allMatchStats(game);
+  const best = computeMvp(players);
+  if (!best) return;
+  game.rankedMatch.mvpInfo = {
+    name: best.player.name || '玩家',
+    score: best.score,
+    kills: best.player.kills || 0,
+    team: best.player.team || 't'
+  };
 }
 
 registerMode({
@@ -293,5 +336,6 @@ registerMode({
   name: '排位赛',
   desc: '5 场定级 + MMR 天梯',
   customBots: false,
-  start: rankedStart
+  start: rankedStart,
+  onFinish: rankedFinish
 });

@@ -102,7 +102,7 @@ function historyHtml(s) {
   if (!h.length) html += '<div class="rk-empty">暂无排位记录</div>';
   for (const m of h.slice(0, 12)) {
     const sign = m.delta >= 0 ? '+' : '';
-    html += '<div class="rk-match ' + (m.win ? 'win' : 'lose') + '"><span>' + (m.win ? '胜' : '负') + '</span><b>' + esc(m.oppName) + '</b><i>' + esc(mapName(m.mapId)) + ' · ' + m.score[0] + ':' + m.score[1] + '</i><em>' + (m.placement ? '定级' : 'MMR ' + sign + m.delta) + '</em></div>';
+    html += '<div class="rk-match ' + (m.win ? 'win' : 'lose') + '"><span>' + (m.win ? '胜' : '负') + '</span><b>' + esc(m.oppName) + '</b><i>' + esc(mapName(m.mapId)) + ' · ' + m.score[0] + ':' + m.score[1] + '</i><em>' + (m.placement ? '定级' : 'MMR ' + sign + m.delta) + (m.perf !== undefined && m.perf !== null ? ' · 评分 ' + m.perf : '') + '</em></div>';
   }
   return html + '</section>';
 }
