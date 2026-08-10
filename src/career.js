@@ -46,6 +46,9 @@ const TEAM_POOL = [
   { name: 'paiN Gaming', tag: 'PAIN' },
   { name: 'Complexity', tag: 'COL' }
 ];
+const TEAM_ROLES = ['突破', '狙击', '补枪', '指挥', '自由人'];
+const STYLE_POOL = ['快攻抢点', '控图磨血', '道具压制', '明星单点', '纪律防守', '变速反清', '稳扎稳打', '青训冲劲'];
+const TACTIC_POOL = ['默认防守', '前压反清', '后保残局', '变速转点', '围点强攻', '拖延保枪'];
 const TRAIN_TIERS = [
   { key: 'basic', label: '基础', cost: 500, points: 2, fatigue: 3 },
   { key: 'pro', label: '进阶', cost: 1200, points: 6, fatigue: 6 },
@@ -879,14 +882,112 @@ function makeRoster() {
   });
 }
 
-function makeTeams(league, playerRating) {
-  const [lo, hi] = LEAGUE_RATING[league] || LEAGUE_RATING['乙级'];
+function teamStyleFor(rules) {
+  if (rules.tacticalBias >= 0.6) return pick(['战术控图', '纪律防守', '变速反清']);
+  if (rules.tacticalBias <= -0.2) return pick(['狂攻抢点', '青训冲劲', '快攻对枪']);
+  return pick(STYLE_POOL);
+}
+
+function makeOpponentRoster(tag, rating, youthBias) {
+  const names = TEAM_ROSTERS[tag] || Array.from({ length: 5 }, (_, i) => tag + ' ' + (i + 1));
+  return names.map((name, i) => {
+    const role = TEAM_ROLES[i % TEAM_ROLES.length];
+    const anchor = i === 0 ? 2 : i === 1 ? 1 : i === 3 ? -2 : 0;
+    const playerRating = clamp(Math.round(rating + anchor + randInt(-2, 2)), 45, 98);
+    return {
+      name,
+      role,
+      rating: playerRating,
+      potential: Math.min(99, playerRating + randInt(2, 9)),
+      youth: rng() < Math.max(0, Math.min(1, youthBias || 0))
+    };
+  });
+}
+
+function makePlayerRoster(roster, playerName) {
+  const players = Array.isArray(roster) ? roster : [];
+  const name = playerName || 'donk';
+  return [
+    { name, role: '突破', rating: 65, potential: 99, youth: true },
+    ...players.map((p) => ({
+      name: p.name || '队员',
+      role: p.role || '补枪',
+      rating: p.rating || 65,
+      potential: p.potential || Math.min(99, (p.rating || 65) + 8),
+      youth: !!p.youth
+    }))
+  ];
+}
+
+function buildTeamProfile(team, league, playerRoster, playerName) {
+  const rules = leagueRules(league);
+  const isPlayer = team.id === 'player';
+  const roster = isPlayer
+    ? makePlayerRoster(playerRoster, playerName)
+    : Array.isArray(team.lineup) && team.lineup.length
+      ? team.lineup
+      : makeOpponentRoster(team.tag || team.name, Number(team.rating) || 70, rules.youthBias);
+  const corePlayer = [...roster].sort((a, b) => (b.rating || 0) - (a.rating || 0))[0] || null;
+  const homeMap = team.homeMap || pick(MAP_IDS);
+  const mapPrefs = Array.isArray(team.mapPrefs) && team.mapPrefs.length
+    ? team.mapPrefs
+    : [homeMap, ...pickUnique(MAP_IDS.filter((m) => m !== homeMap), 2)];
+  const style = team.style || teamStyleFor(rules);
+  const tactics = team.tactics || pick(TACTIC_POOL);
+  const form = Array.isArray(team.form) && team.form.length
+    ? team.form
+    : [pick(['W', 'W', 'L']), pick(['W', 'L']), pick(['W', 'L'])];
+  const youthCount = roster.filter((p) => p.youth).length;
+  return {
+    ...team,
+    league,
+    identity: rules.identity,
+    competition: rules.competition,
+    youthBias: rules.youthBias,
+    tacticalBias: rules.tacticalBias,
+    mediaPressure: rules.mediaPressure,
+    lineup: roster,
+    corePlayer,
+    style,
+    tactics,
+    homeMap,
+    mapPrefs,
+    form: form.slice(-5),
+    recentForm: team.recentForm || form.slice(-5).join(''),
+    morale: clamp(Number(team.morale) || randInt(45, 85), 20, 100),
+    aggression: clamp(Number(team.aggression) || Math.round(58 - rules.tacticalBias * 18 + randInt(-8, 8)), 15, 95),
+    youthCount,
+    status: team.status || (youthCount >= 3 ? '轮换' : '健康')
+  };
+}
+
+export function teamProfile(s, teamId) {
+  if (!s || !Array.isArray(s.season && s.season.teams)) return null;
+  const team = s.season.teams.find((t) => t.id === teamId);
+  if (!team) return null;
+  const league = (s.team && s.team.league) || '乙级';
+  return buildTeamProfile(team, league, teamId === 'player' ? s.team && s.team.roster : null, s.player && s.player.name);
+}
+
+export function buildCareerTeams(league, playerRating, playerRoster, playerName) {
+  return makeTeams(league, playerRating, playerRoster, playerName);
+}
+
+function makeTeams(league, playerRating, playerRoster, playerName) {
+  const rules = leagueRules(league);
+  const [lo, hi] = rules.ratingRange;
   const names = pickUnique(TEAM_POOL, 7);
-  const teams = [{ id: 'player', name: PLAYER_TEAM.name, tag: PLAYER_TEAM.tag, rating: playerRating, homeMap: pick(MAP_IDS) }];
+  const teams = [{
+    id: 'player',
+    name: PLAYER_TEAM.name,
+    tag: PLAYER_TEAM.tag,
+    rating: playerRating,
+    homeMap: pick(MAP_IDS)
+  }];
   for (let i = 0; i < 7; i++) {
     teams.push({ id: 't' + (i + 1), name: names[i].name, tag: names[i].tag, rating: randInt(lo, hi), homeMap: pick(MAP_IDS) });
   }
-  return teams;
+  return teams.map((t) => buildTeamProfile(t, league, playerRoster, playerName));
 }
 
 function roundRobin(ids) {
@@ -984,7 +1085,7 @@ export function save() {
 export function newCareerState() {
   const roster = makeRoster();
   const playerRating = effectiveRatingFor(roster, { aim: 50, move: 50, react: 50, nade: 40 });
-  const teams = makeTeams('乙级', playerRating);
+  const teams = makeTeams('乙级', playerRating, roster, 'donk');
   const state = {
     version: VERSION,
     player: {
@@ -2374,7 +2475,7 @@ export function nextSeason() {
   s.team.pool = null;
   s.player.fatigue = 0;
   s.player.seasonStats = { played: 0, w: 0, d: 0, l: 0, kills: 0, deaths: 0, mvp: 0 };
-  const teams = makeTeams(s.team.league, effectiveTeamRating(s));
+  const teams = makeTeams(s.team.league, effectiveTeamRating(s), s.team.roster, s.player.name);
   s.season.teams = teams;
   s.season.fixtures = makeFixtures(teams.map((t) => t.id));
   assignFixtureMaps(s);
