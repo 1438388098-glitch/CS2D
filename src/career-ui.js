@@ -342,11 +342,26 @@ function renderSchedule(s) {
       const oppName = (d && d.oppName) || teamName(s, oppId);
       const scoreText = d ? d.scoreText : (Array.isArray(f.score) ? f.score.join(':') : '未记录');
       const ratingText = d && d.playerRating != null && d.oppRating != null ? ('赛前评级 ' + d.playerRating + ' : ' + d.oppRating) : '';
+      const roundRows = d && Array.isArray(d.rounds) && d.rounds.length ? d.rounds.map((r) => {
+        const atk = teamName(s, r.attacker);
+        const def = teamName(s, r.defender);
+        const win = teamName(s, r.winner);
+        const ev = Array.isArray(r.events) ? r.events.map((e) => e.text || '').filter(Boolean).join('；') : '';
+        return '<div class="career-row"><span>第 ' + r.round + ' 回合 · ' + esc(atk) + ' 攻 / ' + esc(def) + ' 守 · ' + esc(r.site) + ' 点 · ' + esc(r.tactic) + '</span><b>' + esc(win) + ' 胜 · ' + esc(ev) + '</b></div>';
+      }).join('') : '';
+      const timelineRows = d && Array.isArray(d.timeline) && d.timeline.length ? d.timeline.slice(0, 24).map((e) =>
+        '<div class="career-timeline"><span>第 ' + e.round + ' 回合 · ' + esc(e.t) + '</span><b>' + esc(e.text || '') + '</b></div>'
+      ).join('') : '';
+      const detailRoundHtml = (roundRows || timelineRows) ? '<div class="career-card"><h4>逐回合复盘</h4>' +
+        (roundRows || '<div class="career-news">暂无回合数据</div>') +
+        (timelineRows ? '<div class="career-stats"><span>事件时间线</span></div>' + timelineRows : '') +
+        '</div>' : '';
       const detailVenue = f.home === 'player' ? 'home' : 'away';
       const detailMapId = fixtureMapFor(s, f);
       html += '<div class="career-card"><h4>已赛详情 · ' + esc(oppName) + '</h4>' +
         '<div class="career-settle"><span>' + (detailVenue === 'home' ? '主场' : '客场') + ' · ' + esc(mapName(detailMapId || '')) + '</span><span>比分 ' + esc(scoreText) + '</span><span>' + (d ? (d.win ? '胜利' : '失利') : '已结束') + '</span>' + (ratingText ? '<span>' + ratingText + '</span>' : '') + '</div>' +
         (d ? '<div class="career-stats"><span>K/D ' + d.kills + ' / ' + d.deaths + ' · 伤害 ' + d.dmg + '</span><span>奖金 ' + money(d.money) + ' · ' + esc(d.importance) + (d.mvp ? ' · MVP' : '') + '</span></div>' : '<div class="career-stats"><span>暂无完整比赛数据</span></div>') +
+        detailRoundHtml +
         '<button class="btn small" data-act="close-detail">返回赛程</button></div>';
     }
   }

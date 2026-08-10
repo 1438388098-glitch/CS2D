@@ -2076,7 +2076,10 @@ export function applyPlayerResult(s, r) {
     mapId: matchMapId || null,
     oppRating: oppTeam ? oppTeam.rating : null,
     playerRating: preMatchRating,
-    importance: matchImportanceLabel
+    importance: matchImportanceLabel,
+    rounds: Array.isArray(r.rounds) ? r.rounds : undefined,
+    timeline: Array.isArray(r.timeline) ? r.timeline : undefined,
+    players: Array.isArray(r.players) ? r.players : undefined
   });
   if (s.matchHistory.length > 500) s.matchHistory.splice(0, s.matchHistory.length - 500);
   updateRecords(s, win, kills, bankGain + sponsor + ticket, isCup && s.season.cup.champion === 'player');
@@ -2466,7 +2469,10 @@ export function matchDetail(m) {
     highlight: !!m.highlight || !!m.mvp || kills >= 15 || (m.dmg || 0) >= 1000,
     kd: deaths ? round2(kills / deaths) : kills,
     scoreText: score ? score.join(':') : '未记录',
-    impact: m.mvp ? 'MVP' : (m.win ? '胜利' : '失利')
+    impact: m.mvp ? 'MVP' : (m.win ? '胜利' : '失利'),
+    rounds: Array.isArray(m.rounds) ? m.rounds : [],
+    timeline: Array.isArray(m.timeline) ? m.timeline : [],
+    players: Array.isArray(m.players) ? m.players : []
   };
 }
 
@@ -2725,7 +2731,7 @@ export function simulatePlayerMatch() {
     (a.kills * 2 + a.dmg / 100 + a.plants + a.defuses + a.clutches * 2)
   )[0] || null;
   const mvp = !!top && top.teamId === 'player';
-  applyPlayerResult(s, { win, kills, deaths, mvp, score, dmg, isCup: !!pm.isCup });
+  applyPlayerResult(s, { win, kills, deaths, mvp, score, dmg, rounds: r.rounds, timeline: r.timeline, players: r.players, isCup: !!pm.isCup });
   s.pendingMatch = null;
   save();
   return { ok: true, win, kills, deaths, dmg, mvp, score, rounds: r.rounds, timeline: r.timeline };

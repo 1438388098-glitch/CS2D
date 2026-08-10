@@ -1,5 +1,5 @@
 import {
-  resetCareer, setStorage, setRng, teamProfile, simulateCareerMatch, simulatePlayerMatch, getState
+  resetCareer, setStorage, setRng, teamProfile, simulateCareerMatch, simulatePlayerMatch, matchDetail, getState
 } from '../src/career.js';
 
 const ok = (name, cond) => {
@@ -41,5 +41,8 @@ ok('player sim uses engine', playerSim.ok && Array.isArray(playerSim.rounds) && 
 ok('player sim derives stats', typeof playerSim.kills === 'number' && typeof playerSim.deaths === 'number' && typeof playerSim.dmg === 'number' && typeof playerSim.mvp === 'boolean');
 const lastHistory = getState().matchHistory[getState().matchHistory.length - 1];
 ok('player history from engine', lastHistory && lastHistory.kills === playerSim.kills && lastHistory.deaths === playerSim.deaths && lastHistory.dmg === playerSim.dmg);
+ok('player history persists replay', lastHistory && Array.isArray(lastHistory.rounds) && Array.isArray(lastHistory.timeline) && Array.isArray(lastHistory.players) && lastHistory.rounds.length >= 5);
+const detail = matchDetail(lastHistory);
+ok('match detail exposes replay', detail && detail.rounds.length === lastHistory.rounds.length && detail.timeline.length === lastHistory.timeline.length);
 
 console.log('fx-career-sim: all PASS');
