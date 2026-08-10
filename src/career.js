@@ -325,7 +325,7 @@ export function careerMapPool() { return MAP_IDS.slice(); }
 function makeRoster() {
   return ROLES.map((role, i) => {
     const rating = randInt(60, 75);
-    return { id: 'r' + (i + 1), name: PLAYER_LINEUP[i], team: PLAYER_TEAM.name, role, rating, price: playerPrice(rating) };
+    return { id: 'r' + (i + 1), name: PLAYER_LINEUP[i], team: PLAYER_TEAM.name, role, rating, price: playerPrice(rating), contractYears: 2 + (i % 2), renewalCost: Math.round(rating * 45) };
   });
 }
 
@@ -569,6 +569,38 @@ export function transferBudget(s) {
   };
 }
 
+export function contractStatus(s) {
+  const list = Array.isArray(s.team && s.team.roster) ? s.team.roster : [];
+  return list.map((p) => {
+    const years = Number.isInteger(p.contractYears) ? p.contractYears : 3;
+    const renewalCost = Number.isFinite(Number(p.renewalCost)) ? Number(p.renewalCost) : Math.round((Number(p.price) || 0) * 0.12);
+    return {
+      ...p,
+      yearsLeft: years,
+      renewalCost,
+      expiring: years <= 1
+    };
+  });
+}
+
+export function renewPlayer(id) {
+  const s = getState();
+  const p = s.team.roster.find((x) => x.id === id);
+  if (!p) return { ok: false, error: '队友不存在' };
+  const years = Number.isInteger(p.contractYears) ? p.contractYears : 3;
+  if (years > 1) return { ok: false, error: '合同尚未到期' };
+  const renewalCost = Number.isFinite(Number(p.renewalCost)) ? Number(p.renewalCost) : Math.round((Number(p.price) || 0) * 0.12);
+  if (s.team.bank < renewalCost) return { ok: false, error: '资金不足' };
+  s.team.bank -= renewalCost;
+  p.contractYears = 3;
+  p.renewalCost = Math.round((Number(p.price) || 0) * 0.12);
+  s.team.morale = clamp(Number(s.team.morale) + 1, 20, 100);
+  addLedger(s, 'expense', -renewalCost, '续约：' + p.name);
+  addNews(s, 'info', '续约完成：' + p.name + ' 3 年');
+  save();
+  return { ok: true, cost: renewalCost };
+}
+
 export function train(attr, tierKey) {
   const s = getState();
   const tier = TRAIN_TIERS.find((t) => t.key === tierKey);
@@ -735,9 +767,9 @@ export function buyPlayer(candId) {
   if (slot) {
     refund = Math.floor(slot.price * 0.5);
     s.team.bank += refund;
-    slot.name = cand.name; slot.team = cand.team || s.team.name; slot.rating = cand.rating; slot.price = cand.price; slot.potential = profile.potential; slot.youth = profile.youth;
+    slot.name = cand.name; slot.team = cand.team || s.team.name; slot.rating = cand.rating; slot.price = cand.price; slot.potential = profile.potential; slot.youth = profile.youth; slot.contractYears = 3; slot.renewalCost = Math.round(cand.price * 0.12);
   } else {
-    s.team.roster.push({ id: 'r' + Date.now(), name: cand.name, team: cand.team || s.team.name, role: cand.role, rating: cand.rating, price: cand.price, potential: profile.potential, youth: profile.youth });
+    s.team.roster.push({ id: 'r' + Date.now(), name: cand.name, team: cand.team || s.team.name, role: cand.role, rating: cand.rating, price: cand.price, potential: profile.potential, youth: profile.youth, contractYears: 3, renewalCost: Math.round(cand.price * 0.12) });
   }
   s.team.bank -= cand.price;
   s.team.transfersLeft--;

@@ -1,7 +1,7 @@
 import {
   loadCareer, getState, titleFor, startCareerMatch, careerEndMatch, abandonPendingMatch, simulatePlayerMatch, resetCareer,
-  train, sellPlayer, buyPlayer, candidates, filterCandidates, candidateProfile, nextSeason, seasonReport, nextMatch, nextMatchInfo, matchImportance, teamRecentForm, matchReadiness,
-  transferWindowOpen, transferWindowInfo, transferBudget, isStorageAvailable, cupMap, cupPrizeInfo, cupMapForRound, fixtureMapFor, fixtureMatchRecord, winChance, trainingTiers, trainingPreview, trainingSuggestion, rotationAdvice, xpNeeded,
+  train, sellPlayer, buyPlayer, renewPlayer, candidates, filterCandidates, candidateProfile, nextSeason, seasonReport, nextMatch, nextMatchInfo, matchImportance, teamRecentForm, matchReadiness,
+  transferWindowOpen, transferWindowInfo, transferBudget, contractStatus, isStorageAvailable, cupMap, cupPrizeInfo, cupMapForRound, fixtureMapFor, fixtureMatchRecord, winChance, trainingTiers, trainingPreview, trainingSuggestion, rotationAdvice, xpNeeded,
   seasonStats, seasonAwards, seasonPerformanceSummary, seasonSeries, seasonStreaks, careerSummary, matchDetail, seasonTimeline, headToHead, importantMatches, seasonTrends, favoriteMatches, cupHistory, trophyCase, careerTimeline,
   sponsorIncome, sponsorPreview, formBonus, fatiguePenalty, careerMorale, restPlayer, seasonGoals, seasonPace, goalProgress, relegationProjection, rosterContribution,
   achievementDefs, achievements, careerRecords
@@ -111,6 +111,10 @@ function onClick(e) {
   } else if (act === 'buy') {
     const res = buyPlayer(t.getAttribute('data-id'));
     toast(res.ok ? '买入成功' : (res.error || '买入失败'));
+    render();
+  } else if (act === 'renew') {
+    const res = renewPlayer(t.getAttribute('data-id'));
+    toast(res.ok ? '续约成功' : (res.error || '续约失败'));
     render();
   } else if (act === 'continue') {
     const s = getState();
@@ -345,14 +349,17 @@ function renderTraining(s) {
 
 function renderRoster(s) {
   const contrib = rosterContribution(s);
+  const contracts = contractStatus(s);
   let html = '<div class="career-card"><h4>阵容 · 队伍评级 ' + contrib.rating + '</h4>' +
     '<div class="career-stats"><span>队友均评 ' + contrib.rosterAvg + ' · 玩家属性 ' + contrib.attrsAvg + ' · 状态 ' + (contrib.form >= 0 ? '+' : '') + contrib.form + ' · 士气 +' + contrib.morale + '</span><span>基础 ' + contrib.base + ' · 最终 ' + contrib.rating + '</span></div>' +
     '<div class="career-roster">';
   html += '<div class="career-player-card"><b>' + esc(s.player.name) + '</b><span>你 · ' + esc(titleFor(s.player.level)) + '</span><i>' + esc(s.team.name) + ' · 等级 ' + s.player.level + ' · 属性贡献 +' + contrib.player.contribution + ' · ' + contrib.player.sharePct + '%</i></div>';
   for (const p of contrib.members) {
+    const c = contracts.find((x) => x.id === p.id) || p;
     html += '<div class="career-row"><span>' + esc(p.role) + ' · 评级 ' + p.rating + '</span><b>贡献 ' + (p.delta >= 0 ? '+' : '') + p.delta + ' · ' + p.sharePct + '%</b></div>';
-    html += '<div class="career-player-card"><b>' + esc(p.name) + '</b><span>' + esc(p.role) + '</span><i>' + esc(p.team || s.team.name) + ' · 评级 ' + p.rating + ' · ' + money(p.price) + '</i>';
+    html += '<div class="career-player-card"><b>' + esc(p.name) + '</b><span>' + esc(p.role) + '</span><i>' + esc(p.team || s.team.name) + ' · 评级 ' + p.rating + ' · ' + money(p.price) + (c.yearsLeft != null ? ' · 合同 ' + c.yearsLeft + ' 年 · 续约 ' + money(c.renewalCost) : '') + '</i>';
     if (transferWindowOpen(s) && s.team.transfersLeft > 0) html += '<button class="btn small" data-act="sell" data-id="' + p.id + '">卖出</button>';
+    if (c.expiring && s.team.bank >= c.renewalCost) html += '<button class="btn small" data-act="renew" data-id="' + p.id + '">续约</button>';
     html += '</div>';
   }
   while (contrib.members.length < 4) html += '<div class="career-player-card empty">空位 · 可在转会窗补入</div>';

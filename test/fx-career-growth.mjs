@@ -1,7 +1,7 @@
 import {
   resetCareer, setStorage, setRng, getState, settlePlayerMatch, train, sellPlayer, buyPlayer, candidates, filterCandidates,
   nextSeason, save, loadCareer, __clearStateForTest, candidateProfile,
-  sponsorIncome, sponsorPreview, formBonus, fatiguePenalty, careerMorale, restPlayer, seasonGoals, goalProgress, trainingPreview, trainingSuggestion, rotationAdvice, transferBudget, rosterContribution,
+  sponsorIncome, sponsorPreview, formBonus, fatiguePenalty, careerMorale, restPlayer, seasonGoals, goalProgress, trainingPreview, trainingSuggestion, rotationAdvice, transferBudget, contractStatus, renewPlayer, rosterContribution,
   achievementDefs, achievements, careerRecords, migrateCareerState, matchReadiness
 } from '../src/career.js';
 
@@ -111,6 +111,16 @@ ok('buy ledger and morale', s.team.bank > 0 && s.team.ledger.some((x) => x.label
 const sell = s.team.roster[0];
 sellPlayer(sell.id);
 ok('sell ledger and morale', s.team.ledger.some((x) => x.label.includes('卖出')) && s.team.morale === 65);
+
+s = resetCareer();
+const contractRows = contractStatus(s);
+ok('contract status', contractRows.length === 4 && contractRows.every((x) => x.yearsLeft >= 1 && x.renewalCost > 0));
+const contractPlayer = s.team.roster[0];
+contractPlayer.contractYears = 1;
+contractPlayer.renewalCost = 600;
+const bankBeforeRenew = s.team.bank;
+const renewRes = renewPlayer(contractPlayer.id);
+ok('renew player', renewRes.ok && contractPlayer.contractYears === 3 && s.team.bank === bankBeforeRenew - 600 && s.team.ledger.some((x) => x.label.includes('续约')));
 
 s = resetCareer();
 const first = settlePlayerMatch(true, 8, 2);
