@@ -10,6 +10,7 @@ import {explodeBomb, plantBomb, defuseBomb, pickupBomb} from './bomb.js';
 import {ctx, seedWorld} from './ctx.js';
 import {getMode} from './registry.js';
 import {clamp, lerp, rand, angDiff, rotateInputVector} from './utils.js';
+import { smoothFollow } from './follow-cam.js';
 import { aimSensitivityCurve } from './aim.js';
 import {pressed, getBindLabel} from './keymap.js';
 import {initInfo, prune} from './info.js';
@@ -604,8 +605,16 @@ export function update(game, dt) {
     game.camX = game.player.x;
     game.camY = game.player.y;
   } else if (camTarget) {
-    game.camX = lerp(game.camX, camTarget.x, Math.min(1, 18 * dt));
-    game.camY = lerp(game.camY, camTarget.y, Math.min(1, 18 * dt));
+    if (game.viewMode === 'follow') {
+      // follow 观战：切换到队友/bot 时用 smoothFollow 平滑过渡，接近时减速防抖
+      const dist = Math.hypot(camTarget.x - game.camX, camTarget.y - game.camY);
+      const sp = smoothFollow(game.camX, game.camY, camTarget.x, camTarget.y, dist, dt);
+      game.camX = sp.x;
+      game.camY = sp.y;
+    } else {
+      game.camX = lerp(game.camX, camTarget.x, Math.min(1, 18 * dt));
+      game.camY = lerp(game.camY, camTarget.y, Math.min(1, 18 * dt));
+    }
     const z = game.zoom || 1;
     const hw = game.canvasW / 2 / z;
     const hh = game.canvasH / 2 / z;
@@ -642,8 +651,13 @@ function updateCam(game, dt) {
     const laDist = camTarget === game.player ? 90 : 40;
     const lookX = Math.cos(camTarget.angle || 0) * laDist;
     const lookY = Math.sin(camTarget.angle || 0) * laDist;
-    game.camX = lerp(game.camX, camTarget.x + lookX, Math.min(1, 5 * dt));
-    game.camY = lerp(game.camY, camTarget.y + lookY, Math.min(1, 5 * dt));
+    // smoothFollow：远距离快速跟随、接近时减速防抖、切换目标用 lerp 平滑过渡
+    const tx = camTarget.x + lookX;
+    const ty = camTarget.y + lookY;
+    const dist = Math.hypot(tx - game.camX, ty - game.camY);
+    const sp = smoothFollow(game.camX, game.camY, tx, ty, dist, dt);
+    game.camX = sp.x;
+    game.camY = sp.y;
     const z2 = game.zoom || 1;
     const hw2 = game.canvasW / 2 / z2;
     const hh2 = game.canvasH / 2 / z2;
@@ -652,8 +666,15 @@ function updateCam(game, dt) {
     return;
   }
   if (camTarget) {
-    game.camX = lerp(game.camX, camTarget.x, Math.min(1, 18 * dt));
-    game.camY = lerp(game.camY, camTarget.y, Math.min(1, 18 * dt));
+    if (game.viewMode === 'follow') {
+      const dist = Math.hypot(camTarget.x - game.camX, camTarget.y - game.camY);
+      const sp = smoothFollow(game.camX, game.camY, camTarget.x, camTarget.y, dist, dt);
+      game.camX = sp.x;
+      game.camY = sp.y;
+    } else {
+      game.camX = lerp(game.camX, camTarget.x, Math.min(1, 18 * dt));
+      game.camY = lerp(game.camY, camTarget.y, Math.min(1, 18 * dt));
+    }
   }
   const z = game.zoom || 1;
   const hw = game.canvasW / 2 / z;
