@@ -1,7 +1,7 @@
 import {
   resetCareer, setStorage, setRng, getState, settlePlayerMatch, nextSeason,
   save, loadCareer, __clearStateForTest,
-  seasonStats, seasonSeries, seasonStreaks, careerSummary, matchDetail
+  seasonStats, seasonSeries, seasonStreaks, careerSummary, matchDetail, seasonTimeline
 } from '../src/career.js';
 
 const ok = (name, cond) => {
@@ -78,6 +78,10 @@ ok('matchDetail win', detailWin.kd === 2 && detailWin.scoreText === '16:8' && de
 const detailLose = matchDetail({ win: false, kills: 8, deaths: 12, dmg: 560, money: 300, mvp: false, score: null });
 ok('matchDetail lose', detailLose.kd === Math.round(8 / 12 * 100) / 100 && detailLose.scoreText === '未记录' && detailLose.impact === '失利');
 ok('matchDetail empty', matchDetail(null) === null);
+
+const tl = seasonTimeline(h, 1);
+ok('seasonTimeline rows', tl.length === 3 && tl[0].label === '第 1 轮' && tl[2].win === true && tl[2].kills === 15);
+ok('seasonTimeline cups', seasonTimeline([{ seasonId: 1, isCup: true, win: true, kills: 5, deaths: 2, dmg: 350, money: 5000, score: [13, 5] }], 1)[0].label === '杯赛');
 
 ok('seasonStats deterministic', JSON.stringify(seasonStats(h, 1)) === JSON.stringify(seasonStats(h, 1)));
 ok('seasonSeries deterministic', JSON.stringify(seasonSeries(h, 1)) === JSON.stringify(seasonSeries(h, 1)));

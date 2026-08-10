@@ -1124,6 +1124,17 @@ export function matchDetail(m) {
   };
 }
 
+export function seasonTimeline(history, season) {
+  return filterMatches(history, season).map((m, i) => {
+    const d = matchDetail(m);
+    return {
+      ...d,
+      no: i + 1,
+      label: d.isCup ? '杯赛' : ('第 ' + (d.round != null ? d.round : i + 1) + ' 轮')
+    };
+  });
+}
+
 export function seasonStreaks(series) {
   const list = Array.isArray(series) ? series : [];
   let current = 0;
