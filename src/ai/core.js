@@ -1,6 +1,6 @@
 // AI 主循环 + 感知→决策调度（botThink）
 import { DIFF, diffOf } from '../config.js';
-import { pathTo, followPath, getMap } from '../map.js';
+import { pathTo, followPath, getMap, los } from '../map.js';
 import { weaponDef, ammoFor } from '../entities.js';
 import { startReload } from '../combat.js';
 import { updateShotStreak } from '../ballistic.js';
@@ -12,6 +12,7 @@ import { findVisibleEnemy } from './perception.js';
 import { shouldSaveForEco } from './rules.js';
 import { botObjective, ctReactsTo } from './decisions.js';
 import { botActions } from './actions.js';
+import { peekPlan, peekPhase } from './peek.js';
 import { hasLineOfSight } from '../fog.js';
 
 export function applyTeammateSeparation(e, game) {
@@ -48,6 +49,62 @@ export function updateBots(game, dt) {
     if (!e.bot || e.dead || e.netControlled) continue;
     const w = weaponDef(e);
     if (w.mag > 0 && ammoFor(e) <= 0 && !e.reloading) startReload(e, game);
+  }
+}
+
+// 掩体后对枪适用性判定：持包/攻坚/过远过近不缩头，保持原有推进/站桩逻辑
+function shouldPeekFight(e, game, enemy) {
+  if (e.hasBomb) return false;
+  const td = Math.hypot(enemy.x - e.x, enemy.y - e.y);
+  if (td < 150 || td > 900) return false;
+  if (e.team === 't') {
+    const atkCs = game.tAttackSite === 'A' ? getMap().sites.A : getMap().sites.B;
+    if (atkCs && !(game.bomb && game.bomb.planted)) {
+      const dSite = Math.hypot(e.x - atkCs.cx, e.y - atkCs.cy);
+      if (dSite < 620 && dSite > 90) return false; // 突击模式不缩头
+    }
+  }
+  return true;
+}
+
+// 执行掩体后对枪相位：探出（移向探出点+开火）/ 缩回 / 隐蔽
+function runPeek(e, game, dt, enemy, pk, weapon) {
+  const spd = weapon.speed * 235;
+  // 朝向敌人（轻微扫动模拟人类架枪）
+  e.angle = angNorm(Math.atan2(enemy.y - e.y, enemy.x - e.x) + Math.sin(game.time * 3 + (e.anchorIdx || 0)) * 0.05);
+  if (pk.action === 'peek') {
+    // 探出：移向掩体外能看清敌人的探出点，命中窗口内开火
+    e.peekT = 0.25; // 探身标记：combat.js 按 peekSkill 减免散布
+    const dx = pk.peekX - e.x, dy = pk.peekY - e.y;
+    const dd = Math.hypot(dx, dy);
+    if (dd > 4) {
+      e.vx = dx / dd * spd * 0.6;
+      e.vy = dy / dd * spd * 0.6;
+    } else {
+      e.vx = 0; e.vy = 0;
+    }
+    const td = Math.hypot(enemy.x - e.x, enemy.y - e.y);
+    const lead = td > 500 ? 0.05 : 0;
+    const wantAng = Math.atan2(enemy.y + (enemy.vy || 0) * lead - e.y, enemy.x + (enemy.vx || 0) * lead - e.x);
+    const hitAng = td > 0 ? Math.atan2(enemy.rad + 2, td) : 0.5;
+    if (Math.abs(angDiff(e.angle, wantAng)) < hitAng * 0.85 && e.recoil < 0.7) {
+      const w = weaponDef(e);
+      if (w.mag > 0 && ammoFor(e) <= 0) startReload(e, game);
+      else e.trigger = true;
+    }
+  } else {
+    // recover/缩回 与 hold/隐蔽：回掩体锚点（recover 快速回缩，hold 慢速贴墙静止）
+    e.peekT = 0;
+    const dx = pk.anchorX - e.x, dy = pk.anchorY - e.y;
+    const dd = Math.hypot(dx, dy);
+    if (dd > 6) {
+      const nx = dx / dd, ny = dy / dd;
+      const speedF = pk.action === 'recover' ? 0.7 : 0.45;
+      e.vx = nx * spd * speedF;
+      e.vy = ny * spd * speedF;
+    } else {
+      e.vx = 0; e.vy = 0;
+    }
   }
 }
 
@@ -154,6 +211,36 @@ function botThink(e, game, dt) {
     }
   }
   e.trigger = false;
+  // 掩体后对枪（candidate-221）：近掩体交战时不站桩，按 peek 周期 探头→开火→缩回。
+  // 交战用 aimTarget（即使缩回掩体期间 LOS 短暂被挡，aimTarget 在 aimLostT<1.4s 内仍保留）。
+  // 掩体锚点/探出点在交战期间缓存（e.peekCache），避免每帧从移动位置重算而沿墙漂移；
+  // 仅当敌人大幅移动或探出点失视野时才重规划。
+  const pkTarget = (!e.aimTarget || e.aimTarget.dead) ? null : e.aimTarget;
+  const inPeekWindow = e.peekAt !== undefined && game.time - e.peekAt < 1.6;
+  if (pkTarget && (combat || inPeekWindow) && shouldPeekFight(e, game, pkTarget)) {
+    const replan = !e.peekCache ||
+      Math.hypot(pkTarget.x - e.peekCache.enemyX, pkTarget.y - e.peekCache.enemyY) > 140 ||
+      !los(game, e.peekCache.peekX, e.peekCache.peekY, pkTarget.x, pkTarget.y);
+    if (replan) {
+      const cover = peekPlan(e, pkTarget, game.time, getMap());
+      e.peekCache = cover ? {
+        anchorX: cover.anchorX, anchorY: cover.anchorY,
+        peekX: cover.peekX, peekY: cover.peekY,
+        dir: cover.dir, at: game.time,
+        enemyX: pkTarget.x, enemyY: pkTarget.y
+      } : null;
+    }
+    if (e.peekCache) {
+      e.peekAt = game.time;
+      const ph = peekPhase(e, game.time);
+      runPeek(e, game, dt, pkTarget, {
+        action: ph.action, dir: e.peekCache.dir, duration: ph.duration,
+        anchorX: e.peekCache.anchorX, anchorY: e.peekCache.anchorY,
+        peekX: e.peekCache.peekX, peekY: e.peekCache.peekY
+      }, weapon);
+      return;
+    }
+  }
   if (combat) {
     const t = e.aimTarget;
     const td = Math.hypot(t.x - e.x, t.y - e.y);
@@ -234,7 +321,7 @@ function botThink(e, game, dt) {
     }
     return;
   }
-  if (e.team === 't' && shouldSaveForEco(e, e.money || 0, (e.weapons && (e.weapons.primary === 'ak' || e.weapons.primary === 'm4' || e.weapons.primary === 'awp')) ? 2 : 0, game.roundTime || 0, game.roundDur || 115)) {
+  if (e.team === 't' && shouldSaveForEco(e, e.money || 0, (e.weapons && (e.weapons.primary === 'ak' || e.weapons.primary === 'm4' || e.weapons.primary === 'famas' || e.weapons.primary === 'awp')) ? 2 : 0, game.roundTime || 0, game.roundDur || 115)) {
     e.trigger = false;
     e.ecoRetreat = true;
     const tSpawn = getMap().spawns.t && getMap().spawns.t[0];
