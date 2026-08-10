@@ -1726,6 +1726,206 @@ export function cupMap(s) {
   return cupMapForRound(m && m.round);
 }
 
+function simFormScore(form) {
+  if (!Array.isArray(form)) return 0;
+  let score = 0;
+  for (const f of form) {
+    if (f === 'W' || f === true || f === 1) score += 1;
+    else if (f === 'L' || f === false || f === 0) score -= 1;
+  }
+  return clamp(score * 1.1, -6, 6);
+}
+
+function simLineup(team) {
+  const lineup = Array.isArray(team && team.lineup) && team.lineup.length ? team.lineup : [];
+  if (!lineup.length) {
+    const base = Number(team && team.rating) || 70;
+    return TEAM_ROLES.map((role, i) => ({
+      name: (team && team.name || '战队') + ' ' + (i + 1),
+      role,
+      rating: clamp(base + (i === 0 ? 2 : i === 1 ? 1 : 0) - i * 2, 35, 99),
+      youth: false
+    }));
+  }
+  return lineup.slice(0, 5);
+}
+
+function simTeamPower(team, side, opts = {}) {
+  const lineup = simLineup(team);
+  const avg = lineup.reduce((a, p) => a + (Number(p.rating) || 0), 0) / Math.max(1, lineup.length);
+  const base = Number(team && team.rating) || 70;
+  const form = simFormScore(team && team.form);
+  const morale = ((Number(team && team.morale) || 50) - 50) * 0.12;
+  const aggression = (clamp(Number(team && team.aggression) || 50, 15, 95) - 50) * 0.04;
+  const fatigue = opts.fatigue && opts.fatigue[team.id] ? -Number(opts.fatigue[team.id]) : 0;
+  const home = opts.homeId === team.id ? 2 : 0;
+  const youth = (Number(team && team.youthCount) || 0) * (opts.rules && opts.rules.youthBias > 0.5 ? 0.8 : -0.35);
+  const tactical = opts.rules && opts.rules.tacticalBias > 0 ? (team.tactics === '纪律防守' || team.tactics === '控图磨血' ? 1.2 : 0) : 0;
+  const sideBonus = side === 'attack'
+    ? (team.style === '快攻抢点' || team.style === '青训冲劲' || team.style === '狂攻抢点' ? 3 : 0) + aggression
+    : (team.tactics === '默认防守' || team.tactics === '纪律防守' ? 2.5 : 0) - aggression * 0.5;
+  return clamp(base * 0.65 + avg * 0.35 + form + morale + fatigue + home + youth + tactical + sideBonus, 35, 112);
+}
+
+function simSiteWeights(team, mapId) {
+  const prefs = Array.isArray(team && team.mapPrefs) ? team.mapPrefs : [];
+  const idx = prefs.indexOf(mapId);
+  const bonus = idx === 0 ? 0.7 : idx === 1 ? 0.35 : 0;
+  const aggressive = (Number(team && team.aggression) || 50) > 62 ? 0.3 : 0;
+  return [1 + bonus + aggressive, 1 + (idx === 0 ? 0 : idx === 1 ? bonus : 0)];
+}
+
+function pickSite(attacker, options) {
+  const weights = simSiteWeights(attacker, options.mapId);
+  const total = weights[0] + weights[1];
+  return rng() < weights[0] / total ? 'A' : 'B';
+}
+
+function simDuelWin(entry, anchor, attackPower, defensePower) {
+  return clamp(0.5 + (Number(entry.rating) - Number(anchor.rating)) * 0.006 + (attackPower - defensePower) * 0.006, 0.12, 0.92);
+}
+
+function simStatKey(teamId, name) {
+  return teamId + '|' + name;
+}
+
+function recordSimKill(stats, teamId, name, role, rating, damage = 85) {
+  const key = simStatKey(teamId, name);
+  if (!stats[key]) stats[key] = { teamId, name, role: role || '补枪', rating: rating || 65, kills: 0, deaths: 0, dmg: 0, plants: 0, defuses: 0, clutches: 0 };
+  stats[key].kills++;
+  stats[key].dmg += damage;
+  return stats[key];
+}
+
+function recordSimDeath(stats, teamId, name, role, rating) {
+  const key = simStatKey(teamId, name);
+  if (!stats[key]) stats[key] = { teamId, name, role: role || '补枪', rating: rating || 65, kills: 0, deaths: 0, dmg: 0, plants: 0, defuses: 0, clutches: 0 };
+  stats[key].deaths++;
+  return stats[key];
+}
+
+function recordSimAct(stats, teamId, name, role, rating, act) {
+  const key = simStatKey(teamId, name);
+  if (!stats[key]) stats[key] = { teamId, name, role: role || '补枪', rating: rating || 65, kills: 0, deaths: 0, dmg: 0, plants: 0, defuses: 0, clutches: 0 };
+  stats[key][act]++;
+  return stats[key];
+}
+
+function simulateCareerRound(index, home, away, options, stats) {
+  const attacker = index % 2 === 0 ? home : away;
+  const defender = attacker === home ? away : home;
+  const site = pickSite(attacker, options);
+  const tactic = (attacker && attacker.tactics) || '默认进攻';
+  const events = [{
+    t: 'opening',
+    side: attacker.id,
+    site,
+    tactic,
+    text: attacker.name + ' 选择 ' + site + ' 点，战术 ' + tactic
+  }];
+  const attackPower = simTeamPower(attacker, 'attack', options);
+  const defensePower = simTeamPower(defender, 'defense', options);
+  if (rng() < clamp(0.45 + (Number(attacker.aggression) || 50) * 0.002, 0.15, 0.9)) {
+    const kind = pick(['烟雾', '闪光', '手雷']);
+    events.push({ t: 'utility', side: attacker.id, site, kind, text: attacker.name + ' 使用 ' + kind + ' 控制 ' + site + ' 点入口' });
+  }
+  const entry = attacker.lineup && attacker.lineup[0] || simLineup(attacker)[0];
+  const anchor = (defender.lineup || simLineup(defender)).find((p) => p.role === '指挥') || (defender.lineup || simLineup(defender)).slice(-1)[0];
+  const entryWin = rng() < simDuelWin(entry, anchor, attackPower, defensePower);
+  const duelWinner = entryWin ? attacker : defender;
+  const duelLoser = entryWin ? defender : attacker;
+  const winnerPlayer = entryWin ? entry : anchor;
+  const loserPlayer = entryWin ? anchor : entry;
+  recordSimKill(stats, duelWinner.id, winnerPlayer.name, winnerPlayer.role, winnerPlayer.rating);
+  recordSimDeath(stats, duelLoser.id, loserPlayer.name, loserPlayer.role, loserPlayer.rating);
+  events.push({
+    t: 'duel',
+    side: duelWinner.id,
+    site,
+    winnerName: winnerPlayer.name,
+    loserName: loserPlayer.name,
+    text: winnerPlayer.name + ' 对位击败 ' + loserPlayer.name
+  });
+  const siteControl = rng() < clamp(0.5 + (attackPower - defensePower) * 0.01 + (entryWin ? 0.12 : 0) - (defender.tactics === '默认防守' ? 0.05 : 0), 0.22, 0.92);
+  events.push({ t: 'site_control', side: siteControl ? attacker.id : defender.id, site, text: (siteControl ? attacker.name : defender.name) + ' 控制 ' + site + ' 点' });
+  let winner;
+  if (!siteControl) {
+    winner = rng() < clamp(0.5 + (attackPower - defensePower) * 0.01 - 0.12, 0.18, 0.88) ? attacker : defender;
+    events.push({ t: 'elimination', side: winner.id, site, text: winner.name + ' 在残局中清空 ' + site + ' 点' });
+  } else {
+    const planter = (attacker.lineup || simLineup(attacker))[Math.floor(rng() * (attacker.lineup || simLineup(attacker)).length)];
+    const planted = rng() < clamp(0.55 + (Number(attacker.aggression) || 50) * 0.002 + (attacker.style === '道具压制' ? 0.12 : 0), 0.35, 0.96);
+    if (!planted) {
+      winner = defender;
+      events.push({ t: 'elimination', side: defender.id, site, text: defender.name + ' 在安放前击溃 ' + attacker.name + ' 的进攻' });
+    } else {
+      recordSimAct(stats, attacker.id, planter.name, planter.role, planter.rating, 'plants');
+      events.push({ t: 'plant', side: attacker.id, site, planter: planter.name, text: planter.name + ' 在 ' + site + ' 点安放 C4' });
+      const retake = rng() < clamp(0.42 + (defensePower - attackPower) * 0.012 + (defender.tactics === '后保残局' ? 0.1 : 0), 0.18, 0.88);
+      if (!retake) {
+        winner = attacker;
+        events.push({ t: 'post_plant', side: attacker.id, site, text: attacker.name + ' 用枪线与道具守住 ' + site + ' 点' });
+      } else {
+        const defuser = (defender.lineup || simLineup(defender))[Math.floor(rng() * (defender.lineup || simLineup(defender)).length)];
+        const defused = rng() < clamp(0.5 + (defensePower - attackPower) * 0.01 - (Number(attacker.aggression) || 50) * 0.002, 0.15, 0.92);
+        if (defused) {
+          recordSimAct(stats, defender.id, defuser.name, defuser.role, defuser.rating, 'defuses');
+          winner = defender;
+          events.push({ t: 'defuse', side: defender.id, site, defuser: defuser.name, text: defuser.name + ' 拆掉 ' + site + ' 点的 C4' });
+        } else {
+          const clutchPlayer = (attacker.lineup || simLineup(attacker)).find((p) => p.role === '自由人') || entry;
+          recordSimKill(stats, attacker.id, clutchPlayer.name, clutchPlayer.role, clutchPlayer.rating);
+          recordSimDeath(stats, defender.id, defuser.name, defuser.role, defuser.rating);
+          recordSimAct(stats, attacker.id, clutchPlayer.name, clutchPlayer.role, clutchPlayer.rating, 'clutches');
+          winner = attacker;
+          events.push({ t: 'clutch', side: attacker.id, site, player: clutchPlayer.name, text: clutchPlayer.name + ' 完成 ' + site + ' 点残局' });
+        }
+      }
+    }
+  }
+  const round = index + 1;
+  events.push({ t: 'round_end', side: winner.id, round, text: winner.name + ' 赢下第 ' + round + ' 回合' });
+  return { round, attacker: attacker.id, defender: defender.id, site, tactic, winner: winner.id, events, stats: {} };
+}
+
+export function simulateCareerMatch(home, away, options = {}) {
+  const homeTeam = home || { id: 'player', name: '主队', rating: 70 };
+  const awayTeam = away || { id: 'away', name: '客队', rating: 70 };
+  const rules = leagueRules(options.league || '乙级');
+  const need = options.rounds || ROUND.MATCH_WIN;
+  const maxRounds = need * 2 - 1;
+  const stats = {};
+  const rounds = [];
+  let homeScore = 0;
+  let awayScore = 0;
+  const simOptions = { ...options, rules, homeId: homeTeam.id };
+  for (let i = 0; i < maxRounds && homeScore < need && awayScore < need; i++) {
+    const r = simulateCareerRound(i, homeTeam, awayTeam, simOptions, stats);
+    rounds.push(r);
+    if (r.winner === homeTeam.id) homeScore++; else awayScore++;
+  }
+  const players = Object.values(stats).map((p) => ({ ...p })).sort((a, b) => b.kills - a.kills || b.dmg - a.dmg);
+  const mvp = players.slice().sort((a, b) =>
+    (b.kills * 2 + b.dmg / 100 + b.plants + b.defuses + b.clutches * 2) -
+    (a.kills * 2 + a.dmg / 100 + a.plants + a.defuses + a.clutches * 2)
+  )[0] || null;
+  const winnerId = homeScore >= awayScore ? homeTeam.id : awayTeam.id;
+  return {
+    mapId: options.mapId || (homeTeam.homeMap || 'dust2'),
+    league: rules.key,
+    homeId: homeTeam.id,
+    awayId: awayTeam.id,
+    score: [homeScore, awayScore],
+    winner: winnerId,
+    rounds,
+    timeline: rounds.flatMap((r) => r.events.map((e) => ({ ...e, round: r.round }))),
+    players,
+    mvp,
+    totalKills: players.reduce((a, p) => a + p.kills, 0),
+    totalDamage: players.reduce((a, p) => a + p.dmg, 0)
+  };
+}
+
 function gainXp(s, amount) {
   s.player.xp += amount;
   while (s.player.level < TITLES.length && s.player.xp >= xpNeeded(s.player.level)) {
