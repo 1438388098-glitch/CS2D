@@ -39,6 +39,19 @@ export function minimapEntityIcon(e) {
   };
 }
 
+// 掉落物拾取提示：返回 HUD 文案；玩家不可拾取的掉落返回 null
+// （拆弹钳仅 CT 且未持有才提示；与当前主武器相同则忽略）
+export function dropPickupLabel(p, d) {
+  if (!p || !d) return null;
+  if (d.kind === 'kit') {
+    if (p.team === 'ct' && !(p.weapons && p.weapons.kit)) return '拾取 拆弹钳';
+    return null;
+  }
+  if (p.weapons && p.weapons.primary === d.wid) return null;
+  const wd = WEAPONS[d.wid];
+  return '拾取 ' + (wd ? wd.name : d.wid);
+}
+
 // FPS mode interaction target: pure logic used by HUD and tests.
 export function fpsInteractAction(game) {
   const p = game && game.player;
@@ -61,10 +74,8 @@ export function fpsInteractAction(game) {
   }
   for (const d of game.drops || []) {
     if (!near(d.x, d.y)) continue;
-    const heldPrimary = p.weapons && p.weapons.primary;
-    if (heldPrimary === d.wid) continue;
-    const wd = WEAPONS[d.wid];
-    return { label: '拾取 ' + (wd ? wd.name : d.wid), action: 'interact' };
+    const label = dropPickupLabel(p, d);
+    if (label) return { label, action: 'interact' };
   }
   return null;
 }
@@ -101,11 +112,11 @@ export function fpsAimInteractAction(game) {
   let bestDrop = null;
   for (const d of game.drops || []) {
     if (!aimedAt(d.x, d.y, 220)) continue;
-    const heldPrimary = p.weapons && p.weapons.primary;
-    if (heldPrimary === d.wid) continue;
-    const wd = WEAPONS[d.wid];
-    if (!bestDrop || Math.hypot(d.x - p.x, d.y - p.y) < bestDrop.d) {
-      bestDrop = { d: Math.hypot(d.x - p.x, d.y - p.y), label: '拾取 ' + (wd ? wd.name : d.wid), action: 'interact' };
+    const label = dropPickupLabel(p, d);
+    if (!label) continue;
+    const dist = Math.hypot(d.x - p.x, d.y - p.y);
+    if (!bestDrop || dist < bestDrop.d) {
+      bestDrop = { d: dist, label, action: 'interact' };
     }
   }
   return bestDrop ? { label: bestDrop.label, action: bestDrop.action } : null;
