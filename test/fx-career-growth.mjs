@@ -1,7 +1,7 @@
 import {
   resetCareer, setStorage, setRng, getState, settlePlayerMatch, train, sellPlayer, buyPlayer, candidates, filterCandidates,
   nextSeason, save, loadCareer, __clearStateForTest, candidateProfile,
-  sponsorIncome, sponsorPreview, formBonus, fatiguePenalty, careerMorale, restPlayer, seasonGoals, goalProgress, trainingPreview, trainingSuggestion, rosterContribution,
+  sponsorIncome, sponsorPreview, formBonus, fatiguePenalty, careerMorale, restPlayer, seasonGoals, goalProgress, trainingPreview, trainingSuggestion, rotationAdvice, rosterContribution,
   achievementDefs, achievements, careerRecords, migrateCareerState, matchReadiness
 } from '../src/career.js';
 
@@ -61,6 +61,13 @@ ok('training preview caps', cappedPreview.after === 100 && cappedPreview.gained 
 s = resetCareer();
 const suggestion = trainingSuggestion(s);
 ok('training suggestion', suggestion && suggestion.suggestion && suggestion.suggestion.attr === 'nade' && suggestion.suggestion.tierKey === 'elite' && suggestion.options.length >= 1 && suggestion.trainingLeft === 2);
+
+s = resetCareer();
+const rotation = rotationAdvice(s);
+ok('rotation advice train', rotation && !rotation.shouldRest && rotation.advice === '正常训练' && rotation.reason.length > 0);
+s.player.fatigue = 90;
+const rotationRest = rotationAdvice(s);
+ok('rotation advice rest', rotationRest.shouldRest && rotationRest.advice === '必须休息');
 
 s = resetCareer();
 const ready = matchReadiness(s);

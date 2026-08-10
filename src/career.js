@@ -623,6 +623,38 @@ export function trainingSuggestion(s) {
   };
 }
 
+export function rotationAdvice(s) {
+  const fatigue = Number(s.player.fatigue) || 0;
+  const rested = !!s.team.rested;
+  const info = nextMatchInfo(s);
+  const importance = info ? info.importance : '';
+  const important = /关键|争冠|保级|杯赛/.test(importance);
+  let advice = '正常训练';
+  let reason = '疲劳可控，优先补弱项';
+  let shouldRest = false;
+  if (fatigue >= 80) {
+    advice = '必须休息';
+    reason = '高疲劳会明显削弱下一场属性';
+    shouldRest = true;
+  } else if (fatigue >= 50 || (fatigue >= 30 && important)) {
+    advice = '建议休息';
+    reason = '下一场重要，疲劳已影响状态';
+    shouldRest = true;
+  } else if (rested) {
+    advice = '已休息';
+    reason = '本轮恢复机会已使用';
+  }
+  return {
+    fatigue,
+    rested,
+    importance,
+    important,
+    advice,
+    reason,
+    shouldRest
+  };
+}
+
 export function restPlayer() {
   const s = getState();
   if (s.team.rested) return { ok: false, error: '本轮已经休息过' };

@@ -1,7 +1,7 @@
 import {
   loadCareer, getState, titleFor, startCareerMatch, careerEndMatch, abandonPendingMatch, simulatePlayerMatch, resetCareer,
   train, sellPlayer, buyPlayer, candidates, filterCandidates, candidateProfile, nextSeason, seasonReport, nextMatch, nextMatchInfo, matchImportance, teamRecentForm, matchReadiness,
-  transferWindowOpen, transferWindowInfo, isStorageAvailable, cupMap, cupPrizeInfo, cupMapForRound, fixtureMapFor, fixtureMatchRecord, winChance, trainingTiers, trainingPreview, trainingSuggestion, xpNeeded,
+  transferWindowOpen, transferWindowInfo, isStorageAvailable, cupMap, cupPrizeInfo, cupMapForRound, fixtureMapFor, fixtureMatchRecord, winChance, trainingTiers, trainingPreview, trainingSuggestion, rotationAdvice, xpNeeded,
   seasonStats, seasonAwards, seasonPerformanceSummary, seasonSeries, seasonStreaks, careerSummary, matchDetail, seasonTimeline, headToHead, importantMatches, seasonTrends, favoriteMatches, cupHistory, trophyCase, careerTimeline,
   sponsorIncome, sponsorPreview, formBonus, fatiguePenalty, careerMorale, restPlayer, seasonGoals, seasonPace, goalProgress, relegationProjection, rosterContribution,
   achievementDefs, achievements, careerRecords
@@ -325,9 +325,11 @@ function renderSchedule(s) {
 function renderTraining(s) {
   const fat = Math.round(fatiguePenalty(s) * 100);
   const suggestion = trainingSuggestion(s);
+  const rotation = rotationAdvice(s);
   let html = '<div class="career-card"><h4>训练课</h4><p>本轮剩余 ' + s.team.trainingLeft + ' 次 · 资金 ' + money(s.team.bank) + ' · 疲劳 ' + fat + '%</p>' + attrsRadar(s.player.attrs);
   html += '<div class="career-train-row"><b>恢复</b><button class="btn small"' + (s.team.rested ? ' disabled' : '') + ' data-act="rest">休息（疲劳清零）</button><span>' + (s.team.rested ? '本轮已休息' : '每轮最多一次') + '</span></div>';
   if (suggestion.suggestion) html += '<div class="career-train-row"><b>建议</b><span>训练 ' + cn(suggestion.suggestion.attr, ATTR_CN) + ' ' + suggestion.suggestion.label + ' · +' + suggestion.suggestion.gained + ' 属性 · 花费 ' + money(suggestion.suggestion.cost) + ' · 疲劳+' + suggestion.suggestion.fatigueGain + '</span></div>';
+  html += '<div class="career-train-row"><b>轮换</b><span>' + rotation.advice + ' · ' + rotation.reason + (rotation.importance ? ' · 下一场 ' + rotation.importance : '') + '</span></div>';
   for (const [attr, v] of Object.entries(s.player.attrs)) {
     html += '<div class="career-train-row"><b>' + cn(attr, ATTR_CN) + ' (' + v + ')</b>';
     for (const tier of trainingTiers()) {
