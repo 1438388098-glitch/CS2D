@@ -3,7 +3,7 @@ import {
   train, sellPlayer, sellPreview, buyPlayer, renewPlayer, candidates, filterCandidates, candidateProfile, nextSeason, seasonReport, nextMatch, nextMatchInfo, matchImportance, teamRecentForm, matchReadiness,
   transferWindowOpen, transferWindowInfo, transferBudget, contractStatus, isStorageAvailable, cupMap, cupPrizeInfo, cupMapForRound, fixtureMapFor, fixtureMatchRecord, winChance, trainingTiers, trainingPreview, trainingSuggestion, rotationAdvice, trainingHistory, rosterStatus, xpNeeded,
   seasonStats, seasonAwards, seasonPerformanceSummary, seasonSeries, seasonStreaks, careerSummary, matchDetail, seasonTimeline, headToHead, importantMatches, seasonTrends, favoriteMatches, cupHistory, trophyCase, careerTimeline,
-  sponsorIncome, sponsorPreview, formBonus, fatiguePenalty, careerMorale, restPlayer, seasonGoals, seasonPace, goalProgress, relegationProjection, rosterContribution,
+  sponsorIncome, sponsorPreview, cashflowForecast, formBonus, fatiguePenalty, careerMorale, restPlayer, seasonGoals, seasonPace, goalProgress, relegationProjection, rosterContribution,
   positionBalance,
   achievementDefs, achievements, careerRecords
 } from './career.js';
@@ -490,6 +490,7 @@ function renderFinance(s) {
   const ledger = Array.isArray(s.team.ledger) ? s.team.ledger : [];
   const sponsor = sponsorIncome(s);
   const sponsorInfo = sponsorPreview(s);
+  const cash = cashflowForecast(s);
   const income = ledger.reduce((a, x) => a + Math.max(0, x.amount || 0), 0);
   const expense = ledger.reduce((a, x) => a + Math.min(0, x.amount || 0), 0);
   const rows = ledger.slice().reverse().slice(0, 60).map((x) => '<div class="career-row"><span>' + esc(x.label || '') + '</span><b style="color:' + (x.amount >= 0 ? '#58d68d' : '#ff5d5d') + '">' + (x.amount >= 0 ? '+' : '') + money(x.amount) + '</b></div>').join('') || '<div class="career-news">暂无资金流水</div>';
@@ -500,7 +501,14 @@ function renderFinance(s) {
     '<div class="career-kpi"><b>' + money(sponsorInfo.seasonProjection) + '</b><span>赛季剩余预估</span></div>' +
     '<div class="career-kpi"><b>' + money(sponsorInfo.seasonEarned) + '</b><span>本季已入账</span></div></div>' +
     (sponsorInfo.next ? '<div class="career-row"><span>下一档：' + esc(sponsorInfo.next.label) + ' · ' + money(sponsorInfo.next.income) + '/场</span><b>还差 ' + money(sponsorInfo.next.income - sponsorInfo.current) + '</b></div>' : '<div class="career-news">当前已接近最高赞助档</div>') + '</div>';
+  const cashHtml = '<div class="career-card"><h4>赛季资金预测</h4><div class="career-kpis">' +
+    '<div class="career-kpi"><b>' + money(cash.expectedPrize) + '</b><span>剩余奖金预估</span></div>' +
+    '<div class="career-kpi"><b>' + money(cash.expectedSponsor) + '</b><span>剩余赞助预估</span></div>' +
+    '<div class="career-kpi"><b>' + money(cash.projectedBank) + '</b><span>赛季末预测</span></div>' +
+    '<div class="career-kpi"><b>' + money(cash.cushion) + '</b><span>安全垫</span></div></div>' +
+    '<div class="career-stats"><span>剩余联赛 ' + cash.remainingLeagueMatches + ' 场 · 每场赞助 ' + money(cash.sponsorPerMatch) + ' · 预测风险 ' + (cash.safe ? '可控' : '偏高') + '</span></div></div>';
   return '<div class="career-card"><h4>财务概览</h4><div class="career-kpis"><div class="career-kpi"><b>' + money(s.team.bank) + '</b><span>当前资金</span></div><div class="career-kpi"><b>' + money(income) + '</b><span>累计收入</span></div><div class="career-kpi"><b>' + money(expense) + '</b><span>累计支出</span></div><div class="career-kpi"><b>' + money(sponsor) + '</b><span>每场赞助预估</span></div></div></div>' +
+    cashHtml +
     sponsorHtml +
     '<div class="career-card"><h4>资金流水</h4>' + rows + '</div>';
 }

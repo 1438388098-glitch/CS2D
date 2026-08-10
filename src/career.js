@@ -228,6 +228,46 @@ export function sponsorPreview(s) {
   };
 }
 
+export function cashflowForecast(s) {
+  const current = Number(s.team && s.team.bank) || 0;
+  const totalRounds = Number(s.season && s.season.totalRounds) || 14;
+  const playerStanding = (s.season.standings || []).find((x) => x.teamId === 'player') || { played: 0 };
+  const remainingLeague = Math.max(0, totalRounds - Number(playerStanding.played) || 0);
+  const sponsor = sponsorIncome(s);
+  const expectedSponsor = sponsor * remainingLeague;
+  let expectedPrize = 0;
+  for (const f of Array.isArray(s.season.fixtures) ? s.season.fixtures : []) {
+    if (f.played || (f.home !== 'player' && f.away !== 'player')) continue;
+    const oppId = f.home === 'player' ? f.away : f.home;
+    const venue = f.home === 'player' ? 'home' : 'away';
+    const chance = winChance(s, oppId, venue) / 100;
+    expectedPrize += (chance * 1500 + (1 - chance) * 300 + chance * 0.2 * 200);
+  }
+  if (s.season.cup && s.season.cup.phase === 'active') {
+    for (const m of s.season.cup.bracket || []) {
+      if (!m.played && (m.a === 'player' || m.b === 'player')) {
+        const oppId = m.a === 'player' ? m.b : m.a;
+        const chance = winChance(s, oppId, 'home') / 100;
+        expectedPrize += chance * 5000;
+        if (m.round === 'F') expectedPrize += chance * 30000;
+      }
+    }
+  }
+  expectedPrize = Math.round(expectedPrize);
+  const projectedBank = Math.round(current + expectedPrize + expectedSponsor);
+  const cushion = Math.max(0, projectedBank - 6000);
+  return {
+    bank: current,
+    remainingLeagueMatches: remainingLeague,
+    expectedPrize,
+    expectedSponsor,
+    projectedBank,
+    cushion,
+    sponsorPerMatch: sponsor,
+    safe: projectedBank >= 6000
+  };
+}
+
 function currentWinStreak(s) {
   const list = Array.isArray(s.player.form) ? s.player.form : [];
   let n = 0;
