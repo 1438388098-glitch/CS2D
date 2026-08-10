@@ -1952,8 +1952,12 @@ function simulateLeagueRound(s) {
     if (f.home === 'player' || f.away === 'player') continue;
     const home = s.season.teams.find((t) => t.id === f.home);
     const away = s.season.teams.find((t) => t.id === f.away);
-    const r = simScore(home, away);
-    markFixture(s, f, r.score, r.winner.id);
+    const r = simulateCareerMatch(home, away, {
+      mapId: fixtureMapFor(s, f),
+      league: s.team.league,
+      homeId: f.home
+    });
+    markFixture(s, f, r.score, r.winner);
   }
   const left = s.season.fixtures.filter((f) => f.round === s.season.round && !f.played);
   if (!left.length) {
@@ -1984,10 +1988,14 @@ function simulateRemainingCup(s) {
     if (!m) break;
     const home = s.season.teams.find((x) => x.id === m.a);
     const away = s.season.teams.find((x) => x.id === m.b);
-    const r = simScore(home, away);
+    const r = simulateCareerMatch(home, away, {
+      mapId: cupMapForRound(m.round),
+      league: s.team.league,
+      homeId: m.a
+    });
     m.played = true;
     m.score = r.score;
-    m.winner = r.winner.id;
+    m.winner = r.winner;
     refreshCup(s);
   }
 }
