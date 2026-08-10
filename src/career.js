@@ -1164,6 +1164,11 @@ export function headToHead(history, oppId) {
   };
 }
 
+export function importantMatches(history, limit = 20) {
+  const list = (Array.isArray(history) ? history : []).filter((m) => m && m.importance && /关键|争冠|保级|杯赛/.test(String(m.importance)));
+  return list.slice(-Math.max(0, limit)).reverse().map(matchDetail);
+}
+
 export function seasonStreaks(series) {
   const list = Array.isArray(series) ? series : [];
   let current = 0;

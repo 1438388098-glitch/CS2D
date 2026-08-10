@@ -1,7 +1,7 @@
 import {
   resetCareer, setStorage, setRng, getState, settlePlayerMatch, nextSeason,
   save, loadCareer, __clearStateForTest,
-  seasonStats, seasonSeries, seasonStreaks, careerSummary, matchDetail, seasonTimeline, headToHead
+  seasonStats, seasonSeries, seasonStreaks, careerSummary, matchDetail, seasonTimeline, headToHead, importantMatches
 } from '../src/career.js';
 
 const ok = (name, cond) => {
@@ -91,6 +91,14 @@ const h2hA = headToHead([
   { oppId: 'b', win: true, kills: 9, deaths: 3, dmg: 630, money: 1500 }
 ], 'a');
 ok('headToHead aggregate', h2hA.matches === 2 && h2hA.wins === 1 && h2hA.losses === 1 && h2hA.winRate === 50 && h2hA.kd === Math.round(15 / 12 * 100) / 100 && h2hA.last.length === 2);
+
+const imp = importantMatches([
+  { importance: '普通战', win: true, kills: 3, deaths: 4, dmg: 210, money: 1500 },
+  { importance: '关键战', win: false, kills: 9, deaths: 8, dmg: 630, money: 300 },
+  { importance: '杯赛', win: true, kills: 12, deaths: 6, dmg: 840, money: 5000 }
+], 5);
+ok('importantMatches filters', imp.length === 2 && imp[0].importance === '杯赛' && imp[1].importance === '关键战');
+ok('importantMatches limit', importantMatches([{ importance: '关键战', win: true, kills: 1, deaths: 1, dmg: 70, money: 1500 }, { importance: '争冠战', win: true, kills: 2, deaths: 1, dmg: 140, money: 1500 }], 1).length === 1);
 
 ok('seasonStats deterministic', JSON.stringify(seasonStats(h, 1)) === JSON.stringify(seasonStats(h, 1)));
 ok('seasonSeries deterministic', JSON.stringify(seasonSeries(h, 1)) === JSON.stringify(seasonSeries(h, 1)));

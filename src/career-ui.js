@@ -2,7 +2,7 @@ import {
   loadCareer, getState, titleFor, startCareerMatch, careerEndMatch, abandonPendingMatch, simulatePlayerMatch, resetCareer,
   train, sellPlayer, buyPlayer, candidates, nextSeason, seasonReport, nextMatch, nextMatchInfo, matchImportance, teamRecentForm,
   transferWindowOpen, transferWindowInfo, isStorageAvailable, cupMap, cupPrizeInfo, cupMapForRound, fixtureMapFor, winChance, trainingTiers, xpNeeded,
-  seasonStats, seasonSeries, seasonStreaks, careerSummary, matchDetail, seasonTimeline, headToHead,
+  seasonStats, seasonSeries, seasonStreaks, careerSummary, matchDetail, seasonTimeline, headToHead, importantMatches,
   sponsorIncome, formBonus, fatiguePenalty, careerMorale, restPlayer, seasonGoals, seasonPace,
   achievementDefs, achievements, careerRecords
 } from './career.js';
@@ -407,6 +407,13 @@ function renderSeasonStats(s) {
       h.matches + ' 场 · ' + h.wins + '胜' + h.losses + '负 · ' + h.winRate + '% · K/D ' + h.kd +
       ' · 奖金 ' + money(h.totalMoney) + '</b></div>';
   }).sort((a, b) => b.match(/(\d+) 场/) - a.match(/(\d+) 场/)).join('') || '<div class="career-news">暂无对阵记录</div>';
+  const impRows = importantMatches(mh, 12).map((d) => {
+    const oppName = d.oppName || (d.oppId ? teamName(s, d.oppId) : '-');
+    return '<div class="career-row' + (d.win ? ' win' : ' lose') + '"><span>' +
+      esc(d.importance) + ' · ' + esc(oppName) + ' · ' + esc(mapName(d.mapId || '')) +
+      ' · ' + esc(d.scoreText) + ' · ' + (d.win ? '胜利' : '失利') + '</span><b>' +
+      d.kills + 'K / ' + d.deaths + 'D · ' + d.dmg + ' 伤 · ' + money(d.money) + '</b></div>';
+  }).join('') || '<div class="career-news">暂无关键战记录</div>';
   const ov = [['赛季数', overview.seasons], ['总场次', overview.matches], ['胜率', overview.winRate + '%'], ['K/D', overview.kd], ['场均伤害', overview.avgDmg], ['总奖金', money(overview.totalMoney)], ['总击杀', overview.kills]];
   const ovHtml = ov.map(([k, v]) => '<div class="career-kpi"><b>' + v + '</b><span>' + k + '</span></div>').join('');
   const recordHtml = '<div class="career-card"><h4>生涯纪录</h4><div class="career-kpis"><div class="career-kpi"><b>' + (rec.bestKills || 0) + '</b><span>单场最高击杀</span></div><div class="career-kpi"><b>' + (rec.longestWinStreak || 0) + '</b><span>最长连胜</span></div><div class="career-kpi"><b>' + money(rec.totalPrize || 0) + '</b><span>累计奖金</span></div><div class="career-kpi"><b>' + (rec.cupChampions || 0) + '</b><span>杯赛冠军</span></div><div class="career-kpi"><b>' + (rec.bestSeasonRank || '-') + '</b><span>最佳赛季排名</span></div></div></div>';
@@ -416,6 +423,7 @@ function renderSeasonStats(s) {
     '<div class="career-card"><h4>赛季比赛时间线</h4>' + timelineRows + '</div>' +
     '<div class="career-card"><h4>赛季近场明细</h4>' + detailRows + '</div>' +
     '<div class="career-card"><h4>对阵历史 H2H</h4>' + h2hRows + '</div>' +
+    '<div class="career-card"><h4>关键战复盘</h4>' + impRows + '</div>' +
     '<div class="career-card"><h4>生涯总览</h4><div class="career-kpis">' + ovHtml + '</div></div>' +
     recordHtml + achHtml;
 }
