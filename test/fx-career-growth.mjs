@@ -2,7 +2,7 @@ import {
   resetCareer, setStorage, setRng, getState, settlePlayerMatch, train, trainTeammate, sellPlayer, sellPreview, buyPlayer, candidates, filterCandidates,
   nextSeason, save, loadCareer, __clearStateForTest, candidateProfile,
   sponsorIncome, sponsorPreview, sponsorSeasonPreview, homeTicketIncome, ticketPreview, cashflowForecast, seasonBudget, financialRisk, financeTrend, seasonFinancialSummary, remainingPrizePreview, transferProfit, facilityStatus, upgradeFacility, formBonus, fatiguePenalty, careerMorale, restPlayer, seasonGoals, goalProgress, trainingPreview, trainingSuggestion, rotationAdvice, trainingHistory, rosterStatus, transferBudget, contractStatus, renewPlayer, rosterContribution, positionBalance,
-  achievementDefs, achievements, achievementProgress, careerRecords, honorTitle, migrateCareerState, matchReadiness, seasonGoalHistory, goalAdvice, lastRecordAlerts, seasonRecordAlerts, recordDetails
+  achievementDefs, achievements, achievementProgress, careerRecords, honorTitle, migrateCareerState, matchReadiness, seasonGoalHistory, goalAdvice, lastRecordAlerts, seasonRecordAlerts, recordDetails, seasonHighlights
 } from '../src/career.js';
 
 const ok = (name, cond) => {
@@ -248,6 +248,8 @@ ok('achievement progress after win', achProgressAfterWin.unlockedCount === 1 && 
 ok('records best kills', careerRecords(s).bestKills === 8 && careerRecords(s).longestWinStreak === 1 && careerRecords(s).totalPrize > 0);
 const recordAlerts = lastRecordAlerts(s);
 ok('record refresh alerts', recordAlerts.some((x) => x.type === 'bestKills' && x.oldValue === 0 && x.newValue === 8) && seasonRecordAlerts(s, s.season.id).length >= 1);
+const seasonHighlight = seasonHighlights(s);
+ok('season highlights', seasonHighlight.achievements.some((a) => a.id === 'first_win' && a.seasonId === 1) && seasonHighlight.records.some((x) => x.type === 'bestKills'));
 
 s = resetCareer();
 s.player.records = { bestKills: 4, longestWinStreak: 0 };

@@ -735,7 +735,12 @@ export function unlockAchievement(s, id) {
   if (!Array.isArray(s.player.achievements)) s.player.achievements = [];
   const def = ACHIEVEMENTS.find((a) => a.id === id);
   if (!def || s.player.achievements.some((a) => a.id === id)) return false;
-  s.player.achievements.push({ id: def.id, title: def.title, unlockedAt: Date.now() });
+  s.player.achievements.push({
+    id: def.id,
+    title: def.title,
+    unlockedAt: Date.now(),
+    seasonId: s && s.season ? s.season.id : null
+  });
   if (def.rewardMoney) {
     s.team.bank += def.rewardMoney;
     addLedger(s, 'income', def.rewardMoney, '成就奖励');
@@ -848,6 +853,14 @@ export function recordDetails(s) {
     }
   ];
   return rows;
+}
+
+export function seasonHighlights(s, seasonId) {
+  const id = seasonId == null ? (s && s.season ? s.season.id : null) : seasonId;
+  return {
+    achievements: achievements(s).filter((a) => a.seasonId === id),
+    records: seasonRecordAlerts(s, id).slice().reverse()
+  };
 }
 
 function updateRecords(s, win, kills, bankGain, cupChampion, meta = {}) {
