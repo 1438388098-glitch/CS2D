@@ -1,7 +1,7 @@
 import {
   resetCareer, setStorage, setRng, getState, settlePlayerMatch, nextSeason,
   save, loadCareer, __clearStateForTest,
-  seasonStats, seasonSeries, seasonStreaks, careerSummary, matchDetail, seasonTimeline
+  seasonStats, seasonSeries, seasonStreaks, careerSummary, matchDetail, seasonTimeline, headToHead
 } from '../src/career.js';
 
 const ok = (name, cond) => {
@@ -82,6 +82,15 @@ ok('matchDetail empty', matchDetail(null) === null);
 const tl = seasonTimeline(h, 1);
 ok('seasonTimeline rows', tl.length === 3 && tl[0].label === '第 1 轮' && tl[2].win === true && tl[2].kills === 15);
 ok('seasonTimeline cups', seasonTimeline([{ seasonId: 1, isCup: true, win: true, kills: 5, deaths: 2, dmg: 350, money: 5000, score: [13, 5] }], 1)[0].label === '杯赛');
+
+const h2h = headToHead(h, 'alpha');
+ok('headToHead empty', h2h.matches === 0 && h2h.winRate === 0);
+const h2hA = headToHead([
+  { oppId: 'a', win: true, kills: 10, deaths: 4, dmg: 700, money: 1500 },
+  { oppId: 'a', win: false, kills: 5, deaths: 8, dmg: 350, money: 300 },
+  { oppId: 'b', win: true, kills: 9, deaths: 3, dmg: 630, money: 1500 }
+], 'a');
+ok('headToHead aggregate', h2hA.matches === 2 && h2hA.wins === 1 && h2hA.losses === 1 && h2hA.winRate === 50 && h2hA.kd === Math.round(15 / 12 * 100) / 100 && h2hA.last.length === 2);
 
 ok('seasonStats deterministic', JSON.stringify(seasonStats(h, 1)) === JSON.stringify(seasonStats(h, 1)));
 ok('seasonSeries deterministic', JSON.stringify(seasonSeries(h, 1)) === JSON.stringify(seasonSeries(h, 1)));

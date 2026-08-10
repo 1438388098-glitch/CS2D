@@ -841,6 +841,7 @@ export function applyPlayerResult(s, r) {
     round: isCup ? (match ? match.round : null) : s.season.round,
     isCup: !!isCup,
     oppId: opp,
+    oppName: oppTeam ? oppTeam.name : (opp || null),
     venue: isCup ? 'home' : (match && match.home === 'player' ? 'home' : 'away'),
     win: !!win,
     kills: kills || 0,
@@ -1133,6 +1134,34 @@ export function seasonTimeline(history, season) {
       label: d.isCup ? '杯赛' : ('第 ' + (d.round != null ? d.round : i + 1) + ' 轮')
     };
   });
+}
+
+export function headToHead(history, oppId) {
+  const list = filterMatches(history, (m) => m && m.oppId === oppId);
+  let wins = 0;
+  let kills = 0;
+  let deaths = 0;
+  let totalMoney = 0;
+  let totalDmg = 0;
+  for (const m of list) {
+    if (m.win) wins++;
+    kills += m.kills || 0;
+    deaths += m.deaths || 0;
+    totalMoney += m.money || 0;
+    totalDmg += m.dmg || 0;
+  }
+  const n = list.length;
+  return {
+    oppId,
+    matches: n,
+    wins,
+    losses: n - wins,
+    winRate: n ? Math.round((wins / n) * 100) : 0,
+    kd: deaths ? round2(kills / deaths) : kills,
+    totalMoney,
+    totalDmg,
+    last: list.slice(-5).map(matchDetail)
+  };
 }
 
 export function seasonStreaks(series) {
