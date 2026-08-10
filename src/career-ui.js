@@ -4,6 +4,7 @@ import {
   transferWindowOpen, transferWindowInfo, transferBudget, contractStatus, isStorageAvailable, cupMap, cupPrizeInfo, cupMapForRound, fixtureMapFor, fixtureMatchRecord, winChance, trainingTiers, trainingPreview, trainingSuggestion, rotationAdvice, xpNeeded,
   seasonStats, seasonAwards, seasonPerformanceSummary, seasonSeries, seasonStreaks, careerSummary, matchDetail, seasonTimeline, headToHead, importantMatches, seasonTrends, favoriteMatches, cupHistory, trophyCase, careerTimeline,
   sponsorIncome, sponsorPreview, formBonus, fatiguePenalty, careerMorale, restPlayer, seasonGoals, seasonPace, goalProgress, relegationProjection, rosterContribution,
+  positionBalance,
   achievementDefs, achievements, careerRecords
 } from './career.js';
 
@@ -350,8 +351,10 @@ function renderTraining(s) {
 function renderRoster(s) {
   const contrib = rosterContribution(s);
   const contracts = contractStatus(s);
+  const balance = positionBalance(s);
   let html = '<div class="career-card"><h4>阵容 · 队伍评级 ' + contrib.rating + '</h4>' +
     '<div class="career-stats"><span>队友均评 ' + contrib.rosterAvg + ' · 玩家属性 ' + contrib.attrsAvg + ' · 状态 ' + (contrib.form >= 0 ? '+' : '') + contrib.form + ' · 士气 +' + contrib.morale + '</span><span>基础 ' + contrib.base + ' · 最终 ' + contrib.rating + '</span></div>' +
+    '<div class="career-stats"><span>位置 ' + balance.rows.map((r) => r.role + ' ' + r.count + '人/' + (r.avg || '-')).join(' · ') + '</span><b>' + balance.reason + '</b></div>' +
     '<div class="career-roster">';
   html += '<div class="career-player-card"><b>' + esc(s.player.name) + '</b><span>你 · ' + esc(titleFor(s.player.level)) + '</span><i>' + esc(s.team.name) + ' · 等级 ' + s.player.level + ' · 属性贡献 +' + contrib.player.contribution + ' · ' + contrib.player.sharePct + '%</i></div>';
   for (const p of contrib.members) {

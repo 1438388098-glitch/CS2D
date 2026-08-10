@@ -1,7 +1,7 @@
 import {
   resetCareer, setStorage, setRng, getState, settlePlayerMatch, train, sellPlayer, buyPlayer, candidates, filterCandidates,
   nextSeason, save, loadCareer, __clearStateForTest, candidateProfile,
-  sponsorIncome, sponsorPreview, formBonus, fatiguePenalty, careerMorale, restPlayer, seasonGoals, goalProgress, trainingPreview, trainingSuggestion, rotationAdvice, transferBudget, contractStatus, renewPlayer, rosterContribution,
+  sponsorIncome, sponsorPreview, formBonus, fatiguePenalty, careerMorale, restPlayer, seasonGoals, goalProgress, trainingPreview, trainingSuggestion, rotationAdvice, transferBudget, contractStatus, renewPlayer, rosterContribution, positionBalance,
   achievementDefs, achievements, careerRecords, migrateCareerState, matchReadiness
 } from '../src/career.js';
 
@@ -82,6 +82,13 @@ ok('roster contribution fields', rc && rc.rating > 0 && rc.members.length === 4 
 s.team.roster.forEach((p, i) => { p.rating = [100, 80, 60, 60][i]; });
 rc = rosterContribution(s);
 ok('roster contribution split', rc.rosterAvg === 75 && rc.members[0].delta === 25 && rc.members[3].delta === -15 && rc.members[0].sharePct > rc.members[3].sharePct && rc.player.contribution >= 9);
+
+s = resetCareer();
+const balance = positionBalance(s);
+ok('position balance fields', balance && balance.rows.length === 4 && balance.rows.every((r) => r.count === 1 && r.avg > 0) && balance.recommendation && balance.reason.length > 0);
+s.team.roster = s.team.roster.filter((p) => p.role !== '指挥');
+const missingBalance = positionBalance(s);
+ok('position balance missing', missingBalance.missingRoles.includes('指挥') && missingBalance.recommendation.role === '指挥' && missingBalance.reason.includes('指挥'));
 
 const filterPool = [
   { id: 'a', role: '突破', rating: 82, price: 9000 },

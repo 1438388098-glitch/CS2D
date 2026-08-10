@@ -147,6 +147,34 @@ export function rosterContribution(s) {
   };
 }
 
+export function positionBalance(s) {
+  const roster = Array.isArray(s.team && s.team.roster) ? s.team.roster : [];
+  const rosterAvg = teamAvgRating(roster);
+  const rows = ROLES.map((role) => {
+    const players = roster.filter((p) => p.role === role);
+    const count = players.length;
+    const total = players.reduce((a, p) => a + (p.rating || 0), 0);
+    const avg = count ? Math.round(total / count) : 0;
+    const gap = count ? Math.round(rosterAvg - avg) : Math.round(rosterAvg);
+    return { role, count, avg, gap, total, players };
+  });
+  const missing = rows.find((r) => r.count === 0);
+  const weakest = [...rows]
+    .filter((r) => r.count > 0)
+    .sort((a, b) => a.avg - b.avg || a.count - b.count)[0] || null;
+  const recommendation = missing || weakest;
+  let reason = '阵容位置完整';
+  if (missing) reason = '缺少 ' + missing.role + '，建议优先补上该位置';
+  else if (weakest) reason = weakest.role + ' 均评 ' + weakest.avg + ' 是全队最低，建议优先补强';
+  return {
+    rosterAvg,
+    rows,
+    missingRoles: rows.filter((r) => r.count === 0).map((r) => r.role),
+    recommendation,
+    reason
+  };
+}
+
 function clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); }
 function addLedger(s, type, amount, label) {
   if (!Array.isArray(s.team.ledger)) s.team.ledger = [];
