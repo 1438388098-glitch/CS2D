@@ -1,5 +1,5 @@
 import {
-  resetCareer, setStorage, setRng, teamProfile, simulateCareerMatch
+  resetCareer, setStorage, setRng, teamProfile, simulateCareerMatch, simulatePlayerMatch, getState
 } from '../src/career.js';
 
 const ok = (name, cond) => {
@@ -33,5 +33,13 @@ ok('sim event types', result.timeline.some((e) => e.t === 'opening') && result.t
 ok('mvp and player stats', result.mvp && result.mvp.name && result.players.length > 0);
 ok('kill death balance', result.totalKills === totalDeaths);
 ok('league baked into result', result.league === '乙级' && result.mapId);
+
+setRng(() => 0.42);
+const s2 = resetCareer();
+const playerSim = simulatePlayerMatch();
+ok('player sim uses engine', playerSim.ok && Array.isArray(playerSim.rounds) && playerSim.rounds.length >= 5 && Array.isArray(playerSim.timeline));
+ok('player sim derives stats', typeof playerSim.kills === 'number' && typeof playerSim.deaths === 'number' && typeof playerSim.dmg === 'number' && typeof playerSim.mvp === 'boolean');
+const lastHistory = getState().matchHistory[getState().matchHistory.length - 1];
+ok('player history from engine', lastHistory && lastHistory.kills === playerSim.kills && lastHistory.deaths === playerSim.deaths && lastHistory.dmg === playerSim.dmg);
 
 console.log('fx-career-sim: all PASS');

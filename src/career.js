@@ -2697,19 +2697,30 @@ export function simulatePlayerMatch() {
   const opp = s.season.teams.find((x) => x.id === pm.oppId) || s.season.teams.find((x) => x.id !== 'player');
   const f = pm.isCup ? findCupMatch(s) : findPlayerFixture(s);
   const venue = pm.isCup ? 'home' : (f && f.home === 'player' ? 'home' : 'away');
-  // 主场优势：主队 rating 临时 +2，反映熟悉场地/主场氛围
-  const homeBonus = venue === 'home' ? 2 : 0;
-  const r = simScore({ ...playerTeam, rating: effectiveTeamRating(s) + homeBonus }, opp);
-  const win = r.winner.id === 'player';
-  const playerScore = win ? r.score[0] : r.score[1];
-  const oppScore = win ? r.score[1] : r.score[0];
-  const score = venue === 'home' ? [playerScore, oppScore] : [oppScore, playerScore];
-  const kills = 3 + Math.floor(rng() * 6);
-  const deaths = Math.floor(rng() * 8);
-  applyPlayerResult(s, { win, kills, deaths, mvp: kills >= 5, score, isCup: !!pm.isCup });
+  const mapId = pm.isCup ? cupMap(s) : fixtureMapFor(s, f);
+  const playerTeamSim = { ...playerTeam, rating: effectiveTeamRating(s), form: [], morale: 50 };
+  const simHome = venue === 'home' ? playerTeamSim : opp;
+  const simAway = venue === 'home' ? opp : playerTeamSim;
+  const r = simulateCareerMatch(simHome, simAway, {
+    mapId,
+    league: s.team.league,
+    homeId: simHome.id
+  });
+  const win = r.winner === 'player';
+  const score = venue === 'home' ? r.score : [r.score[1], r.score[0]];
+  const playerStat = r.players.find((p) => p.teamId === 'player' && p.name === s.player.name) || r.players.find((p) => p.teamId === 'player') || { kills: 0, deaths: 0, dmg: 0 };
+  const kills = playerStat.kills || 0;
+  const deaths = playerStat.deaths || 0;
+  const dmg = Math.round(playerStat.dmg || 0);
+  const top = r.players.slice().sort((a, b) =>
+    (b.kills * 2 + b.dmg / 100 + b.plants + b.defuses + b.clutches * 2) -
+    (a.kills * 2 + a.dmg / 100 + a.plants + a.defuses + a.clutches * 2)
+  )[0] || null;
+  const mvp = !!top && top.teamId === 'player';
+  applyPlayerResult(s, { win, kills, deaths, mvp, score, dmg, isCup: !!pm.isCup });
   s.pendingMatch = null;
   save();
-  return { ok: true, win, kills, deaths, score };
+  return { ok: true, win, kills, deaths, dmg, mvp, score, rounds: r.rounds, timeline: r.timeline };
 }
 
 export function abandonPendingMatch() {

@@ -176,7 +176,7 @@ ok('away abandon score order', awayAbandon && awayAbandon.score[0] === ROUND.MAT
 
 s = resetCareer();
 r = simulatePlayerMatch();
-ok('simulate match ok', r.ok && typeof r.win === 'boolean');
+ok('simulate match ok', r.ok && typeof r.win === 'boolean' && Array.isArray(r.rounds) && r.rounds.length >= 5);
 
 s = resetCareer();
 {
