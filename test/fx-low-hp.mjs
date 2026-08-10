@@ -2,7 +2,7 @@
 // 契约：lowHpVignette(hp, maxHp, t, dpr) 确定性返回 { alpha, pulse, radius, intensity }，
 //       hp/maxHp < 30% 时出现，越低越明显，死亡(0 血)后消失；
 //       drawLowHpVignette(ctx, w, h, fx) 仅在 alpha>0 时绘制径向红边。
-import { lowHpIntensity, lowHpVignette, drawLowHpVignette } from '../src/screen-fx.js';
+import { lowHpIntensity, lowHpVignette, drawLowHpVignette, lowHpPulse, drawLowHpPulse } from '../src/screen-fx.js';
 
 function ok(name, cond) {
   if (!cond) throw new Error('fx-low-hp: ' + name + ' FAIL');
@@ -11,6 +11,10 @@ function ok(name, cond) {
 
 function same(a, b) {
   return a.alpha === b.alpha && a.pulse === b.pulse && a.radius === b.radius && a.intensity === b.intensity;
+}
+
+function samePulse(a, b) {
+  return a.alpha === b.alpha && a.phase === b.phase && a.rings === b.rings && a.intensity === b.intensity;
 }
 
 // 强度：≥30% 无特效，0 血/死亡消失，濒死最强，单调递增
@@ -73,6 +77,46 @@ function same(a, b) {
   calls = [];
   drawLowHpVignette(c2, 0, 720, { alpha: 0.5, pulse: 0.5, radius: 0.6 });
   ok('non-positive w is no-op', calls.length === 0);
+}
+
+// 心跳脉冲：≥30%/死亡关闭；血量越低 alpha 越高、环数越多；时间驱动确定性相位
+{
+  const off = lowHpPulse(50, 100, 3);
+  ok('pulse off above 30%', off.alpha === 0 && off.rings === 0 && off.intensity === 0);
+  const dead = lowHpPulse(0, 100, 3);
+  ok('pulse off when dead', dead.alpha === 0 && dead.rings === 0 && dead.intensity === 0);
+  const f20 = lowHpPulse(20, 100, 0);
+  const f5 = lowHpPulse(5, 100, 0);
+  ok('lower hp stronger pulse', f5.alpha > f20.alpha && f5.intensity > f20.intensity);
+  ok('near-death adds ring', f5.rings > f20.rings);
+  ok('phase within [0,1)', f20.phase >= 0 && f20.phase < 1 && f5.phase >= 0 && f5.phase < 1);
+  ok('pulse deterministic', samePulse(lowHpPulse(20, 100, 1.234), lowHpPulse(20, 100, 1.234)));
+  ok('pulse time drives phase', lowHpPulse(20, 100, 0).phase !== lowHpPulse(20, 100, 0.4).phase);
+}
+
+// drawLowHpPulse：alpha>0 时画 rings 个同心圆并 save/restore 平衡；非法输入为 no-op
+{
+  let calls = [];
+  const mkCtx = () => ({
+    save() { calls.push('save'); },
+    restore() { calls.push('restore'); },
+    beginPath() { calls.push('beginPath'); },
+    stroke() { calls.push('stroke'); },
+    set globalAlpha(v) { calls.push('alpha:' + v); },
+    arc(x, y, r, a0, a1) { calls.push('arc:' + x + ',' + y + ',' + r + ',' + a0 + ',' + a1); }
+  });
+  calls = [];
+  const c1 = mkCtx();
+  drawLowHpPulse(c1, 1280, 720, lowHpPulse(5, 100, 0));
+  ok('pulse draws expected rings', calls.filter((c) => c === 'stroke').length === 4);
+  ok('pulse save/restore balanced', calls.filter((c) => c === 'save').length === 1 && calls.filter((c) => c === 'restore').length === 1);
+  const c2 = mkCtx();
+  calls = [];
+  drawLowHpPulse(c2, 1280, 720, { alpha: 0, phase: 0, rings: 4 });
+  ok('pulse alpha=0 is no-op', calls.length === 0);
+  calls = [];
+  drawLowHpPulse(c2, 0, 720, { alpha: 0.5, phase: 0, rings: 4 });
+  ok('pulse non-positive w is no-op', calls.length === 0);
 }
 
 console.log('fx-low-hp: all PASS');

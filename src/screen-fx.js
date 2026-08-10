@@ -47,6 +47,52 @@ export function drawLowHpVignette(ctx, w, h, fx) {
   ctx.restore();
 }
 
+// 低血量心跳脉冲环（candidate-406，2D 画面增强）。
+// 与红边互补：红边提示持续生命危险，同心脉冲环提供濒死心跳节奏。
+// 纯逻辑同样确定性，只依赖 hp/maxHp 与游戏时间 t，不使用 Math.random。
+const HEART_PULSE_PERIOD = 1.15; // 基础心跳周期（秒）
+const HEART_PULSE_RINGS = 3;
+const HEART_PULSE_MAX_RINGS = 4;
+
+// 低血量脉冲参数：返回 { alpha, phase, rings, intensity }。
+// phase ∈ [0,1) 驱动脉冲环相位，rings 为同时存在的同心环数量。
+// 血量越低 alpha 越高、周期越快；≥30% 或死亡时返回全零（不绘制）。
+export function lowHpPulse(hp, maxHp, t) {
+  const intensity = lowHpIntensity(hp, maxHp);
+  if (intensity <= 0) return { alpha: 0, phase: 0, rings: 0, intensity: 0 };
+  const ts = Number.isFinite(t) ? t : 0;
+  const period = HEART_PULSE_PERIOD * (1 - 0.22 * intensity);
+  return {
+    alpha: 0.16 + 0.3 * intensity,
+    phase: (ts % period) / period,
+    rings: intensity > 0.75 ? HEART_PULSE_MAX_RINGS : HEART_PULSE_RINGS,
+    intensity
+  };
+}
+
+// 绘制：以屏幕中心为源不断外扩的同心脉冲环，环越新越粗/亮，越旧越淡。
+export function drawLowHpPulse(ctx, w, h, fx) {
+  if (!fx || !(fx.alpha > 0) || !(w > 0) || !(h > 0)) return;
+  const cx = w / 2;
+  const cy = h / 2;
+  const edge = Math.min(w, h) / 2;
+  const phase = Number.isFinite(fx.phase) ? fx.phase : 0;
+  const rings = Number.isInteger(fx.rings) && fx.rings > 0 ? fx.rings : HEART_PULSE_RINGS;
+  ctx.save();
+  ctx.lineWidth = Math.max(1.5, edge * 0.014);
+  ctx.strokeStyle = 'rgba(255,82,64,0.95)';
+  ctx.lineCap = 'round';
+  for (let i = 0; i < rings; i++) {
+    const p = (phase + i / rings) % 1;
+    const r = Math.max(2, p * edge * 1.08);
+    ctx.globalAlpha = clamp((1 - p) * 0.62 * fx.alpha, 0, 1);
+    ctx.beginPath();
+    ctx.arc(cx, cy, r, 0, Math.PI * 2);
+    ctx.stroke();
+  }
+  ctx.restore();
+}
+
 // 击杀屏幕边缘白色闪光（candidate-304，2D 画面增强）。
 // 玩家击杀时左右下三边缘短暂白色闪光，0.35s 内从 1 衰减到 0。
 // 核心为确定性纯函数：仅依赖传入时间 t（击杀后流逝秒数），不使用 Date/performance。

@@ -7,7 +7,7 @@ import { crosshairSpreadPx, shouldDrawFpsSpreadCrosshair, crosshairHitFeedback, 
 import { getBindLabel } from './keymap.js';
 import { fogEnabled } from './fog.js';
 import { castAimRay } from './fps-laser.js';
-import { lowHpVignette, drawLowHpVignette, killFlash, drawKillFlash } from './screen-fx.js';
+import { lowHpVignette, drawLowHpVignette, lowHpPulse, drawLowHpPulse, killFlash, drawKillFlash } from './screen-fx.js';
 import { damageArc, drawDamageArc, HIT_ARC_DURATION } from './damage-fx.js';
 
 let ctx = null;
@@ -705,6 +705,8 @@ export function renderHud(game) {
   if (p && !p.dead) {
     const fx = lowHpVignette(p.hp, p.maxHp || 100, game.time || 0, dpr);
     drawLowHpVignette(ctx, w2, h2, fx);
+    const pulse = lowHpPulse(p.hp, p.maxHp || 100, game.time || 0);
+    drawLowHpPulse(ctx, w2, h2, pulse);
   }
   // 2D 击杀屏幕边缘白色闪光（candidate-304）：左右下三边 0.35s 内从 1 衰减到 0
   if (game.killFlashT > 0) {
