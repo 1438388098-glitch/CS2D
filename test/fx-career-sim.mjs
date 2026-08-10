@@ -1,5 +1,5 @@
 import {
-  resetCareer, setStorage, setRng, teamProfile, simulateCareerMatch, simulatePlayerMatch, matchDetail, getState, nextMatch
+  resetCareer, setStorage, setRng, teamProfile, simulateCareerMatch, simulatePlayerMatch, matchDetail, getState, nextMatch, careerDifficultyFor
 } from '../src/career.js';
 
 const ok = (name, cond) => {
@@ -35,6 +35,8 @@ ok('sim event types', result.timeline.some((e) => e.t === 'opening') && result.t
 ok('mvp and player stats', result.mvp && result.mvp.name && result.players.length > 0);
 ok('kill death balance', result.totalKills === totalDeaths);
 ok('league baked into result', result.league === '乙级' && result.mapId);
+ok('career difficulty by league', careerDifficultyFor('丙级', 65) === 'easy' && careerDifficultyFor('乙级', 75) === 'normal' && careerDifficultyFor('甲级', 85) === 'hard');
+ok('career difficulty by opponent', careerDifficultyFor('丙级', 86) === 'hard' && careerDifficultyFor('乙级', 88) === 'hard');
 
 setRng(() => 0.42);
 const s2 = resetCareer();

@@ -2347,8 +2347,37 @@ export function startCareerMatch(game, oppId, venue, isCup) {
   s.pendingMatch = { oppId, venue, isCup: !!isCup, mapId: pendingMapId };
   save();
   game.opts.mode = 'career';
+  game.opts.diff = careerDifficultyFor(s.team.league, (s.season.teams.find((t) => t.id === oppId) || {}).rating);
   startMatch(game);
   return { ok: true };
+}
+
+export function careerDifficultyFor(league, oppRating) {
+  const rating = Number(oppRating) || 70;
+  if (league === '甲级' || rating >= 85) return 'hard';
+  if (league === '乙级' || rating >= 78) return 'normal';
+  return rating >= 72 ? 'normal' : 'easy';
+}
+
+function careerAiScale(diff) {
+  return diff === 'hard' ? 1 : (diff === 'normal' ? 0.9 : 0.78);
+}
+
+function scaledTeamDiffParams(team, scale) {
+  const base = teamDiffParams(team);
+  return {
+    ...base,
+    react: clamp(base.react / scale, 0.05, 0.22),
+    spreadMult: clamp(base.spreadMult * (2 - scale), 0.45, 1.1),
+    view: Math.round(base.view * (0.9 + scale * 0.1)),
+    strafe: clamp(base.strafe * (1.25 - scale * 0.25), 0.3, 0.85),
+    aimSpeed: clamp(base.aimSpeed * (0.8 + scale * 0.2), 20, 120),
+    idealMin: Math.round(base.idealMin * (1.2 - scale * 0.2)),
+    idealMax: Math.round(base.idealMax * (1.2 - scale * 0.2)),
+    rushChance: clamp(base.rushChance * scale, 0.1, 0.85),
+    rotateChance: clamp(base.rotateChance * scale, 0.1, 0.9),
+    saveChance: clamp(base.saveChance * scale, 0.15, 0.9)
+  };
 }
 
 function careerStart(game) {
@@ -2366,8 +2395,9 @@ function careerStart(game) {
   game.opts.mapId = pm.isCup ? cupMap(s) : (pm.mapId || fixtureMapFor(s, findPlayerFixture(s)) || (venue === 'home' ? playerTeam.homeMap : opp.homeMap));
   game.opts.team = venue === 'home' ? 't' : 'ct';
   game.opts.bots = 4;
-  game.opts.diff = 'hard';
-  game.opts.diffParams = teamDiffParams(opp);
+  const diff = game.opts.diff || careerDifficultyFor(s.team.league, opp.rating);
+  game.opts.diff = diff;
+  game.opts.diffParams = scaledTeamDiffParams(opp, careerAiScale(diff));
   game.noRoundEnd = false;
   setupMatchEntities(game);
   const roster = s.team.roster.slice();
@@ -2378,8 +2408,9 @@ function careerStart(game) {
     roster.push({ id: 'r' + Date.now() + roster.length, name, team: playerTeam.name, role: ROLES[roster.length % ROLES.length], rating: 60, price: playerPrice(60) });
   }
   const avg = effectiveTeamRating(s);
-  const friendBase = teamDiffParams({ rating: avg });
-  const foeBase = teamDiffParams(opp);
+  const scale = careerAiScale(diff);
+  const friendBase = scaledTeamDiffParams({ rating: avg }, scale);
+  const foeBase = scaledTeamDiffParams(opp, scale);
   const teamBots = game.entities.filter((e) => e.bot && e.team === game.opts.team);
   teamBots.forEach((e, i) => {
     const p = roster[i];
