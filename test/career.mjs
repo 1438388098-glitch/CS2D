@@ -259,5 +259,7 @@ const financeHtml = __renderTabForTest('finance');
 ok('career finance renders', financeHtml.includes('财务概览') && financeHtml.includes('资金流水'));
 const standingsHtml = __renderTabForTest('standings');
 ok('career standings form column', standingsHtml.includes('近5') && standingsHtml.includes('预测最终'));
+const scheduleHtml = __renderTabForTest('schedule');
+ok('career schedule calendar', scheduleHtml.includes('主场') && scheduleHtml.includes('future') && scheduleHtml.includes('地图'));
 
 console.log('career: all PASS');

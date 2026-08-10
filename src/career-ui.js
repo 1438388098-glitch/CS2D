@@ -1,7 +1,7 @@
 import {
   loadCareer, getState, titleFor, startCareerMatch, careerEndMatch, abandonPendingMatch, simulatePlayerMatch, resetCareer,
   train, sellPlayer, buyPlayer, candidates, nextSeason, seasonReport, nextMatch, nextMatchInfo, matchImportance, teamRecentForm,
-  transferWindowOpen, transferWindowInfo, isStorageAvailable, cupMap, cupPrizeInfo, cupMapForRound, trainingTiers, xpNeeded,
+  transferWindowOpen, transferWindowInfo, isStorageAvailable, cupMap, cupPrizeInfo, cupMapForRound, fixtureMapFor, trainingTiers, xpNeeded,
   seasonStats, seasonSeries, seasonStreaks, careerSummary,
   sponsorIncome, formBonus, fatiguePenalty, careerMorale, restPlayer, seasonGoals, seasonPace,
   achievementDefs, achievements, careerRecords
@@ -227,15 +227,18 @@ function renderSchedule(s) {
     for (const f of fs) {
       const mine = f.home === 'player' || f.away === 'player';
       const oppId = f.home === 'player' ? f.away : f.home;
-      html += '<div class="career-fixture' + (mine ? ' mine' : '') + '">';
+      const venue = f.home === 'player' ? 'home' : 'away';
+      const mapId = fixtureMapFor(s, f);
+      const roundCls = f.played ? ' done' : (r === s.season.round ? ' cur' : (r > s.season.round ? ' future' : ' done'));
+      const venueCls = mine ? (venue === 'home' ? ' home' : ' away') : '';
+      html += '<div class="career-fixture' + (mine ? ' mine' : '') + roundCls + venueCls + '">';
       if (f.played) {
-        html += esc(teamName(s, f.home)) + ' ' + f.score[0] + ' : ' + f.score[1] + ' ' + esc(teamName(s, f.away));
-      } else if (mine && r === s.season.round) {
-        const venue = f.home === 'player' ? 'home' : 'away';
-        const mapId = venue === 'home' ? (s.season.teams.find((x) => x.id === 'player') || {}).homeMap : (s.season.teams.find((x) => x.id === oppId) || {}).homeMap;
-        html += esc(teamName(s, f.home)) + ' 对 ' + esc(teamName(s, f.away)) + ' <span>地图 ' + esc(mapName(mapId || '')) + ' · ' + matchImportance(s, f) + '</span> <button class="btn small" data-act="play" data-opp="' + oppId + '" data-venue="' + venue + '" data-cup="0">开赛</button> <button class="btn small" data-act="sim">模拟本场</button>';
+        html += (mine ? '<span class="career-venue">' + (venue === 'home' ? '主场' : '客场') + '</span>' : '') + esc(teamName(s, f.home)) + ' ' + f.score[0] + ' : ' + f.score[1] + ' ' + esc(teamName(s, f.away)) + ' <span>地图 ' + esc(mapName(mapId || '')) + '</span>';
+      } else if (mine) {
+        html += '<span class="career-venue">' + (venue === 'home' ? '主场' : '客场') + '</span>' + esc(teamName(s, f.home)) + ' 对 ' + esc(teamName(s, f.away)) + ' <span>地图 ' + esc(mapName(mapId || '')) + ' · ' + (r === s.season.round ? matchImportance(s, f) : '未来轮次') + '</span>';
+        if (r === s.season.round) html += ' <button class="btn small" data-act="play" data-opp="' + oppId + '" data-venue="' + venue + '" data-cup="0">开赛</button> <button class="btn small" data-act="sim">模拟本场</button>';
       } else {
-        html += esc(teamName(s, f.home)) + ' 对 ' + esc(teamName(s, f.away)) + ' <span>第 ' + r + ' 轮开放</span>';
+        html += esc(teamName(s, f.home)) + ' 对 ' + esc(teamName(s, f.away)) + ' <span>第 ' + r + ' 轮开放 · 地图 ' + esc(mapName(mapId || '')) + '</span>';
       }
       html += '</div>';
     }
