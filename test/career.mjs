@@ -257,6 +257,11 @@ const panelHtml = document.getElementById('careerPanel').innerHTML;
 ok('career ui renders', panelHtml.includes('生涯模式') && panelHtml.includes('赛季结算'));
 const dashHtml = __renderTabForTest('dash');
 ok('career readiness renders', dashHtml.includes('赛前状态') && dashHtml.includes('最终评级') && dashHtml.includes('对手评级') && dashHtml.includes('career-team-chip'));
+const alertState = getState();
+alertState.player.recordAlertLog = [{ matchSeq: 99, seasonId: alertState.season.id, round: 1, type: 'bestKills', label: '单场最高击杀', oldValue: 7, newValue: 9 }];
+save();
+const alertHtml = __renderTabForTest('dash');
+ok('career record alert renders', alertHtml.includes('本场纪录刷新') && alertHtml.includes('单场最高击杀') && alertHtml.includes('7 → 9'));
 for (const key of ['dash', 'schedule', 'training', 'roster', 'standings', 'cup', 'finance', 'stats']) {
   const html = __renderTabForTest(key);
   ok('career tab renders ' + key, html && html.length > 0);

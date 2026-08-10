@@ -750,17 +750,61 @@ export function careerRecords(s) {
   return s.player.records;
 }
 
-function updateRecords(s, win, kills, bankGain, cupChampion) {
+function addRecordAlert(s, matchSeq, type, label, oldValue, newValue) {
+  if (!Array.isArray(s.player.recordAlertLog)) s.player.recordAlertLog = [];
+  s.player.recordAlertLog.push({
+    matchSeq,
+    seasonId: s.season ? s.season.id : null,
+    round: s.season ? s.season.round : null,
+    type,
+    label,
+    oldValue,
+    newValue
+  });
+  if (s.player.recordAlertLog.length > 200) {
+    s.player.recordAlertLog.splice(0, s.player.recordAlertLog.length - 200);
+  }
+}
+
+export function lastRecordAlerts(s) {
+  const log = Array.isArray(s && s.player && s.player.recordAlertLog) ? s.player.recordAlertLog : [];
+  if (!log.length) return [];
+  const last = Math.max(...log.map((x) => Number(x.matchSeq) || 0));
+  return log.filter((x) => (Number(x.matchSeq) || 0) === last);
+}
+
+export function seasonRecordAlerts(s, seasonId) {
+  const log = Array.isArray(s && s.player && s.player.recordAlertLog) ? s.player.recordAlertLog : [];
+  return log.filter((x) => x.seasonId === seasonId);
+}
+
+function updateRecords(s, win, kills, bankGain, cupChampion, meta = {}) {
   const rec = careerRecords(s);
-  rec.bestKills = Math.max(Number(rec.bestKills) || 0, kills || 0);
+  const matchSeq = Number.isFinite(Number(meta.matchSeq))
+    ? Number(meta.matchSeq)
+    : (Array.isArray(s.matchHistory) ? s.matchHistory.length : 0);
+  const oldBestKills = Number(rec.bestKills) || 0;
+  const newBestKills = Math.max(oldBestKills, kills || 0);
+  if (newBestKills > oldBestKills) {
+    addRecordAlert(s, matchSeq, 'bestKills', '单场最高击杀', oldBestKills, newBestKills);
+  }
+  rec.bestKills = newBestKills;
   rec.totalPrize = Math.round((Number(rec.totalPrize) || 0) + (bankGain || 0));
   if (win) {
+    const oldStreak = Number(rec.longestWinStreak) || 0;
     const streak = currentWinStreak(s);
-    rec.longestWinStreak = Math.max(Number(rec.longestWinStreak) || 0, streak);
+    if (streak > oldStreak) {
+      rec.longestWinStreak = streak;
+      addRecordAlert(s, matchSeq, 'longestWinStreak', '最长连胜', oldStreak, streak);
+    } else {
+      rec.longestWinStreak = Math.max(oldStreak, streak);
+    }
     if (streak >= 5) unlockAchievement(s, 'streak5');
   }
   if (cupChampion) {
-    rec.cupChampions = (Number(rec.cupChampions) || 0) + 1;
+    const oldChampions = Number(rec.cupChampions) || 0;
+    rec.cupChampions = oldChampions + 1;
+    addRecordAlert(s, matchSeq, 'cupChampions', '杯赛冠军', oldChampions, oldChampions + 1);
     unlockAchievement(s, 'cup_champion');
   }
 }
@@ -775,6 +819,7 @@ export function migrateCareerState(parsed) {
   parsed.player.fatigue = Number.isFinite(Number(parsed.player.fatigue)) ? Number(parsed.player.fatigue) : 0;
   parsed.player.achievements = Array.isArray(parsed.player.achievements) ? parsed.player.achievements : [];
   parsed.player.records = parsed.player.records && typeof parsed.player.records === 'object' ? parsed.player.records : {};
+  parsed.player.recordAlertLog = Array.isArray(parsed.player.recordAlertLog) ? parsed.player.recordAlertLog : [];
   parsed.team.ledger = Array.isArray(parsed.team.ledger) ? parsed.team.ledger : [];
   parsed.team.morale = Number.isFinite(Number(parsed.team.morale)) ? parsed.team.morale : 65;
   parsed.team.rested = !!parsed.team.rested;
@@ -1101,7 +1146,8 @@ export function newCareerState() {
       form: [],
       fatigue: 0,
       achievements: [],
-      records: {}
+      records: {},
+      recordAlertLog: []
     },
     team: {
       name: PLAYER_TEAM.name, league: '乙级', bank: 12000,
@@ -2091,7 +2137,7 @@ export function applyPlayerResult(s, r) {
     players: Array.isArray(r.players) ? r.players : undefined
   });
   if (s.matchHistory.length > 500) s.matchHistory.splice(0, s.matchHistory.length - 500);
-  updateRecords(s, win, kills, bankGain + sponsor + ticket, isCup && s.season.cup.champion === 'player');
+  updateRecords(s, win, kills, bankGain + sponsor + ticket, isCup && s.season.cup.champion === 'player', { matchSeq: s.matchHistory.length });
   if (s.player.seasonStats.w === 1) unlockAchievement(s, 'first_win');
   if (s.player.level >= 10) unlockAchievement(s, 'veteran');
   if ((Number(careerRecords(s).totalPrize) || 0) >= 100000) unlockAchievement(s, 'rich100k');

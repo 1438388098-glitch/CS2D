@@ -6,7 +6,7 @@ import {
   sponsorIncome, sponsorPreview, sponsorSeasonPreview, homeTicketIncome, ticketPreview, cashflowForecast, seasonBudget, financialRisk, financeTrend, seasonFinancialSummary, remainingPrizePreview, formBonus, fatiguePenalty, careerMorale, restPlayer, seasonGoals, seasonPace, goalProgress, goalAdvice, relegationProjection, rosterContribution,
   seasonGoalHistory,
   positionBalance,
-  achievementDefs, achievements, achievementProgress, careerRecords, honorTitle
+  achievementDefs, achievements, achievementProgress, careerRecords, honorTitle, lastRecordAlerts
 } from './career.js';
 
 let doc = null;
@@ -293,11 +293,16 @@ function renderDash(s) {
     '</div>';
   const news = s.news.slice(0, 8).map((n) => '<div class="career-news ' + esc(n.type) + '">' + esc(n.text) + '</div>').join('') || '<div class="career-news">暂无事件</div>';
   const top = [...s.season.standings].sort((a, b) => b.pts - a.pts).slice(0, 5).map((x, i) => '<div class="career-row"><span>' + (i + 1) + '. ' + esc(teamName(s, x.teamId)) + '</span><b>' + x.pts + ' 分</b></div>').join('');
+  const recordAlerts = lastRecordAlerts(s);
+  const recordAlertHtml = recordAlerts.length ? '<div class="career-card"><h4>本场纪录刷新</h4>' +
+    recordAlerts.map((a) => '<div class="career-row"><span>' + esc(a.label) + '</span><b>' + a.oldValue + ' → ' + a.newValue + '</b></div>').join('') +
+    '</div>' : '';
   return '<div class="career-grid2">' +
     '<div class="career-card"><h4>玩家档案</h4><div class="career-player"><b>' + esc(s.player.name) + '</b><span>' + esc(honor.title) + ' · 等级 ' + s.player.level + '</span></div><div class="career-xp">经验 ' + s.player.xp + ' / ' + xpNeeded(s.player.level) + '<div class="career-bar"><i style="width:' + Math.min(100, Math.round(s.player.xp / xpNeeded(s.player.level) * 100)) + '%"></i></div></div>' + attrsBars(s) +
     '<div class="career-stats"><span>荣誉 ' + esc(honor.reason) + '</span></div>' +
     '<div class="career-stats"><span>状态 ' + (form >= 0 ? '+' : '') + form + ' · 士气 ' + mor + ' · 疲劳 ' + fat + '%</span><span>本赛季 ' + stats.played + ' 场 ' + stats.w + '胜' + stats.l + '负 · ' + stats.kills + ' 杀 / ' + stats.deaths + ' 死</span></div></div>' +
     matchHtml +
+    recordAlertHtml +
     readinessHtml +
     goalHtml +
     '<div class="career-card"><h4>事件流</h4>' + news + '</div>' +

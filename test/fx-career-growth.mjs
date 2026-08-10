@@ -2,7 +2,7 @@ import {
   resetCareer, setStorage, setRng, getState, settlePlayerMatch, train, trainTeammate, sellPlayer, sellPreview, buyPlayer, candidates, filterCandidates,
   nextSeason, save, loadCareer, __clearStateForTest, candidateProfile,
   sponsorIncome, sponsorPreview, sponsorSeasonPreview, homeTicketIncome, ticketPreview, cashflowForecast, seasonBudget, financialRisk, financeTrend, seasonFinancialSummary, remainingPrizePreview, transferProfit, facilityStatus, upgradeFacility, formBonus, fatiguePenalty, careerMorale, restPlayer, seasonGoals, goalProgress, trainingPreview, trainingSuggestion, rotationAdvice, trainingHistory, rosterStatus, transferBudget, contractStatus, renewPlayer, rosterContribution, positionBalance,
-  achievementDefs, achievements, achievementProgress, careerRecords, honorTitle, migrateCareerState, matchReadiness, seasonGoalHistory, goalAdvice
+  achievementDefs, achievements, achievementProgress, careerRecords, honorTitle, migrateCareerState, matchReadiness, seasonGoalHistory, goalAdvice, lastRecordAlerts, seasonRecordAlerts
 } from '../src/career.js';
 
 const ok = (name, cond) => {
@@ -246,6 +246,14 @@ ok('first win achievement', achievements(s).some((a) => a.id === 'first_win'));
 const achProgressAfterWin = achievementProgress(s);
 ok('achievement progress after win', achProgressAfterWin.unlockedCount === 1 && achProgressAfterWin.pct > 0 && achProgressAfterWin.next && achProgressAfterWin.next.id !== 'first_win');
 ok('records best kills', careerRecords(s).bestKills === 8 && careerRecords(s).longestWinStreak === 1 && careerRecords(s).totalPrize > 0);
+const recordAlerts = lastRecordAlerts(s);
+ok('record refresh alerts', recordAlerts.some((x) => x.type === 'bestKills' && x.oldValue === 0 && x.newValue === 8) && seasonRecordAlerts(s, s.season.id).length >= 1);
+
+s = resetCareer();
+s.player.records = { bestKills: 4, longestWinStreak: 0 };
+settlePlayerMatch(true, 6, 2);
+const recordAlertCompare = lastRecordAlerts(s);
+ok('record refresh compare', recordAlertCompare.some((x) => x.type === 'bestKills' && x.oldValue === 4 && x.newValue === 6) && recordAlertCompare.some((x) => x.type === 'longestWinStreak' && x.oldValue === 0 && x.newValue === 1));
 
 const rest = restPlayer();
 ok('rest player', rest.ok && s.player.fatigue === 0 && s.team.rested === true);
