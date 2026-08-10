@@ -3,7 +3,7 @@ import {
   train, sellPlayer, buyPlayer, candidates, nextSeason, seasonReport, nextMatch, nextMatchInfo, matchImportance, teamRecentForm,
   transferWindowOpen, transferWindowInfo, isStorageAvailable, cupMap, cupPrizeInfo, cupMapForRound, fixtureMapFor, fixtureMatchRecord, winChance, trainingTiers, xpNeeded,
   seasonStats, seasonSeries, seasonStreaks, careerSummary, matchDetail, seasonTimeline, headToHead, importantMatches, seasonTrends, favoriteMatches, cupHistory, careerTimeline,
-  sponsorIncome, formBonus, fatiguePenalty, careerMorale, restPlayer, seasonGoals, seasonPace,
+  sponsorIncome, formBonus, fatiguePenalty, careerMorale, restPlayer, seasonGoals, seasonPace, goalProgress,
   achievementDefs, achievements, careerRecords
 } from './career.js';
 
@@ -192,6 +192,7 @@ function renderDash(s) {
   const nm = nextMatch(s);
   const pending = s.pendingMatch;
   const goals = seasonGoals(s);
+  const goalP = goalProgress(s);
   const form = formBonus(s);
   const mor = careerMorale(s);
   const fat = Math.round(fatiguePenalty(s) * 100);
@@ -213,7 +214,19 @@ function renderDash(s) {
     matchHtml += '<p>' + (s.season.cup.phase === 'finished' ? '本赛季已结束' : (s.season.cup.phase === 'active' ? '杯赛已淘汰，等待赛季结算' : '当前轮次已打完')) + '</p>';
   }
   matchHtml += '</div>';
-  const goalHtml = '<div class="career-card"><h4>赛季目标</h4><p>' + esc(s.team.league) + ' 目标：前 ' + goals.rankGoal + ' · 杯赛至少' + (goals.cupGoal === 0 ? '八强' : '四强') + ' · 奖励 ' + money(goals.reward) + '</p><p>当前排名 ' + goals.currentRank + ' · 杯赛 ' + (goals.currentCupRound === 3 ? '冠军' : goals.currentCupRound === 2 ? '亚军' : goals.currentCupRound === 1 ? '四强' : goals.currentCupRound === -1 ? '未决' : '八强') + (goals.achieved ? ' · 已达成' : '') + '</p></div>';
+  const rankGoalText = goalP.currentRank <= goals.rankGoal
+    ? '已进入目标区'
+    : '距前 ' + goals.rankGoal + ' 还需 ' + goalP.rankPointsGap + ' 分';
+  const cupGoalText = goals.cupGoal === 0 ? '八强' : '四强';
+  const cupCurrentText = goalP.currentCupRound === 3 ? '冠军' : goalP.currentCupRound === 2 ? '亚军' : goalP.currentCupRound === 1 ? '四强' : goalP.currentCupRound === -1 ? '未决' : '八强';
+  const goalHtml = '<div class="career-card"><h4>赛季目标</h4>' +
+    '<div class="career-row"><span>' + esc(s.team.league) + ' 目标：前 ' + goals.rankGoal + ' · 杯赛至少' + cupGoalText + ' · 奖励 ' + money(goals.reward) + '</span><b>' + (goalP.achieved ? '已达成' : '进行中') + '</b></div>' +
+    '<div class="career-row"><span>当前排名 ' + goalP.currentRank + ' · ' + rankGoalText + '</span><b>' + goalP.rankProgress + '%</b></div>' +
+    '<div class="career-bar"><i style="width:' + goalP.rankProgress + '%"></i></div>' +
+    '<div class="career-row"><span>杯赛 ' + cupCurrentText + ' · 目标至少' + cupGoalText + '</span><b>' + goalP.cupProgress + '%</b></div>' +
+    '<div class="career-bar"><i style="width:' + goalP.cupProgress + '%"></i></div>' +
+    (goalP.projectedPoints != null ? '<div class="career-stats"><span>已赛 ' + goalP.played + ' 场 · 剩 ' + goalP.remaining + ' 场 · 预测 ' + goalP.projectedPoints + ' 分 / 第 ' + goalP.projectedRank + ' 名</span></div>' : '') +
+    '</div>';
   const news = s.news.slice(0, 8).map((n) => '<div class="career-news ' + esc(n.type) + '">' + esc(n.text) + '</div>').join('') || '<div class="career-news">暂无事件</div>';
   const top = [...s.season.standings].sort((a, b) => b.pts - a.pts).slice(0, 5).map((x, i) => '<div class="career-row"><span>' + (i + 1) + '. ' + esc(teamName(s, x.teamId)) + '</span><b>' + x.pts + ' 分</b></div>').join('');
   return '<div class="career-grid2">' +

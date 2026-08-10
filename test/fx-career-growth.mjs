@@ -1,7 +1,7 @@
 import {
   resetCareer, setStorage, setRng, getState, settlePlayerMatch, train, sellPlayer, buyPlayer, candidates,
   nextSeason, save, loadCareer, __clearStateForTest,
-  sponsorIncome, formBonus, fatiguePenalty, careerMorale, restPlayer, seasonGoals,
+  sponsorIncome, formBonus, fatiguePenalty, careerMorale, restPlayer, seasonGoals, goalProgress,
   achievementDefs, achievements, careerRecords, migrateCareerState
 } from '../src/career.js';
 
@@ -100,6 +100,19 @@ for (let i = 0; i < s.season.standings.length; i++) {
 }
 goals = seasonGoals(s);
 ok('goal achieved', goals.achieved === true && goals.currentRank === 1 && goals.reward === 10000);
+
+s = resetCareer();
+let gp = goalProgress(s);
+ok('goal progress unresolved', gp.rankProgress >= 0 && gp.cupProgress === 0 && gp.rankPointsGap >= 0 && gp.projectedPoints === null);
+for (let i = 0; i < s.season.standings.length; i++) {
+  s.season.standings[i].pts = s.season.standings[i].teamId === 'player' ? 40 : 40 - i;
+  s.season.standings[i].w = s.season.standings[i].teamId === 'player' ? 14 : 14 - i;
+  s.season.standings[i].played = 14;
+}
+s.season.cup.phase = 'finished';
+s.season.cupResult = 3;
+gp = goalProgress(s);
+ok('goal progress achieved', gp.rankProgress === 100 && gp.cupProgress === 100 && gp.rankPointsGap === 0 && gp.projectedRank === 1);
 
 s = resetCareer();
 for (let i = 0; i < s.season.standings.length; i++) {

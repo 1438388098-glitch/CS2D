@@ -1050,6 +1050,33 @@ export function seasonPace(s, teamId = 'player') {
   };
 }
 
+export function goalProgress(s) {
+  const goals = seasonGoals(s);
+  const pace = seasonPace(s);
+  const list = sortedStandings(s);
+  const playerRow = list.find((x) => x.teamId === 'player');
+  const targetRow = list[goals.rankGoal - 1] || playerRow;
+  const rankPointsGap = playerRow && targetRow && playerRow !== targetRow
+    ? Math.max(0, targetRow.pts + 1 - playerRow.pts)
+    : 0;
+  const rankProgress = goals.rankGoal
+    ? Math.min(100, Math.max(0, Math.round(((goals.rankGoal - goals.currentRank + 1) / goals.rankGoal) * 100)))
+    : 0;
+  const cupProgress = goals.cupGoal === 0
+    ? (goals.currentCupRound >= 0 ? 100 : 0)
+    : (goals.currentCupRound === -1 ? 0 : Math.min(100, Math.max(0, Math.round(((goals.currentCupRound + 1) / (goals.cupGoal + 1)) * 100))));
+  return {
+    ...goals,
+    rankPointsGap,
+    rankProgress,
+    cupProgress,
+    projectedPoints: pace.projected,
+    projectedRank: pace.projectedRank,
+    played: pace.played,
+    remaining: pace.remaining
+  };
+}
+
 export function seasonReport() {
   const s = getState();
   const list = sortedStandings(s);
