@@ -1,7 +1,7 @@
 import {
   resetCareer, setStorage, setRng, getState, settlePlayerMatch, train, trainTeammate, sellPlayer, sellPreview, buyPlayer, candidates, filterCandidates,
   nextSeason, save, loadCareer, __clearStateForTest, candidateProfile,
-  sponsorIncome, sponsorPreview, sponsorSeasonPreview, homeTicketIncome, ticketPreview, cashflowForecast, seasonBudget, financeTrend, remainingPrizePreview, transferProfit, facilityStatus, upgradeFacility, formBonus, fatiguePenalty, careerMorale, restPlayer, seasonGoals, goalProgress, trainingPreview, trainingSuggestion, rotationAdvice, trainingHistory, rosterStatus, transferBudget, contractStatus, renewPlayer, rosterContribution, positionBalance,
+  sponsorIncome, sponsorPreview, sponsorSeasonPreview, homeTicketIncome, ticketPreview, cashflowForecast, seasonBudget, financeTrend, seasonFinancialSummary, remainingPrizePreview, transferProfit, facilityStatus, upgradeFacility, formBonus, fatiguePenalty, careerMorale, restPlayer, seasonGoals, goalProgress, trainingPreview, trainingSuggestion, rotationAdvice, trainingHistory, rosterStatus, transferBudget, contractStatus, renewPlayer, rosterContribution, positionBalance,
   achievementDefs, achievements, careerRecords, migrateCareerState, matchReadiness
 } from '../src/career.js';
 
@@ -67,6 +67,13 @@ s.team.bank = 5000;
 train('aim', 'basic');
 const trend = financeTrend(s);
 ok('finance trend', trend && trend.rows.length === 1 && trend.rows[0].round === 1 && trend.rows[0].expense === 500 && trend.totalExpense === 500 && trend.totalNet === -500);
+
+s = resetCareer();
+s.team.bank = 10000;
+train('aim', 'basic');
+s.team.ledger.push({ seasonId: s.season.id, type: 'income', amount: 1500, label: '比赛奖金' });
+const finSummary = seasonFinancialSummary(s);
+ok('season financial summary', finSummary.totalIncome === 1500 && finSummary.totalExpense === 500 && finSummary.net === 1000 && finSummary.bank === 9500 && finSummary.incomeSources[0].label === '比赛奖金' && finSummary.expenseSources[0].label === '训练投入');
 
 s = resetCareer();
 const prize = remainingPrizePreview(s);

@@ -183,7 +183,14 @@ export function positionBalance(s) {
 function clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); }
 function addLedger(s, type, amount, label) {
   if (!Array.isArray(s.team.ledger)) s.team.ledger = [];
-  s.team.ledger.push({ t: Date.now(), round: Number(s.season && s.season.round) || 1, type, amount: Math.round(amount || 0), label });
+  s.team.ledger.push({
+    t: Date.now(),
+    seasonId: Number(s.season && s.season.id) || null,
+    round: Number(s.season && s.season.round) || 1,
+    type,
+    amount: Math.round(amount || 0),
+    label
+  });
   if (s.team.ledger.length > 300) s.team.ledger.splice(0, s.team.ledger.length - 300);
 }
 function ensureTransferLog(s) {
@@ -384,6 +391,61 @@ export function financeTrend(s) {
     totalExpense,
     totalNet: totalIncome - totalExpense
   };
+}
+
+export function seasonFinancialSummary(s, seasonId) {
+  const id = seasonId == null ? (s && s.season ? s.season.id : null) : seasonId;
+  const ledger = Array.isArray(s && s.team && s.team.ledger) ? s.team.ledger : [];
+  const rows = ledger.filter((x) => x && (id == null || x.seasonId == null || x.seasonId === id));
+  const income = new Map();
+  const expense = new Map();
+  let totalIncome = 0;
+  let totalExpense = 0;
+  for (const x of rows) {
+    const amount = Number(x.amount) || 0;
+    if (amount >= 0) {
+      totalIncome += amount;
+      const key = labelSource(x.label, 'income');
+      income.set(key, (income.get(key) || 0) + amount);
+    } else {
+      const abs = Math.abs(amount);
+      totalExpense += abs;
+      const key = labelSource(x.label, 'expense');
+      expense.set(key, (expense.get(key) || 0) + abs);
+    }
+  }
+  const toList = (map) => [...map.entries()]
+    .map(([label, amount]) => ({ label, amount: Math.round(amount) }))
+    .sort((a, b) => b.amount - a.amount);
+  return {
+    seasonId: id,
+    totalIncome: Math.round(totalIncome),
+    totalExpense: Math.round(totalExpense),
+    net: Math.round(totalIncome - totalExpense),
+    bank: Math.round(Number(s && s.team && s.team.bank) || 0),
+    incomeSources: toList(income),
+    expenseSources: toList(expense)
+  };
+}
+
+function labelSource(label, type) {
+  const text = String(label || '');
+  if (type === 'expense') {
+    if (text.includes('买入')) return '转会买入';
+    if (text.includes('续约')) return '合同续约';
+    if (text.includes('设施')) return '设施投资';
+    if (text.includes('训练')) return '训练投入';
+    if (text.includes('休息')) return '恢复投入';
+    return text || '其他支出';
+  }
+  if (text.includes('比赛奖金')) return '比赛奖金';
+  if (text.includes('赞助')) return '赞助收入';
+  if (text.includes('主场票房')) return '主场票房';
+  if (text.includes('赛季目标')) return '赛季目标';
+  if (text.includes('排名奖金')) return '排名奖金';
+  if (text.includes('杯赛奖金')) return '杯赛奖金';
+  if (text.includes('卖出')) return '转会回款';
+  return text || '其他收入';
 }
 
 export function remainingPrizePreview(s) {

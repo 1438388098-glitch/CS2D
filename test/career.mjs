@@ -242,7 +242,7 @@ s.season.cupResult = 3;
 s.season.cupPrizeEarned = 15000;
 s.history.push({ seasonId: 1, league: '乙级', rank: 1, cupRound: 3, prize: 45000 });
 const settleHtml = __renderTabForTest('settlement');
-ok('settlement renders history', settleHtml.includes('赛季结算') && settleHtml.includes('历史记录') && settleHtml.includes('赛季个人表现'));
+ok('settlement renders history', settleHtml.includes('赛季结算') && settleHtml.includes('历史记录') && settleHtml.includes('赛季个人表现') && settleHtml.includes('赛季财务总结') && settleHtml.includes('累计收入'));
 
 installStubs();
 registerDomIds('careerPanel');
