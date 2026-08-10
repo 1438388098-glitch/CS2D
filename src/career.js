@@ -1199,6 +1199,35 @@ export function cupHistory(seasonHistory) {
     }));
 }
 
+export function careerTimeline(s, limit = 60) {
+  const entries = [];
+  const mh = Array.isArray(s && s.matchHistory) ? s.matchHistory.slice().reverse() : [];
+  for (const m of mh) {
+    const d = matchDetail(m);
+    entries.push({
+      type: d.win ? 'win' : 'lose',
+      seasonId: d.seasonId,
+      text: (d.isCup ? '杯赛' : '联赛') + (d.win ? '胜利' : '失利') + ' · ' + (d.oppName || d.oppId || '-') + ' · ' + d.scoreText + ' · ' + d.kills + 'K/' + d.deaths + 'D',
+      detail: d.importance
+    });
+  }
+  for (const h of Array.isArray(s && s.history) ? s.history.slice().reverse() : []) {
+    entries.push({
+      type: 'season',
+      seasonId: h.seasonId,
+      text: '第 ' + h.seasonId + ' 赛季结束 · ' + h.league + ' · 第 ' + h.rank + ' 名 · 奖金 ' + h.prize,
+      detail: cupHistory([h])[0] ? cupHistory([h])[0].cupLabel : ''
+    });
+  }
+  for (const a of (s && s.player && Array.isArray(s.player.achievements) ? s.player.achievements.slice().reverse() : [])) {
+    entries.push({ type: 'award', text: '成就 · ' + a.title, detail: '' });
+  }
+  for (const n of Array.isArray(s && s.news) ? s.news.slice() : []) {
+    entries.push({ type: n.type || 'info', text: n.text, detail: '' });
+  }
+  return entries.slice(0, Math.max(1, limit));
+}
+
 export function seasonStreaks(series) {
   const list = Array.isArray(series) ? series : [];
   let current = 0;

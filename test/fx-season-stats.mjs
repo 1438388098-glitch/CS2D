@@ -1,7 +1,7 @@
 import {
   resetCareer, setStorage, setRng, getState, settlePlayerMatch, nextSeason,
   save, loadCareer, __clearStateForTest,
-  seasonStats, seasonSeries, seasonStreaks, careerSummary, matchDetail, seasonTimeline, headToHead, importantMatches, seasonTrends, favoriteMatches, cupHistory
+  seasonStats, seasonSeries, seasonStreaks, careerSummary, matchDetail, seasonTimeline, headToHead, importantMatches, seasonTrends, favoriteMatches, cupHistory, careerTimeline
 } from '../src/career.js';
 
 const ok = (name, cond) => {
@@ -113,6 +113,14 @@ const cups = cupHistory([
   { seasonId: 2, league: '甲级', rank: 6, cupRound: 2, prize: 20000 }
 ]);
 ok('cupHistory champion', cups.length === 2 && cups[0].seasonId === 2 && cups[0].cupLabel === '亚军' && cups[1].cupLabel === '冠军');
+
+const life = careerTimeline({
+  matchHistory: [{ seasonId: 1, win: true, isCup: false, oppName: 'A', kills: 8, deaths: 4, dmg: 560, money: 1500, score: [13, 8], importance: '关键战' }],
+  history: [{ seasonId: 1, league: '乙级', rank: 2, cupRound: 3, prize: 45000 }],
+  player: { achievements: [{ title: '首胜' }] },
+  news: [{ type: 'info', text: '转会窗开放' }]
+});
+ok('careerTimeline unified', life.length === 4 && life[0].type === 'win' && life[1].type === 'season' && life[2].type === 'award' && life[3].text === '转会窗开放');
 
 const trends = seasonTrends(h);
 ok('seasonTrends seasons', trends.length === 2 && trends[0].seasonId === 1 && trends[1].seasonId === 2);
