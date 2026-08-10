@@ -9,7 +9,7 @@ function ok(name, cond, detail = '') {
   if (!cond) failed = true;
 }
 
-for (const mapId of ['dust2', 'canal', 'metro']) {
+for (const mapId of ['dust2', 'metro', 'forge']) {
   loadMap(findMapById(mapId));
   const g = createGame({ team: 't', diff: 'normal', bots: 5, mapId });
   startMatch(g);

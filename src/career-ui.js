@@ -51,7 +51,7 @@ function leagueRulesHtml(s) {
 const ATTR_CN = { aim: '射击', move: '移速', react: '反应', nade: '道具' };
 const ROLE_CN = ['突破', '补枪', '指挥', '自由人'];
 const CUP_CN = { QF: '八强', SF: '四强', F: '决赛' };
-const MAP_CN = { dust2: '沙漠遗址', canal: '运河小镇', metro: '地铁枢纽' };
+const MAP_CN = { dust2: '沙漠遗址', metro: '地铁枢纽', forge: '熔炉工坊', atrium: '星轨中庭', arctic: '冰封港湾' };
 function cn(v, map) { return map[v] || v; }
 function mapName(id) {
   const extra = { forge: '\u7194\u7089\u5de5\u574a', 'duel-pit': '\u6597\u6280\u5751', 'duel-alley': '\u6b8b\u5df7\u5bf9\u51b3', 'duel-forge': '\u7194\u7089\u5355\u6311' };

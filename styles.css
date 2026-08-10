@@ -890,6 +890,9 @@ td.money{color:var(--gold);font-family:var(--f-num)}
 .mode-settings select:focus { border-color: #ffb545; }
 .mode-hint { color: #8a94a3; letter-spacing: 1px; }
 .map-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 10px; }
+.map-group { grid-column: 1 / -1; }
+.map-group-title { margin: 4px 0 8px; font-size: 12px; color: #ffb545; letter-spacing: 2px; font-weight: 700; }
+.map-subgrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 10px; }
 .map-card { position: relative; background: #181e27; border: 1px solid #242d3a; border-radius: 10px; padding: 8px; cursor: pointer; transition: border-color .15s; text-align: left; overflow: hidden; }
 .map-card:hover { border-color: #33404f; }
 .map-card.sel { border-color: #ffb545; }

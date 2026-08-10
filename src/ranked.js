@@ -7,7 +7,7 @@ import { computePerformanceScore, computeMvp } from './mvp-score.js';
 const SAVE_KEY = 'cs2d_ranked';
 const BACKUP_KEY = 'cs2d_ranked_backup';
 const VERSION = 1;
-const MAP_IDS = ['dust2', 'canal', 'metro', 'forge'];
+const MAP_IDS = ['dust2', 'metro', 'forge', 'arctic', 'atrium'];
 const TIERS = [
   { key: 'bronze', label: '青铜', min: 0, width: 1000 },
   { key: 'silver', label: '白银', min: 1000, width: 200 },

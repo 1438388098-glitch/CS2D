@@ -228,7 +228,7 @@ export function chosenFourthMap() {
 export function installChosenFourthMap() {
   const m = chosenFourthMap();
   if (!m) return null;
-  registerMap({ id: m.id, name: m.name, accent: m.accent, rows: m.rows });
+  registerMap({ id: m.id, name: m.name, accent: m.accent, rows: m.rows, category: 'bomb5v5' });
   if (typeof window !== 'undefined' && window.__syncMapCards) window.__syncMapCards();
   return m;
 }

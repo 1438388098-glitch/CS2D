@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { createBuilder, buildDust2, buildCanal, buildMetro, buildForge, buildHarbor, buildBazaar, buildFoundry } from '../src/map-gen.js';
+import { createBuilder, buildDust2, buildMetro, buildForge, buildHarbor, buildBazaar, buildFoundry, buildAtrium } from '../src/map-gen.js';
 import { loadMap } from '../src/map.js';
 
 function countChar(rows, ch) {
@@ -49,12 +49,12 @@ assert.equal(corridor.rows()[1][1], '.', 'corridor should open a room');
 
 const generatedMaps = [
   { name: 'dust2', rows: buildDust2().rows(), w: 60, h: 42 },
-  { name: 'canal', rows: buildCanal().rows(), w: 64, h: 46 },
   { name: 'metro', rows: buildMetro().rows(), w: 58, h: 42 },
   { name: 'forge', rows: buildForge().rows(), w: 80, h: 52 },
   { name: 'harbor', rows: buildHarbor().rows(), w: 72, h: 48 },
   { name: 'bazaar', rows: buildBazaar().rows(), w: 66, h: 44 },
-  { name: 'foundry', rows: buildFoundry().rows(), w: 74, h: 50 }
+  { name: 'foundry', rows: buildFoundry().rows(), w: 74, h: 50 },
+  { name: 'atrium', rows: buildAtrium().rows(), w: 96, h: 64 }
 ];
 
 for (const map of generatedMaps) {

@@ -25,10 +25,9 @@ function distTime(sx, sy, tx, ty, tile) {
 }
 const EXPECTED_SPAWNS = {
   dust2: { t: [47, 117], c: [74, 27] },
-  canal: { t: [138, 52], c: [45, 102] },
   metro: { t: [17, 106], c: [143, 54] }
 };
-for (const id of ['dust2', 'canal', 'metro']) {
+for (const id of ['dust2', 'metro']) {
   const def = MAPS.find((m) => m.id === id);
   ok(`${id} exists`, !!def);
   if (!def) continue;

@@ -115,9 +115,9 @@ ok('promotion projection', promo && promo.rank === 3 && promo.pointsToPromotion 
 
 const prizes = cupPrizeInfo();
 ok('cup prize info', prizes.perRound === 5000 && prizes.champion === 30000 && prizes.rounds.length === 3);
-ok('cup round map', cupMapForRound('QF') === 'dust2' && cupMapForRound('SF') === 'canal' && cupMapForRound('F') === 'metro');
+ok('cup round map', cupMapForRound('QF') === 'dust2' && cupMapForRound('SF') === 'metro' && cupMapForRound('F') === 'forge');
 const preview = cupPreview({ season: { cup: { bracket: [{ round: 'F', a: 'player', b: 't1', score: null, played: false, winner: null }] } } })[0];
-ok('cup preview schedule', preview && preview.map === 'metro' && preview.prize === 35000);
+ok('cup preview schedule', preview && preview.map === 'forge' && preview.prize === 35000);
 
 s = resetCareer();
 const closedWin = transferWindowInfo(s);

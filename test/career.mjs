@@ -35,7 +35,7 @@ ok('initial attrs', s.player.attrs.aim === 50 && s.player.attrs.move === 50 && s
 ok('roster 4', s.team.roster.length === 4);
 ok('fixtures 56', s.season.fixtures.length === 56);
 ok('standings 8', s.season.standings.length === 8);
-ok('career map pool expanded', careerMapPool().includes('duel-pit') && careerMapPool().includes('duel-alley') && careerMapPool().includes('duel-forge'));
+ok('career map pool 5v5 only', !careerMapPool().some((id) => id.startsWith('duel-')) && careerMapPool().includes('dust2') && careerMapPool().includes('metro') && careerMapPool().includes('forge'));
 ok('league 乙级', s.team.league === '乙级');
 ok('real player team', s.player.name === 'donk' && s.team.name === 'Team Spirit');
 ok('real roster names', s.team.roster.every((p) => ['sh1ro', 'chopper', 'magixx', 'zont1x'].includes(p.name)));
@@ -116,7 +116,7 @@ ok('cup active after league', s.season.cup.phase === 'active');
 guard = 0;
 while (s.season.cup.phase === 'active' && guard++ < 10) {
   const nm = findCupMatch(s);
-  const expectMap = nm && nm.round === 'QF' ? 'dust2' : (nm && nm.round === 'SF' ? 'canal' : 'metro');
+  const expectMap = nm && nm.round === 'QF' ? 'dust2' : (nm && nm.round === 'SF' ? 'metro' : 'forge');
   ok('cup map ' + (nm ? nm.round : 'none'), cupMap(s) === expectMap);
   r = settlePlayerMatch(guard % 2 === 0, 4, 2);
   ok('sim cup step', r.ok);

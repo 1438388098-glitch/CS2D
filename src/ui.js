@@ -712,7 +712,8 @@ box.innerHTML = '<div class="mode-hint">点击“开始”进入地图编辑器�
     if (opts.bet > Math.floor(coins * 0.25)) opts.bet = Math.max(1, Math.floor(coins * 0.25));
     if (!opts.side) opts.side = 'left';
     const teamHtml = (selId) => CYBER_ROSTER.map((c) => '<option value="' + c.id + '"' + (c.id === selId ? ' selected' : '') + '>' + c.tag + ' \u00b7 ' + c.name + ' \u00b7 ' + c.rating + '</option>').join('');
-    const mapHtml = ['dust2', 'canal', 'metro'].map((id) => '<option value="' + id + '"' + (opts.mapId === id ? ' selected' : '') + '>' + id + '</option>').join('');
+    const bombMapIds = MAPS.filter((m) => m.category === 'bomb5v5' && m.rows && m.id !== 'custom-map').map((m) => m.id);
+    const mapHtml = (bombMapIds.length ? bombMapIds : ['dust2', 'metro']).map((id) => '<option value="' + id + '"' + (opts.mapId === id ? ' selected' : '') + '>' + id + '</option>').join('');
     const histHtml = history.length ? history.map((h) => '<div class="mode-hint">' + (h.draw ? '\u5e73\u5c40\u9000\u6b3e ' : (h.won ? '\u8d62 ' : '\u8f93 ')) + h.left + ' vs ' + h.right + ' \u00b7 ' + (h.payout || 0) + ' \u86d0\u86d0\u5e01</div>').join('') : '<div class="mode-hint">\u6682\u65e0\u5bf9\u5c40\u8bb0\u5f55</div>';
     const winRate = stats.played > 0 ? Math.round(stats.won / stats.played * 100) : 0;
     box.innerHTML = '<div class="mode-hint">\u4f59\u989d ' + coins + ' \u86d0\u86d0\u5e01 \u00b7 \u521d\u59cb ' + CYBER_START_COINS + ' \u00b7 \u7834\u4ea7\u4fdd\u62a4 \u4f4e\u4e8e ' + CYBER_BAILOUT_AT + ' \u81ea\u52a8\u8865 ' + CYBER_BAILOUT_COINS + ' \u00b7 \u603b\u573a\u6b21 ' + stats.played + ' \u00b7 \u80dc\u7387 ' + winRate + '% \u00b7 \u8fde\u80dc ' + (stats.streak || 0) + ' \u00b7 \u51c0\u6536\u76ca ' + (stats.net >= 0 ? '+' + stats.net : stats.net) + ' \u00b7 \u4e24\u4e2a\u804c\u4e1a\u6218\u961f AI \u5bf9\u6218\uff0c\u4e0b\u6ce8\u89c2\u6218\u3002</div>' +
@@ -1472,9 +1473,10 @@ export function refreshMapPreviews() {
 
 function mapCardDescription(m) {
   if (m.tagline) return m.tagline;
+  if (m.category === 'duel') return '1v1 单挑 · 专用竞技小图';
+  if (m.category === 'custom') return '自定义地图 · 可在编辑器中继续修改';
   if (m.id === 'forge') return '熔炉中枢 · 三路交汇 · 快节奏';
   if (m.id === 'arctic') return '雪地主题变体 · 低能见度';
-  if (m.id === 'blast') return '工业主题变体 · 金属音效';
   return '经典爆破 · 5v5 战术地图';
 }
 
@@ -1488,43 +1490,66 @@ export function syncMapCards() {
   if (!mapSel) return;
   const savedMap = (() => { try { return localStorage.getItem('cs2d_map'); } catch (err) { return null; } })();
   let selected = game && game.opts && game.opts.mapId ? game.opts.mapId : (savedMap || 'dust2');
-  const bombMaps = MAPS.filter((m) => m.mode !== 'duel');
-  if (!bombMaps.some((m) => m.id === selected)) selected = bombMaps[0] ? bombMaps[0].id : 'dust2';
+  const maps = MAPS.filter((m) => m && m.rows && Array.isArray(m.rows) && m.rows.length);
+  const groups = [
+    { key: 'bomb5v5', label: '5v5 爆破', test: (m) => m.category === 'bomb5v5' },
+    { key: 'duel', label: '单挑竞技', test: (m) => m.category === 'duel' },
+    { key: 'custom', label: '自定义地图', test: (m) => m.category === 'custom' || m.id === 'custom-map' }
+  ];
+  const available = maps.filter((m) => groups.some((g) => g.test(m)));
+  if (!available.some((m) => m.id === selected)) {
+    const firstBomb = available.find((m) => m.category === 'bomb5v5');
+    selected = firstBomb ? firstBomb.id : (available[0] ? available[0].id : 'dust2');
+  }
   mapSel.innerHTML = '';
-  for (const m of bombMaps) {
-    const btn = doc.createElement('button');
-    btn.className = 'map-card' + (m.id === selected ? ' sel' : '');
-    btn.setAttribute('data-map', m.id);
-    const accent = doc.createElement('i');
-    accent.className = 'mc-accent';
-    accent.style.background = safeAccent(m.accent);
-    const prev = doc.createElement('canvas');
-    prev.className = 'map-prev';
-    prev.width = 280;
-    prev.height = 180;
-    const name = doc.createElement('div');
-    name.className = 'mc-name';
-    name.textContent = m.name || m.id;
-    const desc = doc.createElement('div');
-    desc.className = 'mc-desc';
-    desc.textContent = mapCardDescription(m);
-    const check = doc.createElement('span');
-    check.className = 'mc-check';
-    check.textContent = '✓';
-    btn.appendChild(accent);
-    btn.appendChild(prev);
-    btn.appendChild(name);
-    btn.appendChild(desc);
-    btn.appendChild(check);
-    btn.onclick = (e) => {
-      if (game) game.opts.mapId = m.id;
-      for (const cc of mapSel.children) cc.classList.remove('sel');
-      btn.classList.add('sel');
-      try { localStorage.setItem('cs2d_map', m.id); } catch (err) { /* 无存储环境 */ }
-      refreshMapPreviews();
-      if (btn.blur) btn.blur();
-    };
-    mapSel.appendChild(btn);
+  for (const group of groups) {
+    const groupMaps = maps.filter(group.test);
+    if (!groupMaps.length) continue;
+    const wrap = doc.createElement('div');
+    wrap.className = 'map-group';
+    const title = doc.createElement('div');
+    title.className = 'map-group-title';
+    title.textContent = group.label;
+    const sub = doc.createElement('div');
+    sub.className = 'map-subgrid';
+    wrap.appendChild(title);
+    wrap.appendChild(sub);
+    for (const m of groupMaps) {
+      const btn = doc.createElement('button');
+      btn.className = 'map-card' + (m.id === selected ? ' sel' : '');
+      btn.setAttribute('data-map', m.id);
+      const accent = doc.createElement('i');
+      accent.className = 'mc-accent';
+      accent.style.background = safeAccent(m.accent);
+      const prev = doc.createElement('canvas');
+      prev.className = 'map-prev';
+      prev.width = 280;
+      prev.height = 180;
+      const name = doc.createElement('div');
+      name.className = 'mc-name';
+      name.textContent = m.name || m.id;
+      const desc = doc.createElement('div');
+      desc.className = 'mc-desc';
+      desc.textContent = mapCardDescription(m);
+      const check = doc.createElement('span');
+      check.className = 'mc-check';
+      check.textContent = '✓';
+      btn.appendChild(accent);
+      btn.appendChild(prev);
+      btn.appendChild(name);
+      btn.appendChild(desc);
+      btn.appendChild(check);
+      btn.onclick = (e) => {
+        if (game) game.opts.mapId = m.id;
+        for (const cc of mapSel.querySelectorAll('.map-card')) cc.classList.remove('sel');
+        btn.classList.add('sel');
+        try { localStorage.setItem('cs2d_map', m.id); } catch (err) { /* 无存储环境 */ }
+        refreshMapPreviews();
+        if (btn.blur) btn.blur();
+      };
+      sub.appendChild(btn);
+    }
+    mapSel.appendChild(wrap);
   }
   if (game && game.opts && game.opts.mapId !== selected) game.opts.mapId = selected;
   refreshMapPreviews();

@@ -1,12 +1,13 @@
 // 掩体节奏审查：找"2 秒移动距离（470px）内无掩体"的可走点
 import { MAPS, TILE } from '../src/config.js';
+import '../src/modes.js';
 import { loadMap, getMap } from '../src/map.js';
 
 const COVER_R = Math.round(470 / TILE); // 约 12 瓦片
 const isCover = (c) => c === 'C' || c === '^' || c === '=' || c === 'o' || c === 'D' || c === '#';
 const isWalk = (c) => c === '.' || c === 'a' || c === 'b' || c === 't' || c === 'c' || c === '~' || c === '≈';
 
-for (const m of ['dust2', 'canal', 'metro']) {
+for (const m of ['dust2', 'canal', 'metro', 'atrium']) {
   loadMap(MAPS.find((x) => x.id === m));
   const map = getMap();
   const g = map.grid;

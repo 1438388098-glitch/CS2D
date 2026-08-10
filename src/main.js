@@ -73,6 +73,9 @@ async function boot() {
   await preloadTextures();
   installChosenFourthMap();
   installSavedEditorMap();
+  try {
+    if (!localStorage.getItem('cs2d_map')) game.opts.mapId = 'atrium';
+  } catch (err) { /* no storage in test/headless contexts */ }
   initUi(document, canvas, game);
   initCareerUi(document, game);
   initRankedUi(document, game);

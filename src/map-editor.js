@@ -1,7 +1,6 @@
-import { registerMap } from './registry.js';
+import { registerMap, getMapDef, getMaps } from './registry.js';
 import { startMatch } from './game.js';
 import { loadMap, getMap, aStar, nearestWalkable } from './map.js';
-import { OFFICIAL_MAPS } from './official-maps.js';
 
 let game = null;
 let ed = null;
@@ -58,6 +57,13 @@ function toggleEditorHelp() {
   const help = $('editorHelp');
   if (!help) return;
   help.style.display = help.style.display === 'none' ? 'block' : 'none';
+}
+
+function templateOptions() {
+  const maps = Array.from(getMaps().values())
+    .filter((m) => m && m.rows && Array.isArray(m.rows) && m.rows.length && m.id !== 'custom-map')
+    .sort((a, b) => String(a.name || a.id).localeCompare(String(b.name || b.id), 'zh-CN'));
+  return '<option value="">— 空白 —</option>' + maps.map((m) => '<option value="' + String(m.id).replace(/"/g, '&quot;') + '">' + String(m.name || m.id).replace(/</g, '&lt;') + '</option>').join('');
 }
 
 function syncMetaInputs() {
@@ -147,7 +153,7 @@ function exportObject() {
 
 function saveRows() {
   const obj = exportObject();
-  registerMap({ id: 'custom-map', name: obj.name, accent: obj.accent, rows: obj.rows.slice(), tile: obj.tile || 16, penPoints: obj.penPoints || [], highPoints: obj.highPoints || [] });
+  registerMap({ id: 'custom-map', name: obj.name, accent: obj.accent, rows: obj.rows.slice(), tile: obj.tile || 16, penPoints: obj.penPoints || [], highPoints: obj.highPoints || [], category: 'custom' });
   try { localStorage.setItem('cs2d_editor_map', JSON.stringify(obj)); } catch (err) { /* no storage */ }
   const ta = $('editorJson');
   if (ta) ta.value = JSON.stringify(obj);
@@ -231,30 +237,30 @@ function cellAt(ev) {
   return { tx: Math.floor(px / cell), ty: Math.floor(py / cell) };
 }
 
-function applyBrush(tx, ty) {
-  const rows = rowsToArr(ed.rows);
-  const b = Math.max(1, ed.brush || 1);
+function applyBrush(state, tx, ty) {
+  const rows = rowsToArr(state.rows);
+  const b = Math.max(1, state.brush || 1);
   const half = Math.floor(b / 2);
   for (let dy = -half; dy <= half; dy++) for (let dx = -half; dx <= half; dx++) {
     const x = tx + dx, y = ty + dy;
-    if (x >= 0 && y >= 0 && x < rows[0].length && y < rows.length) rows[y][x] = ed.sel;
+    if (x >= 0 && y >= 0 && x < rows[0].length && y < rows.length) rows[y][x] = state.sel;
   }
-  ed.rows = arrToRows(rows);
+  state.rows = arrToRows(rows);
 }
 
-function floodFill(tx, ty) {
-  const rows = rowsToArr(ed.rows);
+function floodFill(state, tx, ty) {
+  const rows = rowsToArr(state.rows);
   const target = rows[ty][tx];
-  if (target === ed.sel) return;
+  if (target === state.sel) return;
   const stack = [[tx, ty]];
   const w = rows[0].length, h = rows.length;
   while (stack.length) {
     const [x, y] = stack.pop();
     if (x < 0 || y < 0 || x >= w || y >= h || rows[y][x] !== target) continue;
-    rows[y][x] = ed.sel;
+    rows[y][x] = state.sel;
     stack.push([x + 1, y], [x - 1, y], [x, y + 1], [x, y - 1]);
   }
-  ed.rows = arrToRows(rows);
+  state.rows = arrToRows(rows);
 }
 
 function lineCells(x0, y0, x1, y1) {
@@ -273,21 +279,32 @@ function lineCells(x0, y0, x1, y1) {
   return out;
 }
 
-function applyLine(ax, ay, tx, ty) {
-  const rows = rowsToArr(ed.rows);
+function applyLine(state, ax, ay, tx, ty) {
+  const rows = rowsToArr(state.rows);
   for (const [x, y] of lineCells(ax, ay, tx, ty)) {
-    if (x >= 0 && y >= 0 && x < rows[0].length && y < rows.length) rows[y][x] = ed.sel;
+    if (x >= 0 && y >= 0 && x < rows[0].length && y < rows.length) rows[y][x] = state.sel;
   }
-  ed.rows = arrToRows(rows);
+  state.rows = arrToRows(rows);
 }
 
-function applyRect(ax, ay, tx, ty) {
-  const rows = rowsToArr(ed.rows);
+function applyRect(state, ax, ay, tx, ty) {
+  const rows = rowsToArr(state.rows);
   const x0 = Math.min(ax, tx), x1 = Math.max(ax, tx), y0 = Math.min(ay, ty), y1 = Math.max(ay, ty);
   for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) {
-    if (x >= 0 && y >= 0 && x < rows[0].length && y < rows.length) rows[y][x] = ed.sel;
+    if (x >= 0 && y >= 0 && x < rows[0].length && y < rows.length) rows[y][x] = state.sel;
   }
-  ed.rows = arrToRows(rows);
+  state.rows = arrToRows(rows);
+}
+
+// 矩形/直线两段式交互：第一次点击只设 anchor，第二次点击才落笔并清空。
+export function shapeStep(state, tx, ty) {
+  if (!state.anchor) {
+    state.anchor = { tx, ty };
+    return;
+  }
+  if (state.tool === 'rect') applyRect(state, state.anchor.tx, state.anchor.ty, tx, ty);
+  else applyLine(state, state.anchor.tx, state.anchor.ty, tx, ty);
+  state.anchor = null;
 }
 
 function syncPaletteSelection() {
@@ -306,38 +323,32 @@ function setTool(tool) {
   drawEditor();
 }
 
-function paintAt(ev, commit) {
-  if (!ed || !ed.rows) return;
+function paintAt(state, ev, commit) {
+  if (!state || !state.rows) return;
   const { tx, ty } = cellAt(ev);
-  if (tx < 0 || ty < 0 || tx >= ed.rows[0].length || ty >= ed.rows.length) return;
-  if (ed.tool === 'pick') {
-    const c = ed.rows[ty][tx] || '#';
-    ed.sel = c;
+  if (tx < 0 || ty < 0 || tx >= state.rows[0].length || ty >= state.rows.length) return;
+  if (state.tool === 'pick') {
+    const c = state.rows[ty][tx] || '#';
+    state.sel = c;
     syncPaletteSelection();
     drawEditor();
     status('取色 ' + (PALETTE[c] ? PALETTE[c][0] : c) + ' (' + c + ')');
     return;
   }
-  if (ed.tool === 'fill') {
+  if (state.tool === 'fill') {
     pushHistory();
-    floodFill(tx, ty);
+    floodFill(state, tx, ty);
     drawEditor();
     return;
   }
-  if (ed.tool === 'rect' || ed.tool === 'line') {
-    if (!ed.anchor) {
-      ed.anchor = { tx, ty };
-      return;
-    }
+  if (state.tool === 'rect' || state.tool === 'line') {
     pushHistory();
-    if (ed.tool === 'rect') applyRect(ed.anchor.tx, ed.anchor.ty, tx, ty);
-    else applyLine(ed.anchor.tx, ed.anchor.ty, tx, ty);
-    ed.anchor = null;
+    shapeStep(state, tx, ty);
     drawEditor();
     return;
   }
   if (commit) pushHistory();
-  applyBrush(tx, ty);
+  applyBrush(state, tx, ty);
   drawEditor();
 }
 
@@ -376,14 +387,13 @@ function bindCanvas() {
   };
   canvas.onmousedown = (ev) => {
     ed.drawing = true;
-    ed.anchor = null;
-    paintAt(ev, true);
+    paintAt(ed, ev, true);
   };
-  window.onmouseup = () => { if (ed) { ed.drawing = false; ed.anchor = null; } };
+  window.onmouseup = () => { if (ed) ed.drawing = false; };
   canvas.oncontextmenu = (ev) => ev.preventDefault();
   canvas.onmousemove = (ev) => {
     if (ed.drawing) {
-      if (ed.tool === 'paint') paintAt(ev, false);
+      if (ed.tool === 'paint') paintAt(ed, ev, false);
       return;
     }
     const { tx, ty } = cellAt(ev);
@@ -445,7 +455,12 @@ function bindButtons() {
   const validate = $('editorValidate'); if (validate) validate.onclick = () => validateMap();
   const resize = $('editorResize'); if (resize) resize.onclick = () => resizeMap();
   const brushSel = $('editorBrush'); if (brushSel) { brushSel.value = String(ed.brush || 1); brushSel.onchange = () => { ed.brush = Math.max(1, Math.min(4, parseInt(brushSel.value, 10) || 1)); }; }
-  const tpl = $('editorTemplate'); if (tpl) { tpl.value = ''; tpl.onchange = () => loadTemplate(tpl.value); }
+  const tpl = $('editorTemplate');
+  if (tpl) {
+    tpl.innerHTML = templateOptions();
+    tpl.value = '';
+    tpl.onchange = () => loadTemplate(tpl.value);
+  }
   const tools = {
     paint: 'editorToolPaint', fill: 'editorToolFill', rect: 'editorToolRect', line: 'editorToolLine', pick: 'editorToolPick'
   };
@@ -459,17 +474,20 @@ function bindButtons() {
   const close = $('editorClose'); if (close) close.onclick = () => closeEditor();
 }
 
-// 载入官方图作为编辑模板（网格/出生点/爆破点/高台全部带入）
+// 载入现有地图作为编辑模板（网格/出生点/爆破点/高台全部带入）
 function loadTemplate(id) {
   if (!id) return;
-  const def = OFFICIAL_MAPS[id];
+  const def = getMapDef(id);
   if (!def || !def.rows) { status('模板不存在'); return; }
   pushHistory();
   ed.rows = def.rows.slice();
+  ed.name = def.name || id;
+  ed.accent = def.accent || '#6ad1a8';
+  ed.tile = def.tile || 16;
+  ed.penPoints = Array.isArray(def.penPoints) ? def.penPoints.slice() : [];
+  ed.highPoints = Array.isArray(def.highPoints) ? def.highPoints.slice() : [];
   if (canvas) canvas.style.aspectRatio = def.rows[0].length + ' / ' + def.rows.length;
-  const w = $('editorW'), h = $('editorH');
-  if (w) w.value = def.rows[0].length;
-  if (h) h.value = def.rows.length;
+  syncMetaInputs();
   drawEditor();
   status('已载入模板：' + (def.name || id));
 }
@@ -599,7 +617,7 @@ export function installSavedEditorMap() {
     const obj = JSON.parse(raw);
     if (!obj || !Array.isArray(obj.rows)) return null;
     // 与 saveRows/exportObject 保持一致：编辑器保存 tile=16，重启后按同尺寸加载
-    registerMap({ id: 'custom-map', name: obj.name || '自定义地图', accent: obj.accent || '#6ad1a8', tile: obj.tile || 16, rows: obj.rows.slice() });
+    registerMap({ id: 'custom-map', name: obj.name || '自定义地图', accent: obj.accent || '#6ad1a8', tile: obj.tile || 16, rows: obj.rows.slice(), category: 'custom' });
     return obj;
   } catch (err) { return null; }
 }

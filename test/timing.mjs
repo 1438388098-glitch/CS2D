@@ -1,5 +1,6 @@
 // Timing 校准工具：测量 T→A/B、CT→A/B、CT 回防时间（px 距离 / 235px/s）
 import { MAPS, TILE } from '../src/config.js';
+import '../src/modes.js';
 import { loadMap, getMap, aStar, nearestWalkable } from '../src/map.js';
 
 const SPEED = 235; // 跑步基准（px/s）
@@ -52,7 +53,7 @@ function run(mapId) {
 }
 
 console.log('地图        T→A    T→B    CT→A   CT→B   T先到A  T先到B  CT回防A  CT回防B');
-for (const m of ['dust2', 'canal', 'metro']) {
+for (const m of ['dust2', 'canal', 'metro', 'atrium']) {
   const r = run(m);
   const f = (k) => r[k] === null ? '  --  ' : r[k].toFixed(1).padStart(6);
   console.log(m.padEnd(9) + ' ' + f('T→A') + ' ' + f('T→B') + ' ' + f('CT→A') + ' ' + f('CT→B') +

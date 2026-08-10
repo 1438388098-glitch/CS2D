@@ -23,7 +23,7 @@ export const OPPONENTS = [
   { name: 'EliGE', tag: 'COL', rating: 82 }
 ];
 
-for (const m of DUEL_MAPS) registerMap({ id: m.id, name: m.name, accent: m.accent, rows: m.rows, mode: 'duel' });
+for (const m of DUEL_MAPS) registerMap({ id: m.id, name: m.name, accent: m.accent, rows: m.rows, mode: 'duel', category: 'duel' });
 
 let storage = null;
 try { if (typeof globalThis !== 'undefined' && globalThis.localStorage) storage = globalThis.localStorage; } catch (e) { storage = null; }

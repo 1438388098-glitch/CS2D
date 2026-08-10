@@ -1,14 +1,12 @@
 import { ROUND } from './config.js';
-import {registerMode, registerMap} from './registry.js';
+import {registerMode} from './registry.js';
 import {setupMatchEntities, startRound, startMatch} from './game.js';
 import {teamDiffParams, simScore} from './modes.js';
-import {DUEL_MAPS} from './duel-maps.js';
 
 const SAVE_KEY = 'cs2d_career';
 const BACKUP_KEY = 'cs2d_career_backup';
 const VERSION = 3;
-const MAP_IDS = ['dust2', 'canal', 'metro', 'forge', 'duel-pit', 'duel-alley', 'duel-forge'];
-for (const m of DUEL_MAPS) registerMap({ id: m.id, name: m.name, accent: m.accent, rows: m.rows, mode: 'career' });
+const MAP_IDS = ['dust2', 'metro', 'forge', 'atrium', 'arctic'];
 const ROLES = ['突破', '补枪', '指挥', '自由人'];
 const PLAYER_TEAM = { name: 'Team Spirit', tag: 'SPIRIT' };
 const PLAYER_LINEUP = ['sh1ro', 'chopper', 'magixx', 'zont1x']; // 玩家扮演 donk
@@ -1938,7 +1936,7 @@ export function cupPreview(s) {
 }
 
 export function cupMap(s) {
-  // 杯赛地图按轮次固定：八强 dust2、四强 canal、决赛 metro（避免连续场次重复地图）
+  // 杯赛地图按轮次固定：八强 dust2、四强 metro、决赛 forge（避免连续场次重复地图）
   const m = findCupMatch(s);
   return cupMapForRound(m && m.round);
 }

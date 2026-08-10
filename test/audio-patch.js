@@ -92,7 +92,7 @@ let threw = false;
 try {
   sfx('shot', 0.85, 100, 100, { mapId: 'metro', player: { x: 0, y: 0, dead: false, angle: 0 } }, 'ak');
   sfx('boom', 1, 50, 50, { mapId: 'metro', player: { x: 0, y: 0, dead: false, angle: 0 } });
-  sfx('step', 0.4, 10, 10, { mapId: 'canal', player: { x: 0, y: 0, dead: false, angle: 0 } }, null, 'metal');
+  sfx('step', 0.4, 10, 10, { mapId: 'metro', player: { x: 0, y: 0, dead: false, angle: 0 } }, null, 'metal');
   uiSfx('click', 0.3);
 } catch (e) { threw = true; console.log('err master: ' + e.message); }
 check('master sfx chain', !threw);
@@ -114,7 +114,7 @@ check('muted blocks sfx', isMuted() === true);
 setMuted(false);
 
 // 10. 环境音：三图构建 + 切换 + 停止
-for (const mid of ['dust2', 'canal', 'metro']) {
+for (const mid of ['dust2', 'metro', 'forge']) {
   let threw = false;
   try {
     const inst = buildAmbient(getAc(), mid);

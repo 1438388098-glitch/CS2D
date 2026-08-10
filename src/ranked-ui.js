@@ -11,7 +11,7 @@ function esc(s) {
   return String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 }
 function toast(t) { if (game && game.ui) game.ui.showToast(t); }
-const MAP_CN = { dust2: '沙漠遗址', canal: '运河小镇', metro: '地铁枢纽' };
+const MAP_CN = { dust2: '沙漠遗址', metro: '地铁枢纽', forge: '熔炉工坊', atrium: '星轨中庭', arctic: '冰封港湾' };
 function mapName(id) { return MAP_CN[id] || id; }
 
 export function initRankedUi(documentRef, gameRef) {

@@ -59,7 +59,7 @@ T('spectate-skip-round', () => {
 });
 
 T('maps-three', () => {
-  for (const id of ['dust2', 'canal', 'metro']) {
+  for (const id of ['dust2', 'metro', 'forge']) {
     const def = findMapById(id);
     if (!def) throw new Error('缺少地图 ' + id);
     const diag = loadMap(def);

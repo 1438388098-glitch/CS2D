@@ -4,6 +4,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import zlib from 'node:zlib';
 import { MAPS, TILE } from '../src/config.js';
+import '../src/modes.js';
 import { loadMap, getMap, aStar, nearestWalkable } from '../src/map.js';
 
 const SPEED = 235;
@@ -275,7 +276,7 @@ function fmtRow(o) {
 
 console.log('Map       Open%  Cover  Areas MaxArea AvgRun Runs>12 MaxRun T->A    T->B');
 console.log('-- CS2D --');
-for (const id of ['dust2', 'canal', 'metro']) {
+for (const id of ['dust2', 'canal', 'metro', 'atrium']) {
   console.log(fmtRow(analyzeCs2d(id)));
 }
 console.log('-- Official CS2 radar (pixel analysis) --');

@@ -298,3 +298,91 @@ export function buildFoundry() {
   b.spawn('c', 4, 3, 6, 2);
   return b;
 }
+
+// Atrium: a dense 96x64 mixed-range bomb map.
+// A is a CT-side gallery, B is a T-side archive, and the central atrium
+// ties both teams through short segmented rotations.
+export function buildAtrium() {
+  const b = createBuilder(96, 64);
+  border(b);
+
+  // Main districts. The overlapping rectangles form the playable shell,
+  // which is then narrowed by walls and cover.
+  b.corridor(8, 2, 48, 20);          // A gallery + west approach
+  b.corridor(66, 2, 28, 18);         // CT security lobby
+  b.corridor(30, 22, 38, 18);        // central atrium
+  b.corridor(2, 43, 26, 20);         // T service yard
+  b.corridor(36, 43, 35, 20);        // B archive
+  b.corridor(8, 20, 8, 26);          // west lift
+  b.corridor(82, 18, 8, 28);         // east lift
+  b.corridor(30, 20, 8, 8);          // A-mid gate
+  b.corridor(60, 18, 10, 10);        // CT-mid gate
+  b.corridor(52, 39, 12, 8);         // B-mid gate
+  b.corridor(22, 38, 12, 8);         // T-mid gate
+  b.corridor(52, 6, 18, 10);         // upper gallery
+  b.corridor(24, 48, 40, 14);        // lower gallery
+  b.corridor(70, 40, 20, 8);         // CT-to-B archive gate
+
+  b.site('A', 30, 7, 13, 9);
+  b.site('B', 50, 46, 15, 10);
+  b.spawn('t', 8, 56, 9, 7);
+  b.spawn('c', 78, 4, 9, 7);
+
+  // Gate walls: each district keeps a deliberate entry gap.
+  for (let y = 2; y <= 21; y++) if (y < 12 || y > 16) b.wall(24, y);
+  for (let y = 2; y <= 19; y++) if (y < 4 || y > 10) b.wall(74, y);
+  for (let y = 43; y <= 62; y++) if (y < 48 || y > 56) b.wall(66, y);
+
+  // A gallery: platforms on the approach, staggered crates inside the site.
+  for (let x = 32; x <= 35; x++) b.tile(x, 5, '^');
+  b.tile(22, 10, '='); b.tile(22, 11, '='); b.tile(22, 12, '=');
+  b.boxes(32, 9, 2, 2); b.boxes(39, 11, 2, 2); b.boxes(35, 13, 2, 2);
+  b.crate(36, 10); b.crate(38, 14);
+  b.crate(34, 14); b.crate(40, 8);
+  b.boxes(12, 15, 2, 2); b.boxes(18, 17, 2, 2); b.boxes(8, 6, 2, 2);
+  b.boxes(15, 4, 2, 2);
+  b.crate(13, 12);
+
+  // B archive: shelf clusters create short-range lanes.
+  for (let x = 56; x <= 59; x++) b.tile(x, 44, '^');
+  b.boxes(52, 48, 2, 2); b.boxes(59, 51, 2, 2); b.boxes(55, 54, 2, 2);
+  b.crate(54, 49); b.crate(61, 48); b.crate(57, 53);
+  b.crate(52, 55); b.crate(62, 55);
+  b.boxes(67, 52, 2, 2); b.boxes(69, 57, 2, 2); b.boxes(85, 49, 2, 2);
+  b.boxes(88, 54, 2, 2);
+
+  // CT lobby and T yard: local cover without pinning spawns.
+  b.boxes(68, 12, 2, 2); b.boxes(77, 13, 2, 2); b.boxes(89, 15, 2, 2);
+  b.boxes(86, 12, 2, 2); b.boxes(18, 46, 2, 2); b.boxes(6, 50, 2, 2);
+  b.boxes(12, 48, 2, 2); b.boxes(21, 54, 2, 2); b.boxes(3, 57, 2, 2);
+  b.boxes(24, 60, 2, 2);
+
+  // Central atrium: high ground, thin-wall pockets, and barrel hazards.
+  for (let x = 46; x <= 49; x++) for (let y = 29; y <= 32; y++) b.tile(x, y, '^');
+  b.tile(38, 25, '='); b.tile(38, 27, '='); b.tile(58, 30, '=');
+  b.tile(58, 32, '='); b.tile(41, 24, '='); b.tile(61, 26, '=');
+  b.boxes(34, 27, 2, 2); b.boxes(58, 24, 2, 2); b.boxes(42, 36, 2, 2);
+  b.boxes(62, 35, 2, 2); b.boxes(44, 33, 2, 2); b.boxes(52, 27, 2, 2);
+  b.boxes(54, 37, 2, 2);
+  b.tile(43, 30, 'o'); b.tile(55, 32, 'o'); b.tile(60, 36, 'o');
+  b.crate(40, 28); b.crate(56, 34);
+
+  // Upper and lower galleries: segmented by cover, never a long straight lane.
+  b.tile(56, 7, '='); b.tile(56, 8, '='); b.tile(56, 10, '=');
+  b.tile(62, 10, '='); b.tile(62, 12, '='); b.tile(53, 14, '=');
+  b.boxes(57, 8, 2, 2); b.boxes(61, 11, 2, 2); b.boxes(65, 6, 2, 2);
+  b.boxes(54, 12, 2, 2);
+  b.tile(30, 51, '='); b.tile(30, 53, '='); b.tile(30, 55, '=');
+  b.tile(42, 50, '='); b.tile(42, 52, '='); b.tile(42, 54, '=');
+  b.boxes(28, 50, 2, 2); b.boxes(36, 53, 2, 2); b.boxes(44, 49, 2, 2);
+  b.boxes(52, 52, 2, 2); b.boxes(58, 55, 2, 2); b.boxes(34, 57, 2, 2);
+  b.boxes(47, 57, 2, 2); b.boxes(56, 48, 2, 2);
+
+  // West/east lifts: alternating cover keeps rotations tight.
+  b.boxes(9, 26, 2, 2); b.boxes(13, 34, 2, 2); b.boxes(10, 40, 2, 2);
+  b.tile(12, 23, '^'); b.tile(13, 23, '^');
+  b.boxes(83, 24, 2, 2); b.boxes(87, 32, 2, 2); b.boxes(84, 38, 2, 2);
+  b.tile(86, 20, '^'); b.tile(87, 20, '^');
+
+  return b;
+}
