@@ -237,6 +237,7 @@ s.player.records = { totalPrize: 99000 };
 s.player.achievements = [];
 settlePlayerMatch(true, 5, 1);
 ok('rich achievement', achievements(s).some((a) => a.id === 'rich100k') && careerRecords(s).totalPrize >= 100000);
+ok('achievement money reward', s.team.bank > 12000 && s.team.ledger.some((x) => x.label === '成就奖励'));
 
 s = resetCareer();
 s.season.cup = {

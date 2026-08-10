@@ -650,7 +650,7 @@ function renderSeasonStats(s) {
     '<div class="career-kpi"><b>' + achProgress.pct + '%</b><span>完成度</span></div>' +
     '<div class="career-kpi"><b>' + (achProgress.next ? esc(achProgress.next.title) : '全部完成') + '</b><span>下一枚</span></div></div>' +
     '<div class="career-bar"><i style="width:' + achProgress.pct + '%"></i></div>' +
-    (achProgress.next ? '<div class="career-news">下一枚：' + esc(achProgress.next.desc) + ' · ' + esc(achProgress.next.hint) + '</div>' : '') +
+    (achProgress.next ? '<div class="career-news">下一枚：' + esc(achProgress.next.desc) + ' · ' + esc(achProgress.next.hint) + (achProgress.next.rewardMoney ? ' · 奖励 ' + money(achProgress.next.rewardMoney) : '') + '</div>' : '') +
     (achList.length ? achList.map((a) => '<div class="career-news award" style="border-left-color:#ffd75e">' + esc(a.title) + '</div>').join('') : '<div class="career-news">暂无成就</div>') + '</div>';
   const awardHtml = '<div class="career-card"><h4>赛季个人奖项</h4><div class="career-kpis">' +
     '<div class="career-kpi"><b>' + awards.mvpMatches.length + '</b><span>MVP场次</span></div>' +
