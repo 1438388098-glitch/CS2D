@@ -427,6 +427,27 @@ export function candidates() {
 }
 export function transferWindowOpen(s) { return s.season.round >= 5 && s.season.round <= 8; }
 
+export function transferWindowInfo(s) {
+  const round = Number(s.season.round) || 1;
+  const open = transferWindowOpen(s);
+  const opensIn = open ? 0 : Math.max(0, 5 - round);
+  const closesIn = open ? Math.max(0, 8 - round) : 0;
+  let text;
+  if (open) text = closesIn === 0 ? '转会窗本轮结束' : '转会窗开放 · 剩余 ' + closesIn + ' 轮';
+  else if (round < 5) text = '还有 ' + opensIn + ' 轮开窗';
+  else text = '本赛季转会窗已关闭';
+  return {
+    open,
+    round,
+    opensRound: 5,
+    closesRound: 8,
+    opensIn,
+    closesIn,
+    remaining: Number(s.team.transfersLeft) || 0,
+    text
+  };
+}
+
 export function train(attr, tierKey) {
   const s = getState();
   const tier = TRAIN_TIERS.find((t) => t.key === tierKey);

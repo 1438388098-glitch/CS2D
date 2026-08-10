@@ -1,7 +1,7 @@
 import {
   loadCareer, getState, titleFor, startCareerMatch, careerEndMatch, abandonPendingMatch, simulatePlayerMatch, resetCareer,
   train, sellPlayer, buyPlayer, candidates, nextSeason, seasonReport, nextMatch, nextMatchInfo, matchImportance, teamRecentForm,
-  transferWindowOpen, isStorageAvailable, cupMap, cupPrizeInfo, cupMapForRound, trainingTiers, xpNeeded,
+  transferWindowOpen, transferWindowInfo, isStorageAvailable, cupMap, cupPrizeInfo, cupMapForRound, trainingTiers, xpNeeded,
   seasonStats, seasonSeries, seasonStreaks, careerSummary,
   sponsorIncome, formBonus, fatiguePenalty, careerMorale, restPlayer, seasonGoals, seasonPace,
   achievementDefs, achievements, careerRecords
@@ -188,7 +188,8 @@ function renderDash(s) {
   const form = formBonus(s);
   const mor = careerMorale(s);
   const fat = Math.round(fatiguePenalty(s) * 100);
-  let matchHtml = '<div class="career-card"><h4>下一场</h4>' + (transferWindowOpen(s) ? '<p class="career-window">转会窗开放 · 剩余 ' + s.team.transfersLeft + ' 次</p>' : '');
+  const winInfo = transferWindowInfo(s);
+  let matchHtml = '<div class="career-card"><h4>下一场</h4>' + (winInfo.open ? '<p class="career-window">转会窗开放 · 剩余 ' + winInfo.remaining + ' 次 · ' + winInfo.text + '</p>' : '<p class="career-window">转会窗：' + winInfo.text + '</p>');
   if (pending) {
     const opp = s.season.teams.find((x) => x.id === pending.oppId);
     matchHtml += '<p>待结算：对阵 ' + esc(opp ? opp.name : pending.oppId) + (pending.isCup ? '（杯赛）' : '') + '</p>';
@@ -295,9 +296,8 @@ function renderRoster(s) {
     }
     html += '</div></div>';
   } else {
-    const openIn = 5 - s.season.round;
-    const winText = s.season.round < 5 ? '第 5 轮开放（还有 ' + openIn + ' 轮）' : (s.season.round <= 8 ? '第 5-8 轮开放' : '本赛季转会窗已关闭');
-    html += '<div class="career-card"><h4>转会窗</h4><p>' + winText + '</p></div>';
+    const win = transferWindowInfo(s);
+    html += '<div class="career-card"><h4>转会窗</h4><p>第 ' + win.opensRound + '-' + win.closesRound + ' 轮开放 · ' + win.text + '</p></div>';
   }
   return html;
 }

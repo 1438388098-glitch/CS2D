@@ -2,7 +2,7 @@ import {
   resetCareer, setStorage, setRng, nextSeason, migrateCareerState,
   fixtureMapFor, assignFixtureMaps, startCareerMatch, findPlayerFixture,
   nextMatchInfo, teamRecentForm, opponentStanding, matchImportance, seasonPace,
-  cupPrizeInfo, cupMapForRound, cupPreview
+  cupPrizeInfo, cupMapForRound, cupPreview, transferWindowInfo
 } from '../src/career.js';
 import { createGame, startMatch } from '../src/game.js';
 
@@ -98,5 +98,12 @@ ok('cup prize info', prizes.perRound === 5000 && prizes.champion === 30000 && pr
 ok('cup round map', cupMapForRound('QF') === 'dust2' && cupMapForRound('SF') === 'canal' && cupMapForRound('F') === 'metro');
 const preview = cupPreview({ season: { cup: { bracket: [{ round: 'F', a: 'player', b: 't1', score: null, played: false, winner: null }] } } })[0];
 ok('cup preview schedule', preview && preview.map === 'metro' && preview.prize === 35000);
+
+s = resetCareer();
+const closedWin = transferWindowInfo(s);
+ok('transfer countdown before', !closedWin.open && closedWin.opensIn === 4 && closedWin.text.includes('4'));
+s.season.round = 6;
+const openWin = transferWindowInfo(s);
+ok('transfer countdown open', openWin.open && openWin.closesIn === 2 && openWin.text.includes('2'));
 
 console.log('fx-career-schedule: all PASS');
