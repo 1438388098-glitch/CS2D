@@ -1,7 +1,7 @@
 import {
   resetCareer, setStorage, setRng, getState, settlePlayerMatch, train, trainTeammate, sellPlayer, sellPreview, buyPlayer, candidates, filterCandidates,
   nextSeason, save, loadCareer, __clearStateForTest, candidateProfile,
-  sponsorIncome, sponsorPreview, cashflowForecast, formBonus, fatiguePenalty, careerMorale, restPlayer, seasonGoals, goalProgress, trainingPreview, trainingSuggestion, rotationAdvice, trainingHistory, rosterStatus, transferBudget, contractStatus, renewPlayer, rosterContribution, positionBalance,
+  sponsorIncome, sponsorPreview, cashflowForecast, seasonBudget, formBonus, fatiguePenalty, careerMorale, restPlayer, seasonGoals, goalProgress, trainingPreview, trainingSuggestion, rotationAdvice, trainingHistory, rosterStatus, transferBudget, contractStatus, renewPlayer, rosterContribution, positionBalance,
   achievementDefs, achievements, careerRecords, migrateCareerState, matchReadiness
 } from '../src/career.js';
 
@@ -46,6 +46,13 @@ ok('sponsor next tier', spHigh.current > sp.current && (!spHigh.next || spHigh.n
 s = resetCareer();
 const cash = cashflowForecast(s);
 ok('cashflow forecast', cash && cash.bank === 12000 && cash.remainingLeagueMatches >= 13 && cash.expectedPrize >= 0 && cash.expectedSponsor > 0 && cash.projectedBank > cash.bank && cash.safe === true);
+
+s = resetCareer();
+const budgetCtrl = seasonBudget(s);
+ok('season budget', budgetCtrl && budgetCtrl.budget > 20000 && budgetCtrl.spent === 0 && budgetCtrl.spendable === budgetCtrl.budget && budgetCtrl.spentPct === 0 && budgetCtrl.warnings.length === 0);
+s.team.bank = 3000;
+const tightBudget = seasonBudget(s);
+ok('season budget warnings', tightBudget.warnings.length >= 1 && tightBudget.warnings.some((w) => w.includes('5000')));
 
 s = resetCareer();
 s.team.bank = 5000;

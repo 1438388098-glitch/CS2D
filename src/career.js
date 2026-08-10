@@ -268,6 +268,33 @@ export function cashflowForecast(s) {
   };
 }
 
+export function seasonBudget(s) {
+  const ledger = Array.isArray(s.team && s.team.ledger) ? s.team.ledger : [];
+  const bank = Number(s.team && s.team.bank) || 0;
+  const income = ledger.reduce((a, x) => a + Math.max(0, x.amount || 0), 0);
+  const expense = ledger.reduce((a, x) => a + Math.min(0, x.amount || 0), 0);
+  const flow = cashflowForecast(s);
+  const budget = 20000 + flow.expectedSponsor + flow.expectedPrize;
+  const spent = Math.abs(expense);
+  const spendable = Math.max(0, budget - spent);
+  const spentPct = budget > 0 ? Math.round((spent / budget) * 100) : 0;
+  const warnings = [];
+  if (bank < 5000) warnings.push('当前资金低于 5000，优先保留比赛与续约底线');
+  if (bank < 1200 && Number(s.team && s.team.trainingLeft) > 0) warnings.push('资金不足完成进阶训练');
+  if (bank < 500 && Number(s.team && s.team.trainingLeft) > 0) warnings.push('资金不足完成基础训练');
+  if (transferWindowOpen(s) && bank < 10000) warnings.push('转会窗期间预算偏低，建议只做小成本补强');
+  return {
+    bank,
+    budget: Math.round(budget),
+    income,
+    expense,
+    spent,
+    spendable,
+    spentPct,
+    warnings
+  };
+}
+
 function currentWinStreak(s) {
   const list = Array.isArray(s.player.form) ? s.player.form : [];
   let n = 0;
