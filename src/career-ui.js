@@ -2,7 +2,9 @@ import {
   loadCareer, getState, titleFor, startCareerMatch, careerEndMatch, abandonPendingMatch, simulatePlayerMatch, resetCareer,
   train, sellPlayer, buyPlayer, candidates, nextSeason, seasonReport, nextMatch,
   transferWindowOpen, isStorageAvailable, cupMap, trainingTiers, xpNeeded,
-  seasonStats, seasonSeries, seasonStreaks, careerSummary
+  seasonStats, seasonSeries, seasonStreaks, careerSummary,
+  sponsorIncome, formBonus, fatiguePenalty, careerMorale, restPlayer, seasonGoals,
+  achievementDefs, achievements, careerRecords
 } from './career.js';
 
 let doc = null;
@@ -82,6 +84,10 @@ function onClick(e) {
     const res = train(t.getAttribute('data-attr'), t.getAttribute('data-tier'));
     toast(res.ok ? '训练完成' : (res.error || '训练失败'));
     if (res.ok) render();
+  } else if (act === 'rest') {
+    const res = restPlayer();
+    toast(res.ok ? '休息完成' : (res.error || '休息失败'));
+    if (res.ok) render();
   } else if (act === 'sell') {
     const res = sellPlayer(t.getAttribute('data-id'));
     toast(res.ok ? '卖出成功' : (res.error || '卖出失败'));
@@ -129,7 +135,7 @@ function render() {
   const phase = s.season.cup.phase === 'active' ? ' · 杯赛' : (s.season.cup.phase === 'finished' ? ' · 杯赛结束' : '');
   let html = '<div class="career-top"><span class="ct-mode">生涯模式</span><span class="ct-season">第 ' + s.season.id + ' 赛季 · 第 ' + s.season.round + ' / ' + s.season.totalRounds + ' 轮' + phase + ' · ' + esc(s.team.league) + '</span><span class="ct-bank">资金 ' + money(s.team.bank) + '</span><button class="btn small" data-act="reset">重开生涯</button><button class="btn small" data-act="menu">← 主菜单</button></div>';
   html += '<div class="career-tabs">';
-  const tabs = [['dash', '仪表盘'], ['schedule', '赛程'], ['training', '训练'], ['roster', '阵容'], ['standings', '排名'], ['cup', '杯赛'], ['stats', '赛季数据']];
+  const tabs = [['dash', '仪表盘'], ['schedule', '赛程'], ['training', '训练'], ['roster', '阵容'], ['standings', '排名'], ['cup', '杯赛'], ['finance', '财务'], ['stats', '赛季数据']];
   for (const [id, label] of tabs) {
     html += '<button class="career-tab' + (tab === id ? ' sel' : '') + '" data-act="tab" data-tab="' + id + '">' + label + '</button>';
   }
@@ -178,6 +184,10 @@ function renderDash(s) {
   const stats = s.player.seasonStats;
   const nm = nextMatch(s);
   const pending = s.pendingMatch;
+  const goals = seasonGoals(s);
+  const form = formBonus(s);
+  const mor = careerMorale(s);
+  const fat = Math.round(fatiguePenalty(s) * 100);
   let matchHtml = '<div class="career-card"><h4>下一场</h4>' + (transferWindowOpen(s) ? '<p class="career-window">转会窗开放 · 剩余 ' + s.team.transfersLeft + ' 次</p>' : '');
   if (pending) {
     const opp = s.season.teams.find((x) => x.id === pending.oppId);
@@ -200,12 +210,14 @@ function renderDash(s) {
     matchHtml += '<p>' + (s.season.cup.phase === 'finished' ? '本赛季已结束' : (s.season.cup.phase === 'active' ? '杯赛已淘汰，等待赛季结算' : '当前轮次已打完')) + '</p>';
   }
   matchHtml += '</div>';
+  const goalHtml = '<div class="career-card"><h4>赛季目标</h4><p>' + esc(s.team.league) + ' 目标：前 ' + goals.rankGoal + ' · 杯赛至少' + (goals.cupGoal === 0 ? '八强' : '四强') + ' · 奖励 ' + money(goals.reward) + '</p><p>当前排名 ' + goals.currentRank + ' · 杯赛 ' + (goals.currentCupRound === 3 ? '冠军' : goals.currentCupRound === 2 ? '亚军' : goals.currentCupRound === 1 ? '四强' : goals.currentCupRound === -1 ? '未决' : '八强') + (goals.achieved ? ' · 已达成' : '') + '</p></div>';
   const news = s.news.slice(0, 8).map((n) => '<div class="career-news ' + esc(n.type) + '">' + esc(n.text) + '</div>').join('') || '<div class="career-news">暂无事件</div>';
   const top = [...s.season.standings].sort((a, b) => b.pts - a.pts).slice(0, 5).map((x, i) => '<div class="career-row"><span>' + (i + 1) + '. ' + esc(teamName(s, x.teamId)) + '</span><b>' + x.pts + ' 分</b></div>').join('');
   return '<div class="career-grid2">' +
     '<div class="career-card"><h4>玩家档案</h4><div class="career-player"><b>' + esc(s.player.name) + '</b><span>' + esc(titleFor(s.player.level)) + ' 等级 ' + s.player.level + '</span></div><div class="career-xp">经验 ' + s.player.xp + ' / ' + xpNeeded(s.player.level) + '<div class="career-bar"><i style="width:' + Math.min(100, Math.round(s.player.xp / xpNeeded(s.player.level) * 100)) + '%"></i></div></div>' + attrsBars(s) +
-    '<div class="career-stats"><span>本赛季 ' + stats.played + ' 场 ' + stats.w + '胜' + stats.l + '负 · 胜率 ' + (stats.played ? Math.round(stats.w / stats.played * 100) : 0) + '%</span><span>' + stats.kills + ' 杀 / ' + stats.deaths + ' 死 / 最佳 ' + stats.mvp + '</span></div></div>' +
+    '<div class="career-stats"><span>状态 ' + (form >= 0 ? '+' : '') + form + ' · 士气 ' + mor + ' · 疲劳 ' + fat + '%</span><span>本赛季 ' + stats.played + ' 场 ' + stats.w + '胜' + stats.l + '负 · ' + stats.kills + ' 杀 / ' + stats.deaths + ' 死</span></div></div>' +
     matchHtml +
+    goalHtml +
     '<div class="career-card"><h4>事件流</h4>' + news + '</div>' +
     '<div class="career-card"><h4>积分榜速览</h4>' + top + '</div>' +
     '</div>';
@@ -245,7 +257,9 @@ function renderSchedule(s) {
 }
 
 function renderTraining(s) {
-  let html = '<div class="career-card"><h4>训练课</h4><p>本轮剩余 ' + s.team.trainingLeft + ' 次 · 资金 ' + money(s.team.bank) + '</p>' + attrsRadar(s.player.attrs);
+  const fat = Math.round(fatiguePenalty(s) * 100);
+  let html = '<div class="career-card"><h4>训练课</h4><p>本轮剩余 ' + s.team.trainingLeft + ' 次 · 资金 ' + money(s.team.bank) + ' · 疲劳 ' + fat + '%</p>' + attrsRadar(s.player.attrs);
+  html += '<div class="career-train-row"><b>恢复</b><button class="btn small"' + (s.team.rested ? ' disabled' : '') + ' data-act="rest">休息（疲劳清零）</button><span>' + (s.team.rested ? '本轮已休息' : '每轮最多一次') + '</span></div>';
   for (const [attr, v] of Object.entries(s.player.attrs)) {
     html += '<div class="career-train-row"><b>' + cn(attr, ATTR_CN) + ' (' + v + ')</b>';
     for (const tier of trainingTiers()) {
@@ -340,6 +354,16 @@ function renderSettlement(s) {
   return '<div class="career-card"><h4>赛季结算</h4><div class="career-settle"><span>联赛：' + esc(r.league) + ' · 第 ' + r.rank + ' 名</span><span>排名奖金：' + money(r.rankPrize) + '</span><span>杯赛：' + cupRoundText + ' · ' + money(r.cupPrize) + '</span><span>总奖金：' + money(r.prize) + '</span></div></div><div class="career-card"><h4>历史记录</h4>' + (history || '<div class="career-history">暂无</div>') + '</div><div class="career-card"><button class="btn primary" data-act="next-season">下一赛季</button></div>';
 }
 
+function renderFinance(s) {
+  const ledger = Array.isArray(s.team.ledger) ? s.team.ledger : [];
+  const sponsor = sponsorIncome(s);
+  const income = ledger.reduce((a, x) => a + Math.max(0, x.amount || 0), 0);
+  const expense = ledger.reduce((a, x) => a + Math.min(0, x.amount || 0), 0);
+  const rows = ledger.slice().reverse().slice(0, 60).map((x) => '<div class="career-row"><span>' + esc(x.label || '') + '</span><b style="color:' + (x.amount >= 0 ? '#58d68d' : '#ff5d5d') + '">' + (x.amount >= 0 ? '+' : '') + money(x.amount) + '</b></div>').join('') || '<div class="career-news">暂无资金流水</div>';
+  return '<div class="career-card"><h4>财务概览</h4><div class="career-kpis"><div class="career-kpi"><b>' + money(s.team.bank) + '</b><span>当前资金</span></div><div class="career-kpi"><b>' + money(income) + '</b><span>累计收入</span></div><div class="career-kpi"><b>' + money(expense) + '</b><span>累计支出</span></div><div class="career-kpi"><b>' + money(sponsor) + '</b><span>每场赞助预估</span></div></div></div>' +
+    '<div class="career-card"><h4>资金流水</h4>' + rows + '</div>';
+}
+
 function renderSeasonStats(s) {
   const mh = Array.isArray(s.matchHistory) ? s.matchHistory : [];
   const seasonSet = new Set();
@@ -351,6 +375,8 @@ function renderSeasonStats(s) {
   const series = seasonSeries(mh, sel);
   const streaks = seasonStreaks(series);
   const overview = careerSummary(mh);
+  const rec = careerRecords(s);
+  const achList = achievements(s);
   const selBtns = seasons.map((sid) => '<button class="btn small' + (sid === sel ? ' sel' : '') + '" data-act="s-season" data-season="' + sid + '">第 ' + sid + ' 赛季</button>').join('');
   const kpis = [['场次', stats.matches], ['胜 / 负', stats.wins + ' / ' + stats.losses], ['胜率', stats.winRate + '%'], ['K/D', stats.kd], ['场均伤害', stats.avgDmg], ['总奖金', money(stats.totalMoney)], ['总击杀', stats.kills], ['最佳场次', stats.mvp]];
   const kpiHtml = kpis.map(([k, v]) => '<div class="career-kpi"><b>' + v + '</b><span>' + k + '</span></div>').join('');
@@ -360,9 +386,12 @@ function renderSeasonStats(s) {
   }).join('') : '<div class="career-news">暂无比赛数据</div>';
   const ov = [['赛季数', overview.seasons], ['总场次', overview.matches], ['胜率', overview.winRate + '%'], ['K/D', overview.kd], ['场均伤害', overview.avgDmg], ['总奖金', money(overview.totalMoney)], ['总击杀', overview.kills]];
   const ovHtml = ov.map(([k, v]) => '<div class="career-kpi"><b>' + v + '</b><span>' + k + '</span></div>').join('');
+  const recordHtml = '<div class="career-card"><h4>生涯纪录</h4><div class="career-kpis"><div class="career-kpi"><b>' + (rec.bestKills || 0) + '</b><span>单场最高击杀</span></div><div class="career-kpi"><b>' + (rec.longestWinStreak || 0) + '</b><span>最长连胜</span></div><div class="career-kpi"><b>' + money(rec.totalPrize || 0) + '</b><span>累计奖金</span></div><div class="career-kpi"><b>' + (rec.cupChampions || 0) + '</b><span>杯赛冠军</span></div><div class="career-kpi"><b>' + (rec.bestSeasonRank || '-') + '</b><span>最佳赛季排名</span></div></div></div>';
+  const achHtml = '<div class="career-card"><h4>成就</h4>' + (achList.length ? achList.map((a) => '<div class="career-news award" style="border-left-color:#ffd75e">' + esc(a.title) + '</div>').join('') : '<div class="career-news">暂无成就</div>') + '</div>';
   return '<div class="career-card"><h4>赛季数据统计</h4><div class="career-season">' + selBtns + '</div><div class="career-kpis">' + kpiHtml + '</div></div>' +
     '<div class="career-card"><h4>单场走势 · 第 ' + sel + ' 赛季（共 ' + stats.matches + ' 场）</h4><div class="career-series">' + seriesHtml + '</div><div class="career-stats"><span>当前连胜 ' + streaks.current + ' · 最长连胜 ' + streaks.longest + '</span><span>绿 = 胜 · 红 = 负 · 描金 = 杯赛 · 高度 = 击杀数</span></div></div>' +
-    '<div class="career-card"><h4>生涯总览</h4><div class="career-kpis">' + ovHtml + '</div></div>';
+    '<div class="career-card"><h4>生涯总览</h4><div class="career-kpis">' + ovHtml + '</div></div>' +
+    recordHtml + achHtml;
 }
 
 export function __setCareerTabForTest(key) { tab = key; }
@@ -378,6 +407,7 @@ function renderTab(s) {
   if (tab === 'roster') return renderRoster(s);
   if (tab === 'standings') return renderStandings(s);
   if (tab === 'cup') return renderCup(s);
+  if (tab === 'finance') return renderFinance(s);
   if (tab === 'stats') return renderSeasonStats(s);
   return renderDash(s);
 }

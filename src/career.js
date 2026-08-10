@@ -6,7 +6,7 @@ import {DUEL_MAPS} from './duel-maps.js';
 
 const SAVE_KEY = 'cs2d_career';
 const BACKUP_KEY = 'cs2d_career_backup';
-const VERSION = 2; // v2：旧档重建，使用真实战队/选手中文信息
+const VERSION = 3;
 const MAP_IDS = ['dust2', 'canal', 'metro', 'forge', 'duel-pit', 'duel-alley', 'duel-forge'];
 for (const m of DUEL_MAPS) registerMap({ id: m.id, name: m.name, accent: m.accent, rows: m.rows, mode: 'career' });
 const ROLES = ['突破', '补枪', '指挥', '自由人'];
@@ -54,6 +54,20 @@ const TRAIN_TIERS = [
 const PRIZE = { 1: 30000, 2: 20000, 3: 15000, 4: 8000, 5: 8000, 6: 8000, 7: 4000, 8: 4000 };
 const LEAGUE_RATING = { '甲级': [80, 92], '乙级': [70, 85], '丙级': [60, 74] };
 const TITLES = ['新兵', '列兵', '下士', '中士', '上尉', '少校', '上校', '准将', '少将', '中将', '上将', '传奇'];
+const LEAGUE_SPONSOR = { '甲级': 5000, '乙级': 3200, '丙级': 2000 };
+const SEASON_GOALS = {
+  '甲级': { rank: 6, cup: 1, reward: 12000 },
+  '乙级': { rank: 2, cup: 1, reward: 10000 },
+  '丙级': { rank: 4, cup: 0, reward: 7000 }
+};
+const ACHIEVEMENTS = [
+  { id: 'first_win', title: '首胜', desc: '赢得第一场生涯比赛' },
+  { id: 'streak5', title: '五连胜', desc: '创造一次五连胜' },
+  { id: 'promotion', title: '升级', desc: '带队升入更高级别联赛' },
+  { id: 'cup_champion', title: '杯赛冠军', desc: '拿下淘汰赛冠军' },
+  { id: 'rich100k', title: '百万俱乐部', desc: '累计赛季奖金达到 100000' },
+  { id: 'veteran', title: '老将', desc: '玩家达到 10 级' }
+];
 
 let storage = null;
 try { if (typeof globalThis !== 'undefined' && globalThis.localStorage) storage = globalThis.localStorage; } catch (e) { storage = null; }
@@ -92,11 +106,142 @@ function effectiveRatingFor(roster, attrs) {
   return Math.round(rosterAvg * 0.8 + attrsAvg * 0.2);
 }
 function effectiveTeamRating(s) {
-  return effectiveRatingFor(s.team.roster, s.player.attrs);
+  return effectiveRatingFor(s.team.roster, effectiveAttrs(s)) + formBonus(s) + moraleModifier(s);
 }
 function refreshPlayerRating(s) {
   const t = s.season.teams.find((x) => x.id === 'player');
   if (t) t.rating = effectiveTeamRating(s);
+}
+
+function clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); }
+function addLedger(s, type, amount, label) {
+  if (!Array.isArray(s.team.ledger)) s.team.ledger = [];
+  s.team.ledger.push({ t: Date.now(), type, amount: Math.round(amount || 0), label });
+  if (s.team.ledger.length > 300) s.team.ledger.splice(0, s.team.ledger.length - 300);
+}
+
+export function sponsorIncome(s) {
+  const league = s && s.team && s.team.league ? s.team.league : '乙级';
+  const base = LEAGUE_SPONSOR[league] || LEAGUE_SPONSOR['乙级'];
+  const morale = Number(s && s.team && s.team.morale) || 65;
+  const rating = Number((s && s.season && s.season.teams && s.season.teams.find((t) => t.id === 'player') || {}).rating) || 65;
+  return Math.round(base * (0.7 + morale / 200) * (0.8 + rating / 500));
+}
+
+function currentWinStreak(s) {
+  const list = Array.isArray(s.player.form) ? s.player.form : [];
+  let n = 0;
+  for (let i = list.length - 1; i >= 0; i--) {
+    if (!list[i].win) break;
+    n++;
+  }
+  return n;
+}
+
+export function careerForm(s) {
+  return (Array.isArray(s.player.form) ? s.player.form : []).slice(-5);
+}
+
+export function formBonus(s) {
+  const recent = careerForm(s);
+  if (!recent.length) return 0;
+  let score = 0;
+  for (const m of recent) {
+    score += (m.win ? 1 : -1) + Math.max(-2, Math.min(2, ((m.kills || 0) - (m.deaths || 0)) / 3));
+  }
+  return clamp(Math.round(score / Math.max(1, recent.length)), -4, 4);
+}
+
+export function fatiguePenalty(s) {
+  return Math.min(0.3, (Number(s.player.fatigue) || 0) / 400);
+}
+
+function effectiveAttrs(s) {
+  const p = fatiguePenalty(s);
+  const base = s.player.attrs;
+  const out = {};
+  for (const k of Object.keys(base)) out[k] = clamp(Math.round(base[k] * (1 - p)), 1, 100);
+  return out;
+}
+
+function moraleModifier(s) {
+  return clamp(Math.round(((Number(s.team.morale) || 65) - 50) / 10), -1, 5);
+}
+
+export function careerMorale(s) {
+  return clamp(Number(s.team.morale) || 65, 20, 100);
+}
+
+export function seasonGoals(s) {
+  const def = SEASON_GOALS[s.team.league] || SEASON_GOALS['乙级'];
+  const list = sortedStandings(s);
+  const rank = list.findIndex((x) => x.teamId === 'player') + 1;
+  const cupRound = s.season.cup.phase === 'finished' ? Number(s.season.cupResult) : -1;
+  return {
+    league: s.team.league,
+    rankGoal: def.rank,
+    cupGoal: def.cup,
+    reward: def.reward,
+    currentRank: rank,
+    currentCupRound: cupRound,
+    achieved: rank <= def.rank && (Number.isFinite(cupRound) ? cupRound >= def.cup : false)
+  };
+}
+
+export function achievementDefs() {
+  return ACHIEVEMENTS.map((a) => ({ ...a }));
+}
+
+export function achievements(s) {
+  return (Array.isArray(s.player.achievements) ? s.player.achievements : []).slice();
+}
+
+export function unlockAchievement(s, id) {
+  if (!Array.isArray(s.player.achievements)) s.player.achievements = [];
+  const def = ACHIEVEMENTS.find((a) => a.id === id);
+  if (!def || s.player.achievements.some((a) => a.id === id)) return false;
+  s.player.achievements.push({ id: def.id, title: def.title, unlockedAt: Date.now() });
+  addNews(s, 'award', '成就解锁：' + def.title);
+  save();
+  return true;
+}
+
+export function careerRecords(s) {
+  if (!s.player.records) s.player.records = {};
+  return s.player.records;
+}
+
+function updateRecords(s, win, kills, bankGain, cupChampion) {
+  const rec = careerRecords(s);
+  rec.bestKills = Math.max(Number(rec.bestKills) || 0, kills || 0);
+  rec.totalPrize = Math.round((Number(rec.totalPrize) || 0) + (bankGain || 0));
+  if (win) {
+    const streak = currentWinStreak(s);
+    rec.longestWinStreak = Math.max(Number(rec.longestWinStreak) || 0, streak);
+    if (streak >= 5) unlockAchievement(s, 'streak5');
+  }
+  if (cupChampion) {
+    rec.cupChampions = (Number(rec.cupChampions) || 0) + 1;
+    unlockAchievement(s, 'cup_champion');
+  }
+}
+
+export function migrateCareerState(parsed) {
+  if (!parsed.player) parsed.player = {};
+  if (!parsed.team) parsed.team = {};
+  if (!parsed.season) parsed.season = {};
+  parsed.version = VERSION;
+  parsed.player.form = Array.isArray(parsed.player.form) ? parsed.player.form : [];
+  parsed.player.fatigue = Number.isFinite(Number(parsed.player.fatigue)) ? Number(parsed.player.fatigue) : 0;
+  parsed.player.achievements = Array.isArray(parsed.player.achievements) ? parsed.player.achievements : [];
+  parsed.player.records = parsed.player.records && typeof parsed.player.records === 'object' ? parsed.player.records : {};
+  parsed.team.ledger = Array.isArray(parsed.team.ledger) ? parsed.team.ledger : [];
+  parsed.team.morale = Number.isFinite(Number(parsed.team.morale)) ? parsed.team.morale : 65;
+  parsed.team.rested = !!parsed.team.rested;
+  parsed.team.pool = parsed.team.pool || null;
+  parsed.season.cup = parsed.season.cup || { phase: 'idle', bracket: [] };
+  parsed.matchHistory = Array.isArray(parsed.matchHistory) ? parsed.matchHistory : [];
+  return parsed;
 }
 
 export function xpNeeded(level) { return level * 500; }
@@ -150,10 +295,11 @@ function makeStandings(teams) {
   return teams.map((t) => ({ teamId: t.id, played: 0, w: 0, d: 0, l: 0, pts: 0 }));
 }
 
-function makeCup(teams) {
-  const sorted = [...teams].sort((a, b) => b.rating - a.rating);
-  const qf = [[sorted[0], sorted[7]], [sorted[3], sorted[4]], [sorted[2], sorted[5]], [sorted[1], sorted[6]]];
-  const bracket = qf.map(([a, b]) => ({ round: 'QF', a: a.id, b: b.id, score: null, played: false, winner: null }));
+function makeCup(teams, standings) {
+  const table = standings ? [...standings].sort((a, b) => b.pts - a.pts || b.w - a.w) : [...teams].sort((a, b) => b.rating - a.rating);
+  const ids = table.map((x) => x.teamId);
+  const qf = [[ids[0], ids[7]], [ids[3], ids[4]], [ids[2], ids[5]], [ids[1], ids[6]]];
+  const bracket = qf.map(([a, b]) => ({ round: 'QF', a, b, score: null, played: false, winner: null }));
   bracket.push({ round: 'SF', a: null, b: null, score: null, played: false, winner: null });
   bracket.push({ round: 'SF', a: null, b: null, score: null, played: false, winner: null });
   bracket.push({ round: 'F', a: null, b: null, score: null, played: false, winner: null });
@@ -206,11 +352,16 @@ export function newCareerState() {
     player: {
       name: 'donk', level: 1, xp: 0,
       attrs: { aim: 50, move: 50, react: 50, nade: 40 },
-      seasonStats: { played: 0, w: 0, d: 0, l: 0, kills: 0, deaths: 0, mvp: 0 }
+      seasonStats: { played: 0, w: 0, d: 0, l: 0, kills: 0, deaths: 0, mvp: 0 },
+      form: [],
+      fatigue: 0,
+      achievements: [],
+      records: {}
     },
     team: {
       name: PLAYER_TEAM.name, league: '乙级', bank: 12000,
-      roster, trainingLeft: 2, transfersLeft: 2, transferWindow: false, pool: null
+      roster, trainingLeft: 2, transfersLeft: 2, transferWindow: false, pool: null,
+      ledger: [], morale: 65, rested: false
     },
     season: {
       id: 1, round: 1, totalRounds: 14,
@@ -229,11 +380,9 @@ export function loadCareer() {
   if (raw) {
     try {
       const parsed = JSON.parse(raw);
-      if (parsed && parsed.version === VERSION && parsed.season && parsed.team && parsed.player) {
-        state = parsed;
-        if (!state.team.pool) state.team.pool = null;
-        if (!state.season.cup) state.season.cup = { phase: 'idle', bracket: [] };
-        if (!Array.isArray(state.matchHistory)) state.matchHistory = [];
+      if (parsed && (parsed.version === VERSION || parsed.version === 2) && parsed.season && parsed.team && parsed.player) {
+        state = migrateCareerState(parsed);
+        save();
         return state;
       }
     } catch (e) { /* fallthrough */ }
@@ -273,7 +422,19 @@ export function train(attr, tierKey) {
   s.player.attrs[attr] = Math.min(100, s.player.attrs[attr] + tier.points);
   s.team.trainingLeft--;
   refreshPlayerRating(s);
+  addLedger(s, 'expense', -tier.cost, '训练：' + attr);
   addNews(s, 'info', '训练完成：' + attr + ' +' + tier.points);
+  save();
+  return { ok: true };
+}
+
+export function restPlayer() {
+  const s = getState();
+  if (s.team.rested) return { ok: false, error: '本轮已经休息过' };
+  s.player.fatigue = 0;
+  s.team.rested = true;
+  addLedger(s, 'expense', 0, '休息恢复');
+  addNews(s, 'info', '休息完成，疲劳清零');
   save();
   return { ok: true };
 }
@@ -292,6 +453,7 @@ export function trainTeammate(id, tierKey) {
   p.rating = Math.min(97, p.rating + tier.points);
   s.team.trainingLeft--;
   refreshPlayerRating(s);
+  addLedger(s, 'expense', -tier.cost, '训练：' + p.name);
   addNews(s, 'info', '训练完成：' + p.name + ' rating +' + tier.points);
   save();
   return { ok: true };
@@ -307,7 +469,9 @@ export function sellPlayer(id) {
   s.team.bank += Math.floor(p.price * 0.5);
   s.team.roster.splice(idx, 1);
   s.team.transfersLeft--;
+  s.team.morale = clamp(Number(s.team.morale) - 2, 20, 100);
   refreshPlayerRating(s);
+  addLedger(s, 'income', Math.floor(p.price * 0.5), '卖出：' + p.name);
   addNews(s, 'info', '卖出 ' + p.name + '，返还 ' + Math.floor(p.price * 0.5));
   save();
   return { ok: true, refund: Math.floor(p.price * 0.5) };
@@ -332,8 +496,10 @@ export function buyPlayer(candId) {
   }
   s.team.bank -= cand.price;
   s.team.transfersLeft--;
+  s.team.morale = clamp(Number(s.team.morale) + 2, 20, 100);
   s.team.pool = s.team.pool.filter((c) => c.id !== candId);
   refreshPlayerRating(s);
+  addLedger(s, 'expense', -cand.price, '买入：' + cand.name);
   addNews(s, 'info', '买入 ' + cand.name + '（' + cand.role + '）' + (refund ? '，替换返还 ' + refund : ''));
   save();
   return { ok: true, refund };
@@ -399,7 +565,7 @@ function simulateLeagueRound(s) {
       s.season.round++;
     } else if (s.season.cup.phase === 'idle') {
       refreshPlayerRating(s);
-      s.season.cup = makeCup(s.season.teams);
+      s.season.cup = makeCup(s.season.teams, s.season.standings);
     }
   }
 }
@@ -439,6 +605,13 @@ export function applyPlayerResult(s, r) {
   s.player.seasonStats.kills += kills;
   s.player.seasonStats.deaths += deaths;
   if (mvp) s.player.seasonStats.mvp++;
+  if (!Array.isArray(s.player.form)) s.player.form = [];
+  s.player.form.push({ win: !!win, kills: kills || 0, deaths: deaths || 0 });
+  if (s.player.form.length > 5) s.player.form.splice(0, s.player.form.length - 5);
+  s.player.fatigue = clamp(Number(s.player.fatigue) + (isCup ? 10 : 6) + (win ? 0 : 2), 0, 100);
+  s.team.morale = clamp(Number(s.team.morale) + (win ? 4 : -3) + (mvp ? 2 : 0) + (isCup && win ? 3 : 0), 20, 100);
+  s.team.rested = false;
+  refreshPlayerRating(s);
   let bankGain = 0;
   if (!noReward) {
     bankGain = (win ? 1500 : 300) + (mvp ? 200 : 0);
@@ -467,7 +640,10 @@ export function applyPlayerResult(s, r) {
       simulateLeagueRound(s);
     }
   }
-  s.team.bank += bankGain;
+  const sponsor = !noReward ? sponsorIncome(s) : 0;
+  s.team.bank += bankGain + sponsor;
+  if (bankGain) addLedger(s, 'income', bankGain, '比赛奖金');
+  if (sponsor) addLedger(s, 'income', sponsor, '赞助收入');
   s.team.trainingLeft = 2;
   if (!Array.isArray(s.matchHistory)) s.matchHistory = [];
   s.matchHistory.push({
@@ -485,6 +661,10 @@ export function applyPlayerResult(s, r) {
     score: score || null
   });
   if (s.matchHistory.length > 500) s.matchHistory.splice(0, s.matchHistory.length - 500);
+  updateRecords(s, win, kills, bankGain + sponsor, isCup && s.season.cup.champion === 'player');
+  if (s.player.seasonStats.w === 1) unlockAchievement(s, 'first_win');
+  if (s.player.level >= 10) unlockAchievement(s, 'veteran');
+  if ((Number(careerRecords(s).totalPrize) || 0) >= 100000) unlockAchievement(s, 'rich100k');
   if (noReward) {
     addNews(s, 'info', '放弃本场（' + (isCup ? '杯赛' : '联赛') + '）');
   } else {
@@ -539,7 +719,7 @@ function careerStart(game) {
     if (roster.some((x) => x.name === name)) continue;
     roster.push({ id: 'r' + Date.now() + roster.length, name, team: playerTeam.name, role: ROLES[roster.length % ROLES.length], rating: 60, price: playerPrice(60) });
   }
-  const avg = effectiveRatingFor(roster, s.player.attrs);
+  const avg = effectiveTeamRating(s);
   const friendBase = teamDiffParams({ rating: avg });
   const foeBase = teamDiffParams(opp);
   const teamBots = game.entities.filter((e) => e.bot && e.team === game.opts.team);
@@ -556,7 +736,7 @@ function careerStart(game) {
     e.aiParams = { ...foeBase };
   }
   const p = game.player;
-  const a = s.player.attrs;
+  const a = effectiveAttrs(s);
   p.spreadMult = 1.3 - a.aim / 250;
   p.speedMult = 0.9 + a.move / 250;
   p.reloadMult = 1.25 - a.react / 200;
@@ -763,16 +943,31 @@ function promoteLeague(league, rank) {
 export function nextSeason() {
   const s = getState();
   const report = seasonReport();
+  const oldLeague = s.team.league;
+  const goals = seasonGoals(s);
+  if (goals.achieved) {
+    s.team.bank += goals.reward;
+    addLedger(s, 'income', goals.reward, '赛季目标奖励');
+    addNews(s, 'award', '赛季目标达成，奖励 ' + goals.reward);
+  }
   s.team.bank += report.rankPrize;
+  addLedger(s, 'income', report.rankPrize, '排名奖金');
+  addLedger(s, 'income', report.cupPrize, '杯赛奖金');
+  const rec = careerRecords(s);
+  rec.bestSeasonRank = Math.min(Number(rec.bestSeasonRank) || 99, report.rank);
+  rec.totalPrize = Math.round((Number(rec.totalPrize) || 0) + report.prize + goals.reward);
   s.history.push({ seasonId: s.season.id, league: report.league, rank: report.rank, cupRound: report.cupRound, prize: report.prize });
   addNews(s, 'info', '第 ' + s.season.id + ' 赛季结束：第 ' + report.rank + ' 名，总奖金 ' + report.prize);
   s.team.league = promoteLeague(report.league, report.rank);
+  if (s.team.league !== oldLeague) unlockAchievement(s, 'promotion');
   s.season.id++;
   s.season.round = 1;
   s.team.transfersLeft = 2;
   s.team.transferWindow = false;
   s.team.trainingLeft = 2;
+  s.team.rested = false;
   s.team.pool = null;
+  s.player.fatigue = 0;
   s.player.seasonStats = { played: 0, w: 0, d: 0, l: 0, kills: 0, deaths: 0, mvp: 0 };
   const teams = makeTeams(s.team.league, effectiveTeamRating(s));
   s.season.teams = teams;

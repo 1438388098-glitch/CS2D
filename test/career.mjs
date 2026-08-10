@@ -249,11 +249,13 @@ initCareerUi(document, fakeGame);
 openCareer();
 const panelHtml = document.getElementById('careerPanel').innerHTML;
 ok('career ui renders', panelHtml.includes('生涯模式') && panelHtml.includes('赛季结算'));
-for (const key of ['dash', 'schedule', 'training', 'roster', 'standings', 'cup']) {
+for (const key of ['dash', 'schedule', 'training', 'roster', 'standings', 'cup', 'finance', 'stats']) {
   const html = __renderTabForTest(key);
   ok('career tab renders ' + key, html && html.length > 0);
 }
 const trainingHtml = __renderTabForTest('training');
 ok('career training radar renders', trainingHtml.includes('career-radar') && trainingHtml.includes('综合能力'));
+const financeHtml = __renderTabForTest('finance');
+ok('career finance renders', financeHtml.includes('财务概览') && financeHtml.includes('资金流水'));
 
 console.log('career: all PASS');
