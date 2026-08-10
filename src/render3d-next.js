@@ -72,6 +72,7 @@ let shockwaveMeshes = [];
 let splashMeshes = [];
 let corpseMeshes = new Map();
 let decalPointMeshes = new Map();
+const particleBuckets = { shell: [], boom: [], splash: [], other: [] };
 let viewmodelKey = '';
 let initGen = 0;
 const normalMapCache = new Map();
@@ -81,6 +82,8 @@ const MAX_TEXTURE_CACHE = 128;
 const MAX_GEOMETRY_CACHE = 512;
 let webglHealthy = true;
 let frameHealthTick = 0;
+let frameHealthProbe = null;
+let frameHealthProbeCtx = null;
 
 function ensureThree() {
   if (THREE) return Promise.resolve(THREE);
@@ -284,7 +287,7 @@ export function render3dNext(game) {
       if (renderer.shadowMap.type !== shadowType) renderer.shadowMap.type = shadowType;
     }
     game._perfBudget = perf;
-    renderer.setPixelRatio(Math.min(dpr, 2, quality * 2));
+    renderer.setPixelRatio(Math.max(1, Math.min(dpr, 2, 1.5, quality * 2)));
     renderer.setSize(w, h, false);
     camera.aspect = w / h;
     const fovDeg = game.fov && isFinite(game.fov) ? game.fov * 180 / Math.PI : 75;
@@ -323,6 +326,7 @@ export function render3dNext(game) {
       weatherPoints: weatherPoints ? weatherPoints.geometry.attributes.position.count : 0,
       weatherKind: weatherKey || 'none',
       renderSize: { width: w, height: h, cssWidth: Math.floor(cssW), cssHeight: Math.floor(cssH) },
+      bufferSize: { width: renderer.domElement.width, height: renderer.domElement.height },
       renderScale: scale,
       atmosphere,
       lighting: {
@@ -658,7 +662,7 @@ function renderQualityFor(game) {
 function performanceBudgetFor(game) {
   const q = renderQualityFor(game);
   return {
-    shadowMapSize: q >= 0.9 ? 2048 : q >= 0.72 ? 1024 : 512,
+    shadowMapSize: q >= 0.9 ? 1024 : q >= 0.72 ? 512 : 256,
     shadowType: q >= 0.72 ? 'PCFSoft' : 'PCF',
     particleCaps: {
       shell: Math.max(12, Math.round(40 * q)),
@@ -680,14 +684,15 @@ function updateFrameHealth(game, ctx) {
   try {
     const w = canvasRef.width;
     const h = canvasRef.height;
-    const step = Math.max(8, Math.floor(Math.min(w, h) / 22));
-    const data = ctx.getImageData(0, 0, w, h).data;
+    const probe = sampleFrameHealth(ctx, w, h);
+    const data = probe.data;
+    const step = Math.max(1, Math.floor(Math.min(probe.width, probe.height) / 22));
     let checked = 0;
     let lit = 0;
     let white = 0;
-    for (let y = 0; y < h; y += step) {
-      for (let x = 0; x < w; x += step) {
-        const i = (y * w + x) * 4;
+    for (let y = 0; y < probe.height; y += step) {
+      for (let x = 0; x < probe.width; x += step) {
+        const i = (y * probe.width + x) * 4;
         const sum = data[i] + data[i + 1] + data[i + 2];
         checked++;
         if (sum > 40) lit++;
@@ -706,6 +711,20 @@ function updateFrameHealth(game, ctx) {
       game._renderHealthStrikes = 0;
     }
   } catch (err) { /* sampling must never break rendering */ }
+}
+
+function sampleFrameHealth(ctx, w, h) {
+  const pw = Math.max(64, Math.min(256, Math.floor(w / 16)));
+  const ph = Math.max(48, Math.min(160, Math.floor(h / 16)));
+  if (!frameHealthProbe || frameHealthProbe.width !== pw || frameHealthProbe.height !== ph) {
+    frameHealthProbe = document.createElement('canvas');
+    frameHealthProbe.width = pw;
+    frameHealthProbe.height = ph;
+    frameHealthProbeCtx = frameHealthProbe.getContext('2d', { willReadFrequently: true });
+  }
+  frameHealthProbeCtx.clearRect(0, 0, pw, ph);
+  frameHealthProbeCtx.drawImage(ctx.canvas, 0, 0, pw, ph);
+  return frameHealthProbeCtx.getImageData(0, 0, pw, ph);
 }
 
 function updateCamera(game, ent, map) {
@@ -2332,12 +2351,28 @@ function updateSmokes(game) {
 
 function updateParticles(game) {
   if (!dynamicGroup || !THREE) return;
+  particleBuckets.shell.length = 0;
+  particleBuckets.boom.length = 0;
+  particleBuckets.splash.length = 0;
+  particleBuckets.other.length = 0;
   const all = game.particles || [];
   const caps = performanceBudgetFor(game).particleCaps;
-  const shells = all.filter((p) => p && p.kind === 'shell').slice(0, caps.shell);
-  const booms = all.filter((p) => p && p.kind === 'boom').slice(0, caps.boom);
-  const splashes = all.filter((p) => p && (p.kind === 'splash' || p.kind === 'water')).slice(0, caps.splash);
-  const others = all.filter((p) => !p || (p.kind !== 'shell' && p.kind !== 'boom' && p.kind !== 'splash' && p.kind !== 'water')).slice(0, caps.other);
+  for (const p of all) {
+    if (!p) continue;
+    if (p.kind === 'shell') {
+      if (particleBuckets.shell.length < caps.shell) particleBuckets.shell.push(p);
+    } else if (p.kind === 'boom') {
+      if (particleBuckets.boom.length < caps.boom) particleBuckets.boom.push(p);
+    } else if (p.kind === 'splash' || p.kind === 'water') {
+      if (particleBuckets.splash.length < caps.splash) particleBuckets.splash.push(p);
+    } else if (particleBuckets.other.length < caps.other) {
+      particleBuckets.other.push(p);
+    }
+  }
+  const shells = particleBuckets.shell;
+  const booms = particleBuckets.boom;
+  const splashes = particleBuckets.splash;
+  const others = particleBuckets.other;
   const tile = (getMap() && getMap().tile) || 16;
 
   while (shellMeshes.length < shells.length) {

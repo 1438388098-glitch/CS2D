@@ -113,13 +113,14 @@ async function boot() {
   startLoop();
 }
 
-let frameMsEma = 16.7; let statsT = 0; let scaleCur = 1.0; let scaleT = 0; // E4 自适应：默认全分辨率（1080P），超预算降档
+let frameMsEma = 16.7; let renderMsEma = 16.7; let statsT = 0; let scaleCur = 1.0; let scaleT = 0; // E4 自适应：默认全分辨率（1080P），超预算降档
 let lastT = performance.now();
 function startLoop() {
   let acc = 0;
   const FIXED = 1 / 30;
   function loop(t) {
     const now = t || performance.now();
+    const frameMs = Math.min(Math.max(now - lastT, 0), 100);
     let frame = Math.min((now - lastT) / 1000, 0.1);
     lastT = now;
     acc += frame;
@@ -151,16 +152,17 @@ function startLoop() {
         render(game);
       }
       const renderMs = performance.now() - tR0;
-      frameMsEma = frameMsEma * 0.9 + renderMs * 0.1;
+      frameMsEma = frameMsEma * 0.9 + frameMs * 0.1;
+      renderMsEma = renderMsEma * 0.9 + renderMs * 0.1;
       game._renderScale = scaleCur;
       statsT++;
       if (statsT >= 60) {
         statsT = 0;
-        const next = nextRenderScale(scaleCur, frameMsEma, { lockT: scaleT });
+        const next = nextRenderScale(scaleCur, renderMsEma, { lockT: scaleT });
         scaleCur = next.scale;
         scaleT = next.lockT;
       }
-      if (statsT % 30 === 0 && window.__cs2d) window.__cs2d.stats = { frameMs: frameMsEma, render3d: game._renderStats || null, scale: scaleCur };
+      if (window.__cs2d) window.__cs2d.stats = { frameMs: frameMsEma, renderMs: renderMsEma, frameDelta: frameMs, render3d: game._renderStats || null, scale: scaleCur };
       if (game.viewMode !== 'fps') renderLens(game);
       renderMinimap(game);
       updateHudDom(now);

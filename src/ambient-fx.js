@@ -70,9 +70,8 @@ export function drawAmbientDust(ctx, game) {
       const offY = gy * cell;
       for (const p of ambientDust(cellSeed, t, DUST_PER_CELL, cell, cell)) {
         ctx.globalAlpha = p.alpha;
-        ctx.beginPath();
-        ctx.arc(offX + p.x, offY + p.y, p.r, 0, Math.PI * 2);
-        ctx.fill();
+        const size = p.r * 2;
+        ctx.fillRect(offX + p.x - p.r, offY + p.y - p.r, size, size);
       }
     }
   }
