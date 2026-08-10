@@ -340,6 +340,7 @@ export function botActions(e, game, dt) {
   // 设计意图：bot 后坐力恢复比玩家慢（1.2 vs 玩家 RECOIL_RECOVER 2.2），克制 AI 火力
   if (e.recoil > 0) e.recoil -= dt * 1.2 * (e.recoil > 1.1 ? 1.8 : 0.55);
   if (e.muzzleT > 0) e.muzzleT -= dt;
+  if (e.switchT > 0) e.switchT -= dt;
   if (e.aimTarget && e.barrelT <= 0 && rand() < 0.4 && (e.weapons.primary || e.weapons.secondary)) {
     const near = game.barrels.find((bl) =>
       Math.hypot(bl.x - e.aimTarget.x, bl.y - e.aimTarget.y) < 180 &&
