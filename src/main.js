@@ -156,7 +156,7 @@ function startLoop() {
       renderMsEma = renderMsEma * 0.9 + renderMs * 0.1;
       game._renderScale = scaleCur;
       statsT++;
-      if (statsT >= 60) {
+      if (statsT >= 30) {
         statsT = 0;
         const next = nextRenderScale(scaleCur, renderMsEma, { lockT: scaleT });
         scaleCur = next.scale;
