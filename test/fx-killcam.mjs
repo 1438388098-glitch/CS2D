@@ -115,6 +115,14 @@ const near = (a, b, eps = 1e-9) => Math.abs(a - b) <= eps;
     canvas: { width: 1280, height: 720 },
     save() { calls.push('save'); },
     restore() { calls.push('restore'); },
+    translate() { calls.push('translate'); },
+    rotate() { calls.push('rotate'); },
+    beginPath() { calls.push('begin'); },
+    moveTo() { calls.push('move'); },
+    lineTo() { calls.push('line'); },
+    arc() { calls.push('arc'); },
+    stroke() { calls.push('stroke'); },
+    fill() { calls.push('fill'); },
     strokeText(t, x, y) { calls.push('stroke:' + t + '@' + x + ',' + y); },
     fillText(t, x, y) { calls.push('fill:' + t + '@' + x + ',' + y); },
     set globalAlpha(v) { calls.push('alpha:' + v); },
@@ -123,6 +131,7 @@ const near = (a, b, eps = 1e-9) => Math.abs(a - b) <= eps;
     set font(v) { calls.push('font:' + v); },
     set strokeStyle(v) { calls.push('strokeStyle:' + v); },
     set lineWidth(v) { calls.push('lineWidth:' + v); },
+    set lineCap(v) { calls.push('lineCap:' + v); },
     set fillStyle(v) { calls.push('fillStyle:' + v); }
   };
   calls.length = 0;
@@ -165,6 +174,14 @@ const near = (a, b, eps = 1e-9) => Math.abs(a - b) <= eps;
       canvas: { width: 1280, height: 720 },
       save() { calls.push('save'); },
       restore() { calls.push('restore'); },
+      translate() { calls.push('translate'); },
+      rotate() { calls.push('rotate'); },
+      beginPath() { calls.push('begin'); },
+      moveTo() { calls.push('move'); },
+      lineTo() { calls.push('line'); },
+      arc() { calls.push('arc'); },
+      stroke() { calls.push('stroke'); },
+      fill() { calls.push('fill'); },
       strokeText() { calls.push('stroke'); },
       fillText() { calls.push('fill'); },
       set globalAlpha(v) { calls.push('a'); },
@@ -173,6 +190,7 @@ const near = (a, b, eps = 1e-9) => Math.abs(a - b) <= eps;
       set font(v) { calls.push('f'); },
       set strokeStyle(v) { calls.push('s'); },
       set lineWidth(v) { calls.push('l'); },
+      set lineCap(v) { calls.push('c'); },
       set fillStyle(v) { calls.push('c'); }
     };
   };

@@ -9,6 +9,7 @@ import { clamp } from './utils.js';
 export const KILL_LABEL_FADE_IN = 0.15; // 秒：缩放放大 + 淡入
 export const KILL_LABEL_HOLD_AT = 0.8;  // 秒：完整显示停留起点
 export const KILL_LABEL_DUR = 1.2;      // 秒：总时长（含淡出）
+export const KILL_BURST_DUR = 0.35;     // 秒：标签背后的爆发纹持续时间
 
 const KILL_LABEL_SCALE_MIN = 0.6;           // 淡入起始缩放
 const KILL_LABEL_FADE_OUT_SCALE = 0.88;     // 淡出结束缩放
@@ -29,6 +30,29 @@ const KILL_SIZES = {
 // 多杀文案：与 ui.js STREAK_TEXTS 一致（2 双杀 / 3 三杀 / 4 四杀 / 5+ RAMPAGE）
 const MULTIKILL_TEXTS = { 2: 'DOUBLE KILL', 3: 'TRIPLE KILL', 4: 'QUAD KILL' };
 const MULTIKILL_RAMPAGE = 'RAMPAGE';
+
+const BURST_BASE = {
+  normal: { rays: 8, radius: 42 },
+  headshot: { rays: 12, radius: 54 },
+  multikill: { rays: 16, radius: 66 }
+};
+
+// 击杀爆发纹：标签出现时背后的放射线/光晕参数。
+// t 为标签已流逝秒数，seed 只影响旋转起始角，画面仍完全确定。
+export function killBurst(kind, t, seed) {
+  const k = kind === 'headshot' ? 'headshot' : (kind === 'multikill' ? 'multikill' : 'normal');
+  if (!Number.isFinite(t)) return null;
+  if (t < 0 || t >= KILL_BURST_DUR) return null;
+  const u = t / KILL_BURST_DUR;
+  const base = BURST_BASE[k];
+  const alpha = Math.pow(1 - u, 1.35);
+  return {
+    alpha,
+    rays: base.rays,
+    radius: base.radius + u * 84,
+    rot: ((Math.floor(Math.abs(seed)) || 7) * 0.017) % (Math.PI * 2)
+  };
+}
 
 // 击杀标签文案：normal → 'KILL'；headshot → '爆头!'；
 // multikill 按连续击杀数 streak（≥5 显示 RAMPAGE，<2 视为双杀）。
@@ -65,15 +89,18 @@ function labelEnvelope(t) {
 // x/y 为标签中心（相对画布宽高比例，默认居中偏上），由绘制函数换算成像素。
 export function killLabel(kind, streak, t) {
   const k = kind === 'headshot' ? 'headshot' : (kind === 'multikill' ? 'multikill' : 'normal');
-  const env = labelEnvelope(Number.isFinite(t) ? t : 0);
+  const tt = Number.isFinite(t) ? Math.max(0, t) : 0;
+  const env = labelEnvelope(tt);
   return {
+    kind: k,
     text: killLabelText(k, streak),
     color: KILL_COLORS[k],
     scale: env.scale,
     alpha: env.alpha,
     x: KILL_LABEL_X,
     y: KILL_LABEL_Y,
-    size: KILL_SIZES[k]
+    size: KILL_SIZES[k],
+    burst: killBurst(k, tt, Math.floor(tt * 1000) || 7)
   };
 }
 
@@ -91,6 +118,31 @@ export function drawKillLabel(ctx, fx) {
   const cjk = /[\u4e00-\u9fff]/.test(String(fx.text));
   ctx.save();
   ctx.globalAlpha = clamp(fx.alpha, 0, 1);
+  const burst = fx.burst;
+  if (burst && burst.alpha > 0 && burst.rays > 0) {
+    ctx.save();
+    ctx.translate(cx, cy);
+    ctx.rotate(burst.rot || 0);
+    ctx.globalAlpha = clamp(burst.alpha * fx.alpha * 0.7, 0, 1);
+    ctx.strokeStyle = fx.color;
+    ctx.lineWidth = 2.5;
+    ctx.lineCap = 'round';
+    ctx.beginPath();
+    for (let i = 0; i < burst.rays; i++) {
+      const a = i / burst.rays * Math.PI * 2;
+      const r0 = burst.radius * 0.18;
+      const r1 = burst.radius * (i % 2 === 0 ? 1 : 0.62);
+      ctx.moveTo(Math.cos(a) * r0, Math.sin(a) * r0);
+      ctx.lineTo(Math.cos(a) * r1, Math.sin(a) * r1);
+    }
+    ctx.stroke();
+    ctx.globalAlpha = clamp(burst.alpha * fx.alpha * 0.16, 0, 1);
+    ctx.fillStyle = fx.color;
+    ctx.beginPath();
+    ctx.arc(0, 0, burst.radius * 0.72, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+  }
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
   ctx.font = '900 ' + Math.round(size * scale) + "px '" + (cjk ? 'Microsoft YaHei' : 'Segoe UI') + "',sans-serif";
