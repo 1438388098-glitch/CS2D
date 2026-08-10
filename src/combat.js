@@ -375,6 +375,7 @@ export function applyDamage(v, dmg, opt, game) {
     armLoss = 0;
   }
   if (opt.killer && opt.killer !== v) {
+    opt.killer.dmgTotal = (opt.killer.dmgTotal || 0) + hpLoss;
     if (opt.killer === game.player) {
       game.dmgT = 0;
       if (head) emit('sfx', { name: 'head', vol: 0.9, x: v.x, y: v.y, game });

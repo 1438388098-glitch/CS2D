@@ -508,7 +508,7 @@ function renderScoreboard(gameRef) {
   const maxKills = gameRef.entities.reduce((a, e) => Math.max(a, e.kills), 0);
   for (const tm of ['t', 'ct']) {
     const players = gameRef.entities.filter((e) => e.team === tm);
-    players.sort((a, b) => b.kills - a.kills);
+    players.sort((a, b) => (b.dmgTotal || 0) - (a.dmgTotal || 0) || b.kills - a.kills);
     for (const e of players) {
       const tr = doc.createElement('tr');
       const self = e === gameRef.player;
@@ -538,6 +538,10 @@ function renderScoreboard(gameRef) {
       kn.textContent = e.kills;
       tdK.appendChild(kn);
       tr.appendChild(tdK);
+      const tdDmg = doc.createElement('td');
+      tdDmg.className = 'num dmg';
+      tdDmg.textContent = Math.round(e.dmgTotal || 0);
+      tr.appendChild(tdDmg);
       const tdD = doc.createElement('td');
       tdD.className = 'num';
       tdD.textContent = e.deaths;
@@ -572,8 +576,9 @@ function renderScoreboard(gameRef) {
     th.className = tm === 't' ? 'tname' : 'cname';
     trow.appendChild(th);
     const totalK = players.reduce((a, e) => a + e.kills, 0);
+    const totalDmg = players.reduce((a, e) => a + (e.dmgTotal || 0), 0);
     const totalD = players.reduce((a, e) => a + e.deaths, 0);
-    for (const v of [totalK, totalD, '', '', '']) {
+    for (const v of [totalK, Math.round(totalDmg), totalD, '', '', '']) {
       const td = doc.createElement('td');
       td.className = 'num';
       td.textContent = v;
