@@ -1,7 +1,7 @@
 import {
   resetCareer, setStorage, setRng, getState, settlePlayerMatch, train, trainTeammate, sellPlayer, sellPreview, buyPlayer, candidates, filterCandidates,
   nextSeason, save, loadCareer, __clearStateForTest, candidateProfile,
-  sponsorIncome, sponsorPreview, cashflowForecast, seasonBudget, financeTrend, remainingPrizePreview, formBonus, fatiguePenalty, careerMorale, restPlayer, seasonGoals, goalProgress, trainingPreview, trainingSuggestion, rotationAdvice, trainingHistory, rosterStatus, transferBudget, contractStatus, renewPlayer, rosterContribution, positionBalance,
+  sponsorIncome, sponsorPreview, cashflowForecast, seasonBudget, financeTrend, remainingPrizePreview, transferProfit, formBonus, fatiguePenalty, careerMorale, restPlayer, seasonGoals, goalProgress, trainingPreview, trainingSuggestion, rotationAdvice, trainingHistory, rosterStatus, transferBudget, contractStatus, renewPlayer, rosterContribution, positionBalance,
   achievementDefs, achievements, careerRecords, migrateCareerState, matchReadiness
 } from '../src/career.js';
 
@@ -157,13 +157,16 @@ ok('transfer budget', budget && budget.total > 0 && budget.affordable >= 0 && bu
 const cand = candidates()[0];
 buyPlayer(cand.id);
 ok('buy ledger and morale', s.team.bank > 0 && s.team.ledger.some((x) => x.label.includes('买入')) && s.team.morale === 67);
-const sell = s.team.roster[0];
+const soldPlayer = s.team.roster.find((x) => x.name === cand.name);
+const sell = soldPlayer || s.team.roster[0];
 s.team.transfersLeft = 1;
 const sellPreviewRow = sellPreview(s, sell.id);
 const bankBeforeSell = s.team.bank;
 const sellRes = sellPlayer(sell.id);
 ok('sell preview', sellPreviewRow && sellPreviewRow.refund > 0 && sellPreviewRow.ratingImpact < 0 && sellRes.refund === sellPreviewRow.refund && s.team.bank === bankBeforeSell + sellPreviewRow.refund);
 ok('sell ledger and morale', s.team.ledger.some((x) => x.label.includes('卖出')) && s.team.morale === 65);
+const profit = transferProfit(s);
+ok('transfer profit tracker', profit && profit.buysCount >= 1 && profit.sellsCount >= 1 && profit.totalBuyCost > 0 && profit.totalRefund > 0 && profit.realized < 0);
 
 s = resetCareer();
 const contractRows = contractStatus(s);

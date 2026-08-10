@@ -181,6 +181,10 @@ function addLedger(s, type, amount, label) {
   s.team.ledger.push({ t: Date.now(), round: Number(s.season && s.season.round) || 1, type, amount: Math.round(amount || 0), label });
   if (s.team.ledger.length > 300) s.team.ledger.splice(0, s.team.ledger.length - 300);
 }
+function ensureTransferLog(s) {
+  if (!Array.isArray(s.team.transferLog)) s.team.transferLog = [];
+  return s.team.transferLog;
+}
 
 export function sponsorIncome(s) {
   const league = s && s.team && s.team.league ? s.team.league : '乙级';
@@ -469,6 +473,7 @@ export function migrateCareerState(parsed) {
   parsed.team.rested = !!parsed.team.rested;
   parsed.team.pool = parsed.team.pool || null;
   parsed.team.trainingLog = Array.isArray(parsed.team.trainingLog) ? parsed.team.trainingLog : [];
+  parsed.team.transferLog = Array.isArray(parsed.team.transferLog) ? parsed.team.transferLog : [];
   parsed.season.cup = parsed.season.cup || { phase: 'idle', bracket: [] };
   assignFixtureMaps(parsed);
   parsed.matchHistory = Array.isArray(parsed.matchHistory) ? parsed.matchHistory : [];
@@ -785,6 +790,30 @@ export function transferBudget(s) {
   };
 }
 
+export function transferProfit(s) {
+  const log = ensureTransferLog(s);
+  const buys = log.filter((x) => x.type === 'buy');
+  const sells = log.filter((x) => x.type === 'sell');
+  const matched = new Set();
+  let realized = 0;
+  for (const sell of sells) {
+    const idx = buys.findIndex((b, i) => !matched.has(i) && b.name === sell.name);
+    if (idx >= 0) {
+      matched.add(idx);
+      realized += (Number(sell.refund) || 0) - (Number(buys[idx].cost) || 0);
+    }
+  }
+  return {
+    log: log.slice().reverse(),
+    buysCount: buys.length,
+    sellsCount: sells.length,
+    totalBuyCost: buys.reduce((a, x) => a + (Number(x.cost) || 0), 0),
+    totalRefund: sells.reduce((a, x) => a + (Number(x.refund) || 0), 0),
+    realized,
+    transactions: log.slice().reverse().slice(0, 10)
+  };
+}
+
 export function contractStatus(s) {
   const list = Array.isArray(s.team && s.team.roster) ? s.team.roster : [];
   return list.map((p) => {
@@ -964,6 +993,7 @@ export function sellPlayer(id) {
   const p = s.team.roster[idx];
   const preview = sellPreview(s, id);
   const refund = preview ? preview.refund : Math.floor(p.price * 0.5);
+  ensureTransferLog(s).push({ type: 'sell', name: p.name, role: p.role, refund, round: s.season.round, t: Date.now() });
   s.team.bank += refund;
   s.team.roster.splice(idx, 1);
   s.team.transfersLeft--;
@@ -1014,12 +1044,14 @@ export function buyPlayer(candId) {
   if (slot) {
     const oldPreview = sellPreview(s, slot.id);
     refund = oldPreview ? oldPreview.refund : Math.floor(slot.price * 0.5);
+    ensureTransferLog(s).push({ type: 'sell', name: slot.name, role: slot.role, refund, round: s.season.round, t: Date.now() });
     s.team.bank += refund;
     slot.name = cand.name; slot.team = cand.team || s.team.name; slot.rating = cand.rating; slot.price = cand.price; slot.costBasis = cand.price; slot.potential = profile.potential; slot.youth = profile.youth; slot.contractYears = 3; slot.renewalCost = Math.round(cand.price * 0.12);
   } else {
     s.team.roster.push({ id: 'r' + Date.now(), name: cand.name, team: cand.team || s.team.name, role: cand.role, rating: cand.rating, price: cand.price, costBasis: cand.price, potential: profile.potential, youth: profile.youth, contractYears: 3, renewalCost: Math.round(cand.price * 0.12) });
   }
   s.team.bank -= cand.price;
+  ensureTransferLog(s).push({ type: 'buy', name: cand.name, role: cand.role, cost: cand.price, round: s.season.round, t: Date.now() });
   s.team.transfersLeft--;
   s.team.morale = clamp(Number(s.team.morale) + 2, 20, 100);
   s.team.pool = s.team.pool.filter((c) => c.id !== candId);

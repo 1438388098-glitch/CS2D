@@ -1,7 +1,7 @@
 import {
   loadCareer, getState, titleFor, startCareerMatch, careerEndMatch, abandonPendingMatch, simulatePlayerMatch, resetCareer,
   train, sellPlayer, sellPreview, buyPlayer, renewPlayer, candidates, filterCandidates, candidateProfile, nextSeason, seasonReport, nextMatch, nextMatchInfo, matchImportance, teamRecentForm, matchReadiness,
-  transferWindowOpen, transferWindowInfo, transferBudget, contractStatus, isStorageAvailable, cupMap, cupPrizeInfo, cupMapForRound, fixtureMapFor, fixtureMatchRecord, winChance, trainingTiers, trainingPreview, trainingSuggestion, rotationAdvice, trainingHistory, rosterStatus, xpNeeded,
+  transferWindowOpen, transferWindowInfo, transferBudget, transferProfit, contractStatus, isStorageAvailable, cupMap, cupPrizeInfo, cupMapForRound, fixtureMapFor, fixtureMatchRecord, winChance, trainingTiers, trainingPreview, trainingSuggestion, rotationAdvice, trainingHistory, rosterStatus, xpNeeded,
   seasonStats, seasonAwards, seasonPerformanceSummary, seasonSeries, seasonStreaks, careerSummary, matchDetail, seasonTimeline, headToHead, importantMatches, seasonTrends, favoriteMatches, cupHistory, trophyCase, careerTimeline,
   sponsorIncome, sponsorPreview, cashflowForecast, seasonBudget, financeTrend, remainingPrizePreview, formBonus, fatiguePenalty, careerMorale, restPlayer, seasonGoals, seasonPace, goalProgress, relegationProjection, rosterContribution,
   positionBalance,
@@ -494,6 +494,7 @@ function renderFinance(s) {
   const budget = seasonBudget(s);
   const trend = financeTrend(s);
   const prize = remainingPrizePreview(s);
+  const transfers = transferProfit(s);
   const income = ledger.reduce((a, x) => a + Math.max(0, x.amount || 0), 0);
   const expense = ledger.reduce((a, x) => a + Math.min(0, x.amount || 0), 0);
   const rows = ledger.slice().reverse().slice(0, 60).map((x) => '<div class="career-row"><span>' + esc(x.label || '') + '</span><b style="color:' + (x.amount >= 0 ? '#58d68d' : '#ff5d5d') + '">' + (x.amount >= 0 ? '+' : '') + money(x.amount) + '</b></div>').join('') || '<div class="career-news">暂无资金流水</div>';
@@ -524,11 +525,18 @@ function renderFinance(s) {
     '<div class="career-kpi"><b>' + money(prize.rankUpside) + '</b><span>排名提升空间</span></div>' +
     '<div class="career-kpi"><b>' + money(prize.total) + '</b><span>剩余可争取</span></div></div>' +
     '<div class="career-stats"><span>当前第 ' + prize.rank + ' 名奖金 ' + money(prize.currentRankPrize) + (prize.projectedRank ? ' · 预测第 ' + prize.projectedRank + ' 名 ' + money(prize.projectedRankPrize) : '') + (prize.maxCup ? ' · 杯赛全胜上限 ' + money(prize.maxCup) : '') + '</span></div></div>';
+  const transferHtml = '<div class="career-card"><h4>转会盈亏</h4><div class="career-kpis">' +
+    '<div class="career-kpi"><b>' + transfers.buysCount + '</b><span>买入</span></div>' +
+    '<div class="career-kpi"><b>' + transfers.sellsCount + '</b><span>卖出</span></div>' +
+    '<div class="career-kpi"><b style="color:' + (transfers.realized >= 0 ? '#58d68d' : '#ff5d5d') + '">' + (transfers.realized >= 0 ? '+' : '') + money(transfers.realized) + '</b><span>已实现盈亏</span></div>' +
+    '<div class="career-kpi"><b>' + money(transfers.totalRefund) + '</b><span>累计回款</span></div></div>' +
+    (transfers.transactions.length ? transfers.transactions.map((x) => '<div class="career-row"><span>' + (x.type === 'buy' ? '买入' : '卖出') + ' · ' + esc(x.name) + ' · 第 ' + x.round + ' 轮</span><b>' + (x.type === 'buy' ? '-' : '+') + money(x.type === 'buy' ? x.cost : x.refund) + '</b></div>').join('') : '<div class="career-news">暂无转会操作</div>') + '</div>';
   return '<div class="career-card"><h4>财务概览</h4><div class="career-kpis"><div class="career-kpi"><b>' + money(s.team.bank) + '</b><span>当前资金</span></div><div class="career-kpi"><b>' + money(income) + '</b><span>累计收入</span></div><div class="career-kpi"><b>' + money(expense) + '</b><span>累计支出</span></div><div class="career-kpi"><b>' + money(sponsor) + '</b><span>每场赞助预估</span></div></div></div>' +
     cashHtml +
     budgetHtml +
     trendHtml +
     prizeHtml +
+    transferHtml +
     sponsorHtml +
     '<div class="career-card"><h4>资金流水</h4>' + rows + '</div>';
 }
