@@ -624,6 +624,14 @@ export function scoutReport(s, oppId) {
   };
 }
 
+export function winChance(s, oppId, venue = 'home') {
+  const opp = s.season.teams.find((x) => x.id === oppId);
+  if (!opp) return 50;
+  const playerRating = effectiveTeamRating(s) + (venue === 'home' ? 2 : 0);
+  const diff = playerRating - opp.rating;
+  return clamp(Math.round(50 + diff * 2.5), 5, 95);
+}
+
 export function matchImportance(s, match) {
   if (!match) return '普通战';
   if (s.season.cup.phase === 'active') return '杯赛';
@@ -665,7 +673,8 @@ export function nextMatchInfo(s) {
     ratingDiff,
     threat,
     importance: matchImportance(s, nm),
-    scout: scoutReport(s, oppId)
+    scout: scoutReport(s, oppId),
+    winChance: winChance(s, oppId, venue)
   };
 }
 

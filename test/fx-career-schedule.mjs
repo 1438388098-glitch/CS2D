@@ -2,7 +2,7 @@ import {
   resetCareer, setStorage, setRng, nextSeason, migrateCareerState,
   fixtureMapFor, assignFixtureMaps, startCareerMatch, findPlayerFixture,
   nextMatchInfo, teamRecentForm, opponentStanding, matchImportance, seasonPace,
-  cupPrizeInfo, cupMapForRound, cupPreview, transferWindowInfo, scoutReport
+  cupPrizeInfo, cupMapForRound, cupPreview, transferWindowInfo, scoutReport, winChance
 } from '../src/career.js';
 import { createGame, startMatch } from '../src/game.js';
 
@@ -113,5 +113,16 @@ ok('scout report fields', scout && scout.rank >= 1 && scout.rank <= 8 && scout.a
 s.matchHistory = [{ oppId: scout.oppId, kills: 10, deaths: 4 }];
 const scoutWithData = scoutReport(s, scout.oppId);
 ok('scout report averages', scoutWithData.avgKills === 10 && scoutWithData.avgDeaths === 4);
+
+s = resetCareer();
+s.player.attrs = { aim: 100, move: 100, react: 100, nade: 100 };
+s.player.fatigue = 0;
+s.team.morale = 100;
+s.team.roster.forEach((p) => { p.rating = 100; });
+const weakOpp = s.season.teams.find((x) => x.id !== 'player');
+weakOpp.rating = 20;
+ok('win chance clamps high', winChance(s, weakOpp.id, 'home') === 95);
+weakOpp.rating = 200;
+ok('win chance clamps low', winChance(s, weakOpp.id, 'home') === 5);
 
 console.log('fx-career-schedule: all PASS');
