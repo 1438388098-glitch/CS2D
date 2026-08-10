@@ -1963,12 +1963,15 @@ function simTeamPower(team, side, opts = {}) {
   const aggression = (clamp(Number(team && team.aggression) || 50, 15, 95) - 50) * 0.04;
   const fatigue = opts.fatigue && opts.fatigue[team.id] ? -Number(opts.fatigue[team.id]) : 0;
   const home = opts.homeId === team.id ? 2 : 0;
+  const mapPrefs = Array.isArray(team && team.mapPrefs) ? team.mapPrefs : [];
+  const mapIdx = opts.mapId ? mapPrefs.indexOf(opts.mapId) : -1;
+  const mapEdge = mapIdx === 0 ? 1.4 : (mapIdx === 1 ? 0.7 : (team.homeMap === opts.mapId ? 0.8 : 0));
   const youth = (Number(team && team.youthCount) || 0) * (opts.rules && opts.rules.youthBias > 0.5 ? 0.8 : -0.35);
   const tactical = opts.rules && opts.rules.tacticalBias > 0 ? (team.tactics === '纪律防守' || team.tactics === '控图磨血' ? 1.2 : 0) : 0;
   const sideBonus = side === 'attack'
     ? (team.style === '快攻抢点' || team.style === '青训冲劲' || team.style === '狂攻抢点' ? 3 : 0) + aggression
     : (team.tactics === '默认防守' || team.tactics === '纪律防守' ? 2.5 : 0) - aggression * 0.5;
-  return clamp(base * 0.65 + avg * 0.35 + form + morale + fatigue + home + youth + tactical + sideBonus, 35, 112);
+  return clamp(base * 0.65 + avg * 0.35 + form + morale + fatigue + home + mapEdge + youth + tactical + sideBonus, 35, 112);
 }
 
 function simSiteWeights(team, mapId) {
@@ -2016,16 +2019,20 @@ function recordSimAct(stats, teamId, name, role, rating, act) {
 }
 
 function simulateCareerRound(index, home, away, options, stats) {
+  const need = options.rules && options.rounds ? options.rounds : ROUND.MATCH_WIN;
+  const secondHalf = index >= need;
   const attacker = index % 2 === 0 ? home : away;
   const defender = attacker === home ? away : home;
   const site = pickSite(attacker, options);
   const tactic = (attacker && attacker.tactics) || '默认进攻';
+  const half = secondHalf ? 2 : 1;
   const events = [{
     t: 'opening',
     side: attacker.id,
     site,
     tactic,
-    text: attacker.name + ' 选择 ' + site + ' 点，战术 ' + tactic
+    half,
+    text: (secondHalf ? '下半场换边：' : '') + attacker.name + ' 选择 ' + site + ' 点，战术 ' + tactic
   }];
   const attackPower = simTeamPower(attacker, 'attack', options);
   const defensePower = simTeamPower(defender, 'defense', options);
@@ -2089,7 +2096,7 @@ function simulateCareerRound(index, home, away, options, stats) {
   }
   const round = index + 1;
   events.push({ t: 'round_end', side: winner.id, round, text: winner.name + ' 赢下第 ' + round + ' 回合' });
-  return { round, attacker: attacker.id, defender: defender.id, site, tactic, winner: winner.id, events, stats: {} };
+  return { round, half, attacker: attacker.id, defender: defender.id, site, tactic, winner: winner.id, events, stats: {} };
 }
 
 export function simulateCareerMatch(home, away, options = {}) {

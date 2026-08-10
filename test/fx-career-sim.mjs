@@ -29,6 +29,8 @@ ok('match winner decided', result.winner === home.id || result.winner === away.i
 ok('match score reaches five', (result.score[0] === 5 || result.score[1] === 5) && result.score[0] >= 0 && result.score[1] >= 0);
 ok('rounds match score sum', result.rounds.length === result.score[0] + result.score[1]);
 ok('round timeline structured', result.rounds.every((r) => r.events.length >= 4 && r.site && r.tactic) && result.timeline.length >= result.rounds.length * 4);
+ok('sim halves structured', result.rounds.every((r) => r.half === 1 || r.half === 2) && result.rounds.filter((r) => r.half === 1).length <= 5);
+ok('sim side swap after half', result.rounds.length <= 5 || result.rounds[5].attacker === away.id);
 ok('sim event types', result.timeline.some((e) => e.t === 'opening') && result.timeline.some((e) => e.t === 'duel') && result.timeline.some((e) => e.t === 'site_control') && result.timeline.some((e) => e.t === 'round_end'));
 ok('mvp and player stats', result.mvp && result.mvp.name && result.players.length > 0);
 ok('kill death balance', result.totalKills === totalDeaths);
