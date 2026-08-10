@@ -1,7 +1,7 @@
 import {
   resetCareer, setStorage, setRng, getState, settlePlayerMatch, train, sellPlayer, buyPlayer, candidates, filterCandidates,
   nextSeason, save, loadCareer, __clearStateForTest, candidateProfile,
-  sponsorIncome, sponsorPreview, formBonus, fatiguePenalty, careerMorale, restPlayer, seasonGoals, goalProgress, trainingPreview, trainingSuggestion, rotationAdvice, rosterContribution,
+  sponsorIncome, sponsorPreview, formBonus, fatiguePenalty, careerMorale, restPlayer, seasonGoals, goalProgress, trainingPreview, trainingSuggestion, rotationAdvice, transferBudget, rosterContribution,
   achievementDefs, achievements, careerRecords, migrateCareerState, matchReadiness
 } from '../src/career.js';
 
@@ -103,6 +103,8 @@ ok('candidate pool potential', candidates().every((c) => c.potential > 0 && type
 s = resetCareer();
 s.season.round = 5;
 s.team.bank = 20000;
+const budget = transferBudget(s);
+ok('transfer budget', budget && budget.total > 0 && budget.affordable >= 0 && budget.maxAffordableRating >= 0 && budget.afterBestBuy >= 0 && budget.best && budget.best.price <= s.team.bank);
 const cand = candidates()[0];
 buyPlayer(cand.id);
 ok('buy ledger and morale', s.team.bank > 0 && s.team.ledger.some((x) => x.label.includes('买入')) && s.team.morale === 67);

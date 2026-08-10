@@ -552,6 +552,23 @@ export function transferWindowInfo(s) {
   };
 }
 
+export function transferBudget(s) {
+  const pool = Array.isArray(s.team && s.team.pool) ? s.team.pool : (transferWindowOpen(s) ? candidates() : []);
+  const bank = Number(s.team && s.team.bank) || 0;
+  const affordable = pool
+    .filter((c) => c && c.price <= bank)
+    .sort((a, b) => b.rating - a.rating || a.price - b.price);
+  const best = affordable[0] || null;
+  return {
+    bank,
+    total: pool.length,
+    affordable: affordable.length,
+    maxAffordableRating: affordable.length ? affordable[0].rating : null,
+    best,
+    afterBestBuy: best ? Math.max(0, bank - best.price) : bank
+  };
+}
+
 export function train(attr, tierKey) {
   const s = getState();
   const tier = TRAIN_TIERS.find((t) => t.key === tierKey);

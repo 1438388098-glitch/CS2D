@@ -1,7 +1,7 @@
 import {
   loadCareer, getState, titleFor, startCareerMatch, careerEndMatch, abandonPendingMatch, simulatePlayerMatch, resetCareer,
   train, sellPlayer, buyPlayer, candidates, filterCandidates, candidateProfile, nextSeason, seasonReport, nextMatch, nextMatchInfo, matchImportance, teamRecentForm, matchReadiness,
-  transferWindowOpen, transferWindowInfo, isStorageAvailable, cupMap, cupPrizeInfo, cupMapForRound, fixtureMapFor, fixtureMatchRecord, winChance, trainingTiers, trainingPreview, trainingSuggestion, rotationAdvice, xpNeeded,
+  transferWindowOpen, transferWindowInfo, transferBudget, isStorageAvailable, cupMap, cupPrizeInfo, cupMapForRound, fixtureMapFor, fixtureMatchRecord, winChance, trainingTiers, trainingPreview, trainingSuggestion, rotationAdvice, xpNeeded,
   seasonStats, seasonAwards, seasonPerformanceSummary, seasonSeries, seasonStreaks, careerSummary, matchDetail, seasonTimeline, headToHead, importantMatches, seasonTrends, favoriteMatches, cupHistory, trophyCase, careerTimeline,
   sponsorIncome, sponsorPreview, formBonus, fatiguePenalty, careerMorale, restPlayer, seasonGoals, seasonPace, goalProgress, relegationProjection, rosterContribution,
   achievementDefs, achievements, careerRecords
@@ -362,7 +362,9 @@ function renderRoster(s) {
     const filterHtml = '<div class="career-train-row"><b>筛选</b><select data-filter="role"><option value="">全部角色</option>' + roleOptions + '</select>' +
       '<span>最低评级 <input type="number" data-filter="min-rating" min="0" max="100" value="' + transferMinRating + '"></span>' +
       '<span>最高价格 <input type="number" data-filter="max-price" min="0" max="30000" step="500" value="' + transferMaxPrice + '"></span></div>';
-    html += '<div class="career-card"><h4>转会窗 · 剩余 ' + s.team.transfersLeft + ' 次</h4>' + filterHtml + '<div class="career-pool">';
+    const budget = transferBudget(s);
+    html += '<div class="career-card"><h4>转会窗 · 剩余 ' + s.team.transfersLeft + ' 次</h4>' + filterHtml +
+      '<div class="career-stats"><span>可负担 ' + budget.affordable + ' / ' + budget.total + ' · 最高可买评级 ' + (budget.maxAffordableRating || '-') + ' · 买入后余额 ' + money(budget.afterBestBuy) + '</span></div><div class="career-pool">';
     const poolResult = filterCandidates(candidates(), { role: transferRole, minRating: transferMinRating, maxPrice: transferMaxPrice });
     const pool = poolResult.list;
     if (pool.length) {
