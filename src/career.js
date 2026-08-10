@@ -3198,13 +3198,20 @@ export function simulatePlayerMatch() {
   const f = pm.isCup ? findCupMatch(s) : findPlayerFixture(s);
   const venue = pm.isCup ? 'home' : (f && f.home === 'player' ? 'home' : 'away');
   const mapId = pm.isCup ? cupMap(s) : fixtureMapFor(s, f);
-  const playerTeamSim = { ...playerTeam, rating: effectiveTeamRating(s), form: [], morale: 50 };
+  const form = careerForm(s).map((m) => (m.win ? 'W' : 'L'));
+  const playerTeamSim = {
+    ...playerTeam,
+    rating: effectiveRatingFor(s.team.roster, s.player.attrs),
+    form,
+    morale: careerMorale(s)
+  };
   const simHome = venue === 'home' ? playerTeamSim : opp;
   const simAway = venue === 'home' ? opp : playerTeamSim;
   const r = simulateCareerMatch(simHome, simAway, {
     mapId,
     league: s.team.league,
-    homeId: simHome.id
+    homeId: simHome.id,
+    fatigue: { [playerTeam.id]: Math.round(fatiguePenalty(s) * 20) }
   });
   const win = r.winner === 'player';
   const score = venue === 'home' ? r.score : [r.score[1], r.score[0]];

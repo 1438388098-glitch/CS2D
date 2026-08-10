@@ -47,4 +47,17 @@ ok('player history persists replay', lastHistory && Array.isArray(lastHistory.ro
 const detail = matchDetail(lastHistory);
 ok('match detail exposes replay', detail && detail.rounds.length === lastHistory.rounds.length && detail.timeline.length === lastHistory.timeline.length);
 
+setRng(() => 0.5);
+const fresh = resetCareer();
+fresh.player.fatigue = 0;
+fresh.team.morale = 100;
+fresh.player.form = Array.from({ length: 5 }, (_, i) => ({ win: true, kills: 12 + i, deaths: 5 }));
+const goodStateSim = simulatePlayerMatch();
+const tired = resetCareer();
+tired.player.fatigue = 90;
+tired.team.morale = 20;
+tired.player.form = Array.from({ length: 5 }, (_, i) => ({ win: false, kills: 4, deaths: 14 - i }));
+const badStateSim = simulatePlayerMatch();
+ok('player state affects simulation', goodStateSim.win !== badStateSim.win || goodStateSim.kills !== badStateSim.kills);
+
 console.log('fx-career-sim: all PASS');
