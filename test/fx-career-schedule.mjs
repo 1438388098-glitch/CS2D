@@ -1,7 +1,7 @@
 import {
   resetCareer, setStorage, setRng, nextSeason, migrateCareerState,
   fixtureMapFor, assignFixtureMaps, startCareerMatch, findPlayerFixture,
-  nextMatchInfo, teamRecentForm, opponentStanding, matchImportance
+  nextMatchInfo, teamRecentForm, opponentStanding, matchImportance, seasonPace
 } from '../src/career.js';
 import { createGame, startMatch } from '../src/game.js';
 
@@ -83,5 +83,13 @@ const lateF = findPlayerFixture(s);
 s.season.standings.forEach((x, i) => { x.pts = 30 - i * 2; });
 ok('title match importance', matchImportance(s, lateF) === '争冠战');
 ok('info carries importance', nextMatchInfo(s).importance === '争冠战');
+
+s = resetCareer();
+const playerStanding = s.season.standings.find((x) => x.teamId === 'player');
+playerStanding.played = 6;
+playerStanding.pts = 12;
+const pace = seasonPace(s);
+ok('season pace projects points', pace.played === 6 && pace.remaining === 8 && pace.projected === 28);
+ok('season pace rank', pace.currentRank === 1 && pace.projectedRank === 1);
 
 console.log('fx-career-schedule: all PASS');

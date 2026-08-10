@@ -906,6 +906,35 @@ function sortedStandings(s) {
   return [...s.season.standings].sort((a, b) => b.pts - a.pts || b.w - a.w);
 }
 
+export function seasonPace(s, teamId = 'player') {
+  const list = sortedStandings(s);
+  const row = list.find((x) => x.teamId === teamId);
+  if (!row) return { teamId, points: 0, played: 0, remaining: 0, projected: null, currentRank: null, projectedRank: null };
+  const total = Number(s.season.totalRounds) || 14;
+  const remaining = Math.max(0, total - row.played);
+  const avg = row.played > 0 ? row.pts / row.played : null;
+  const projected = avg == null ? null : Math.round(row.pts + avg * remaining);
+  const projectedRanks = s.season.standings.map((x) => {
+    const avg2 = x.played > 0 ? x.pts / x.played : null;
+    return {
+      teamId: x.teamId,
+      projected: avg2 == null ? null : Math.round(x.pts + avg2 * Math.max(0, total - x.played)),
+      w: x.w,
+      pts: x.pts
+    };
+  }).filter((x) => x.projected != null).sort((a, b) => b.projected - a.projected || b.w - a.w);
+  const projectedRank = projectedRanks.length ? projectedRanks.findIndex((x) => x.teamId === teamId) + 1 : null;
+  return {
+    teamId,
+    points: row.pts,
+    played: row.played,
+    remaining,
+    projected,
+    currentRank: list.indexOf(row) + 1,
+    projectedRank
+  };
+}
+
 export function seasonReport() {
   const s = getState();
   const list = sortedStandings(s);

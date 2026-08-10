@@ -3,7 +3,7 @@ import {
   train, sellPlayer, buyPlayer, candidates, nextSeason, seasonReport, nextMatch, nextMatchInfo, matchImportance,
   transferWindowOpen, isStorageAvailable, cupMap, trainingTiers, xpNeeded,
   seasonStats, seasonSeries, seasonStreaks, careerSummary,
-  sponsorIncome, formBonus, fatiguePenalty, careerMorale, restPlayer, seasonGoals,
+  sponsorIncome, formBonus, fatiguePenalty, careerMorale, restPlayer, seasonGoals, seasonPace,
   achievementDefs, achievements, careerRecords
 } from './career.js';
 
@@ -304,6 +304,7 @@ function renderRoster(s) {
 
 function renderStandings(s) {
   const list = [...s.season.standings].sort((a, b) => b.pts - a.pts || b.w - a.w);
+  const pace = seasonPace(s);
   let html = '<div class="career-card"><h4>积分榜</h4><div class="career-table">';
   html += '<div class="career-row head"><span>球队</span><b>场</b><b>胜</b><b>平</b><b>负</b><b>分</b></div>';
   for (let i = 0; i < list.length; i++) {
@@ -314,7 +315,7 @@ function renderStandings(s) {
     const cls = 'career-row' + (x.teamId === 'player' ? ' mine' : '') + (promo ? ' promo' : '') + (releg ? ' releg' : '');
     html += '<div class="' + cls + '"><span>' + esc(teamName(s, x.teamId)) + '</span><b>' + x.played + '</b><b>' + x.w + '</b><b>' + x.d + '</b><b>' + x.l + '</b><b>' + x.pts + '</b></div>';
   }
-  return html + '</div><p>甲级第 7-8 名降乙；乙级第 1-2 名升甲、第 7-8 名降丙；丙级第 1-2 名升乙。</p></div>';
+  return html + '</div><p>' + (pace.projected != null ? '玩家当前第 ' + pace.currentRank + ' · 剩余 ' + pace.remaining + ' 场 · 预测最终 ' + pace.projected + ' 分（预计第 ' + pace.projectedRank + '）' : '玩家当前第 ' + pace.currentRank + ' · 暂无足够赛果预测最终积分') + '</p><p>甲级第 7-8 名降乙；乙级第 1-2 名升甲、第 7-8 名降丙；丙级第 1-2 名升乙。</p></div>';
 }
 
 function renderCup(s) {
