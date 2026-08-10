@@ -3,7 +3,7 @@ import {
   train, sellPlayer, buyPlayer, candidates, nextSeason, seasonReport, nextMatch, nextMatchInfo, matchImportance, teamRecentForm,
   transferWindowOpen, transferWindowInfo, isStorageAvailable, cupMap, cupPrizeInfo, cupMapForRound, fixtureMapFor, fixtureMatchRecord, winChance, trainingTiers, trainingPreview, xpNeeded,
   seasonStats, seasonSeries, seasonStreaks, careerSummary, matchDetail, seasonTimeline, headToHead, importantMatches, seasonTrends, favoriteMatches, cupHistory, careerTimeline,
-  sponsorIncome, formBonus, fatiguePenalty, careerMorale, restPlayer, seasonGoals, seasonPace, goalProgress,
+  sponsorIncome, formBonus, fatiguePenalty, careerMorale, restPlayer, seasonGoals, seasonPace, goalProgress, rosterContribution,
   achievementDefs, achievements, careerRecords
 } from './career.js';
 
@@ -312,18 +312,18 @@ function renderTraining(s) {
 }
 
 function renderRoster(s) {
-  const rosterAvg = s.team.roster.reduce((a, p) => a + p.rating, 0) / Math.max(1, s.team.roster.length);
-  const attrs = s.player.attrs;
-  const attrsAvg = (attrs.aim + attrs.move + attrs.react + attrs.nade) / 4;
-  const teamRating = Math.round(rosterAvg * 0.8 + attrsAvg * 0.2);
-  let html = '<div class="career-card"><h4>阵容 · 队伍评级 ' + teamRating + '</h4><div class="career-roster">';
-  html += '<div class="career-player-card"><b>' + esc(s.player.name) + '</b><span>你 · ' + esc(titleFor(s.player.level)) + '</span><i>' + esc(s.team.name) + ' · 等级 ' + s.player.level + '</i></div>';
-  for (const p of s.team.roster) {
+  const contrib = rosterContribution(s);
+  let html = '<div class="career-card"><h4>阵容 · 队伍评级 ' + contrib.rating + '</h4>' +
+    '<div class="career-stats"><span>队友均评 ' + contrib.rosterAvg + ' · 玩家属性 ' + contrib.attrsAvg + ' · 状态 ' + (contrib.form >= 0 ? '+' : '') + contrib.form + ' · 士气 +' + contrib.morale + '</span><span>基础 ' + contrib.base + ' · 最终 ' + contrib.rating + '</span></div>' +
+    '<div class="career-roster">';
+  html += '<div class="career-player-card"><b>' + esc(s.player.name) + '</b><span>你 · ' + esc(titleFor(s.player.level)) + '</span><i>' + esc(s.team.name) + ' · 等级 ' + s.player.level + ' · 属性贡献 +' + contrib.player.contribution + ' · ' + contrib.player.sharePct + '%</i></div>';
+  for (const p of contrib.members) {
+    html += '<div class="career-row"><span>' + esc(p.role) + ' · 评级 ' + p.rating + '</span><b>贡献 ' + (p.delta >= 0 ? '+' : '') + p.delta + ' · ' + p.sharePct + '%</b></div>';
     html += '<div class="career-player-card"><b>' + esc(p.name) + '</b><span>' + esc(p.role) + '</span><i>' + esc(p.team || s.team.name) + ' · 评级 ' + p.rating + ' · ' + money(p.price) + '</i>';
     if (transferWindowOpen(s) && s.team.transfersLeft > 0) html += '<button class="btn small" data-act="sell" data-id="' + p.id + '">卖出</button>';
     html += '</div>';
   }
-  while (s.team.roster.length < 4) html += '<div class="career-player-card empty">空位 · 可在转会窗补入</div>';
+  while (contrib.members.length < 4) html += '<div class="career-player-card empty">空位 · 可在转会窗补入</div>';
   html += '</div></div>';
   if (transferWindowOpen(s)) {
     html += '<div class="career-card"><h4>转会窗 · 剩余 ' + s.team.transfersLeft + ' 次</h4><div class="career-pool">';

@@ -1,7 +1,7 @@
 import {
   resetCareer, setStorage, setRng, getState, settlePlayerMatch, train, sellPlayer, buyPlayer, candidates,
   nextSeason, save, loadCareer, __clearStateForTest,
-  sponsorIncome, formBonus, fatiguePenalty, careerMorale, restPlayer, seasonGoals, goalProgress, trainingPreview,
+  sponsorIncome, formBonus, fatiguePenalty, careerMorale, restPlayer, seasonGoals, goalProgress, trainingPreview, rosterContribution,
   achievementDefs, achievements, careerRecords, migrateCareerState
 } from '../src/career.js';
 
@@ -48,6 +48,13 @@ ok('training preview invalids', trainingPreview(s, 'nope', 'basic') === null && 
 s.player.attrs.aim = 99;
 const cappedPreview = trainingPreview(s, 'aim', 'elite');
 ok('training preview caps', cappedPreview.after === 100 && cappedPreview.gained === 1 && cappedPreview.fatigueGain === 10);
+
+s = resetCareer();
+let rc = rosterContribution(s);
+ok('roster contribution fields', rc && rc.rating > 0 && rc.members.length === 4 && rc.player.contribution > 0 && rc.members.every((m) => m.sharePct >= 0));
+s.team.roster.forEach((p, i) => { p.rating = [100, 80, 60, 60][i]; });
+rc = rosterContribution(s);
+ok('roster contribution split', rc.rosterAvg === 75 && rc.members[0].delta === 25 && rc.members[3].delta === -15 && rc.members[0].sharePct > rc.members[3].sharePct && rc.player.contribution >= 9);
 
 s = resetCareer();
 s.season.round = 5;

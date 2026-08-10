@@ -113,6 +113,40 @@ function refreshPlayerRating(s) {
   if (t) t.rating = effectiveTeamRating(s);
 }
 
+export function rosterContribution(s) {
+  const roster = Array.isArray(s.team && s.team.roster) ? s.team.roster : [];
+  const attrs = s.player && s.player.attrs ? s.player.attrs : { aim: 0, move: 0, react: 0, nade: 0 };
+  const rosterTotal = roster.reduce((a, p) => a + (p.rating || 0), 0);
+  const rosterAvg = roster.length ? rosterTotal / roster.length : 0;
+  const attrsAvg = (attrs.aim + attrs.move + attrs.react + attrs.nade) / 4;
+  const base = Math.round(rosterAvg * 0.8 + attrsAvg * 0.2);
+  const members = roster.map((p) => {
+    const sharePct = rosterTotal ? Math.round(((p.rating || 0) / rosterTotal) * 100) : 0;
+    return {
+      ...p,
+      delta: Math.round((p.rating || 0) - rosterAvg),
+      sharePct,
+      weightPct: roster.length ? Math.round(80 / roster.length) : 0
+    };
+  });
+  const playerShare = base && attrsAvg ? Math.round((attrsAvg * 0.2 / base) * 100) : 0;
+  return {
+    rosterAvg: Math.round(rosterAvg),
+    attrsAvg: Math.round(attrsAvg),
+    base,
+    rating: Math.round(effectiveTeamRating(s)),
+    form: formBonus(s),
+    morale: moraleModifier(s),
+    members,
+    player: {
+      name: s.player && s.player.name || 'player',
+      attrsAvg: Math.round(attrsAvg),
+      contribution: Math.round(attrsAvg * 0.2),
+      sharePct: playerShare
+    }
+  };
+}
+
 function clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); }
 function addLedger(s, type, amount, label) {
   if (!Array.isArray(s.team.ledger)) s.team.ledger = [];
