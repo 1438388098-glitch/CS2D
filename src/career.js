@@ -567,6 +567,25 @@ export function opponentStanding(s, teamId) {
   return idx < 0 ? null : idx + 1;
 }
 
+export function matchImportance(s, match) {
+  if (!match) return '普通战';
+  if (s.season.cup.phase === 'active') return '杯赛';
+  const list = sortedStandings(s);
+  const playerRow = list.find((x) => x.teamId === 'player');
+  const oppRow = list.find((x) => x.teamId === (match.home === 'player' ? match.away : match.home));
+  if (!playerRow || !oppRow) return '普通战';
+  const playerRank = list.indexOf(playerRow) + 1;
+  const oppRank = list.indexOf(oppRow) + 1;
+  const gap = Math.abs(playerRow.pts - oppRow.pts);
+  const late = s.season.round >= s.season.totalRounds - 3;
+  const titleRelevant = playerRank <= 2 || oppRank <= 2;
+  const relegRelevant = s.team.league !== '丙级' && (playerRank >= 7 || oppRank >= 7);
+  if (late && titleRelevant && gap <= 6) return '争冠战';
+  if (late && relegRelevant && gap <= 6) return '保级战';
+  if (gap <= 3 && (late || playerRank <= 4 || oppRank <= 4 || playerRank >= 6 || oppRank >= 6)) return '关键战';
+  return '普通战';
+}
+
 export function nextMatchInfo(s) {
   const nm = nextMatch(s);
   if (!nm) return null;
@@ -587,7 +606,8 @@ export function nextMatchInfo(s) {
     rank: opponentStanding(s, oppId),
     form: teamRecentForm(s, oppId),
     ratingDiff,
-    threat
+    threat,
+    importance: matchImportance(s, nm)
   };
 }
 

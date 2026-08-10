@@ -1,7 +1,7 @@
 import {
   resetCareer, setStorage, setRng, nextSeason, migrateCareerState,
   fixtureMapFor, assignFixtureMaps, startCareerMatch, findPlayerFixture,
-  nextMatchInfo, teamRecentForm, opponentStanding
+  nextMatchInfo, teamRecentForm, opponentStanding, matchImportance
 } from '../src/career.js';
 import { createGame, startMatch } from '../src/game.js';
 
@@ -76,5 +76,12 @@ s.season.fixtures[0].played = true;
 s.season.fixtures[0].winner = s.season.fixtures[0].home;
 const formHome = teamRecentForm(s, s.season.fixtures[0].home);
 ok('recent form reads fixtures', formHome === 'W');
+
+s = resetCareer();
+s.season.round = 12;
+const lateF = findPlayerFixture(s);
+s.season.standings.forEach((x, i) => { x.pts = 30 - i * 2; });
+ok('title match importance', matchImportance(s, lateF) === '争冠战');
+ok('info carries importance', nextMatchInfo(s).importance === '争冠战');
 
 console.log('fx-career-schedule: all PASS');
