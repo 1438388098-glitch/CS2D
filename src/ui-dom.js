@@ -2,6 +2,7 @@ import { ROUND } from './config.js';
 import { weaponDef, ammoFor, reserveFor, wkey } from './entities.js';
 import { tileAt } from './map.js';
 import { clamp } from './utils.js';
+import { ammoWarning } from './hud.js';
 
 let game = null;
 let D = {};
@@ -101,16 +102,20 @@ function updateRight(p, now) {
   const wd = weaponDef(p);
   const wk = wkey(p);
   let mag = '∞', res = '';
+  let warn = null;
   if (wd && wd.mag > 0) {
     mag = String(ammoFor(p));
     res = String(reserveFor(p));
+    warn = ammoWarning(ammoFor(p), wd.mag, now);
   } else if (!wd) {
     mag = '—';
   }
-  if (D.hudAmmoMag.textContent !== mag) {
-    D.hudAmmoMag.textContent = mag;
-    D.hudAmmoMag.classList.toggle('empty', mag === '0');
-  }
+  const ammoEl = D.hudAmmoMag;
+  if (ammoEl.textContent !== mag) ammoEl.textContent = mag;
+  ammoEl.classList.toggle('empty', mag === '0');
+  ammoEl.classList.toggle('low', !!warn && warn.level === 'low');
+  ammoEl.classList.toggle('critical', !!warn && warn.level === 'critical');
+  ammoEl.classList.toggle('blink-off', !!warn && !warn.blink);
   if (D.hudAmmoRes.textContent !== res) D.hudAmmoRes.textContent = res;
   const nm = wd ? wd.name : (p.slot && p.slot.indexOf('nade:') === 0 ? '投掷物' : '');
   if (D.hudAmmoName.textContent !== nm) D.hudAmmoName.textContent = nm;
