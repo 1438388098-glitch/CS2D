@@ -1,38 +1,50 @@
 import { launchBrowser, waitForDebug, newTab, CDP } from './cdp.js';
 import { spawn } from 'child_process';
 
-const srv = spawn('node', ['server.js'], { cwd: 'D:/Claudeworkspace/CS2D', stdio: 'ignore', detached: true });
+const APP_PORT = 8092;
+const DBG_PORT = 9232;
+const srv = spawn('node', ['server.js'], { cwd: 'D:/Claudeworkspace/CS2D', env: { ...process.env, PORT: String(APP_PORT) }, stdio: 'ignore', detached: true });
 await new Promise((r) => setTimeout(r, 1500));
-const { proc, port } = launchBrowser();
+const { proc, port } = launchBrowser({ port: DBG_PORT, profile: 'C:/Users/20579/AppData/Local/Temp/opencode/cdp-profile-switch' });
 let ok = true;
 const fail = (m) => { ok = false; console.log('  FAIL: ' + m); };
 const pass = (m) => console.log('  PASS: ' + m);
 try {
   const wsUrl = await waitForDebug(port);
-  const pageUrl = await newTab(port, 'http://127.0.0.1:8080/');
+  const pageUrl = await newTab(port, `http://127.0.0.1:${APP_PORT}/`);
   const cdp = new CDP(pageUrl);
   await cdp.connect();
-  await cdp.navigate('http://127.0.0.1:8080/');
+  await cdp.navigate(`http://127.0.0.1:${APP_PORT}/`);
   await new Promise((r) => setTimeout(r, 2500));
+  await cdp.eval(`(()=>{const c=document.querySelector('[data-mode="classic"]'); if(c && !c.classList.contains('sel')) c.click(); return true})()`);
 
   const maps = await cdp.eval(`JSON.stringify([...document.querySelectorAll('[data-map]')].map(b=>({m:b.getAttribute('data-map'),t:b.textContent.trim()})))`);
-  pass('map buttons: ' + maps);
+  const mapsArr = JSON.parse(maps);
+  if (!mapsArr.some((b) => b.m === 'canal')) { fail('canal map button missing: ' + maps); }
+  else pass('map buttons: ' + maps);
 
   const clickCanal = await cdp.eval(`(()=>{const b=document.querySelector('[data-map="canal"]');if(!b)return 'no-canal-btn';b.click();return document.querySelector('[data-map="canal"]').classList.contains('sel')})()`);
-  pass('click canal selected: ' + clickCanal);
+  if (clickCanal !== true) { fail('canal button not selected: ' + clickCanal); }
+  else pass('click canal selected: ' + clickCanal);
 
   const stored = await cdp.eval(`localStorage.getItem('cs2d_map')`);
-  pass('localStorage cs2d_map: ' + stored);
+  if (stored !== 'canal') { fail('localStorage cs2d_map expected canal got ' + stored); }
+  else pass('localStorage cs2d_map: ' + stored);
 
   const optsMap = await cdp.eval(`window.__cs2d.game.opts.mapId`);
-  pass('opts.mapId after click: ' + optsMap);
+  if (optsMap !== 'canal') { fail('opts.mapId expected canal got ' + optsMap); }
+  else pass('opts.mapId after click: ' + optsMap);
 
-  const startClick = await cdp.eval(`(()=>{const b=[...document.querySelectorAll('button')].find(b=>/\\u5f00\\u59cb|start/i.test(b.textContent));if(!b)return false;b.click();return true})()`);
-  pass('click start: ' + startClick);
+  const startClick = await cdp.eval(`(()=>{const b=document.getElementById('startBtn');if(!b)return false;b.click();return true})()`);
+  if (!startClick) { fail('start button not found'); }
+  else pass('click start: ' + startClick);
   await new Promise((r) => setTimeout(r, 1800));
 
   const state = await cdp.eval(`window.__cs2d.game ? JSON.stringify({state:window.__cs2d.game.state, mapId:window.__cs2d.game.opts.mapId}) : 'no game'`);
-  pass('game state: ' + state);
+  const stObj = state === 'no game' ? null : JSON.parse(state);
+  if (!stObj || (stObj.state !== 'BUY' && stObj.state !== 'LIVE')) { fail('game not running: ' + state); }
+  else if (stObj.mapId !== 'canal') { fail('game mapId expected canal got ' + stObj.mapId); }
+  else pass('game state: ' + state);
 
   const mmTex = await cdp.eval(`(()=>{const g=window.__cs2d.game;const l=g.layers;return l&&l.miniMap?l.miniMap.width+'x'+l.miniMap.height:'no-layers'})()`);
   pass('minimap layer: ' + mmTex);

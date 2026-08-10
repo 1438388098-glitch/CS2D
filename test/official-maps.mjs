@@ -25,8 +25,8 @@ function distTime(sx, sy, tx, ty, tile) {
 }
 const EXPECTED_SPAWNS = {
   dust2: { t: [47, 117], c: [74, 27] },
-  canal: { t: [104, 40], c: [34, 77] },
-  metro: { t: [13, 80], c: [108, 41] }
+  canal: { t: [138, 52], c: [45, 102] },
+  metro: { t: [17, 106], c: [143, 54] }
 };
 for (const id of ['dust2', 'canal', 'metro']) {
   const def = MAPS.find((m) => m.id === id);
@@ -52,6 +52,13 @@ for (const id of ['dust2', 'canal', 'metro']) {
     const ta = distTime(t.x, t.y, tx, ty, tile);
     const ca = distTime(c.x, c.y, tx, ty, tile);
     ok(`${id} reachable ${k}`, ta !== null && ca !== null, `T=${ta?.toFixed(2)} CT=${ca?.toFixed(2)}`);
+  }
+  if (id === 'dust2') {
+    const areaOk = ['A', 'B'].every((k) => {
+      const ss = map.sites[k];
+      return (ss.x1 - ss.x0) / tile >= 7 && (ss.y1 - ss.y0) / tile >= 7;
+    });
+    ok('dust2 site planting area', areaOk, `A=${((map.sites.A.x1 - map.sites.A.x0) / tile).toFixed(0)}x${((map.sites.A.y1 - map.sites.A.y0) / tile).toFixed(0)} B=${((map.sites.B.x1 - map.sites.B.x0) / tile).toFixed(0)}x${((map.sites.B.y1 - map.sites.B.y0) / tile).toFixed(0)}`);
   }
   const vertical = map.grid.flat().filter((c) => c === '^' || c === 'R').length;
   ok(`${id} vertical layer`, vertical >= 6, `tiles=${vertical} highPoints=${map.highPoints?.length || 0}`);

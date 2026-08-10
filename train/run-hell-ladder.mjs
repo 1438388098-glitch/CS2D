@@ -4,7 +4,7 @@
 //   node train/run-hell-ladder.mjs --stage=h4,h5,h6,h7
 //   node train/run-hell-ladder.mjs --stage=deploy  # 部署 checkpoints 到 config.js
 // 产出: train/checkpoints/best_gen_{N}_{h4..h7}.json → 手动/自动合入 config.js
-import { existsSync, readFileSync, writeFileSync } from 'fs';
+import { existsSync, readFileSync, writeFileSync, readdirSync } from 'fs';
 import { evolve, loadCheckpoint, listCheckpoints } from './evolve.js';
 import { runEval } from './fitness.js';
 import { decodeGenome, mutate } from '../src/ai-genome.js';
@@ -65,11 +65,14 @@ function deploy() {
     console.log(`[deploy] H${level[1]} ← ${cks[cks.length - 1]} fitness=${ck.fitness}`);
   }
   for (const style of ['hold', 'control', 'push']) {
-    const net = 'D:/Claudeworkspace/CS2D/train/checkpoints/net_' + style + '.json';
-    if (!existsSync(net)) { console.log(`[deploy] 跳过 net_${style}（训练未完成）`); continue; }
+    // dqn-train 产出 net_{style}_best.json（dust2）或 net_{style}_best_{map}.json（迁移图）
+    const ckDir = 'D:/Claudeworkspace/CS2D/train/checkpoints/';
+    const cands = readdirSync(ckDir).filter((f) => f.startsWith('net_' + style + '_best')).sort();
+    if (!cands.length) { console.log(`[deploy] 跳过 net_${style}（训练未完成）`); continue; }
+    const net = ckDir + cands[cands.length - 1];
     const j = JSON.parse(readFileSync(net, 'utf8'));
     out['net_' + style] = j;
-    console.log(`[deploy] net_${style} ← net_${style}.json`);
+    console.log(`[deploy] net_${style} ← ${net}`);
   }
   writeFileSync('D:/Claudeworkspace/CS2D/train/checkpoints/ladder-deploy.json', JSON.stringify(out, null, 1));
   console.log('[deploy] 汇总 → train/checkpoints/ladder-deploy.json（手动合入 config.js 或由脚本自动合入）');

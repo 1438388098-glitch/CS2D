@@ -106,3 +106,10 @@ export function shouldSaveForEco(e, money, weaponTier, roundTime, roundDur = 115
   if (roundTime < roundDur - lateAt) return false;
   return weaponTier >= 2 && money < minMoney;
 }
+
+export function shouldRepositionOnIntel(e, intelAge, distToHome, planted = false, maxAge = 6, farHome = 700) {
+  if (!e || e.team !== 'ct' || e.dead) return false;
+  if (planted) return false;
+  if (distToHome < farHome) return false;
+  return intelAge > maxAge;
+}

@@ -15,7 +15,7 @@
 | 长期结构 | 联赛+杯赛双轨:8 队双循环 14 轮 → 8 队单败杯赛 |
 | 成长 | 经验+训练课:4 项属性,打比赛得经验,花钱上训练课 |
 | 战队管理 | 精简:4 名 AI 队友,每赛季转会窗可换人(转会费上限) |
-| 比赛 | 复用经典爆破引擎,MR13,与 Major 一致 |
+| 比赛 | 复用经典爆破引擎,MR9,与 Major 一致 |
 | 二级 UI | 单一全屏遮罩 + 顶部 Tab 导航,6 个页面 + 赛季结算页 |
 
 ## 2. 数据模型
@@ -26,13 +26,13 @@
 {
   version: 1,
   player: {
-    name: '猎鹰',
+    name: 'donk',  // 玩家扮演真实 CS2 选手 donk
     level: 1, xp: 0,          // 等级=经验里程碑,仅决定称号
     attrs: { aim: 50, move: 50, react: 50, nade: 40 },  // 0-100
     seasonStats: { played: 0, w: 0, d: 0, l: 0, kills: 0, deaths: 0, mvp: 0 }
   },
   team: {
-    name: '猎鹰战队',
+    name: 'Team Spirit',
     league: '乙级',           // '甲级' | '乙级' | '丙级'
     bank: 12000,
     roster: [ { id, name, role, rating, price } x 4 ],  // AI 队友
@@ -59,14 +59,14 @@
 
 - 每个级别 8 队(甲级/乙级/丙级),双循环 14 轮(主客各 7 场),每轮 4 场。
 - 玩家所在队的比赛由玩家亲自打;同轮其余 3 场按双方 rating 模拟。
-- 对手队伍:每赛季除玩家队外生成 7 支 AI 队;甲级 rating 80-92,乙级 70-85,丙级 60-74;名称/简称从战队名池随机,homeMap 从 3 张官方图分配;玩家队 rating = roster 平均 rating(四舍五入)。
+- 对手队伍:每赛季除玩家队外生成 7 支 AI 队;甲级 rating 80-92,乙级 70-85,丙级 60-74;名称/简称从真实 CS2 战队池(NAVI/G2/FaZe/Vitality/MOUZ/Astralis/Team Liquid/Virtus.pro/Eternal Fire/FURIA/paiN/Complexity)随机,homeMap 从 3 张官方图分配;玩家队 rating = roster 平均 rating(四舍五入)。
 - 积分:胜 3 / 平 1 / 负 0。加时不计平局,经典 MR 赛制本身无平局 → **联赛无平局**,`d` 恒为 0,保留字段仅为格式统一。
 - 升降级:甲级(顶级)第 7-8 名降乙;乙级第 1-2 名升甲、第 7-8 名降丙;丙级第 1-2 名升乙。
 - 丙级为最低级别,第 7-8 名不降级,留在丙级。
 - 排名奖金(赛季末):1st 30000 / 2nd 20000 / 3rd 15000 / 4-6 8000 / 7-8 4000。
 - 杯赛:8 队单败淘汰,QF → SF → F,共 7 场,第 14 轮结束后自动进入。玩家所在队场次由玩家亲自打,其余场次模拟。每轮晋级奖 5000,冠军奖 30000。
 - 杯赛奖金口径:每赢一场杯赛得晋级奖 5000(最多 15000),冠军另得 30000。
-- 模拟比分公式复用 `simScore` 思路(Major 已验证):`p = clamp(0.5 + diff*0.004, 0.22, 0.86)`,胜者取 MR13 比分(13-x 形式),带入联赛与杯赛 AI 场次。
+- 模拟比分公式复用 `simScore` 思路(Major 已验证):`p = clamp(0.5 + diff*0.004, 0.22, 0.86)`,胜者取 MR9 比分(9-x 形式),带入联赛与杯赛 AI 场次。
 - 地图:每队绑定一张 `homeMap`(从现有 3 张官方图 `[dust2, canal, metro]` 分配),该队主场时使用;杯赛轮次按 `[dust2, canal, metro]` 轮转。
 
 ## 4. 比赛整合(复用引擎)
@@ -84,14 +84,14 @@
    - move → `p.speedMult = 0.9 + move/250`(50→1.1,100→1.3)
    - react → 换弹时间 `p.reloadMult = 1.25 - react/200`(50→1.0,100→0.75),准星恢复 `p.recoverMult = 0.75 + react/200`(50→1.0,100→1.25);切枪当前为瞬时操作,不纳入本版。
    - nade → 手雷伤害 `p.nadeMult = 1 + nade/300`(40→1.13,100→1.33)
-4. 赛制:经典 MR13(`ROUND.MATCH_WIN=13`,12 回合后换边),零改动。
+4. 赛制:经典 MR9(`ROUND.MATCH_WIN=9`,8 回合后换边),零改动。
 5. 赛后结算 `careerEndMatch(game)`(点击结束面板「返回生涯总部」按钮触发,`settled` 防重复):
    - 奖金:胜 +1500 / 负 +300(无平局);MVP +200;杯赛另加晋级奖。
    - 经验:胜 300 / 负 50 + 击杀×10 + MVP×100。
    - MVP 判定:玩家击杀 ≥ 5 且严格高于任意队友,并列最高不计 MVP;计入 `seasonStats.mvp`。
    - 更新积分榜、round 推进、`trainingLeft` 重置为 2、写 news、`save()`、重新打开生涯总部。
    - 第 14 轮结束 → 进入杯赛;杯赛打完 → 赛季结算页。
-   - 推进与弃赛:联赛中玩家结算自己场次后,模拟同轮其余 3 场并 `round++`;杯赛 QF → SF → F 顺序推进,玩家队存活时必须打完当前场,被淘汰后模拟剩余场次并进入赛季结算。比赛结束前退出主菜单时,生涯总部提供「继续本场 / 放弃本场」;放弃按 0:13 负处理,记负场,不发奖金/经验/MVP。
+   - 推进与弃赛:联赛中玩家结算自己场次后,模拟同轮其余 3 场并 `round++`;杯赛 QF → SF → F 顺序推进,玩家队存活时必须打完当前场,被淘汰后模拟剩余场次并进入赛季结算。比赛结束前退出主菜单时,生涯总部提供「继续本场 / 放弃本场」;放弃按 0:9 负处理,记负场,不发奖金/经验/MVP。
 
 ## 5. 训练课
 
@@ -101,9 +101,9 @@
 
 ## 6. 阵容与转会
 
-- 初始 4 名队友:名字从 BOT_NAMES 池取,rating 60-75,`price = min(rating*300, 20000)`。
+- 初始 4 名队友:真实 Team Spirit 选手 sh1ro/chopper/magixx/zont1x(玩家为 donk),rating 60-75,`price = min(rating*300, 20000)`。
 - 转会窗:每赛季第 5-8 轮开启,`transfersLeft = 2`。
-- 选手池:每赛季重置生成 8 名候选 `{ id, name, role, rating, price }`(rating 55-85,`price = min(rating*300, 20000)`);所有球员价格统一走同一上限。
+- 选手池:每赛季重置生成 8 名候选 `{ id, name, team, role, rating, price }`(真实 CS2 选手池如 b1t/iM/jL/w0nderful/m0NESY/NiKo/ZywOo/flameZ/Spinx/torzsi/ropz/broky/rain/frozen/NAF/Twistzz/Jame/XANTARES/KSCERATO/FalleN/dev1ce/stavn/EliGE/TeSeS,rating 55-85,`price = min(rating*300, 20000)`);所有球员价格统一走同一上限。
 - 角色:固定 `['突破','补枪','指挥','自由人']`,初始 4 队友一人一职,选手池每职 2 人,买入按 role 替换对应位置。
 - 操作:卖出队友返还 50% 价格;买入候选扣款并替换对应位置;`bank` 不足不可买。
 - 完成交易写 news 并 `save()`。
@@ -121,6 +121,7 @@
   7. **赛季结算**(自动):升降级结果、排名奖金、杯赛成绩、本赛季数据、历史记录,「下一赛季」按钮 → 重置赛季数据(保留属性/资金/升降级后的队伍),history 追加。
 - 结束面板:`showMatchEnd` 中 `mode === 'career'` 时显示「返回生涯总部」按钮(复用 majorNextBtn 的显隐模式),并分支修改按钮文案与 onclick 到 `careerEndMatch`,不能复用 `majorAction(game,'next')`。
 - 挂载:`ui.js` 的 `hideModePanels` 加入 `careerPanel`;`renderModeSettings` 加 career 分支(显示入口提示);`bindModeMenu` 无需改动(模式卡片通用)。
+- 迭代补充:玩家场次支持「模拟本场」;比赛计分板使用真实战队选手名;仪表盘显示经验条与对手评级;阵容显示队伍评级;转会窗显示开放倒计时;赛季结算显示历史记录;支持一键重开生涯。
 
 ## 8. 存档与容错
 
@@ -168,6 +169,6 @@
 | 风险 | 对策 |
 |---|---|
 | 我方 bot 过强/过弱 | 我方平均 rating 65-70 用 teamDiffParams 映射,与 Major 同源,可调 |
-| MR13 比赛偏长 | 与 Major 保持一致,不单独做短赛制 |
+| 比赛时长 | 全局改为 MR9,经典/Major/生涯统一缩短 |
 | 联赛模拟失衡 | 复用 Major 已验证的 simScore 公式 |
 | 赛季结算遗漏 | 结算入口单一(careerEndMatch + settled 防重),所有路径统一 |

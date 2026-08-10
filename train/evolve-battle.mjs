@@ -53,8 +53,8 @@ let pop;
 if (fs.existsSync(ckPath)) {
   const ck = JSON.parse(fs.readFileSync(ckPath, 'utf8'));
   const base = Array.from(ck.genome);
-  // 新 6 维中性 pad（解码值 = 无害默认：peekSkill/counterStrafe/spreadCtrl=1.0, prefire/trade=0, eco=1.0）
-  while (base.length < 19) base.push([1.0, 1.0, 0, 0.75, 0, 1.0][base.length - 13]);
+  // 新 6 维中性 pad（解码值 = 无害默认：peekSkill/counterStrafe=1.0, prefire/trade=0, eco=1.0, spreadCtrl=0.5→1.0）
+  while (base.length < 19) base.push([1.0, 1.0, 0, 0.75, 0, 0.5][base.length - 13]);
   pop = [base];
   while (pop.length < POP) pop.push(mutate(base, 0.2));
   console.log(`[evolve-battle] 起点 = H11 冠军 (fitness ${ck.fitness}) + 19 维扩展 + ${POP - 1} 变异`);
@@ -106,7 +106,7 @@ for (let gen = 0; gen < GENS; gen++) {
   const results = [];
   for (let i = 0; i < pop.length; i++) {
     const ev = evalAll(pop[i], gen, i);
-    results.push({ g: pop[i], f: ev.f, perOpp: ev.perOpp });
+    results.push({ g: pop[i], f: ev.f });
   }
   results.sort((a, b) => b.f - a.f);
   const avg = results.reduce((s, x) => s + x.f, 0) / results.length;
@@ -117,17 +117,7 @@ for (let gen = 0; gen < GENS; gen++) {
   }
   console.log(`GEN ${gen + 1}  best=${best.f.toFixed(1)}${improved ? ' ★' : ''}  avg=${avg.toFixed(1)}  (每代 ${(Date.now() - t0) / 1000}s)`);
 
-  // 每 10 代验收：全挡位大样本（2 seed × 8 回合）
-  if ((gen + 1) % 10 === 0 || gen === GENS - 1) {
-    const { result, allPass } = acceptance(best.g, gen + 1);
-    passRates = result;
-    const rateStr = Object.entries(result).map(([lv, r]) => `H${lv}:${(r * 100).toFixed(0)}%`).join(' ');
-    console.log(`  → 验收: ${rateStr}`);
-    console.log(`  → ${allPass ? `★ 达标：全挡位 ≥${CHECK_RATE * 100}%！` : `未达标（继续训练）`}`);
-    if (allPass) { console.log(`[evolve-battle] DONE in ${((Date.now() - t0) / 1000).toFixed(0)}s @GEN${gen + 1}`); break; }
-  }
-
-  // 每 5 代验收：全挡位 ≥80%
+  // 每 5 代验收：全挡位 ≥80%（gen 末代也验收一次）
   if ((gen + 1) % 5 === 0 || gen === GENS - 1) {
     const { result, allPass } = acceptance(best.g, gen + 1);
     passRates = result;

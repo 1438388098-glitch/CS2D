@@ -222,7 +222,7 @@ for (let ep = 1; ep <= EPS; ep++) {
       // —— 学习更新（回放采样）——
       step++;
       eps = Math.max(DQN_EPS_END, eps * DQN_EPS_DECAY);
-      // 课程阶段推进（每 150 eps 对手升档 + 学习率减半）
+      // 课程阶段推进（每 150 eps 对手升档 + 学习率减半）；非课程场景才走独立 LR 衰减，避免同 ep 双倍减半
       if (CURRICULUM && ep % CUR_EPS === 0 && ep < EPS) {
         const stage = Math.floor(ep / CUR_EPS);
         if (stage !== curStage) {
@@ -231,8 +231,7 @@ for (let ep = 1; ep <= EPS; ep++) {
           targetNet.lr = net.lr;
           console.log(`[ep ${ep}] 课程阶段 → 对手=${curStage + 1}/3, lr=${net.lr}`);
         }
-      }
-      if (ep % LR_DECAY_EPS === 0 && ep < EPS) {
+      } else if (ep % LR_DECAY_EPS === 0 && ep < EPS) {
         net.lr = Math.max(0.0003, net.lr * 0.5);
         targetNet.lr = net.lr;
       }

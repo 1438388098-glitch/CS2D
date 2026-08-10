@@ -1,7 +1,7 @@
 import { createGame, startMatch, update } from '../src/game.js';
 
 const MAPS = ['dust2', 'canal', 'metro'];
-const RUNS = 8;
+const RUNS = 16;
 let ok = true;
 for (const map of MAPS) {
   let t = 0, c = 0;

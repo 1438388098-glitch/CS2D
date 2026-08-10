@@ -70,14 +70,20 @@ export class DQN {
   // 单个样本反向传播（标准 DQN TD 目标）: (s, a, r, s', done)
   // 返回 TD 误差（训练监控用）
   trainStep(s, a, r, s2, done) {
+    return this.trainStepDouble(s, a, r, s2, done, this);
+  }
+
+  // Double DQN：argmax 用当前网络（online），Q 值用 target 网络——消除 Q 值过估计
+  trainStepDouble(s, a, r, s2, done, targetNet) {
     let target;
     if (done) {
       target = r;
     } else {
-      const q2 = this.forward(s2);
-      let maxQ2 = -Infinity;
-      for (let k = 0; k < q2.length; k++) if (q2[k] > maxQ2) maxQ2 = q2[k];
-      target = r + this.gamma * maxQ2;
+      const qs2 = this.forward(s2);
+      let best = 0;
+      for (let k = 1; k < qs2.length; k++) if (qs2[k] > qs2[best]) best = k;
+      const q2t = targetNet ? targetNet.forward(s2) : qs2;
+      target = r + this.gamma * q2t[best];
     }
     const qs = this.forward(s);
     const hAct = this.hAct;

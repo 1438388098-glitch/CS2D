@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CS2D AI &#25112;&#26415;&#38754;&#26495;</title>
+<style>
+:root { --bg:#0b0e12; --panel:#11161c; --line:#222a33; --txt:#e8edf2; --muted:#8b98a6; --accent:#ff8a2a; --ok:#42d392; }
+* { box-sizing:border-box; }
+body { margin:0; background:var(--bg); color:var(--txt); font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif; }
+.wrap { max-width:1180px; margin:0 auto; padding:24px; }
+header { display:flex; justify-content:space-between; align-items:flex-end; gap:16px; margin-bottom:20px; flex-wrap:wrap; }
+h1 { font-size:26px; margin:0; letter-spacing:0; }
+h2 { font-size:16px; margin:0 0 12px; letter-spacing:0; }
+.sub { color:var(--muted); font-size:13px; }
+.stats { display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:10px; margin-bottom:22px; }
+.stat { background:var(--panel); border:1px solid var(--line); border-radius:8px; padding:14px; }
+.stat b { display:block; font-size:22px; }
+.stat span { color:var(--muted); font-size:12px; }
+.grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(250px,1fr)); gap:12px; }
+.card { background:var(--panel); border:1px solid var(--line); border-radius:8px; padding:14px; }
+.card h3 { margin:0 0 8px; font-size:15px; }
+.card .en { color:var(--muted); font-size:11px; }
+.badges { display:flex; flex-wrap:wrap; gap:6px; margin:8px 0; }
+.badge { border:1px solid var(--line); border-radius:4px; padding:2px 7px; font-size:11px; color:var(--muted); }
+.badge.on { color:#0b0e12; background:var(--accent); border-color:var(--accent); }
+.split { font-size:12px; margin-bottom:8px; }
+.bar { height:5px; background:#1a222b; border-radius:3px; overflow:hidden; margin:4px 0; }
+.bar i { display:block; height:100%; background:var(--accent); }
+.kv { display:grid; grid-template-columns:repeat(3,1fr); gap:6px; font-size:11px; color:var(--muted); }
+.kv b { color:var(--txt); font-weight:600; }
+.panel { background:var(--panel); border:1px solid var(--line); border-radius:8px; padding:16px; margin-top:22px; }
+.row { display:flex; gap:14px; flex-wrap:wrap; align-items:flex-end; }
+.btn { background:var(--accent); color:#0b0e12; border:0; border-radius:6px; padding:10px 16px; font-weight:700; cursor:pointer; }
+.btn:hover { filter:brightness(1.08); }
+table { width:100%; border-collapse:collapse; font-size:12px; }
+th,td { text-align:left; padding:8px 10px; border-bottom:1px solid var(--line); }
+th { color:var(--muted); font-weight:600; }
+.flow { display:grid; grid-template-columns:repeat(auto-fit,minmax(210px,1fr)); gap:10px; }
+.flow div { border:1px solid var(--line); border-radius:8px; padding:12px; background:#0d1217; }
+.flow b { display:block; margin-bottom:4px; color:var(--accent); }
+.flow span { font-size:12px; color:var(--muted); }
+#roll { margin-top:12px; min-height:120px; }
+#roll .plan { border-left:3px solid var(--accent); padding:10px 12px; background:#0d1217; border-radius:0 6px 6px 0; }
+#roll .plan b { color:var(--accent); }
+@media (max-width:720px) { header{align-items:flex-start; flex-direction:column;} .wrap{padding:14px;} }
+</style>
+</head>
+<body>
+<div class="wrap">
+<header>
+  <div>
+    <h1>CS2D AI &#25112;&#26415;&#38754;&#26495;</h1>
+    <div class="sub">9 &#31181;&#24120;&#35265; CS2 &#25171;&#27861; &middot; &#27599;&#23567;&#23616;&#38543;&#26426;&#19982;&#21160;&#24577;&#36866;&#24212; &middot; &#21516;&#27494;&#22120;&#21407;&#22987;&#31934;&#24230;</div>
+  </div>
+  <div class="sub">&#29983;&#25104;&#26102;&#38388; 2026-08-03</div>
+</header>
+
+<div class="stats">
+  <div class="stat"><b>9</b><span>&#25112;&#26415;&#31867;&#22411;</span></div>
+  <div class="stat"><b>3</b><span>&#23448;&#26041;&#22320;&#22270;</span></div>
+  <div class="stat"><b>720px</b><span>Bot &#35270;&#37326;&#19978;&#38480;</span></div>
+  <div class="stat"><b>1.0</b><span>&#27494;&#22120;&#25955;&#24067;&#20056;&#25968;</span></div>
+  <div class="stat"><b>50&plusmn;5%</b><span>32 &#23616;&#24179;&#34913;&#30446;&#26631;</span></div>
+</div>
+
+<h2>&#25112;&#26415;&#27744;</h2>
+<div class="grid" id="tactics"></div>
+
+<div class="panel">
+  <h2>&#22238;&#21512;&#29983;&#25104;&#22120;</h2>
+  <div class="row">
+    <button class="btn" id="rollBtn">&#38543;&#26426;&#29983;&#25104;&#19968;&#23616;</button>
+    <div class="sub" style="margin:0">&#25353;&#32463;&#27982;&#12289;&#27604;&#20998;&#12289;&#19978;&#23616;&#25112;&#26415;&#19982;&#38543;&#26426;&#26435;&#37325;&#36873;&#25321;</div>
+  </div>
+  <div id="roll"></div>
+</div>
+
+<div class="panel">
+  <h2>&#22320;&#22270;&#24179;&#34913;&#21442;&#25968;</h2>
+  <table>
+    <thead><tr><th>&#22320;&#22270;</th><th>T &#36827;&#21475;&#36317;&#31163;</th><th>CT &#23432;&#28857;&#38142;</th><th>CT &#39044;&#30596;&#21453;&#24212;</th><th>32 &#23616; T &#32988;&#29575;</th></tr></thead>
+    <tbody>
+      <tr><td>dust2</td><td>340px</td><td>100 / 190 / 300px</td><td>0.24</td><td>51%</td></tr>
+      <tr><td>canal</td><td>420px</td><td>220 / 340 / 460px</td><td>0.12</td><td>55%</td></tr>
+      <tr><td>metro</td><td>340px</td><td>140 / 260 / 380px</td><td>0.70</td><td>49%</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<div class="panel">
+  <h2>AI &#20915;&#31574;&#38142;&#36335;</h2>
+  <div class="flow">
+    <div><b>&#24863;&#30693;</b><span>720px &#35270;&#37326;&#38480;&#21046;&#65292;&#31354;&#38388;&#32593;&#26684;&#26816;&#26597;&#38468;&#36817;&#21333;&#20803;</span></div>
+    <div><b>T &#22242;&#38431;</b><span>rollRoundPlan &#36755;&#20986;&#25112;&#26415;&#12289;&#35282;&#33394;&#20998;&#37197;&#12289;&#36947;&#20855;&#29992;&#37327;&#19982;&#39118;&#38505;</span></div>
+    <div><b>CT &#22242;&#38431;</b><span>&#29420;&#31435; ctPlan&#65292;&#23432;&#28857;&#38754;&#21521;&#36827;&#21475;&#65292;&#25353;&#22270;&#39044;&#30596;&#21453;&#24212;</span></div>
+    <div><b>&#25191;&#34892;</b><span>clearPoints &#28165;&#35282;&#12289;preaimPoints &#39044;&#30596;&#12289;IGL focus &#24773;&#25253;</span></div>
+  </div>
+</div>
+
+<script>
+const TACTICS = [
+  { key:'default', name:'&#26631;&#20934;&#40664;&#35748;', split:[3,1,1], flags:{}, utility:.7, rotate:.4, save:.55, prefire:.04, peek:.06, risk:.8 },
+  { key:'rush', name:'&#20840;&#38431;&#25552;&#36895;', split:[5,0,0], flags:{rush:1}, utility:.35, rotate:.2, save:.35, prefire:.02, peek:.03, risk:1.2 },
+  { key:'split', name:'&#21452;&#36335;&#20998;&#25512;', split:[2,2,1], flags:{}, utility:.9, rotate:.75, save:.5, prefire:.07, peek:.08, risk:1.0 },
+  { key:'sneak', name:'&#20302;&#36947;&#20855;&#24930;&#25720;', split:[3,1,1], flags:{slow:1}, utility:.55, rotate:.3, save:.7, prefire:.03, peek:.04, risk:.6 },
+  { key:'fake', name:'&#20551;&#25915;&#20302;&#25915;', split:[2,2,1], flags:{fake:1}, utility:1.05, rotate:.9, save:.5, prefire:.08, peek:.08, risk:.95 },
+  { key:'slow', name:'&#24930;&#25171;&#22810;&#36947;&#20855;', split:[3,1,1], flags:{slow:1}, utility:1.1, rotate:.55, save:.65, prefire:.05, peek:.04, risk:.7 },
+  { key:'mid', name:'&#21452;&#20154;&#25511;&#20013;', split:[2,1,2], flags:{mid:1}, utility:.8, rotate:.65, save:.55, prefire:.06, peek:.07, risk:.9 },
+  { key:'contact', name:'&#25509;&#35302;&#25250;&#20808;&#25163;', split:[4,0,1], flags:{contact:1}, utility:.6, rotate:.35, save:.45, prefire:.1, peek:.12, risk:1.1 },
+  { key:'antiEco', name:'&#32463;&#27982;&#23616;&#21453; ECO', split:[4,1,0], flags:{rush:1}, utility:.3, rotate:.15, save:.3, prefire:.02, peek:.02, risk:1.25 }
+];
+const cards = document.getElementById('tactics');
+for (const t of TACTICS) {
+  const card = document.createElement('div');
+  card.className = 'card';
+  const badges = Object.keys(t.flags).map(k=>'<span class="badge on">'+k+'</span>').join('') || '<span class="badge">standard</span>';
+  card.innerHTML = '<h3>'+t.name+'</h3><div class="en">'+t.key+'</div><div class="badges">'+badges+'</div><div class="split">&#20027;&#25915; '+t.split[0]+' &middot; &#20391;&#32764; '+t.split[1]+' &middot; &#20013;&#36335; '+t.split[2]+'</div><div class="kv"><span>&#36947;&#20855; <b>'+t.utility.toFixed(2)+'</b></span><span>&#36716;&#28857; <b>'+t.rotate.toFixed(2)+'</b></span><span>&#20445;&#26538; <b>'+t.save.toFixed(2)+'</b></span><span>&#39044;&#30596; <b>'+t.prefire.toFixed(2)+'</b></span><span>&#25506;&#28857; <b>'+t.peek.toFixed(2)+'</b></span><span>&#39118;&#38505; <b>'+t.risk.toFixed(2)+'</b></span></div><div class="bar"><i style="width:'+Math.round(t.utility*100)+'%"></i></div>';
+  cards.appendChild(card);
+}
+function pickWeighted(prev, lowEco) {
+  const weights = { default:1.2, rush:1.0, split:1, sneak:.8, fake:1, slow:.9, mid:.7, contact:.3, antiEco:lowEco?.8:.15 };
+  if (prev && weights[prev]!==undefined) weights[prev]*=.35;
+  const total = Object.values(weights).reduce((a,b)=>a+b,0);
+  let r = Math.random()*total;
+  for (const k of Object.keys(weights)) { r -= weights[k]; if (r<=0) return k; }
+  return 'default';
+}
+const rollBtn = document.getElementById('rollBtn');
+const rollEl = document.getElementById('roll');
+let prev = null;
+function render() {
+  const key = pickWeighted(prev, Math.random()<0.25);
+  const t = TACTICS.find(x=>x.key===key);
+  prev = key;
+  const site = Math.random()<.5 ? 'A' : 'B';
+  rollEl.innerHTML = '<div class="plan"><b>'+t.name+' / '+t.key+'</b><div>&#25915;&#20987;&#28857; '+site+' &middot; &#20027;&#25915; '+t.split[0]+' &middot; &#20391;&#32764; '+t.split[1]+' &middot; &#20013;&#36335; '+t.split[2]+'</div><div>&#36947;&#20855; '+t.utility.toFixed(2)+' &middot; &#36716;&#28857; '+t.rotate.toFixed(2)+' &middot; &#20445;&#26538; '+t.save.toFixed(2)+' &middot; &#39044;&#30596; '+t.prefire.toFixed(2)+' &middot; &#25506;&#28857; '+t.peek.toFixed(2)+' &middot; &#39118;&#38505; '+t.risk.toFixed(2)+'</div></div>';
+}
+rollBtn.onclick = render;
+render();
+</script>
+</div>
+</body>
+</html>

@@ -1,6 +1,6 @@
 // H11 从零强化学习训练器（与 H8-H10 管线完全独立）：
 //   - 不加载任何前 10 级权重（随机初始化，--init 被禁用）
-//   - 5 图轮训（每 episode 随机选图 → 天然泛化，无迁移）
+//   - 3 图轮训（每 episode 随机选图 → 天然泛化，无迁移）
 //   - 双阶段探索：阶段1(前 40%) 高探索 ε 慢衰减学基础；阶段2 ε 快速收敛精炼
 //   - 安弹引导：前期 plant 奖励加倍（先学会"进点安弹"再学战斗）
 //   - 独立 checkpoint 命名 net_fresh_ep*.json / net_fresh_best.json
@@ -26,7 +26,7 @@ function arg(name, def) {
 const EPS = parseInt(arg('eps', '2000'), 10);
 const SEED = parseInt(arg('seed', '1'), 10);
 const DEC_S = 0.35; // 决策步 0.35s（更密的 TD 传播，γ 有效时域翻倍）
-const MAPS = ['dust2', 'snow', 'depot', 'canal', 'metro'];
+const MAPS = ['dust2', 'canal', 'metro'];
 // 三段 ε 调度（保底 0.08 探索，避免困在局部最优）
 const EPS_SCHEDULE = [
   { to: 0.30, until: 0.25, decay: 0.9993 },
@@ -40,7 +40,7 @@ const CFG = { kill: 1.2, death: -0.8, win: 10.0, lose: -2.0, plant: 2.0, plantTe
 // 自适应对手池（含 H3 参数=冠军级，超出后不再升级）
 const OPP_POOL = ['easy', 'normal', 'hard', 'champ'];
 
-console.log(`[dqn-fresh] H11 从零强化学习 eps=${EPS} 5图轮训 seed=${SEED}（密集奖励+信用分配+自适应对手）`);
+console.log(`[dqn-fresh] H11 从零强化学习 eps=${EPS} 3图轮训 seed=${SEED}（密集奖励+信用分配+自适应对手）`);
 
 // 网络：随机初始化（刻意不 import 任何 checkpoint）
 // γ=0.995：0.35s 决策步 × 110 步/回合 → 奖励有效时域 ≈ 整回合（win 能传回起点，核心修复）

@@ -2,25 +2,28 @@ import { launchBrowser, waitForDebug, newTab, CDP } from './cdp.js';
 import { spawn } from 'child_process';
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-const srv = spawn('node', ['server.js'], { cwd: 'D:/Claudeworkspace/CS2D', stdio: 'ignore', detached: true });
+const APP_PORT = 8091;
+const DBG_PORT = 9231;
+const srv = spawn('node', ['server.js'], { cwd: 'D:/Claudeworkspace/CS2D', env: { ...process.env, PORT: String(APP_PORT) }, stdio: 'ignore', detached: true });
 await sleep(1500);
 if (srv.exitCode !== null) {
   console.log('CDP-MAPS: FAIL (server failed, exit=' + srv.exitCode + ')');
   process.exit(1);
 }
 
-const { proc, port } = launchBrowser();
+const { proc, port } = launchBrowser({ port: DBG_PORT, profile: 'C:/Users/20579/AppData/Local/Temp/opencode/cdp-profile-maps' });
 let ok = true;
 const fail = (m) => { ok = false; console.log('  FAIL: ' + m); };
 try {
   const wsUrl = await waitForDebug(port);
-  const pageUrl = await newTab(port, 'http://127.0.0.1:8080/');
+  const pageUrl = await newTab(port, `http://127.0.0.1:${APP_PORT}/`);
   const cdp = new CDP(pageUrl);
   await cdp.connect();
-  await cdp.navigate('http://127.0.0.1:8080/');
+  await cdp.navigate(`http://127.0.0.1:${APP_PORT}/`);
   await sleep(1500);
+  await cdp.eval(`(()=>{const c=document.querySelector('[data-mode="classic"]'); if(c && !c.classList.contains('sel')) c.click(); return true})()`);
 
-  for (const id of ['dust2', 'canal', 'metro']) {
+  for (const id of ['dust2', 'canal', 'metro', 'arctic', 'blast', 'forge', 'foundry-port']) {
     await cdp.eval(`window.__cs2d.game && window.__cs2d.game.ui && window.__cs2d.game.ui.showMenu()`);
     await sleep(150);
     const picked = await cdp.eval(`(()=>{const el=document.querySelector('.map-card[data-map="${id}"]');if(!el)return false;el.click();return true})()`);

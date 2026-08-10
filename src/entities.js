@@ -8,7 +8,7 @@ export function createEntity(team, bot) {
   return {
     team, bot,
     name: bot ? BOT_NAMES[botNameIdx++ % BOT_NAMES.length] : 'You',
-    x: 0, y: 0, vx: 0, vy: 0, angle: 0, rad: 13,
+    x: 0, y: 0, vx: 0, vy: 0, angle: 0, pitch: 0, rad: 13, moveRad: 7,
     hp: 100, armor: 0, helmet: false, money: ECONOMY.START_MONEY,
     weapons: { primary: null, secondary: null, knife: 'knife', nades: { he: 0, flash: 0, smoke: 0 }, kit: false },
     slot: 'secondary', lastSlot: 'knife',
@@ -21,8 +21,8 @@ export function createEntity(team, bot) {
     lastKnown: null, lastKnownT: 99,
     path: null, pathI: 0, role: 'a', repathT: 0, stuckT: 0, lastSample: { x: 0, y: 0 },
     plantT: 0, defuseT: 0, lastShot: 0, trigger: false, triggerHeld: false, triggerWas: false,
-    objCache: null, objAt: 0, objBombState: null, guardPoint: null, guardPointSite: null,
-    plantRetryT: 0, usedNadeRound: 0, anchorIdx: 0,
+    objCache: null, objAt: 0, objKey: null, guardPoint: null, guardPointSite: null,
+    plantRetryT: 0, usedNadeRound: 0, anchorIdx: 0, peekT: 0,
     rushMode: false, vanguard: false, plantedSmokeRound: 0,
     streak: 0, wKills: {}, aiParams: null,
     personality: rollPersonality(botNameIdx),
@@ -31,19 +31,23 @@ export function createEntity(team, bot) {
     decT: 0,
     height: 0, stunT: 0, splashCd: 0, highPointT: 0, highIdx: 0,
     prefireT: 0, prefireX: 0, prefireY: 0, prefireCount: 0, barrelT: 0, crateT: 0, botThreatT: 0,
+    tradeBoost: 0,
   };
 }
 
-export function spawnEntity(e, spawnList) {
+export function spawnEntity(e, spawnList, preferIdx) {
   if (!spawnList || spawnList.length === 0) {
     console.warn('spawnEntity: spawn list empty for team ' + e.team);
     return;
   }
-  const s = spawnList[Math.floor(ctx.rand() * spawnList.length)];
+  const s = preferIdx !== undefined
+    ? spawnList[preferIdx % spawnList.length]
+    : spawnList[Math.floor(ctx.rand() * spawnList.length)];
   e.x = s.x;
   e.y = s.y;
   e.vx = 0; e.vy = 0; e.dead = false; e.hp = 100;
   e.angle = ctx.rand() * Math.PI * 2;
+  e.pitch = 0;
   e.slot = e.weapons.primary ? 'primary' : 'secondary';
   e.reloading = false; e.reloadT = 0; e.fireCd = 0; e.recoil = 0;
   e.blind = 0; e.scoped = false;
@@ -55,9 +59,20 @@ export function spawnEntity(e, spawnList) {
   e.plantT = 0; e.defuseT = 0;
   e.trigger = false; e.triggerHeld = false; e.triggerWas = false;
   e.shotStreak = 0; e.crouched = false;
-  e.objCache = null; e.objAt = 0; e.guardPoint = null; e.guardPointSite = null;
+  e.objCache = null; e.objAt = 0; e.objKey = null; e.guardPoint = null; e.guardPointSite = null;
   e.walking = false; e.muzzleT = 0;
   e.rushMode = false; e.vanguard = false; e.plantedSmokeRound = 0;
+  // 跨回合残留清理（决策/感知状态不得跨回合携带）
+  e.lastShot = 0;              // 防"幻听"：上回合枪声当新情报
+  e.lastHearT = {};            // 同上
+  e.netAct = undefined; e.netAt = undefined;  // DQN 决策跨回合
+  e.stuckEscapes = 0;          // 卡死逃逸计数跨回合
+  e.peekT = 0; e.aimLostT = 0; e.aimLastPos = null;
+  e.tradeBoost = 0;            // 补枪加速跨回合
+  e.highPointT = 0;            // 高台换位计时跨回合
+  e.plantRetryT = 0;           // 安弹重试跨回合
+  e.lastReport = null;         // 报告冷却跨回合
+  e.memory = [];               // 目击记忆跨回合（防开局沿用旧情报）
   if (!e.weapons.secondary) e.weapons.secondary = defaultPistol(e.team);
   // 新回合弹药回满（CS 惯例；仅补齐已有武器）
   for (const k in e.ammoMap) { const w = WEAPONS[k]; if (w && w.mag > 0) e.ammoMap[k] = w.mag; }

@@ -21,7 +21,7 @@ export const MECH_TEST_ROWS = (() => {
 })();
 
 export function installMechTestMap() {
-  registerMap({ id: 'mech-test', name: 'mech', accent: '#aaa', rows: MECH_TEST_ROWS });
+  registerMap({ id: 'mech-test', name: 'mech', accent: '#aaa', rows: MECH_TEST_ROWS, allowDisconnected: true });
 }
 
 export function installLegacyDust2Map() {

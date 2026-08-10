@@ -180,6 +180,20 @@ export function crateRenderSpec(x, y, hp, tile = mapTile()) {
   };
 }
 
+export function boomShockwaveSpec(p) {
+  const maxLife = p.maxLife || 0.5;
+  const life = Math.min(Math.max(p.life || 0, 0), maxLife);
+  const t = maxLife > 0 ? 1 - life / maxLife : 1;
+  const flash = Math.max(0, 1 - t * 2.5);
+  return {
+    t,
+    flash,
+    outer: p.size * (0.25 + 0.85 * t),
+    inner: p.size * (0.18 + 0.5 * t),
+    alpha: (1 - t) * 0.8
+  };
+}
+
 function drawCrates(game) {
   if (!game.crates || !game.crates.length) return;
   for (const c of game.crates) {
@@ -540,20 +554,21 @@ function drawParticles(game) {
       ctx.fill();
       ctx.globalAlpha = 1;
     } else if (p.kind === 'boom') {
-      const pr = p.life / 0.5;
-      ctx.fillStyle = 'rgba(255,150,50,' + (pr * 0.22) + ')';
+      const sw = boomShockwaveSpec(p);
+      ctx.fillStyle = 'rgba(255,150,50,' + (sw.flash * 0.24) + ')';
       ctx.beginPath();
-      ctx.arc(p.x, p.y, p.size * pr * 1.4, 0, Math.PI * 2);
+      ctx.arc(p.x, p.y, p.size * (0.18 + 0.8 * sw.t), 0, Math.PI * 2);
       ctx.fill();
-      ctx.strokeStyle = 'rgba(255,160,60,' + (pr * 0.8) + ')';
-      ctx.lineWidth = 6 * pr + 2;
+      ctx.strokeStyle = 'rgba(255,160,60,' + sw.alpha + ')';
+      ctx.lineWidth = 4 + 8 * (1 - sw.t);
       ctx.beginPath();
-      ctx.arc(p.x, p.y, p.size * pr, 0, Math.PI * 2);
+      ctx.arc(p.x, p.y, sw.outer, 0, Math.PI * 2);
       ctx.stroke();
-      ctx.fillStyle = 'rgba(255,220,140,' + (pr * 0.5) + ')';
+      ctx.strokeStyle = 'rgba(255,220,140,' + (sw.alpha * 0.55) + ')';
+      ctx.lineWidth = 2 + 4 * (1 - sw.t);
       ctx.beginPath();
-      ctx.arc(p.x, p.y, p.size * pr * 0.5, 0, Math.PI * 2);
-      ctx.fill();
+      ctx.arc(p.x, p.y, sw.inner, 0, Math.PI * 2);
+      ctx.stroke();
     }
   }
 }

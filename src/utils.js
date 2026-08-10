@@ -16,6 +16,12 @@ export function angDiff(a, b) {
   return d;
 }
 
+// FPS 视角：屏幕系输入向量(ax,ay)按朝向角旋转为世界系向量（W=沿朝向前进，D=右平移）
+export function rotateInputVector(ax, ay, angle) {
+  const ca = Math.cos(angle), sa = Math.sin(angle);
+  return { x: -ax * sa - ay * ca, y: ax * ca - ay * sa };
+}
+
 // 玩家屏幕最远可视距离（半对角）：bot 感知不得超过此值，保证与玩家视野公平
 export function viewCap(game) {
   const w = game.canvasW || 1280, h = game.canvasH || 720;

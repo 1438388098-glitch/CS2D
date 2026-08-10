@@ -32,7 +32,7 @@ export function decodeGenome(g) {
     prefireChance: v(15, 0) * 0.6,
     ecoDiscipline: 0.4 + v(16, 0.75) * 0.8,
     tradeSpeed: 1.0 + v(17, 0) * 1.5,
-    spreadCtrl: 0.5 + v(18, 1.0) * 1.0
+    spreadCtrl: 0.5 + v(18, 0.5) * 1.0
   };
 }
 

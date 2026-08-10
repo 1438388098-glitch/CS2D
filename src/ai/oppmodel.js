@@ -5,7 +5,7 @@ const MAX_REC = 40;
 const MAX_AGE = 120; // 秒：只记近期（回合滚动）
 
 export function initOppModel(game) {
-  if (!game.oppModel) game.oppModel = { dust2: [], snow: [], depot: [], canal: [], metro: [] };
+  if (!game.oppModel) game.oppModel = { dust2: [], canal: [], metro: [] };
 }
 
 // 记录一次 CT 位置事件（战斗中由 combat/core 调用，仅 H11 队启用）

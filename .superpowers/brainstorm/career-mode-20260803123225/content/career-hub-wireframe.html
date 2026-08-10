@@ -1,0 +1,134 @@
+<style>
+  body { background: #0d1117; }
+  .hub { background: #10141c; border: 1px solid #2a3342; border-radius: 10px; overflow: hidden; font-family: system-ui, sans-serif; color: #c9d4e3; }
+  .hub-top { display: flex; align-items: center; gap: 14px; padding: 10px 16px; border-bottom: 1px solid #232c3a; background: linear-gradient(180deg, #151b26, #10141c); }
+  .hub-title { font-weight: 700; font-size: 15px; color: #ffb74d; letter-spacing: 1px; }
+  .hub-tag { font-size: 11px; color: #7c8aa0; }
+  .hub-spacer { flex: 1; }
+  .hub-money { font-size: 13px; color: #8be08b; font-weight: 600; }
+  .hub-back { font-size: 12px; color: #7c8aa0; border: 1px solid #2a3342; padding: 3px 10px; border-radius: 5px; }
+  .hub-tabs { display: flex; gap: 4px; padding: 8px 16px 0; border-bottom: 1px solid #232c3a; }
+  .hub-tab { padding: 6px 18px; font-size: 13px; color: #7c8aa0; border-radius: 7px 7px 0 0; cursor: pointer; }
+  .hub-tab.on { color: #ffb74d; background: #1a2130; border: 1px solid #2a3342; border-bottom: 1px solid #1a2130; margin-bottom: -1px; font-weight: 600; }
+  .hub-body { padding: 14px 16px; display: flex; gap: 14px; min-height: 300px; }
+  .pane { background: #151b26; border: 1px solid #232c3a; border-radius: 8px; padding: 12px; }
+  .pane-title { font-size: 11px; color: #7c8aa0; letter-spacing: 1px; margin-bottom: 10px; text-transform: uppercase; }
+  .avatar { width: 46px; height: 46px; border-radius: 50%; background: radial-gradient(circle at 35% 30%, #3d5a80, #1f2c44); border: 2px solid #ffb74d; }
+  .stat-bar { height: 5px; border-radius: 3px; background: #232c3a; margin: 3px 0 7px; overflow: hidden; }
+  .stat-bar i { display: block; height: 100%; background: linear-gradient(90deg, #ff8a2a, #ffd75e); }
+  .row { display: flex; align-items: center; gap: 8px; }
+  .mini { font-size: 11px; color: #8b97a8; }
+  .btn-main { background: linear-gradient(180deg, #ffb74d, #ff8a2a); color: #10141c; font-weight: 700; padding: 7px 22px; border-radius: 6px; font-size: 13px; }
+  .btn-sub { border: 1px solid #2a3342; color: #c9d4e3; padding: 6px 14px; border-radius: 6px; font-size: 12px; }
+  .grid-cards { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-top: 8px; }
+  .mini-card { background: #10141c; border: 1px solid #232c3a; border-radius: 6px; padding: 8px; font-size: 11px; }
+  .mini-card b { display: block; font-size: 15px; color: #fff; margin: 2px 0; }
+  table.stand { width: 100%; border-collapse: collapse; font-size: 12px; }
+  table.stand td { padding: 5px 8px; border-bottom: 1px solid #1c2432; }
+  table.stand .me { color: #ffb74d; font-weight: 700; }
+  .cup-line { display: flex; align-items: center; gap: 10px; font-size: 12px; margin: 6px 0; }
+  .cup-node { border: 1px solid #2a3342; padding: 4px 12px; border-radius: 5px; min-width: 90px; text-align: center; }
+  .cup-node.win { border-color: #ffb74d; color: #ffb74d; }
+  .cup-arrow { color: #4a5670; }
+</style>
+
+<h2>生涯总部 · 二级 UI 线框</h2>
+<p class="subtitle">单一全屏遮罩 + 顶部 Tab 导航。左图=仪表盘,右图=排名/杯赛页,其余页同构。</p>
+
+<div class="split">
+  <div class="mockup">
+    <div class="mockup-header">Tab 1 · 生涯仪表盘(默认首页)</div>
+    <div class="mockup-body" style="background:#0d1117">
+      <div class="hub">
+        <div class="hub-top">
+          <span class="hub-title">CS2D 生涯模式</span>
+          <span class="hub-tag">S2 · 第 6 轮 · 乙级联赛</span>
+          <span class="hub-spacer"></span>
+          <span class="hub-money">💰 12,500</span>
+          <span class="hub-back">← 主菜单</span>
+        </div>
+        <div class="hub-tabs">
+          <div class="hub-tab on">仪表盘</div><div class="hub-tab">赛程</div><div class="hub-tab">训练</div><div class="hub-tab">阵容</div><div class="hub-tab">排名</div><div class="hub-tab">杯赛</div>
+        </div>
+        <div class="hub-body">
+          <div class="pane" style="width:210px">
+            <div class="pane-title">玩家档案</div>
+            <div class="row"><div class="avatar"></div><div><b style="font-size:14px">猎鹰</b><br><span class="mini">Lv.12 · 突击手</span></div></div>
+            <div style="margin-top:10px;font-size:11px">
+              射击 <div class="stat-bar" style="width:120px"><i style="width:68%"></i></div>
+              移速 <div class="stat-bar" style="width:120px"><i style="width:45%"></i></div>
+              反应 <div class="stat-bar" style="width:120px"><i style="width:52%"></i></div>
+              道具 <div class="stat-bar" style="width:120px"><i style="width:30%"></i></div>
+            </div>
+            <div style="margin-top:10px" class="mini">本赛季: 12 场 · 7胜2平3负<br>KD 1.42 · 奖金 8,400</div>
+          </div>
+          <div class="pane" style="flex:1">
+            <div class="pane-title">下一场 · 第 7 轮</div>
+            <div class="row" style="justify-content:space-between">
+              <div><b style="font-size:16px">⚔ 铁血战队</b><br><span class="mini">对手强度 74 · 主场 dust2 · 先到8胜</span></div>
+              <div class="btn-main">开赛 ▶</div>
+            </div>
+            <div style="margin-top:12px" class="mini">对手近 5 场: 胜 胜 负 胜 平 · 排名第 4</div>
+            <div class="pane-title" style="margin-top:14px">事件流 / 新闻</div>
+            <div class="mini">📌 转会窗还有 2 天关闭,可花 8,000 转会费补强阵容</div>
+            <div class="mini">🏆 杯赛小组赛 3 轮后开打</div>
+            <div class="mini">📈 你被评为上轮最佳选手(+50 经验)</div>
+          </div>
+          <div class="pane" style="width:200px">
+            <div class="pane-title">积分榜速览</div>
+            <table class="stand">
+              <tr><td>1. 狼群</td><td>24</td></tr>
+              <tr><td>2. 烈焰</td><td>21</td></tr>
+              <tr><td class="me">3. 我们</td><td>19</td></tr>
+              <tr><td>4. 铁血</td><td>18</td></tr>
+              <tr><td>5. 雷霆</td><td>15</td></tr>
+            </table>
+            <div class="mini" style="margin-top:8px">前2晋级 · 后2降级</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="mockup">
+    <div class="mockup-header">Tab 5/6 · 排名 + 杯赛(内容页示例)</div>
+    <div class="mockup-body" style="background:#0d1117">
+      <div class="hub">
+        <div class="hub-top">
+          <span class="hub-title">CS2D 生涯模式</span>
+          <span class="hub-tag">S2 · 第 6 轮 · 乙级联赛</span>
+          <span class="hub-spacer"></span>
+          <span class="hub-money">💰 12,500</span>
+          <span class="hub-back">← 主菜单</span>
+        </div>
+        <div class="hub-tabs">
+          <div class="hub-tab">仪表盘</div><div class="hub-tab">赛程</div><div class="hub-tab">训练</div><div class="hub-tab">阵容</div><div class="hub-tab on">排名</div><div class="hub-tab">杯赛</div>
+        </div>
+        <div class="hub-body">
+          <div class="pane" style="flex:1.1">
+            <div class="pane-title">乙级联赛积分榜</div>
+            <table class="stand">
+              <tr><td>#</td><td>战队</td><td>场</td><td>胜平负</td><td>分</td></tr>
+              <tr><td>1</td><td>狼群</td><td>6</td><td>8-1-1</td><td>24</td></tr>
+              <tr><td>2</td><td>烈焰</td><td>6</td><td>7-0-2</td><td>21</td></tr>
+              <tr><td>3</td><td class="me">我们</td><td>6</td><td>7-2-3</td><td>19</td></tr>
+              <tr><td>4</td><td>铁血</td><td>6</td><td>6-0-3</td><td>18</td></tr>
+              <tr><td>...</td><td>...</td><td>...</td><td>...</td><td>...</td></tr>
+              <tr><td>8</td><td>新星</td><td>6</td><td>0-1-8</td><td>1</td></tr>
+            </table>
+            <div class="mini" style="margin-top:8px">乙级 8 队双循环 14 轮 · 前2升甲 · 后2降丙</div>
+          </div>
+          <div class="pane" style="flex:1">
+            <div class="pane-title">杯赛 · 淘汰赛对阵树</div>
+            <div class="cup-line"><span class="cup-node win">我们 ✓</span><span class="cup-arrow">──</span><span class="cup-node">新星</span></div>
+            <div class="cup-line"><span class="cup-node">狼群</span><span class="cup-arrow">──</span><span class="cup-node">烈焰</span></div>
+            <div class="cup-line" style="margin-left:40px"><span class="cup-node">? 决赛</span></div>
+            <div style="margin-top:14px" class="mini">🏆 冠军奖金 20,000<br>🏅 冠军直升甲级资格</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<p class="subtitle">顶部统一:模式名 + 赛季信息 + 金钱 + 返回。左侧窄档案/右侧内容的信息架构,所有页共用。</p>

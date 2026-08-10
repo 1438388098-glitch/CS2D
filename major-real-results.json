@@ -1,0 +1,3218 @@
+[
+ {
+  "majorIdx": 0,
+  "seed": 2495581231,
+  "champion": {
+   "id": "spirit",
+   "tag": "Spirit",
+   "name": "Team Spirit"
+  },
+  "finalScore": [
+   3,
+   1
+  ],
+  "finalMaps": [
+   [
+    0,
+    1
+   ],
+   [
+    1,
+    0
+   ],
+   [
+    1,
+    0
+   ],
+   [
+    1,
+    0
+   ]
+  ],
+  "qualRanking": [
+   {
+    "id": "spirit",
+    "w": 4,
+    "l": 0
+   },
+   {
+    "id": "pain",
+    "w": 4,
+    "l": 1
+   },
+   {
+    "id": "liquid",
+    "w": 4,
+    "l": 0
+   },
+   {
+    "id": "3dmax",
+    "w": 4,
+    "l": 1
+   },
+   {
+    "id": "fnatic",
+    "w": 4,
+    "l": 1
+   },
+   {
+    "id": "metizport",
+    "w": 4,
+    "l": 0
+   },
+   {
+    "id": "fluxo",
+    "w": 4,
+    "l": 0
+   },
+   {
+    "id": "vitality",
+    "w": 3,
+    "l": 2
+   },
+   {
+    "id": "navi",
+    "w": 3,
+    "l": 2
+   },
+   {
+    "id": "g2",
+    "w": 3,
+    "l": 2
+   },
+   {
+    "id": "faze",
+    "w": 3,
+    "l": 2
+   },
+   {
+    "id": "mongolz",
+    "w": 3,
+    "l": 2
+   },
+   {
+    "id": "legacy",
+    "w": 3,
+    "l": 1
+   },
+   {
+    "id": "gl",
+    "w": 3,
+    "l": 2
+   },
+   {
+    "id": "nip",
+    "w": 3,
+    "l": 2
+   },
+   {
+    "id": "big",
+    "w": 3,
+    "l": 2
+   },
+   {
+    "id": "efire",
+    "w": 3,
+    "l": 1
+   },
+   {
+    "id": "vp",
+    "w": 3,
+    "l": 2
+   },
+   {
+    "id": "sashi",
+    "w": 3,
+    "l": 2
+   },
+   {
+    "id": "nine",
+    "w": 3,
+    "l": 2
+   },
+   {
+    "id": "bcg",
+    "w": 3,
+    "l": 2
+   },
+   {
+    "id": "nrg",
+    "w": 3,
+    "l": 2
+   },
+   {
+    "id": "saw",
+    "w": 3,
+    "l": 2
+   },
+   {
+    "id": "ence",
+    "w": 3,
+    "l": 2
+   },
+   {
+    "id": "mouz",
+    "w": 2,
+    "l": 3
+   },
+   {
+    "id": "aurora",
+    "w": 2,
+    "l": 3
+   },
+   {
+    "id": "astralis",
+    "w": 2,
+    "l": 3
+   },
+   {
+    "id": "9z",
+    "w": 2,
+    "l": 3
+   },
+   {
+    "id": "b8",
+    "w": 2,
+    "l": 3
+   },
+   {
+    "id": "mibr",
+    "w": 2,
+    "l": 3
+   },
+   {
+    "id": "tyloo",
+    "w": 2,
+    "l": 3
+   },
+   {
+    "id": "eyeballers",
+    "w": 2,
+    "l": 3
+   },
+   {
+    "id": "100t",
+    "w": 2,
+    "l": 3
+   },
+   {
+    "id": "m80",
+    "w": 2,
+    "l": 3
+   },
+   {
+    "id": "wildcard",
+    "w": 2,
+    "l": 3
+   },
+   {
+    "id": "imperial",
+    "w": 2,
+    "l": 3
+   },
+   {
+    "id": "bestia",
+    "w": 2,
+    "l": 3
+   },
+   {
+    "id": "onewin",
+    "w": 2,
+    "l": 3
+   },
+   {
+    "id": "marsborne",
+    "w": 2,
+    "l": 3
+   },
+   {
+    "id": "falcons",
+    "w": 1,
+    "l": 4
+   },
+   {
+    "id": "furia",
+    "w": 1,
+    "l": 4
+   },
+   {
+    "id": "betboom",
+    "w": 1,
+    "l": 4
+   },
+   {
+    "id": "parivision",
+    "w": 1,
+    "l": 4
+   },
+   {
+    "id": "heroic",
+    "w": 1,
+    "l": 4
+   },
+   {
+    "id": "sangal",
+    "w": 1,
+    "l": 4
+   },
+   {
+    "id": "nemiga",
+    "w": 1,
+    "l": 4
+   },
+   {
+    "id": "rareatom",
+    "w": 1,
+    "l": 4
+   },
+   {
+    "id": "lynnvision",
+    "w": 0,
+    "l": 5
+   }
+  ],
+  "s1": {
+   "label": "Stage 1",
+   "rounds": [
+    {
+     "n": 1,
+     "pairs": [
+      {
+       "a": "mouz",
+       "b": "aurora",
+       "winner": "mouz",
+       "score": [
+        1,
+        0
+       ],
+       "bo": 1,
+       "maps": [
+        [
+         1,
+         0
+        ]
+       ],
+       "played": true
+      },
+      {
+       "a": "astralis",
+       "b": "9z",
+       "winner": "9z",
+       "score": [
+        0,
+        1
+       ],
+       "bo": 1,
+       "maps": [
+        [
+         0,
+         1
+        ]
+       ],
+       "played": true
+      },
+      {
+       "a": "b8",
+       "b": "mibr",
+       "winner": "b8",
+       "score": [
+        1,
+        0
+       ],
+       "bo": 1,
+       "maps": [
+        [
+         1,
+         0
+        ]
+       ],
+       "played": true
+      },
+      {
+       "a": "tyloo",
+       "b": "eyeballers",
+       "winner": "tyloo",
+       "score": [
+        1,
+        0
+       ],
+       "bo": 1,
+       "maps": [
+        [
+         1,
+         0
+        ]
+       ],
+       "played": true
+      },
+      {
+       "a": "efire",
+       "b": "vp",
+       "winner": "vp",
+       "score": [
+        0,
+        1
+       ],
+       "bo": 1,
+       "maps": [
+        [
+         0,
+         1
+        ]
+       ],
+       "played": true
+      },
+      {
+       "a": "sashi",
+       "b": "nine",
+       "winner": "nine",
+       "score": [
+        0,
+        1
+       ],
+       "bo": 1,
+       "maps": [
+        [
+         0,
+         1
+        ]
+       ],
+       "played": true
+      },
+      {
+       "a": "bcg",
+       "b": "nrg",
+       "winner": "bcg",
+       "score": [
+        1,
+        0
+       ],
+       "bo": 1,
+       "maps": [
+        [
+         1,
+         0
+        ]
+       ],
+       "played": true
+      },
+      {
+       "a": "saw",
+       "b": "ence",
+       "winner": "ence",
+       "score": [
+        0,
+        1
+       ],
+       "bo": 1,
+       "maps": [
+        [
+         0,
+         1
+        ]
+       ],
+       "played": true
+      }
+     ]
+    },
+    {
+     "n": 2,
+     "pairs": [
+      {
+       "a": "mouz",
+       "b": "9z",
+       "winner": "9z",
+       "score": [
+        0,
+        1
+       ],
+       "bo": 1,
+       "maps": [
+        [
+         0,
+         1
+        ]
+       ],
+       "played": true
+      },
+      {
+       "a": "b8",
+       "b": "tyloo",
+       "winner": "b8",
+       "score": [
+        1,
+        0
+       ],
+       "bo": 1,
+       "maps": [
+        [
+         1,
+         0
+        ]
+       ],
+       "played": true
+      },
+      {
+       "a": "vp",
+       "b": "nine",
+       "winner": "nine",
+       "score": [
+        0,
+        1
+       ],
+       "bo": 1,
+       "maps": [
+        [
+         0,
+         1
+        ]
+       ],
+       "played": true
+      },
+      {
+       "a": "bcg",
+       "b": "ence",
+       "winner": "ence",
+       "score": [
+        0,
+        1
+       ],
+       "bo": 1,
+       "maps": [
+        [
+         0,
+         1
+        ]
+       ],
+       "played": true
+      },
+      {
+       "a": "aurora",
+       "b": "astralis",
+       "winner": "astralis",
+       "score": [
+        0,
+        1
+       ],
+       "bo": 1,
+       "maps": [
+        [
+         0,
+         1
+        ]
+       ],
+       "played": true
+      },
+      {
+       "a": "mibr",
+       "b": "eyeballers",
+       "winner": "mibr",
+       "score": [
+        1,
+        0
+       ],
+       "bo": 1,
+       "maps": [
+        [
+         1,
+         0
+        ]
+       ],
+       "played": true
+      },
+      {
+       "a": "efire",
+       "b": "sashi",
+       "winner": "efire",
+       "score": [
+        1,
+        0
+       ],
+       "bo": 1,
+       "maps": [
+        [
+         1,
+         0
+        ]
+       ],
+       "played": true
+      },
+      {
+       "a": "nrg",
+       "b": "saw",
+       "winner": "saw",
+       "score": [
+        0,
+        1
+       ],
+       "bo": 1,
+       "maps": [
+        [
+         0,
+         1
+        ]
+       ],
+       "played": true
+      }
+     ]
+    },
+    {
+     "n": 3,
+     "pairs": [
+      {
+       "a": "9z",
+       "b": "b8",
+       "winner": "9z",
+       "score": [
+        2,
+        1
+       ],
+       "bo": 3,
+       "maps": [
+        [
+         0,
+         1
+        ],
+        [
+         1,
+         0
+        ],
+        [
+         1,
+         0
+        ]
+       ],
+       "played": true
+      },
+      {
+       "a": "nine",
+       "b": "ence",
+       "winner": "nine",
+       "score": [
+        2,
+        1
+       ],
+       "bo": 3,
+       "maps": [
+        [
+         1,
+         0
+        ],
+        [
+         0,
+         1
+        ],
+        [
+         1,
+         0
+        ]
+       ],
+       "played": true
+      },
+      {
+       "a": "mouz",
+       "b": "astralis",
+       "winner": "astralis",
+       "score": [
+        0,
+        2
+       ],
+       "bo": 3,
+       "maps": [
+        [
+         0,
+         1
+        ],
+        [
+         0,
+         1
+        ]
+       ],
+       "played": true
+      },
+      {
+       "a": "mibr",
+       "b": "tyloo",
+       "winner": "tyloo",
+       "score": [
+        1,
+        2
+       ],
+       "bo": 3,
+       "maps": [
+        [
+         0,
+         1
+        ],
+        [
+         1,
+         0
+        ],
+        [
+         0,
+         1
+        ]
+       ],
+       "played": true
+      },
+      {
+       "a": "efire",
+       "b": "bcg",
+       "winner": "bcg",
+       "score": [
+        1,
+        2
+       ],
+       "bo": 3,
+       "maps": [
+        [
+         0,
+         1
+        ],
+        [
+         1,
+         0
+        ],
+        [
+         0,
+         1
+        ]
+       ],
+       "played": true
+      },
+      {
+       "a": "vp",
+       "b": "saw",
+       "winner": "vp",
+       "score": [
+        2,
+        0
+       ],
+       "bo": 3,
+       "maps": [
+        [
+         1,
+         0
+        ],
+        [
+         1,
+         0
+        ]
+       ],
+       "played": true
+      },
+      {
+       "a": "aurora",
+       "b": "eyeballers",
+       "winner": "eyeballers",
+       "score": [
+        0,
+        2
+       ],
+       "bo": 3,
+       "maps": [
+        [
+         0,
+         1
+        ],
+        [
+         0,
+         1
+        ]
+       ],
+       "played": true
+      },
+      {
+       "a": "sashi",
+       "b": "nrg",
+       "winner": "sashi",
+       "score": [
+        2,
+        1
+       ],
+       "bo": 3,
+       "maps": [
+        [
+         0,
+         1
+        ],
+        [
+         1,
+         0
+        ],
+        [
+         1,
+         0
+        ]
+       ],
+       "played": true
+      }
+     ]
+    },
+    {
+     "n": 4,
+     "pairs": [
+      {
+       "a": "astralis",
+       "b": "b8",
+       "winner": "b8",
+       "score": [
+        1,
+        2
+       ],
+       "bo": 3,
+       "maps": [
+        [
+         0,
+         1
+        ],
+        [
+         1,
+         0
+        ],
+        [
+         0,
+         1
+        ]
+       ],
+       "played": true
+      },
+      {
+       "a": "tyloo",
+       "b": "vp",
+       "winner": "tyloo",
+       "score": [
+        2,
+        1
+       ],
+       "bo": 3,
+       "maps": [
+        [
+         1,
+         0
+        ],
+        [
+         0,
+         1
+        ],
+        [
+         1,
+         0
+        ]
+       ],
+       "played": true
+      },
+      {
+       "a": "bcg",
+       "b": "ence",
+       "winner": "bcg",
+       "score": [
+        2,
+        0
+       ],
+       "bo": 3,
+       "maps": [
+        [
+         1,
+         0
+        ],
+        [
+         1,
+         0
+        ]
+       ],
+       "played": true
+      },
+      {
+       "a": "mouz",
+       "b": "mibr",
+       "winner": "mouz",
+       "score": [
+        2,
+        0
+       ],
+       "bo": 3,
+       "maps": [
+        [
+         1,
+         0
+        ],
+        [
+         1,
+         0
+        ]
+       ],
+       "played": true
+      },
+      {
+       "a": "eyeballers",
+       "b": "efire",
+       "winner": "efire",
+       "score": [
+        1,
+        2
+       ],
+       "bo": 3,
+       "maps": [
+        [
+         1,
+         0
+        ],
+        [
+         0,
+         1
+        ],
+        [
+         0,
+         1
+        ]
+       ],
+       "played": true
+      },
+      {
+       "a": "sashi",
+       "b": "saw",
+       "winner": "saw",
+       "score": [
+        0,
+        2
+       ],
+       "bo": 3,
+       "maps": [
+        [
+         0,
+         1
+        ],
+        [
+         0,
+         1
+        ]
+       ],
+       "played": true
+      }
+     ]
+    },
+    {
+     "n": 5,
+     "pairs": [
+      {
+       "a": "mouz",
+       "b": "efire",
+       "winner": "mouz",
+       "score": [
+        2,
+        0
+       ],
+       "bo": 3,
+       "maps": [
+        [
+         1,
+         0
+        ],
+        [
+         1,
+         0
+        ]
+       ],
+       "played": true
+      },
+      {
+       "a": "astralis",
+       "b": "vp",
+       "winner": "vp",
+       "score": [
+        1,
+        2
+       ],
+       "bo": 3,
+       "maps": [
+        [
+         0,
+         1
+        ],
+        [
+         1,
+         0
+        ],
+        [
+         0,
+         1
+        ]
+       ],
+       "played": true
+      },
+      {
+       "a": "saw",
+       "b": "ence",
+       "winner": "saw",
+       "score": [
+        2,
+        0
+       ],
+       "bo": 3,
+       "maps": [
+        [
+         1,
+         0
+        ],
+        [
+         1,
+         0
+        ]
+       ],
+       "played": true
+      }
+     ]
+    }
+   ],
+   "teams": [
+    {
+     "id": "efire",
+     "w": 2,
+     "l": 3,
+     "status": "elim",
+     "opps": [
+      "vp",
+      "sashi",
+      "bcg",
+      "eyeballers",
+      "mouz"
+     ]
+    },
+    {
+     "id": "vp",
+     "w": 3,
+     "l": 2,
+     "status": "adv",
+     "opps": [
+      "efire",
+      "nine",
+      "saw",
+      "tyloo",
+      "astralis"
+     ]
+    },
+    {
+     "id": "sashi",
+     "w": 1,
+     "l": 3,
+     "status": "elim",
+     "opps": [
+      "nine",
+      "efire",
+      "nrg",
+      "saw"
+     ]
+    },
+    {
+     "id": "nine",
+     "w": 3,
+     "l": 0,
+     "status": "adv",
+     "opps": [
+      "sashi",
+      "vp",
+      "ence"
+     ]
+    },
+    {
+     "id": "bcg",
+     "w": 3,
+     "l": 1,
+     "status": "adv",
+     "opps": [
+      "nrg",
+      "ence",
+      "efire",
+      "ence"
+     ]
+    },
+    {
+     "id": "nrg",
+     "w": 0,
+     "l": 3,
+     "status": "elim",
+     "opps": [
+      "bcg",
+      "saw",
+      "sashi"
+     ]
+    },
+    {
+     "id": "saw",
+     "w": 3,
+     "l": 2,
+     "status": "adv",
+     "opps": [
+      "ence",
+      "nrg",
+      "vp",
+      "sashi",
+      "ence"
+     ]
+    },
+    {
+     "id": "ence",
+     "w": 2,
+     "l": 3,
+     "status": "elim",
+     "opps": [
+      "saw",
+      "bcg",
+      "nine",
+      "bcg",
+      "saw"
+     ]
+    },
+    {
+     "id": "mouz",
+     "w": 3,
+     "l": 2,
+     "status": "adv",
+     "opps": [
+      "aurora",
+      "9z",
+      "astralis",
+      "mibr",
+      "efire"
+     ]
+    },
+    {
+     "id": "aurora",
+     "w": 0,
+     "l": 3,
+     "status": "elim",
+     "opps": [
+      "mouz",
+      "astralis",
+      "eyeballers"
+     ]
+    },
+    {
+     "id": "astralis",
+     "w": 2,
+     "l": 3,
+     "status": "elim",
+     "opps": [
+      "9z",
+      "aurora",
+      "mouz",
+      "b8",
+      "vp"
+     ]
+    },
+    {
+     "id": "9z",
+     "w": 3,
+     "l": 0,
+     "status": "adv",
+     "opps": [
+      "astralis",
+      "mouz",
+      "b8"
+     ]
+    },
+    {
+     "id": "b8",
+     "w": 3,
+     "l": 1,
+     "status": "adv",
+     "opps": [
+      "mibr",
+      "tyloo",
+      "9z",
+      "astralis"
+     ]
+    },
+    {
+     "id": "mibr",
+     "w": 1,
+     "l": 3,
+     "status": "elim",
+     "opps": [
+      "b8",
+      "eyeballers",
+      "tyloo",
+      "mouz"
+     ]
+    },
+    {
+     "id": "tyloo",
+     "w": 3,
+     "l": 1,
+     "status": "adv",
+     "opps": [
+      "eyeballers",
+      "b8",
+      "mibr",
+      "vp"
+     ]
+    },
+    {
+     "id": "eyeballers",
+     "w": 1,
+     "l": 3,
+     "status": "elim",
+     "opps": [
+      "tyloo",
+      "mibr",
+      "aurora",
+      "efire"
+     ]
+    }
+   ]
+  },
+  "s2": {
+   "label": "Stage 2",
+   "rounds": [
+    {
+     "n": 1,
+     "pairs": [
+      {
+       "a": "mouz",
+       "b": "navi",
+       "winner": "mouz",
+       "score": [
+        1,
+        0
+       ],
+       "bo": 1,
+       "maps": [
+        [
+         1,
+         0
+        ]
+       ],
+       "played": true
+      },
+      {
+       "a": "g2",
+       "b": "faze",
+       "winner": "faze",
+       "score": [
+        0,
+        1
+       ],
+       "bo": 1,
+       "maps": [
+        [
+         0,
+         1
+        ]
+       ],
+       "played": true
+      },
+      {
+       "a": "mongolz",
+       "b": "9z",
+       "winner": "mongolz",
+       "score": [
+        1,
+        0
+       ],
+       "bo": 1,
+       "maps": [
+        [
+         1,
+         0
+        ]
+       ],
+       "played": true
+      },
+      {
+       "a": "legacy",
+       "b": "b8",
+       "winner": "b8",
+       "score": [
+        0,
+        1
+       ],
+       "bo": 1,
+       "maps": [
+        [
+         0,
+         1
+        ]
+       ],
+       "played": true
+      },
+      {
+       "a": "gl",
+       "b": "nip",
+       "winner": "gl",
+       "score": [
+        1,
+        0
+       ],
+       "bo": 1,
+       "maps": [
+        [
+         1,
+         0
+        ]
+       ],
+       "played": true
+      },
+      {
+       "a": "big",
+       "b": "tyloo",
+       "winner": "big",
+       "score": [
+        1,
+        0
+       ],
+       "bo": 1,
+       "maps": [
+        [
+         1,
+         0
+        ]
+       ],
+       "played": true
+      },
+      {
+       "a": "vp",
+       "b": "nine",
+       "winner": "nine",
+       "score": [
+        0,
+        1
+       ],
+       "bo": 1,
+       "maps": [
+        [
+         0,
+         1
+        ]
+       ],
+       "played": true
+      },
+      {
+       "a": "bcg",
+       "b": "saw",
+       "winner": "bcg",
+       "score": [
+        1,
+        0
+       ],
+       "bo": 1,
+       "maps": [
+        [
+         1,
+         0
+        ]
+       ],
+       "played": true
+      }
+     ]
+    },
+    {
+     "n": 2,
+     "pairs": [
+      {
+       "a": "mouz",
+       "b": "faze",
+       "winner": "mouz",
+       "score": [
+        1,
+        0
+       ],
+       "bo": 1,
+       "maps": [
+        [
+         1,
+         0
+        ]
+       ],
+       "played": true
+      },
+      {
+       "a": "mongolz",
+       "b": "b8",
+       "winner": "mongolz",
+       "score": [
+        1,
+        0
+       ],
+       "bo": 1,
+       "maps": [
+        [
+         1,
+         0
+        ]
+       ],
+       "played": true
+      },
+      {
+       "a": "gl",
+       "b": "big",
+       "winner": "gl",
+       "score": [
+        1,
+        0
+       ],
+       "bo": 1,
+       "maps": [
+        [
+         1,
+         0
+        ]
+       ],
+       "played": true
+      },
+      {
+       "a": "nine",
+       "b": "bcg",
+       "winner": "nine",
+       "score": [
+        1,
+        0
+       ],
+       "bo": 1,
+       "maps": [
+        [
+         1,
+         0
+        ]
+       ],
+       "played": true
+      },
+      {
+       "a": "navi",
+       "b": "g2",
+       "winner": "navi",
+       "score": [
+        1,
+        0
+       ],
+       "bo": 1,
+       "maps": [
+        [
+         1,
+         0
+        ]
+       ],
+       "played": true
+      },
+      {
+       "a": "9z",
+       "b": "legacy",
+       "winner": "legacy",
+       "score": [
+        0,
+        1
+       ],
+       "bo": 1,
+       "maps": [
+        [
+         0,
+         1
+        ]
+       ],
+       "played": true
+      },
+      {
+       "a": "nip",
+       "b": "tyloo",
+       "winner": "tyloo",
+       "score": [
+        0,
+        1
+       ],
+       "bo": 1,
+       "maps": [
+        [
+         0,
+         1
+        ]
+       ],
+       "played": true
+      },
+      {
+       "a": "vp",
+       "b": "saw",
+       "winner": "vp",
+       "score": [
+        1,
+        0
+       ],
+       "bo": 1,
+       "maps": [
+        [
+         1,
+         0
+        ]
+       ],
+       "played": true
+      }
+     ]
+    },
+    {
+     "n": 3,
+     "pairs": [
+      {
+       "a": "mouz",
+       "b": "mongolz",
+       "winner": "mouz",
+       "score": [
+        2,
+        1
+       ],
+       "bo": 3,
+       "maps": [
+        [
+         0,
+         1
+        ],
+        [
+         1,
+         0
+        ],
+        [
+         1,
+         0
+        ]
+       ],
+       "played": true
+      },
+      {
+       "a": "gl",
+       "b": "nine",
+       "winner": "gl",
+       "score": [
+        2,
+        1
+       ],
+       "bo": 3,
+       "maps": [
+        [
+         0,
+         1
+        ],
+        [
+         1,
+         0
+        ],
+        [
+         1,
+         0
+        ]
+       ],
+       "played": true
+      },
+      {
+       "a": "navi",
+       "b": "faze",
+       "winner": "faze",
+       "score": [
+        0,
+        2
+       ],
+       "bo": 3,
+       "maps": [
+        [
+         0,
+         1
+        ],
+        [
+         0,
+         1
+        ]
+       ],
+       "played": true
+      },
+      {
+       "a": "legacy",
+       "b": "big",
+       "winner": "legacy",
+       "score": [
+        2,
+        1
+       ],
+       "bo": 3,
+       "maps": [
+        [
+         0,
+         1
+        ],
+        [
+         1,
+         0
+        ],
+        [
+         1,
+         0
+        ]
+       ],
+       "played": true
+      },
+      {
+       "a": "b8",
+       "b": "tyloo",
+       "winner": "b8",
+       "score": [
+        2,
+        1
+       ],
+       "bo": 3,
+       "maps": [
+        [
+         1,
+         0
+        ],
+        [
+         0,
+         1
+        ],
+        [
+         1,
+         0
+        ]
+       ],
+       "played": true
+      },
+      {
+       "a": "vp",
+       "b": "bcg",
+       "winner": "vp",
+       "score": [
+        2,
+        1
+       ],
+       "bo": 3,
+       "maps": [
+        [
+         1,
+         0
+        ],
+        [
+         0,
+         1
+        ],
+        [
+         1,
+         0
+        ]
+       ],
+       "played": true
+      },
+      {
+       "a": "g2",
+       "b": "9z",
+       "winner": "g2",
+       "score": [
+        2,
+        0
+       ],
+       "bo": 3,
+       "maps": [
+        [
+         1,
+         0
+        ],
+        [
+         1,
+         0
+        ]
+       ],
+       "played": true
+      },
+      {
+       "a": "nip",
+       "b": "saw",
+       "winner": "saw",
+       "score": [
+        1,
+        2
+       ],
+       "bo": 3,
+       "maps": [
+        [
+         1,
+         0
+        ],
+        [
+         0,
+         1
+        ],
+        [
+         0,
+         1
+        ]
+       ],
+       "played": true
+      }
+     ]
+    },
+    {
+     "n": 4,
+     "pairs": [
+      {
+       "a": "faze",
+       "b": "mongolz",
+       "winner": "mongolz",
+       "score": [
+        0,
+        2
+       ],
+       "bo": 3,
+       "maps": [
+        [
+         0,
+         1
+        ],
+        [
+         0,
+         1
+        ]
+       ],
+       "played": true
+      },
+      {
+       "a": "legacy",
+       "b": "vp",
+       "winner": "legacy",
+       "score": [
+        2,
+        0
+       ],
+       "bo": 3,
+       "maps": [
+        [
+         1,
+         0
+        ],
+        [
+         1,
+         0
+        ]
+       ],
+       "played": true
+      },
+      {
+       "a": "b8",
+       "b": "nine",
+       "winner": "nine",
+       "score": [
+        0,
+        2
+       ],
+       "bo": 3,
+       "maps": [
+        [
+         0,
+         1
+        ],
+        [
+         0,
+         1
+        ]
+       ],
+       "played": true
+      },
+      {
+       "a": "navi",
+       "b": "big",
+       "winner": "navi",
+       "score": [
+        2,
+        0
+       ],
+       "bo": 3,
+       "maps": [
+        [
+         1,
+         0
+        ],
+        [
+         1,
+         0
+        ]
+       ],
+       "played": true
+      },
+      {
+       "a": "g2",
+       "b": "tyloo",
+       "winner": "g2",
+       "score": [
+        2,
+        0
+       ],
+       "bo": 3,
+       "maps": [
+        [
+         1,
+         0
+        ],
+        [
+         1,
+         0
+        ]
+       ],
+       "played": true
+      },
+      {
+       "a": "bcg",
+       "b": "saw",
+       "winner": "bcg",
+       "score": [
+        2,
+        0
+       ],
+       "bo": 3,
+       "maps": [
+        [
+         1,
+         0
+        ],
+        [
+         1,
+         0
+        ]
+       ],
+       "played": true
+      }
+     ]
+    },
+    {
+     "n": 5,
+     "pairs": [
+      {
+       "a": "navi",
+       "b": "b8",
+       "winner": "b8",
+       "score": [
+        0,
+        2
+       ],
+       "bo": 3,
+       "maps": [
+        [
+         0,
+         1
+        ],
+        [
+         0,
+         1
+        ]
+       ],
+       "played": true
+      },
+      {
+       "a": "g2",
+       "b": "vp",
+       "winner": "g2",
+       "score": [
+        2,
+        1
+       ],
+       "bo": 3,
+       "maps": [
+        [
+         1,
+         0
+        ],
+        [
+         0,
+         1
+        ],
+        [
+         1,
+         0
+        ]
+       ],
+       "played": true
+      },
+      {
+       "a": "faze",
+       "b": "bcg",
+       "winner": "faze",
+       "score": [
+        2,
+        1
+       ],
+       "bo": 3,
+       "maps": [
+        [
+         1,
+         0
+        ],
+        [
+         0,
+         1
+        ],
+        [
+         1,
+         0
+        ]
+       ],
+       "played": true
+      }
+     ]
+    }
+   ],
+   "teams": [
+    {
+     "id": "navi",
+     "w": 2,
+     "l": 3,
+     "status": "elim",
+     "opps": [
+      "mouz",
+      "g2",
+      "faze",
+      "big",
+      "b8"
+     ]
+    },
+    {
+     "id": "g2",
+     "w": 3,
+     "l": 2,
+     "status": "adv",
+     "opps": [
+      "faze",
+      "navi",
+      "9z",
+      "tyloo",
+      "vp"
+     ]
+    },
+    {
+     "id": "faze",
+     "w": 3,
+     "l": 2,
+     "status": "adv",
+     "opps": [
+      "g2",
+      "mouz",
+      "navi",
+      "mongolz",
+      "bcg"
+     ]
+    },
+    {
+     "id": "mongolz",
+     "w": 3,
+     "l": 1,
+     "status": "adv",
+     "opps": [
+      "9z",
+      "b8",
+      "mouz",
+      "faze"
+     ]
+    },
+    {
+     "id": "legacy",
+     "w": 3,
+     "l": 1,
+     "status": "adv",
+     "opps": [
+      "b8",
+      "9z",
+      "big",
+      "vp"
+     ]
+    },
+    {
+     "id": "gl",
+     "w": 3,
+     "l": 0,
+     "status": "adv",
+     "opps": [
+      "nip",
+      "big",
+      "nine"
+     ]
+    },
+    {
+     "id": "nip",
+     "w": 0,
+     "l": 3,
+     "status": "elim",
+     "opps": [
+      "gl",
+      "tyloo",
+      "saw"
+     ]
+    },
+    {
+     "id": "big",
+     "w": 1,
+     "l": 3,
+     "status": "elim",
+     "opps": [
+      "tyloo",
+      "gl",
+      "legacy",
+      "navi"
+     ]
+    },
+    {
+     "id": "vp",
+     "w": 2,
+     "l": 3,
+     "status": "elim",
+     "opps": [
+      "nine",
+      "saw",
+      "bcg",
+      "legacy",
+      "g2"
+     ]
+    },
+    {
+     "id": "nine",
+     "w": 3,
+     "l": 1,
+     "status": "adv",
+     "opps": [
+      "vp",
+      "bcg",
+      "gl",
+      "b8"
+     ]
+    },
+    {
+     "id": "bcg",
+     "w": 2,
+     "l": 3,
+     "status": "elim",
+     "opps": [
+      "saw",
+      "nine",
+      "vp",
+      "saw",
+      "faze"
+     ]
+    },
+    {
+     "id": "saw",
+     "w": 1,
+     "l": 3,
+     "status": "elim",
+     "opps": [
+      "bcg",
+      "vp",
+      "nip",
+      "bcg"
+     ]
+    },
+    {
+     "id": "mouz",
+     "w": 3,
+     "l": 0,
+     "status": "adv",
+     "opps": [
+      "navi",
+      "faze",
+      "mongolz"
+     ]
+    },
+    {
+     "id": "9z",
+     "w": 0,
+     "l": 3,
+     "status": "elim",
+     "opps": [
+      "mongolz",
+      "legacy",
+      "g2"
+     ]
+    },
+    {
+     "id": "b8",
+     "w": 3,
+     "l": 2,
+     "status": "adv",
+     "opps": [
+      "legacy",
+      "mongolz",
+      "tyloo",
+      "nine",
+      "navi"
+     ]
+    },
+    {
+     "id": "tyloo",
+     "w": 1,
+     "l": 3,
+     "status": "elim",
+     "opps": [
+      "big",
+      "nip",
+      "b8",
+      "g2"
+     ]
+    }
+   ]
+  },
+  "s3": {
+   "label": "Stage 3",
+   "rounds": [
+    {
+     "n": 1,
+     "pairs": [
+      {
+       "a": "spirit",
+       "b": "vitality",
+       "winner": "vitality",
+       "score": [
+        0,
+        2
+       ],
+       "bo": 3,
+       "maps": [
+        [
+         0,
+         1
+        ],
+        [
+         0,
+         1
+        ]
+       ],
+       "played": true
+      },
+      {
+       "a": "mouz",
+       "b": "g2",
+       "winner": "g2",
+       "score": [
+        0,
+        2
+       ],
+       "bo": 3,
+       "maps": [
+        [
+         0,
+         1
+        ],
+        [
+         0,
+         1
+        ]
+       ],
+       "played": true
+      },
+      {
+       "a": "faze",
+       "b": "mongolz",
+       "winner": "mongolz",
+       "score": [
+        1,
+        2
+       ],
+       "bo": 3,
+       "maps": [
+        [
+         0,
+         1
+        ],
+        [
+         1,
+         0
+        ],
+        [
+         0,
+         1
+        ]
+       ],
+       "played": true
+      },
+      {
+       "a": "pain",
+       "b": "legacy",
+       "winner": "legacy",
+       "score": [
+        0,
+        2
+       ],
+       "bo": 3,
+       "maps": [
+        [
+         0,
+         1
+        ],
+        [
+         0,
+         1
+        ]
+       ],
+       "played": true
+      },
+      {
+       "a": "b8",
+       "b": "liquid",
+       "winner": "liquid",
+       "score": [
+        0,
+        2
+       ],
+       "bo": 3,
+       "maps": [
+        [
+         0,
+         1
+        ],
+        [
+         0,
+         1
+        ]
+       ],
+       "played": true
+      },
+      {
+       "a": "gl",
+       "b": "3dmax",
+       "winner": "gl",
+       "score": [
+        2,
+        0
+       ],
+       "bo": 3,
+       "maps": [
+        [
+         1,
+         0
+        ],
+        [
+         1,
+         0
+        ]
+       ],
+       "played": true
+      },
+      {
+       "a": "fnatic",
+       "b": "nine",
+       "winner": "nine",
+       "score": [
+        0,
+        2
+       ],
+       "bo": 3,
+       "maps": [
+        [
+         0,
+         1
+        ],
+        [
+         0,
+         1
+        ]
+       ],
+       "played": true
+      },
+      {
+       "a": "metizport",
+       "b": "fluxo",
+       "winner": "metizport",
+       "score": [
+        2,
+        1
+       ],
+       "bo": 3,
+       "maps": [
+        [
+         0,
+         1
+        ],
+        [
+         1,
+         0
+        ],
+        [
+         1,
+         0
+        ]
+       ],
+       "played": true
+      }
+     ]
+    },
+    {
+     "n": 2,
+     "pairs": [
+      {
+       "a": "vitality",
+       "b": "g2",
+       "winner": "vitality",
+       "score": [
+        2,
+        0
+       ],
+       "bo": 3,
+       "maps": [
+        [
+         1,
+         0
+        ],
+        [
+         1,
+         0
+        ]
+       ],
+       "played": true
+      },
+      {
+       "a": "mongolz",
+       "b": "legacy",
+       "winner": "mongolz",
+       "score": [
+        2,
+        0
+       ],
+       "bo": 3,
+       "maps": [
+        [
+         1,
+         0
+        ],
+        [
+         1,
+         0
+        ]
+       ],
+       "played": true
+      },
+      {
+       "a": "liquid",
+       "b": "gl",
+       "winner": "liquid",
+       "score": [
+        2,
+        0
+       ],
+       "bo": 3,
+       "maps": [
+        [
+         1,
+         0
+        ],
+        [
+         1,
+         0
+        ]
+       ],
+       "played": true
+      },
+      {
+       "a": "nine",
+       "b": "metizport",
+       "winner": "nine",
+       "score": [
+        2,
+        1
+       ],
+       "bo": 3,
+       "maps": [
+        [
+         1,
+         0
+        ],
+        [
+         0,
+         1
+        ],
+        [
+         1,
+         0
+        ]
+       ],
+       "played": true
+      },
+      {
+       "a": "spirit",
+       "b": "mouz",
+       "winner": "spirit",
+       "score": [
+        2,
+        0
+       ],
+       "bo": 3,
+       "maps": [
+        [
+         1,
+         0
+        ],
+        [
+         1,
+         0
+        ]
+       ],
+       "played": true
+      },
+      {
+       "a": "faze",
+       "b": "pain",
+       "winner": "pain",
+       "score": [
+        1,
+        2
+       ],
+       "bo": 3,
+       "maps": [
+        [
+         1,
+         0
+        ],
+        [
+         0,
+         1
+        ],
+        [
+         0,
+         1
+        ]
+       ],
+       "played": true
+      },
+      {
+       "a": "b8",
+       "b": "3dmax",
+       "winner": "b8",
+       "score": [
+        2,
+        0
+       ],
+       "bo": 3,
+       "maps": [
+        [
+         1,
+         0
+        ],
+        [
+         1,
+         0
+        ]
+       ],
+       "played": true
+      },
+      {
+       "a": "fnatic",
+       "b": "fluxo",
+       "winner": "fnatic",
+       "score": [
+        2,
+        1
+       ],
+       "bo": 3,
+       "maps": [
+        [
+         0,
+         1
+        ],
+        [
+         1,
+         0
+        ],
+        [
+         1,
+         0
+        ]
+       ],
+       "played": true
+      }
+     ]
+    },
+    {
+     "n": 3,
+     "pairs": [
+      {
+       "a": "vitality",
+       "b": "mongolz",
+       "winner": "vitality",
+       "score": [
+        2,
+        1
+       ],
+       "bo": 3,
+       "maps": [
+        [
+         0,
+         1
+        ],
+        [
+         1,
+         0
+        ],
+        [
+         1,
+         0
+        ]
+       ],
+       "played": true
+      },
+      {
+       "a": "liquid",
+       "b": "nine",
+       "winner": "nine",
+       "score": [
+        1,
+        2
+       ],
+       "bo": 3,
+       "maps": [
+        [
+         1,
+         0
+        ],
+        [
+         0,
+         1
+        ],
+        [
+         0,
+         1
+        ]
+       ],
+       "played": true
+      },
+      {
+       "a": "spirit",
+       "b": "g2",
+       "winner": "spirit",
+       "score": [
+        2,
+        1
+       ],
+       "bo": 3,
+       "maps": [
+        [
+         1,
+         0
+        ],
+        [
+         0,
+         1
+        ],
+        [
+         1,
+         0
+        ]
+       ],
+       "played": true
+      },
+      {
+       "a": "pain",
+       "b": "b8",
+       "winner": "b8",
+       "score": [
+        0,
+        2
+       ],
+       "bo": 3,
+       "maps": [
+        [
+         0,
+         1
+        ],
+        [
+         0,
+         1
+        ]
+       ],
+       "played": true
+      },
+      {
+       "a": "legacy",
+       "b": "gl",
+       "winner": "gl",
+       "score": [
+        0,
+        2
+       ],
+       "bo": 3,
+       "maps": [
+        [
+         0,
+         1
+        ],
+        [
+         0,
+         1
+        ]
+       ],
+       "played": true
+      },
+      {
+       "a": "fnatic",
+       "b": "metizport",
+       "winner": "fnatic",
+       "score": [
+        2,
+        1
+       ],
+       "bo": 3,
+       "maps": [
+        [
+         1,
+         0
+        ],
+        [
+         0,
+         1
+        ],
+        [
+         1,
+         0
+        ]
+       ],
+       "played": true
+      },
+      {
+       "a": "mouz",
+       "b": "faze",
+       "winner": "faze",
+       "score": [
+        0,
+        2
+       ],
+       "bo": 3,
+       "maps": [
+        [
+         0,
+         1
+        ],
+        [
+         0,
+         1
+        ]
+       ],
+       "played": true
+      },
+      {
+       "a": "3dmax",
+       "b": "fluxo",
+       "winner": "fluxo",
+       "score": [
+        0,
+        2
+       ],
+       "bo": 3,
+       "maps": [
+        [
+         0,
+         1
+        ],
+        [
+         0,
+         1
+        ]
+       ],
+       "played": true
+      }
+     ]
+    },
+    {
+     "n": 4,
+     "pairs": [
+      {
+       "a": "spirit",
+       "b": "mongolz",
+       "winner": "spirit",
+       "score": [
+        2,
+        0
+       ],
+       "bo": 3,
+       "maps": [
+        [
+         1,
+         0
+        ],
+        [
+         1,
+         0
+        ]
+       ],
+       "played": true
+      },
+      {
+       "a": "b8",
+       "b": "gl",
+       "winner": "b8",
+       "score": [
+        2,
+        1
+       ],
+       "bo": 3,
+       "maps": [
+        [
+         0,
+         1
+        ],
+        [
+         1,
+         0
+        ],
+        [
+         1,
+         0
+        ]
+       ],
+       "played": true
+      },
+      {
+       "a": "liquid",
+       "b": "fnatic",
+       "winner": "fnatic",
+       "score": [
+        1,
+        2
+       ],
+       "bo": 3,
+       "maps": [
+        [
+         0,
+         1
+        ],
+        [
+         1,
+         0
+        ],
+        [
+         0,
+         1
+        ]
+       ],
+       "played": true
+      },
+      {
+       "a": "g2",
+       "b": "faze",
+       "winner": "faze",
+       "score": [
+        1,
+        2
+       ],
+       "bo": 3,
+       "maps": [
+        [
+         1,
+         0
+        ],
+        [
+         0,
+         1
+        ],
+        [
+         0,
+         1
+        ]
+       ],
+       "played": true
+      },
+      {
+       "a": "pain",
+       "b": "metizport",
+       "winner": "metizport",
+       "score": [
+        1,
+        2
+       ],
+       "bo": 3,
+       "maps": [
+        [
+         1,
+         0
+        ],
+        [
+         0,
+         1
+        ],
+        [
+         0,
+         1
+        ]
+       ],
+       "played": true
+      },
+      {
+       "a": "legacy",
+       "b": "fluxo",
+       "winner": "fluxo",
+       "score": [
+        0,
+        2
+       ],
+       "bo": 3,
+       "maps": [
+        [
+         0,
+         1
+        ],
+        [
+         0,
+         1
+        ]
+       ],
+       "played": true
+      }
+     ]
+    },
+    {
+     "n": 5,
+     "pairs": [
+      {
+       "a": "faze",
+       "b": "liquid",
+       "winner": "liquid",
+       "score": [
+        0,
+        2
+       ],
+       "bo": 3,
+       "maps": [
+        [
+         0,
+         1
+        ],
+        [
+         0,
+         1
+        ]
+       ],
+       "played": true
+      },
+      {
+       "a": "mongolz",
+       "b": "gl",
+       "winner": "mongolz",
+       "score": [
+        2,
+        1
+       ],
+       "bo": 3,
+       "maps": [
+        [
+         0,
+         1
+        ],
+        [
+         1,
+         0
+        ],
+        [
+         1,
+         0
+        ]
+       ],
+       "played": true
+      },
+      {
+       "a": "metizport",
+       "b": "fluxo",
+       "winner": "metizport",
+       "score": [
+        2,
+        1
+       ],
+       "bo": 3,
+       "maps": [
+        [
+         0,
+         1
+        ],
+        [
+         1,
+         0
+        ],
+        [
+         1,
+         0
+        ]
+       ],
+       "played": true
+      }
+     ]
+    }
+   ],
+   "teams": [
+    {
+     "id": "spirit",
+     "w": 3,
+     "l": 1,
+     "status": "adv",
+     "opps": [
+      "vitality",
+      "mouz",
+      "g2",
+      "mongolz"
+     ]
+    },
+    {
+     "id": "pain",
+     "w": 1,
+     "l": 3,
+     "status": "elim",
+     "opps": [
+      "legacy",
+      "faze",
+      "b8",
+      "metizport"
+     ]
+    },
+    {
+     "id": "liquid",
+     "w": 3,
+     "l": 2,
+     "status": "adv",
+     "opps": [
+      "b8",
+      "gl",
+      "nine",
+      "fnatic",
+      "faze"
+     ]
+    },
+    {
+     "id": "3dmax",
+     "w": 0,
+     "l": 3,
+     "status": "elim",
+     "opps": [
+      "gl",
+      "b8",
+      "fluxo"
+     ]
+    },
+    {
+     "id": "fnatic",
+     "w": 3,
+     "l": 1,
+     "status": "adv",
+     "opps": [
+      "nine",
+      "fluxo",
+      "metizport",
+      "liquid"
+     ]
+    },
+    {
+     "id": "metizport",
+     "w": 3,
+     "l": 2,
+     "status": "adv",
+     "opps": [
+      "fluxo",
+      "nine",
+      "fnatic",
+      "pain",
+      "fluxo"
+     ]
+    },
+    {
+     "id": "fluxo",
+     "w": 2,
+     "l": 3,
+     "status": "elim",
+     "opps": [
+      "metizport",
+      "fnatic",
+      "3dmax",
+      "legacy",
+      "metizport"
+     ]
+    },
+    {
+     "id": "vitality",
+     "w": 3,
+     "l": 0,
+     "status": "adv",
+     "opps": [
+      "spirit",
+      "g2",
+      "mongolz"
+     ]
+    },
+    {
+     "id": "g2",
+     "w": 1,
+     "l": 3,
+     "status": "elim",
+     "opps": [
+      "mouz",
+      "vitality",
+      "spirit",
+      "faze"
+     ]
+    },
+    {
+     "id": "faze",
+     "w": 2,
+     "l": 3,
+     "status": "elim",
+     "opps": [
+      "mongolz",
+      "pain",
+      "mouz",
+      "g2",
+      "liquid"
+     ]
+    },
+    {
+     "id": "mongolz",
+     "w": 3,
+     "l": 2,
+     "status": "adv",
+     "opps": [
+      "faze",
+      "legacy",
+      "vitality",
+      "spirit",
+      "gl"
+     ]
+    },
+    {
+     "id": "legacy",
+     "w": 1,
+     "l": 3,
+     "status": "elim",
+     "opps": [
+      "pain",
+      "mongolz",
+      "gl",
+      "fluxo"
+     ]
+    },
+    {
+     "id": "gl",
+     "w": 2,
+     "l": 3,
+     "status": "elim",
+     "opps": [
+      "3dmax",
+      "liquid",
+      "legacy",
+      "b8",
+      "mongolz"
+     ]
+    },
+    {
+     "id": "nine",
+     "w": 3,
+     "l": 0,
+     "status": "adv",
+     "opps": [
+      "fnatic",
+      "metizport",
+      "liquid"
+     ]
+    },
+    {
+     "id": "mouz",
+     "w": 0,
+     "l": 3,
+     "status": "elim",
+     "opps": [
+      "g2",
+      "spirit",
+      "faze"
+     ]
+    },
+    {
+     "id": "b8",
+     "w": 3,
+     "l": 1,
+     "status": "adv",
+     "opps": [
+      "liquid",
+      "3dmax",
+      "pain",
+      "gl"
+     ]
+    }
+   ]
+  },
+  "playoff": [
+   {
+    "label": "1/4 决赛",
+    "pairs": [
+     {
+      "a": "spirit",
+      "b": "metizport",
+      "winner": "spirit",
+      "score": [
+       2,
+       1
+      ],
+      "bo": 3,
+      "maps": [
+       [
+        1,
+        0
+       ],
+       [
+        0,
+        1
+       ],
+       [
+        1,
+        0
+       ]
+      ],
+      "played": true
+     },
+     {
+      "a": "b8",
+      "b": "liquid",
+      "winner": "b8",
+      "score": [
+       2,
+       1
+      ],
+      "bo": 3,
+      "maps": [
+       [
+        1,
+        0
+       ],
+       [
+        0,
+        1
+       ],
+       [
+        1,
+        0
+       ]
+      ],
+      "played": true
+     },
+     {
+      "a": "mongolz",
+      "b": "fnatic",
+      "winner": "fnatic",
+      "score": [
+       0,
+       2
+      ],
+      "bo": 3,
+      "maps": [
+       [
+        0,
+        1
+       ],
+       [
+        0,
+        1
+       ]
+      ],
+      "played": true
+     },
+     {
+      "a": "vitality",
+      "b": "nine",
+      "winner": "vitality",
+      "score": [
+       2,
+       0
+      ],
+      "bo": 3,
+      "maps": [
+       [
+        1,
+        0
+       ],
+       [
+        1,
+        0
+       ]
+      ],
+      "played": true
+     }
+    ]
+   },
+   {
+    "label": "半决赛",
+    "pairs": [
+     {
+      "a": "spirit",
+      "b": "b8",
+      "winner": "spirit",
+      "score": [
+       2,
+       0
+      ],
+      "bo": 3,
+      "maps": [
+       [
+        1,
+        0
+       ],
+       [
+        1,
+        0
+       ]
+      ],
+      "played": true
+     },
+     {
+      "a": "fnatic",
+      "b": "vitality",
+      "winner": "vitality",
+      "score": [
+       0,
+       2
+      ],
+      "bo": 3,
+      "maps": [
+       [
+        0,
+        1
+       ],
+       [
+        0,
+        1
+       ]
+      ],
+      "played": true
+     }
+    ]
+   },
+   {
+    "label": "决赛",
+    "pairs": [
+     {
+      "a": "spirit",
+      "b": "vitality",
+      "winner": "spirit",
+      "score": [
+       3,
+       1
+      ],
+      "bo": 5,
+      "maps": [
+       [
+        0,
+        1
+       ],
+       [
+        1,
+        0
+       ],
+       [
+        1,
+        0
+       ],
+       [
+        1,
+        0
+       ]
+      ],
+      "played": true
+     }
+    ]
+   }
+  ],
+  "user": {
+   "id": "spirit",
+   "tag": "Spirit",
+   "wins": 10,
+   "losses": 1
+  }
+ }
+]

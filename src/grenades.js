@@ -35,6 +35,7 @@ export function updateGrenades(game, dt) {
       game.grenades.splice(i, 1);
       if (g.kind === 'he') {
         emit('sfx', { name: 'boom', vol: 1.2, x: g.x, y: g.y, game });
+        game.lastSound = { x: g.x, y: g.y, t: game.time, radius: 1200, conf: 0.85 };
         game.shake = Math.max(game.shake, 9);
         spawnParticle(game, { kind: 'boom', x: g.x, y: g.y, life: 0.5, size: 180 });
         for (let f = 0; f < 26; f++) {
@@ -53,6 +54,7 @@ export function updateGrenades(game, dt) {
         }
       } else if (g.kind === 'flash') {
         emit('sfx', { name: 'flash', vol: 1.0, x: g.x, y: g.y, game });
+        game.lastSound = { x: g.x, y: g.y, t: game.time, radius: 700, conf: 0.5 };
         for (const e of game.entities) {
           if (e.dead) continue;
           if (g.owner && g.owner.team === e.team) continue;
@@ -75,6 +77,7 @@ export function updateGrenades(game, dt) {
         }
       } else if (g.kind === 'smoke') {
         emit('sfx', { name: 'smoke', vol: 0.8, x: g.x, y: g.y, game });
+        game.lastSound = { x: g.x, y: g.y, t: game.time, radius: 500, conf: 0.4 };
         game.smokes.push({ x: g.x, y: g.y, r: 20, gr: 150, life: 12 });
         for (let s2 = 0; s2 < 10; s2++) {
           const a3 = rand() * Math.PI * 2;

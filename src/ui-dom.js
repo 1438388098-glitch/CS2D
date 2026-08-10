@@ -29,6 +29,8 @@ export function initUiDom(gameRef) {
     'hudBomb', 'hudBombSecs', 'hudSpectate', 'hudSpecText'
   ];
   for (const id of ids) D[id] = document.getElementById(id);
+  D.hudBomb = document.getElementById('hud-bomb');
+  D.hudSpectate = document.getElementById('hud-spectate');
 }
 
 export function updateHudDom(now) {
@@ -169,11 +171,19 @@ function updateTop(p, now) {
   // 观战条
   const pDead = !p || p.dead;
   if (pDead) {
-    const mates = game.entities.filter((e) => e.team === p.team && !e.dead);
-    let txt = '本回合已结束';
-    if (mates.length) {
-      const idx = game.spectateIdx % mates.length;
-      txt = '观战: ' + mates[idx].name + ' · 左键切换';
+    let txt = '\u672c\u56de\u5408\u5df2\u7ed3\u675f';
+    if (game.cyber && !game.cyber.ended) {
+      const bots = game.entities.filter((e) => e.bot && !e.dead);
+      if (bots.length) {
+        const target = bots[game.spectateIdx % bots.length];
+        txt = '\u89c2\u6218: ' + target.name + ' (' + (target.team === 't' ? 'T' : 'CT') + ') \u00b7 \u5de6\u952e\u5207\u6362';
+      }
+    } else {
+      const mates = game.entities.filter((e) => e.team === p.team && !e.dead);
+      if (mates.length) {
+        const idx = game.spectateIdx % mates.length;
+        txt = '\u89c2\u6218: ' + mates[idx].name + ' \u00b7 \u5de6\u952e\u5207\u6362';
+      }
     }
     if (txt !== lastSpecKey) {
       lastSpecKey = txt;

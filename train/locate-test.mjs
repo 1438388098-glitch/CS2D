@@ -9,7 +9,7 @@ const fs = await import('fs');
 
 const ck = JSON.parse(fs.readFileSync('D:/Claudeworkspace/CS2D/train/checkpoints/fresh_genome_best.json', 'utf8'));
 const base = Array.from(ck.genome);
-while (base.length < 19) base.push([1.0, 1.0, 0, 0.75, 0, 1.0][base.length - 13]);
+while (base.length < 19) base.push([1.0, 1.0, 0, 0.75, 0, 0.5][base.length - 13]);
 const params = decodeGenome(base);
 const H11_NET = DIFF.hell.ladder[11].netWeights;
 const OPP = DIFF.hell.ladder;

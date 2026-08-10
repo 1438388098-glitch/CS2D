@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>边境熔炉 · 设计蓝本</title>
+<style>
+  :root{--bg:#0f1216;--panel:#161a20;--line:#2a323c;--txt:#e8edf2;--sub:#8b96a3}
+  *{margin:0;padding:0;box-sizing:border-box}
+  body{background:var(--bg);color:var(--txt);font-family:"Microsoft YaHei","PingFang SC",sans-serif;padding:26px 20px 50px}
+  .wrap{max-width:1080px;margin:0 auto}
+  .head{display:flex;align-items:baseline;gap:14px;flex-wrap:wrap;margin-bottom:8px}
+  .head h1{font-size:24px;letter-spacing:2px}
+  .head p{color:var(--sub);font-size:13px}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:14px;margin-top:12px}
+  canvas{display:block;width:100%;height:auto;background:#0a0c0f;border-radius:10px}
+  .legend{display:flex;gap:12px;flex-wrap:wrap;margin-top:14px;font-size:12px;color:var(--sub)}
+  .legend span{display:inline-flex;align-items:center;gap:6px}
+  .dot{width:12px;height:12px;border-radius:50%;display:inline-block}
+  .line{width:24px;height:3px;display:inline-block}
+  .note{margin-top:14px;font-size:12px;color:var(--sub);line-height:1.8}
+  .note b{color:var(--txt)}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="head"><h1>边境熔炉 · 设计蓝本</h1><p>战术转点图 · 室内外混合 · 不同路线适配不同武器 · 约 150×140</p></div>
+  <div class="card">
+    <canvas id="map" width="960" height="920"></canvas>
+    <div class="legend">
+      <span><i class="dot" style="background:#ffb84d"></i>T 出生 / 黄色</span>
+      <span><i class="dot" style="background:#4da6ff"></i>CT 出生 / 蓝色</span>
+      <span><i class="dot" style="background:#ff6a5a"></i>A/B 包点</span>
+      <span><i class="line" style="background:#ffd27a"></i>室外长枪路线</span>
+      <span><i class="line" style="background:#6fd08c"></i>室内短枪路线</span>
+      <span><i class="line" style="background:#7aa8ff"></i>中路 / 转点路线</span>
+      <span><i class="line" style="background:#9a7bff"></i>绕后慢路</span>
+    </div>
+    <div class="note">
+      <b>阅读顺序：</b>南侧 T 出生 → 先进入出生缓冲 → 信息争夺区 → 选择路线 → 核心交火区 → 包点内部。
+      <br>
+      <b>西侧室外：</b>A大（长枪，分段视野）· A小（近战）· A地道（绕后）。
+      <br>
+      <b>东侧室内：</b>B大（中距步枪）· B小（货架巷道）· B地下（绕后）。
+      <br>
+      <b>中路：</b>断桥 + 地下通道，控制中路 = 控制转点。
+    </div>
+  </div>
+</div>
+<script>
+const cv=document.getElementById('map'),ctx=cv.getContext('2d');
+const W=cv.width,H=cv.height;
+// 地图区域：上下留 70px 给 HUD 外延，比例接近 150:140
+const x0=70,x1=890,y0=80,y1=830;
+ctx.clearRect(0,0,W,H);
+
+function zone(x,y,w,h,color,alpha=0.16){ctx.fillStyle=color;ctx.globalAlpha=alpha;ctx.fillRect(x,y,w,h);ctx.globalAlpha=1;}
+function dot(x,y,r,color,label){ctx.fillStyle=color;ctx.beginPath();ctx.arc(x,y,r,0,Math.PI*2);ctx.fill();ctx.strokeStyle='#fff';ctx.lineWidth=2;ctx.stroke();if(label){ctx.fillStyle='#fff';ctx.font='bold 15px sans-serif';ctx.textAlign='center';ctx.fillText(label,x,y+r+20);}}
+function line(points,color,label,offset=0){ctx.strokeStyle=color;ctx.lineWidth=5;ctx.lineCap='round';ctx.lineJoin='round';ctx.beginPath();const p=points.map(([px,py],i)=>{const nx=i<points.length-1?points[i+1][1]-points[i][1]:0;const ny=i<points.length-1?-(points[i+1][0]-points[i][0]):0;const len=Math.hypot(nx,ny)||1;return [px+(nx/len)*offset,py+(ny/len)*offset];});ctx.moveTo(p[0][0],p[0][1]);for(const q of p)ctx.lineTo(q[0],q[1]);ctx.stroke();if(label){const mid=p[Math.floor(p.length/2)];ctx.fillStyle='#fff';ctx.font='bold 13px sans-serif';ctx.textAlign='center';ctx.fillText(label,mid[0],mid[1]-10);}}
+
+// 区域底色
+zone(x0,y0,(x1-x0)/2-20,y1-y0,'#d9a24a'); // 西侧室外
+zone(x0+(x1-x0)/2+20,y0,(x1-x0)/2-20,y1-y0,'#4a5d78'); // 东侧室内
+zone(x0+(x1-x0)/2-40,y0,80,y1-y0,'#3f4a56'); // 中路竖带
+
+// 出生缓冲圈
+ctx.strokeStyle='rgba(255,255,255,.25)';ctx.lineWidth=2;ctx.setLineDash([6,6]);
+ctx.beginPath();ctx.arc(480,750,52,0,Math.PI*2);ctx.stroke();ctx.beginPath();ctx.arc(480,160,52,0,Math.PI*2);ctx.stroke();ctx.setLineDash([]);
+
+// T / CT
+dot(480,750,16,'#ffb84d','T 出生');
+dot(480,160,16,'#4da6ff','CT 出生');
+// A / B
+dot(190,360,18,'#ff6a5a','A');
+dot(790,360,18,'#ff6a5a','B');
+// 中路核心
+dot(480,480,14,'#9a7bff','中路控制区');
+
+// 路线
+line([[470,700],[420,620],[260,520],[190,420]],'#ffd27a','A大（室外长枪）',8);
+line([[520,700],[650,600],[720,480],[760,400]],'#6fd08c','B大（室内中距）',8);
+line([[470,700],[430,580],[350,520],[230,420]],'#9a7bff','A地道（绕后）',-6);
+line([[520,700],[600,580],[700,500],[770,420]],'#9a7bff','B地下（绕后）',-6);
+line([[500,700],[560,620],[600,500],[620,420]],'#6fd08c','B小（货架巷道）',-8);
+line([[460,700],[390,600],[300,520],[220,420]],'#ffd27a','A小（近战）',-8);
+line([[480,210],[480,740]],'#7aa8ff','中路：断桥+地下');
+
+// 区域标签
+ctx.fillStyle='#ffe6b0';ctx.font='bold 14px sans-serif';ctx.textAlign='center';
+ctx.fillText('室外区：长枪/步枪',260,110);
+ctx.fillStyle='#bcd6f2';ctx.fillText('室内区：短枪/喷子',760,110);
+ctx.fillStyle='#c9b8ff';ctx.fillText('信息争夺区',480,300);
+ctx.fillStyle='#ffb3a8';ctx.fillText('A 核心交火区',190,500);
+ctx.fillStyle='#ffb3a8';ctx.fillText('B 核心交火区',790,500);
+ctx.fillStyle='#8fa6bd';ctx.fillText('出生缓冲',480,830);
+ctx.fillStyle='#8fa6bd';ctx.fillText('出生缓冲',480,100);
+</script>
+</body>
+</html>

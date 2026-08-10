@@ -1,23 +1,25 @@
 import { launchBrowser, waitForDebug, newTab, CDP } from './cdp.js';
 import { spawn } from 'child_process';
 
-const srv = spawn('node', ['server.js'], { cwd: 'D:/Claudeworkspace/CS2D', stdio: 'ignore', detached: true });
+const APP_PORT = 8093;
+const DBG_PORT = 9233;
+const srv = spawn('node', ['server.js'], { cwd: 'D:/Claudeworkspace/CS2D', env: { ...process.env, PORT: String(APP_PORT) }, stdio: 'ignore', detached: true });
 await new Promise((r) => setTimeout(r, 1500));
 if (srv.exitCode !== null) {
   console.log('CDP-TEST: FAIL (server failed to start, exit=' + srv.exitCode + ')');
   process.exit(1);
 }
 
-const { proc, port } = launchBrowser();
+const { proc, port } = launchBrowser({ port: DBG_PORT, profile: 'C:/Users/20579/AppData/Local/Temp/opencode/cdp-profile-basic' });
 let ok = true;
 const fail = (m) => { ok = false; console.log('  FAIL: ' + m); };
 const pass = (m) => console.log('  PASS: ' + m);
 try {
   const wsUrl = await waitForDebug(port);
-  const pageUrl = await newTab(port, 'http://127.0.0.1:8080/');
+  const pageUrl = await newTab(port, `http://127.0.0.1:${APP_PORT}/`);
   const cdp = new CDP(pageUrl);
   await cdp.connect();
-  await cdp.navigate('http://127.0.0.1:8080/');
+  await cdp.navigate(`http://127.0.0.1:${APP_PORT}/`);
   await new Promise((r) => setTimeout(r, 2500));
 
   const html = await cdp.eval(`document.body ? document.body.innerHTML.length : -1`);

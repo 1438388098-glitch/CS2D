@@ -1,0 +1,19 @@
+﻿import fs from 'node:fs';
+import { DUEL_MAPS } from './src/duel-maps.js';
+const data = DUEL_MAPS.map((m) => ({ id: m.id, name: m.name, accent: m.accent, tagline: m.tagline, description: m.description, rows: m.rows }));
+const json = JSON.stringify(data);
+const html = `<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>1v1 专用地图 · 三选一</title>
+<style>:root{--bg:#0f1216;--panel:#161a20;--line:#2a323c;--txt:#e8edf2;--sub:#8b96a3}*{margin:0;padding:0;box-sizing:border-box}body{background:var(--bg);color:var(--txt);font-family:"Microsoft YaHei","PingFang SC",sans-serif;padding:26px 20px 50px}.wrap{max-width:1180px;margin:0 auto}.head{display:flex;align-items:baseline;gap:14px;flex-wrap:wrap;margin-bottom:16px}.head h1{font-size:24px}.head p{color:var(--sub);font-size:13px}.cards{display:grid;grid-template-columns:repeat(3,1fr);gap:18px}.card{background:var(--panel);border:1px solid var(--line);border-radius:10px;overflow:hidden}.map-frame{padding:10px;background:#0a0c0f;border-bottom:1px solid var(--line)}canvas{display:block;width:100%;height:auto}.body{padding:12px 14px}.body h2{font-size:16px;margin-bottom:4px}.body p{font-size:12px;color:var(--sub);line-height:1.7}@media(max-width:900px){.cards{grid-template-columns:1fr}}</style>
+</head>
+<body><div class="wrap"><div class="head"><h1>1v1 专用地图 · 三选一</h1><p>小尺寸 · 蜿蜒窄通道 · 近中距离对枪</p></div><div class="cards" id="cards"></div></div>
+<script>
+const MAPS=${json};
+const COLOR={'#':'#3a424c','.':'#59636e','a':'#d45a5a','b':'#4d9bff','t':'#ffb545','c':'#5ab0ff','~':'#3d6f9e','≈':'#1d3a55','=':'#8a6d4d','^':'#7d8793','o':'#8b6f3e','D':'#8b6f3e','C':'#8b6f3e'};
+function draw(cv,rows){const h=rows.length,w=rows[0].length,cw=640,ch=Math.round(cw*h/w);cv.width=cw;cv.height=ch;const x=cv.getContext('2d'),c=cw/w;for(let y=0;y<h;y++)for(let xx=0;xx<w;xx++){x.fillStyle=COLOR[rows[y][xx]]||'#59636e';x.fillRect(xx*c,y*c,c+.5,c+.5);}}
+const cards=document.getElementById('cards');for(const m of MAPS){const card=document.createElement('div');card.className='card';const fr=document.createElement('div');fr.className='map-frame';const cv=document.createElement('canvas');draw(cv,m.rows);fr.appendChild(cv);const body=document.createElement('div');body.className='body';const h2=document.createElement('h2');h2.textContent=m.name;const tag=document.createElement('p');tag.style.color='#ffb066';tag.style.marginBottom='6px';tag.textContent=m.tagline;const desc=document.createElement('p');desc.textContent=m.description;body.appendChild(h2);body.appendChild(tag);body.appendChild(desc);card.appendChild(fr);card.appendChild(body);cards.appendChild(card);}
+</script></body></html>`;
+fs.writeFileSync('docs/duel-maps.html', html, 'utf8');
+console.log('duel maps html bytes=' + html.length);

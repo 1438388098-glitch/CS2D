@@ -1,11 +1,11 @@
-import { ROUND, ECONOMY } from './config.js';
-import { addMoney } from './economy.js';
-import { inSite, los, getMap } from './map.js';
-import { applyDamage } from './combat.js';
-import { endRound, spawnParticle } from './game.js';
+import {ROUND, ECONOMY} from './config.js';
+import {addMoney} from './economy.js';
+import {inSite, los, getMap} from './map.js';
+import {applyDamage} from './combat.js';
+import {endRound, spawnParticle} from './game.js';
 
-import { ctx } from './ctx.js';
-import { clamp, rand } from './utils.js';
+import {ctx} from './ctx.js';
+import {rand} from './utils.js';
 
 const emit = (evt, p) => ctx.bus.emit(evt, p);
 
@@ -40,6 +40,10 @@ export function plantBomb(e, game) {
   }
   const s = inA ? sites.A : sites.B;
   e.plantT += game.dt;
+  if (e.plantT - (e.plantSoundAt || 0) > 0.5) {
+    e.plantSoundAt = e.plantT;
+    game.lastSound = { x: e.x, y: e.y, t: game.time, radius: 700, conf: 0.55 };
+  }
   if (e.plantT >= 3) {
     e.plantT = 0;
     e.hasBomb = false;
@@ -48,6 +52,7 @@ export function plantBomb(e, game) {
     addMoney(e, ECONOMY.PLANT_MONEY);
     emit('sysfeed', { text: 'Bomb has been planted at ' + (s.label === 'A' ? 'A' : 'B') });
     emit('sfx', { name: 'bombPlanted', vol: 0.9, x: e.x, y: e.y, game });
+    game.lastSound = { x: e.x, y: e.y, t: game.time, radius: 900, conf: 0.6 };
   }
 }
 
@@ -65,6 +70,10 @@ export function defuseBomb(e, game) {
   }
   const speed = e.weapons.kit ? 2.5 : 5;
   e.defuseT += game.dt;
+  if (e.defuseT - (e.defuseSoundAt || 0) > 0.5) {
+    e.defuseSoundAt = e.defuseT;
+    game.lastSound = { x: game.bomb.x, y: game.bomb.y, t: game.time, radius: 600, conf: 0.5 };
+  }
   game.bomb.defusing = true;
   if (e.defuseT >= speed) {
     e.defuseT = 0;
@@ -73,6 +82,7 @@ export function defuseBomb(e, game) {
     addMoney(e, ECONOMY.DEFUSE_MONEY);
     emit('sysfeed', { text: 'Bomb has been defused!' });
     emit('sfx', { name: 'win', vol: 0.8, x: e.x, y: e.y, game });
+    game.lastSound = { x: e.x, y: e.y, t: game.time, radius: 900, conf: 0.6 };
     endRound(game, 'ct', '拆弹成功', 'defuse');
   }
 }
@@ -82,6 +92,7 @@ export function explodeBomb(game) {
   if (!b) return;
   b.planted = false;
   emit('sfx', { name: 'boom', vol: 1.3, x: b.x, y: b.y, game });
+  game.lastSound = { x: b.x, y: b.y, t: game.time, radius: 1600, conf: 1 };
   game.shake = Math.max(game.shake, 14);
   spawnParticle(game, { kind: 'boom', x: b.x, y: b.y, life: 0.5, size: 300 });
   for (let i = 0; i < 40; i++) {
@@ -92,6 +103,7 @@ export function explodeBomb(game) {
     const a2 = rand() * Math.PI * 2;
     spawnParticle(game, { kind: 'smokep', x: b.x + Math.cos(a2) * 40, y: b.y + Math.sin(a2) * 40, vx: Math.cos(a2) * rand(30, 120), vy: Math.sin(a2) * rand(30, 120), life: rand(1.2, 2.4), size: rand(6, 14) });
   }
+  game._bombExploding = true;
   for (const e of game.entities) {
     if (e.dead) continue;
     if (e.team === 't') continue;
@@ -101,5 +113,6 @@ export function explodeBomb(game) {
     const dmg = 700 * (1 - d / 620);
     if (dmg > 0) applyDamage(e, dmg, { killer: null, weapon: 'bomb', head: false }, game);
   }
+  game._bombExploding = false;
   endRound(game, 't', '炸弹爆炸', 'bomb');
 }

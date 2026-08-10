@@ -14,6 +14,7 @@ import {
   shouldThrowUtility,
   shouldAttemptDefuse,
   shouldSaveForEco,
+  shouldRepositionOnIntel,
   shouldRushPlant
 } from '../src/ai/rules.js';
 
@@ -134,5 +135,12 @@ assert.equal(shouldSaveForEco({ team: 'ct' }, 1800, 2, 60), false, 'early round 
 assert.equal(shouldSaveForEco({ team: 't', hasBomb: true }, 1800, 2, 100), false, 'bomb carrier must keep playing the objective');
 assert.equal(shouldSaveForEco({ team: 'ct', defusing: true }, 1800, 2, 100), false, 'defusing CT should not abandon bomb');
 assert.equal(shouldSaveForEco({ team: 'ct', dead: true }, 1800, 2, 100), false, 'dead bot cannot save equipment');
+
+assert.equal(shouldRepositionOnIntel({ team: 'ct' }, 9, 900), true, 'CT far from anchor with stale intel should reposition');
+assert.equal(shouldRepositionOnIntel({ team: 'ct' }, 2, 900), false, 'fresh intel should keep the current hold');
+assert.equal(shouldRepositionOnIntel({ team: 'ct' }, 9, 300), false, 'CT already near home should not rotate pointlessly');
+assert.equal(shouldRepositionOnIntel({ team: 'ct' }, 9, 900, true), false, 'post-plant CT should move to bomb instead of home anchor');
+assert.equal(shouldRepositionOnIntel({ team: 't' }, 9, 900), false, 'T should not use CT reposition rule');
+assert.equal(shouldRepositionOnIntel({ team: 'ct', dead: true }, 9, 900), false, 'dead CT cannot reposition');
 
 console.log('ai-rules: all PASS');

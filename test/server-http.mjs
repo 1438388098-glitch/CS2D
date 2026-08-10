@@ -46,7 +46,7 @@ try {
   });
   assert.equal(js.status, 200);
   assert.equal(js.headers.get('content-encoding'), 'gzip');
-  assert.equal(js.headers.get('cache-control'), 'public, max-age=3600');
+  assert.equal(js.headers.get('cache-control'), 'no-cache');
   assert.equal(js.headers.get('vary'), 'Accept-Encoding');
   assert.equal(js.headers.get('x-content-type-options'), 'nosniff');
 
@@ -56,7 +56,11 @@ try {
     headers: { 'Accept-Encoding': 'gzip', 'If-None-Match': etag }
   });
   assert.equal(revalidate.status, 304, 'matching If-None-Match should return 304');
-  assert.equal(revalidate.headers.get('cache-control'), 'public, max-age=3600', '304 should keep static cache policy');
+  assert.equal(revalidate.headers.get('cache-control'), 'no-cache', '304 should keep no-cache policy');
+
+  const css = await fetch(`http://localhost:${port}/styles.css`);
+  assert.equal(css.status, 200);
+  assert.equal(css.headers.get('cache-control'), 'no-cache', 'css should not be cached for long');
 
   const html = await fetch(`http://localhost:${port}/`, {
     headers: { 'Accept-Encoding': 'gzip' }
