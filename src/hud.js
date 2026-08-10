@@ -587,12 +587,13 @@ export function renderHud(game) {
     ctx.beginPath();
     ctx.arc(aimX, aimY, 20 + pr * 55, 0, Math.PI * 2);
     ctx.stroke();
-  }  if (p && !p.dead && p.scoped && game.viewMode !== 'fps') {
-    // 开镜环：FPS 模式下由 render3d 的 drawScope 负责（黑环+十字线），此处跳过避免双镜错位
+  }  if (p && !p.dead && p.scoped && (game.viewMode !== 'fps' || game._render3dBackend === 'next')) {
+    // 开镜环：legacy 后端在 FPS 下由 render3d 的 drawScope 负责（黑环+十字线），此处跳过避免双镜错位；
+    // next 后端无 drawScope，需在本处补画黑圈
     const wd = weaponDef(p);
     if (wd && wd.kind === 'sniper') {
-      const cx = game.input.mouse.x;
-      const cy = game.input.mouse.y;
+      const cx = game.viewMode === 'fps' ? w2 / 2 : game.input.mouse.x;
+      const cy = game.viewMode === 'fps' ? h2 / 2 : game.input.mouse.y;
       const r = Math.min(w2, h2) * 0.48;
       ctx.save();
       ctx.beginPath();
@@ -625,6 +626,15 @@ export function renderHud(game) {
       ctx.beginPath();
       ctx.arc(cx - r * 0.35, cy - r * 0.35, r * 0.22, 0, Math.PI * 2);
       ctx.fill();
+      // 中心十字 + 中心点：对齐 legacy drawScope（全屏细十字线 + 2px 中心点）
+      ctx.strokeStyle = 'rgba(255,255,255,0.9)';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(cx, 0); ctx.lineTo(cx, h2);
+      ctx.moveTo(0, cy); ctx.lineTo(w2, cy);
+      ctx.stroke();
+      ctx.fillStyle = 'rgba(255,255,255,0.9)';
+      ctx.fillRect(cx - 1.5, cy - 1.5, 3, 3);
       ctx.restore();
     }
   }
@@ -642,8 +652,8 @@ export function renderHud(game) {
     ctx.fillText(String(Math.ceil(game.freezeT)), w2 / 2, h2 / 2);
     ctx.restore();
   }
-  // D2 炸弹已装：上方中央 C4 倒计时，<10s 红色脉冲
-  if (game.viewMode === 'fps' && game.bomb && game.bomb.planted) {
+  // D2 炸弹已装：上方中央 C4 倒计时，<10s 红色脉冲（next 后端由 canvas drawMatchOverlay 绘制，此处跳过第三份）
+  if (game.viewMode === 'fps' && game.bomb && game.bomb.planted && game._render3dBackend !== 'next') {
     const t = game.bomb.timer;
     const urgent = t < 10;
     const pulse = 0.7 + 0.3 * Math.sin(game.time * 10);

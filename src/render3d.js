@@ -53,6 +53,8 @@ let shadeTiles = null, shadeTilesRef = null, shadeTilesBroken = false; // 已废
 let zbufArr = null;
 let fpsMarkerCache = [];
 let fpsMarkerPool = [];
+// E3d 射线方向偏移表缓存（iw+focal 变化时重建，避免逐列 Math.atan/cos/sin）
+let rayOffTbl = null;
 
 // ===== 纯函数（node 单测用，无 DOM）=====
 
@@ -560,7 +562,9 @@ function drawFloorPixels(F) {
   const { iw, ih, horizon, centerY, eyeH, focal, angle, cx, cy, fogMax, cosP, sinP } = F;
   if (eyeH <= 0.01 || focal <= 0) return;
   const texW = ft.width, texH = ft.height;
-  const scl = texW / mapTile(); // 每瓦片重复一次
+  // 密度统一：128 为参考尺寸 → 程序化 128px 纹理 scl=1（横跨 8 瓦片），真实素材（如 1024px）scl=0.125，
+  // 三条路径（2D 烘焙 / CPU 直写 / WebGL 行 quad）每纹理均横跨 128 世界像素，避免真实素材 3D 颗粒度是 2D 的 8 倍
+  const scl = 128 / texW;
   // 行两端射线角
   const tan0 = Math.atan((0 - iw / 2) / focal);
   const tan1 = Math.atan((iw - 1 - iw / 2) / focal);
@@ -594,6 +598,7 @@ function drawFloorPixels(F) {
     const dvf = ((((y1w - y0w) * scl / iw) * 2) * F16) | 0;
     let ui = u0f, vi = v0f;
     const rowIdx = y * iw;
+    const rowNext = y + 1 < ih ? rowIdx + iw : -1;
     for (let x = 0; x < iw; x += 2) {
       const tu = ((ui >> 16) % texW + texW) % texW;
       const tv = ((vi >> 16) % texH + texH) % texH;
@@ -601,7 +606,15 @@ function drawFloorPixels(F) {
       const r = ((pv & 0xff) * shade) | 0;
       const g = (((pv >> 8) & 0xff) * shade) | 0;
       const b = (((pv >> 16) & 0xff) * shade) | 0;
-      px32[rowIdx + x] = (0xff << 24) | (b << 16) | (g << 8) | r;
+      // 2×2 块填充：一次采样写 4 像素，消除步长 2 造成的 75% 空洞（x+1/y+1 边界防护）
+      const packed = (0xff << 24) | (b << 16) | (g << 8) | r;
+      const writeCol2 = x + 1 < iw;
+      px32[rowIdx + x] = packed;
+      if (writeCol2) px32[rowIdx + x + 1] = packed;
+      if (rowNext >= 0) {
+        px32[rowNext + x] = packed;
+        if (writeCol2) px32[rowNext + x + 1] = packed;
+      }
       ui += duf; vi += dvf;
     }
   }
@@ -742,6 +755,21 @@ function drawGroundQuads(F) {
 
 // 墙体：逐列 DDA 投射。WebGL 路径提交 GPU 列 quad（光栅化全在 GPU）；
 // 回退路径 CPU 像素直写（雾化/侧向亮度/站点浸染在像素级完成）。两路都写 zbuf 供 sprite 裁剪。
+// 射线方向偏移表：iw/focal 变化时重建一次，逐列复用 atan 偏移与 cos/sin（避免每列 1 atan + 2 cos/sin）
+function rayOffsetTable(iw, focal) {
+  // key 按 focal 每 4 单位分桶：开火/开镜时 focal 逐帧微变，原 toFixed(4) 每帧重建（iw×3 次三角函数）；
+  // 分桶后仅在跨桶时重建。桶宽 4 → 屏幕边缘列偏移误差 ≤ ~2px，视觉可接受
+  const key = iw + ':' + Math.round(focal / 4);
+  if (rayOffTbl && rayOffTbl.key === key) return rayOffTbl;
+  const o = new Array(iw), co = new Array(iw), si = new Array(iw);
+  for (let col = 0; col < iw; col++) {
+    const a = Math.atan((col - iw / 2) / focal);
+    o[col] = a; co[col] = Math.cos(a); si[col] = Math.sin(a);
+  }
+  rayOffTbl = { key, o, co, si };
+  return rayOffTbl;
+}
+
 function drawWalls(F, zbuf) {
   const grid = getGrid();
   if (!grid || !grid.length) return;
@@ -756,10 +784,13 @@ function drawWalls(F, zbuf) {
     if (sites.A && sites.A.cx !== undefined) siteC.push({ x: sites.A.cx, y: sites.A.cy, col: [255, 120, 70] });
     if (sites.B && sites.B.cx !== undefined) siteC.push({ x: sites.B.cx, y: sites.B.cy, col: [70, 150, 255] });
   }
+  const rt = rayOffsetTable(iw, focal);
   for (let col = 0; col < iw; col++) {
-    const rayA = angle + Math.atan((col - iw / 2) / focal);
+    const rayA = angle + rt.o[col];
+    let zb = zbuf[col];
+    if (!zb) zb = zbuf[col] = {}; // E3c zbuf 对象复用，避免逐帧 new
     const hit = wallDist(grid, cx, cy, rayA, T, fogMax);
-    if (!hit) { zbuf[col] = { d: 1e9, yTop: 0, yBottom: ih }; continue; }
+    if (!hit) { zb.d = 1e9; zb.yTop = 0; zb.yBottom = ih; continue; }
     const d = Math.max(hit.dist, NEAR); // 相机贴墙安全钳制
     const hgt = wallHeightFor(hit.char) * mapTile();
     const yTop = projectAt(F, d, 0, hgt, true).sy;
@@ -767,7 +798,9 @@ function drawWalls(F, zbuf) {
     // C1 站点浸染：命中点距 A/B 中心 <480 时混合站点色
     let bandMix = 0, bandCol = null;
     if (siteC.length) {
-      const rdX = Math.cos(rayA), rdY = Math.sin(rayA);
+      // 用旋转公式复用射线方向，避免每列 Math.cos/sin
+      const rdX = F.cos * rt.co[col] - F.sin * rt.si[col];
+      const rdY = F.cos * rt.si[col] + F.sin * rt.co[col];
       const hitX = cx + d * rdX, hitY = cy + d * rdY;
       for (const sc of siteC) {
         const dSite = Math.hypot(hitX - sc.x, hitY - sc.y);
@@ -803,12 +836,12 @@ function drawWalls(F, zbuf) {
           const y1p = Math.min(ih - 1, Math.floor(yBottom));
           const invH = 1 / Math.max(1, yBottom - yTop);
           const step = d > 400 ? 2 : 1;
-          const invStep = invH * step;
+          // v 用增量、绝对斜率 = 1/列高（不带 step 因子）：step=2 时纹理纵向不再放大 2 倍重复
+          let v = (y0p - yTop) * invH;
           const bR = bandCol ? bandCol[0] : 0, bG = bandCol ? bandCol[1] : 0, bB = bandCol ? bandCol[2] : 0;
           const bm = bandMix;
           const twm = texW;
           for (let py = y0p; py <= y1p; py += step) {
-            const v = (py - yTop) * invStep;
             const tvf = srcY + v * srcH;
             const tvi = tvf | 0;
             const tv0 = tvi < 0 ? 0 : (tvi >= texH ? texH - 1 : tvi);
@@ -826,12 +859,16 @@ function drawWalls(F, zbuf) {
               g = g * (1 - bm) + bG * bm;
               b = b * (1 - bm) + bB * bm;
             }
-            px32[py * iw + col] = (0xff << 24) | ((b | 0) << 16) | ((g | 0) << 8) | (r | 0);
+            const packed = (0xff << 24) | ((b | 0) << 16) | ((g | 0) << 8) | (r | 0);
+            px32[py * iw + col] = packed;
+            // step=2 时每采样写两行：py+1 行残留 sky 渐变的问题修复（仅当仍在墙列纵向范围内）
+            if (step === 2 && py + 1 <= y1p) px32[(py + 1) * iw + col] = packed;
+            v += step * invH;
           }
         }
       }
     }
-    zbuf[col] = { d, yTop, yBottom };
+    zb.d = d; zb.yTop = yTop; zb.yBottom = yBottom;
   }
 }
 
@@ -860,7 +897,7 @@ function updateFpsMarkers(F, zbuf) {
     if (depth < NEAR || depth > F.fogMax) continue;
     const perp = -dx * F.sin + dy * F.cos;
     const elev = groundElevationAt(e.x, e.y);
-    const headH = 44 * F.U + (e.height || 0) * T + elev;
+    const headH = 44 * F.U * 0.78 + (e.height || 0) * T + elev; // 立绘头在盒内约 78% 处，避免标记悬空
     const pt = projectAt(F, depth, perp, headH, false);
     if (!pt) continue;
     const sx = pt.sx;
@@ -868,7 +905,9 @@ function updateFpsMarkers(F, zbuf) {
     const x0 = Math.max(0, Math.floor(sx - 3));
     const x1 = Math.min(F.iw - 1, Math.ceil(sx + 3));
     for (let c = x0; c <= x1; c++) {
-      if (zbuf[c] && zbuf[c].d < depth) { occluded = true; break; }
+      const zb = zbuf[c];
+      // 仅当墙顶（yTop）高于标记点时才遮挡；头在墙顶之上仍可见
+      if (zb && zb.d < depth && zb.yTop < pt.sy) { occluded = true; break; }
     }
     const smokeA = smokeAlphaBetween(F, e.x, e.y);
     if (smokeA < 0.14) occluded = true;
@@ -1054,9 +1093,9 @@ function drawSprites(F, zbuf, alive, p) {
   collectWeather(F, sprites);
   sprites.sort((a, b) => b.depth - a.depth); // 远 → 近
   for (const s of sprites) drawSprite(F, zbuf, s);
-  drawParticles(F);
-  drawTracers(F);
-  drawLaser(F, alive, p);
+  drawParticles(F, zbuf);
+  drawTracers(F, zbuf);
+  drawLaser(F, alive, p, zbuf);
   drawSpectatePlate(F); // D3 观战名牌（排序绘制后手画，始终可见）
   drawTeammateMarkers(F);
   drawEnemyMarkers(F);
@@ -1125,9 +1164,12 @@ function drawSpectatePlate(F) {
   const depth = dx * F.cos + dy * F.sin;
   if (depth < NEAR || depth > F.fogMax) return;
   const perp = -dx * F.sin + dy * F.cos;
-  const sx = F.iw / 2 + perp / depth * F.focal;
   const headH = 44 * F.U + (ent.height || 0) * mapTile() + groundElevationAt(ent.x, ent.y);
-  const sy = projectAt(F, depth, perp, headH, true).sy;
+  // 统一用 projectAt（含 pitch 投影）取名牌锚点，避免 sx/sy 双投影不一致
+  const pt = projectAt(F, depth, perp, headH, true);
+  if (!pt) return;
+  const sx = pt.sx;
+  const sy = pt.sy;
   const t = F.cctx;
   const col = ent.team === 'ct' ? '#7ab8ff' : '#ffb35c';
   t.font = '10px Arial';
@@ -1148,6 +1190,28 @@ function drawSpectatePlate(F) {
   t.textAlign = 'start';
 }
 
+// 左右出屏剔除：|perp| 超出视锥半角 + 精灵半宽即跳过（避免 off-screen 精灵仍进 zbuf 扫描/drawImage）
+function offscreenX(F, depth, perp, sw) {
+  return Math.abs(perp) > (F.iw / 2) * depth / F.focal + sw / 2;
+}
+
+// 弹孔/火花贴命中墙面高度（无高度数据时按墙面类型取固定比例，与 render3d-next 的 updateDecalsNext 一致）
+function decalBaseH(d) {
+  const T = mapTile();
+  const grid = getGrid();
+  let c = '#';
+  const tx = Math.floor(d.x / T), ty = Math.floor(d.y / T);
+  if (grid && grid.length && ty >= 0 && ty < grid.length && grid[ty]) {
+    const row = grid[ty];
+    if (tx >= 0 && tx < row.length) c = row[tx];
+  }
+  if (d.type === 'hole' && !walkableChar(c)) {
+    const wallH = (c === '=' || c === 'C') ? T * 0.28 : (c === 'o' ? T * 0.22 : T * 0.78);
+    return groundElevationAt(d.x, d.y) + wallH;
+  }
+  return groundElevationAt(d.x, d.y);
+}
+
 // 3D 弹痕/尸体：combat.js 的 decal（spark/hole/corpse）以贴片形式呈现——打墙有可见反馈
 function collectDecals(F, out) {
   for (const d of F.g.decals || []) {
@@ -1156,12 +1220,14 @@ function collectDecals(F, out) {
     const depth = dx * F.cos + dy * F.sin;
     if (depth < NEAR || depth > F.fogMax) continue;
     const perp = -dx * F.sin + dy * F.cos;
+    const swD = d.type === 'corpse' ? 32 * F.U : 11 * F.U;
+    if (offscreenX(F, depth, perp, swD)) continue;
     const smokeA = smokeAlphaBetween(F, d.x, d.y);
     if (d.type === 'corpse') {
-      out.push({ depth, perp, cv: corpseCanvas(F.g, d), sw: 32 * F.U, sh: 36 * F.U, baseH: 0, alpha: clamp(d.life / 3, 0, 1) * smokeA });
+      out.push({ depth, perp, cv: corpseCanvas(F.g, d), sw: swD, sh: 36 * F.U, baseH: groundElevationAt(d.x, d.y), alpha: clamp(d.life / 3, 0, 1) * smokeA });
     } else {
       // 弹孔/火花：命中点小圆点（面向相机），生命末期淡出
-      out.push({ depth, perp, cv: holeCanvas(F.g, d.type), sw: 11 * F.U, sh: 11 * F.U, baseH: 0, alpha: clamp(d.life / 2, 0.15, 1) * smokeA });
+      out.push({ depth, perp, cv: holeCanvas(F.g, d.type), sw: swD, sh: 11 * F.U, baseH: decalBaseH(d), alpha: clamp(d.life / 2, 0.15, 1) * smokeA });
     }
   }
 }
@@ -1225,8 +1291,11 @@ function collectWeather(F, out) {
   const t0 = F.time;
   const sw = { snow: 6, sand: 7, smoke: 12, mist: 22 }[kind] * F.U || 8 * F.U;
   const sh = sw * cv.height / cv.width;
-  const driftX = wind[0] * t0 * 40;
-  const fallY = kind === 'snow' ? t0 * 30 : 0;
+  // 漂移/下落对粒子环半径小窗口环绕：保留符号（负风 → 向左飘）、幅度限定在环半径内，
+  // 避免原实现取模到 [0,fogMax) 使负风符号丢失、偏移达 fogMax 时粒子周期性被剔除
+  const ringR = 90 + 170; // 粒子环半径 [90, 260]
+  const driftX = (((wind[0] * t0 * 40) % (2 * ringR)) + 2 * ringR) % (2 * ringR) - ringR;
+  const fallY = kind === 'snow' ? ((((t0 * 30) % (2 * ringR)) + 2 * ringR) % (2 * ringR) - ringR) : 0;
   for (let i = 0; i < n; i++) {
     const angleOff = (i * 0.618034 * Math.PI * 2 + t0 * 0.05) % (Math.PI * 2);
     const r = 90 + (i * 0.381966 % 1) * 170;
@@ -1236,6 +1305,7 @@ function collectWeather(F, out) {
     const depth = dx * F.cos + dy * F.sin;
     if (depth < NEAR || depth > F.fogMax) continue;
     const perp = -dx * F.sin + dy * F.cos;
+    if (offscreenX(F, depth, perp, sw)) continue;
     const alpha = clamp(0.35 + 0.3 * (1 - depth / F.fogMax), 0.05, 1);
     out.push({ depth, perp, cv, sw, sh, baseH: 0, alpha: alpha * smokeAlphaBetween(F, wx, wy) });
   }
@@ -1263,7 +1333,9 @@ function collectDecos(F, out) {
     const cv = decoCanvas(F, kind);
     if (!cv) continue;
     const ss = DECO_SIZES[kind] || [12, 12];
-    out.push({ depth, perp, cv, sw: ss[0] * F.U, sh: ss[1] * F.U, baseH: 0, alpha: clamp(0.85 - 0.35 * (depth / F.fogMax), 0, 1) });
+    const swD = ss[0] * F.U;
+    if (offscreenX(F, depth, perp, swD)) continue;
+    out.push({ depth, perp, cv, sw: swD, sh: ss[1] * F.U, baseH: groundElevationAt(wx, wy), alpha: clamp(0.85 - 0.35 * (depth / F.fogMax), 0, 1) });
   }
 }
 
@@ -1390,6 +1462,7 @@ function decoCanvas(F, kind) {
 function corpseCanvas(game, d) {
   let map = game._corpseCvs;
   if (!map) map = game._corpseCvs = new Map();
+  if (map.size > 64) map.clear(); // 与 _sprCvs 一致：尸体对象作 key 永不释放 → 超阈值清空防泄漏
   let cv = map.get(d);
   if (!cv) {
     cv = document.createElement('canvas');
@@ -1457,7 +1530,8 @@ function collectEntities(F, out) {
     if (depth < NEAR || depth > F.fogMax) continue;
     const perp = -dx * F.sin + dy * F.cos;
     const smokeA = smokeAlphaBetween(F, e.x, e.y);
-    if (smokeA <= 0.12) continue;
+    if (smokeA < 0.14) continue; // 与 updateFpsMarkers/名牌阈值统一为 0.14
+    if (offscreenX(F, depth, perp, 44 * F.U)) continue;
     const s = { depth, perp, cv: entitySprite(F.g, e), sw: 44 * F.U, sh: 44 * F.U, baseH: groundElevationAt(e.x, e.y) + (e.height || 0) * mapTile() };
     s.alpha = smokeA;
     if (killHi && e === killHi) s.isKiller = true;
@@ -1582,6 +1656,7 @@ function collectSmokes(F, out) {
     const depth = dx * F.cos + dy * F.sin;
     if (depth < NEAR || depth > F.fogMax) continue;
     const perp = -dx * F.sin + dy * F.cos;
+    if (offscreenX(F, depth, perp, 2 * sm.r)) continue;
     const lifeA = clamp(sm.life / 2, 0, 1);
     const fogA = clamp(1 - (depth / F.fogMax) * 0.8, 0.35, 1);
     const alpha = lifeA * clamp((sm.r - 20) / 100, 0.2, 0.42) * fogA;
@@ -1617,22 +1692,28 @@ function collectBomb(F, out) {
   const depth = dx * F.cos + dy * F.sin;
   if (depth < NEAR || depth > F.fogMax) return;
   const perp = -dx * F.sin + dy * F.cos;
-  if (b.planted) {
-    // 红色脉冲地面圆（透视椭圆近似：远边/近边按各自深度投影）
-    const t = F.cctx;
-    if (depth > 34 + NEAR) {
-      const k = 1 / depth;
-      const sx = F.iw / 2 + perp * k * F.focal;
-      const syFar = projectAt(F, depth - 34, perp, 0, true).sy;
-      const syNear = projectAt(F, depth + 34, perp, 0, true).sy;
-      const pulse = 0.4 + 0.3 * Math.sin(F.time / 0.3);
-      t.fillStyle = 'rgba(255,60,40,' + (pulse * 0.3).toFixed(3) + ')';
-      t.beginPath();
-      t.ellipse(sx, (syFar + syNear) / 2, Math.max(0.5, k * 34 * F.focal), Math.max(0.5, (syNear - syFar) / 2), 0, 0, Math.PI * 2);
-      t.fill();
-    }
+  if (offscreenX(F, depth, perp, 68)) return;
+  if (b.planted && depth > 34 + NEAR) {
+    // 红色脉冲地面圈：作为 sprite 项参与 far→near 排序与墙体逐列裁剪（不再直接画到 cctx）
+    const pulse = 0.4 + 0.3 * Math.sin(F.time / 0.3);
+    out.push({ depth, perp, cv: bombRingCanvas(), sw: 68, sh: 8, baseH: groundElevationAt(b.x, b.y), alpha: pulse * 0.3 * smokeAlphaBetween(F, b.x, b.y) });
   }
-  out.push({ depth, perp, cv: fxCanvas(F.g, 'bomb', bombDraw), sw: 20 * F.U, sh: 16 * F.U, baseH: 0, alpha: smokeAlphaBetween(F, b.x, b.y) });
+  out.push({ depth, perp, cv: fxCanvas(F.g, 'bomb', bombDraw), sw: 20 * F.U, sh: 16 * F.U, baseH: groundElevationAt(b.x, b.y), alpha: smokeAlphaBetween(F, b.x, b.y) });
+}
+
+let bombRingCv = null;
+function bombRingCanvas() {
+  if (bombRingCv) return bombRingCv;
+  const c = document.createElement('canvas');
+  c.width = 68; c.height = 8;
+  const t = c.getContext('2d');
+  t.clearRect(0, 0, 68, 8);
+  t.fillStyle = '#ff3c28';
+  t.beginPath();
+  t.ellipse(34, 4, 33, 3.6, 0, 0, Math.PI * 2);
+  t.fill();
+  bombRingCv = c;
+  return c;
 }
 
 function bombDraw(t, cvW, cvH) {
@@ -1655,6 +1736,7 @@ function collectDrops(F, out) {
     if (depth < NEAR || depth > F.fogMax) continue;
     const perp = -dx * F.sin + dy * F.cos;
     const col = DROP_COL[wd.kind] || '#ccc';
+    if (offscreenX(F, depth, perp, 26 * F.U)) continue;
     out.push({ depth, perp, cv: fxCanvas(F.g, 'drop:' + wd.kind, (t, cw, ch) => {
       t.fillStyle = 'rgba(24,26,32,0.9)';
       t.fillRect(2, 2, cw - 4, ch - 4);
@@ -1662,7 +1744,7 @@ function collectDrops(F, out) {
       t.fillRect(2, 4, cw - 4, 3);
       t.fillStyle = 'rgba(255,255,255,0.6)';
       t.fillRect(2, 2, 5, 2);
-    }), sw: 26 * F.U, sh: 8 * F.U, baseH: 0, alpha: smokeAlphaBetween(F, d.x, d.y) });
+    }), sw: 26 * F.U, sh: 8 * F.U, baseH: groundElevationAt(d.x, d.y), alpha: smokeAlphaBetween(F, d.x, d.y) });
   }
 }
 
@@ -1673,6 +1755,7 @@ function collectGrenades(F, out) {
     if (depth < NEAR || depth > F.fogMax) continue;
     const perp = -dx * F.sin + dy * F.cos;
     const col = gn.kind === 'he' ? '#2f6b2f' : (gn.kind === 'flash' ? '#c9c9c9' : '#5a5f66');
+    if (offscreenX(F, depth, perp, 12 * F.U)) continue;
     out.push({ depth, perp, cv: fxCanvas(F.g, 'nade:' + gn.kind, (t, cw, ch) => {
       t.fillStyle = col;
       t.beginPath();
@@ -1680,7 +1763,7 @@ function collectGrenades(F, out) {
       t.fill();
       t.fillStyle = '#111';
       t.fillRect(cw / 2 - 2, ch / 2 - 5, 4, 10);
-    }), sw: 12 * F.U, sh: 12 * F.U, baseH: 0, alpha: smokeAlphaBetween(F, gn.x, gn.y) });
+    }), sw: 12 * F.U, sh: 12 * F.U, baseH: groundElevationAt(gn.x, gn.y), alpha: smokeAlphaBetween(F, gn.x, gn.y) });
   }
 }
 
@@ -1732,8 +1815,8 @@ function drawSprite(F, zbuf, s) {
     }
   }
   t.globalAlpha = 1;
-  // D3 击杀者高亮：红色脉冲圆角矩形描边（叠加在精灵之后）
-  if (s.isKiller) {
+  // D3 击杀者高亮：红色脉冲圆角矩形描边（叠加在精灵之后；仅在未被逐列裁剪时画，避免描边穿墙）
+  if (s.isKiller && !clipped) {
     const ka = 0.9 + 0.1 * Math.sin(F.time * 6);
     t.strokeStyle = 'rgba(255,60,40,' + ka.toFixed(3) + ')';
     t.lineWidth = 2;
@@ -1741,8 +1824,16 @@ function drawSprite(F, zbuf, s) {
   }
 }
 
+// 单列遮挡：该列有更近墙且墙顶高于屏幕点则隐藏
+function pointHidden(F, zbuf, sx, sy, depth) {
+  const c = Math.round(sx);
+  if (c < 0 || c >= F.iw) return false;
+  const zb = zbuf[c];
+  return !!(zb && zb.d < depth && zb.yTop < sy);
+}
+
 // 粒子：只画前 60 个，2-4px 屏幕小方块（shell/swing 跳过）
-function drawParticles(F) {
+function drawParticles(F, zbuf) {
   const t = F.cctx;
   const styles = {
     blood: 'rgba(150,20,15,',
@@ -1767,6 +1858,15 @@ function drawParticles(F) {
     const sy = pt.sy;
     // 火花等命中反馈粒子更大更亮（近距离按焦距缩放）
     const sz = clamp((pa.size || 2) * (pa.kind === 'spark' || pa.kind === 'fire' ? 1.6 : 1), 2, 7);
+    // 墙后粒子不画：所在列有更近墙且墙顶覆盖粒子屏幕 y
+    const px0 = Math.max(0, Math.floor(sx - sz / 2));
+    const px1 = Math.min(F.iw - 1, Math.ceil(sx + sz / 2));
+    let hidden = false;
+    for (let c = px0; c <= px1; c++) {
+      const zb = zbuf[c];
+      if (zb && zb.d < depth && zb.yTop < sy) { hidden = true; break; }
+    }
+    if (hidden) continue;
     t.fillStyle = style + clamp(pa.life, 0, 1).toFixed(3) + ')';
     t.fillRect(sx - sz / 2, sy - sz / 2, sz, sz);
   }
@@ -1774,13 +1874,16 @@ function drawParticles(F) {
 }
 
 // 弹道：两端点投影（clampRange 时钳到 [NEAR, fogMax]，近端贴相机、远端超雾距也能画出穿过视野的部分）
-function drawTracers(F) {
+function drawTracers(F, zbuf) {
   const t = F.cctx;
   for (const tr of F.g.tracers || []) {
     const a = clamp(tr.life / 0.09, 0, 1);
     const p1 = projectPoint(F, tr.x1, tr.y1, true);
     const p2 = projectPoint(F, tr.x2, tr.y2, true);
     if (!p1 || !p2) continue;
+    // 首段遮挡：终点被更近墙遮住则整条弹道不画（视觉上弹道被墙吸收）
+    const dEnd = (tr.x2 - F.cx) * F.cos + (tr.y2 - F.cy) * F.sin;
+    if (pointHidden(F, zbuf, p2.sx, p2.sy, dEnd)) continue;
     t.strokeStyle = tr.team === 'ct' ? 'rgba(110,180,255,' + a.toFixed(3) + ')' : 'rgba(255,190,90,' + a.toFixed(3) + ')';
     t.lineWidth = 1.6;
     t.beginPath();
@@ -1791,11 +1894,12 @@ function drawTracers(F) {
 }
 
 // 激光瞄准线：眼高方向，相机中心 → 命中点（投影到水平线，开镜时与准星对齐）
-function drawLaser(F, alive, p) {
+function drawLaser(F, alive, p, zbuf) {
   if (!alive || !p.laserEnd) return;
   const t = F.cctx;
   const wz = Number.isFinite(p.laserEnd.z) ? p.laserEnd.z : 0;
   const pt = projectPoint(F, p.laserEnd.x, p.laserEnd.y, true, wz);
+  if (pointHidden(F, zbuf, pt.sx, pt.sy, (p.laserEnd.x - F.cx) * F.cos + (p.laserEnd.y - F.cy) * F.sin)) return;
   const a = p.scoped ? 0.9 : 0.4;
   t.strokeStyle = 'rgba(255,70,70,' + a + ')';
   t.lineWidth = 1.5;
@@ -1808,6 +1912,7 @@ function drawLaser(F, alive, p) {
 // 枪口火光：跟随 viewmodel 同一套后坐/步态偏移，避免火光固定在准星中心
 function drawMuzzle(F, alive, p) {
   if (!alive || !p.muzzleT || p.muzzleT <= 0) return;
+  if (F.scoped) return; // 开镜时整支枪口焰隐藏（含泛光），避免视野遮挡
   const t = F.cctx;
   const a = clamp(p.muzzleT / 0.08, 0, 1);
   const m = viewmodelMotion(F, p);

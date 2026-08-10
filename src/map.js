@@ -454,6 +454,29 @@ export function collideCircle(ent) {
       const dx = ent.x - cx, dy = ent.y - cy;
       const d2 = dx * dx + dy * dy;
       if (d2 < r * r) {
+        if (d2 === 0) {
+          const T = tileSize();
+          const options = [
+            { x: wx - r, y: ent.y, dist: ent.x - wx },
+            { x: wx + T + r, y: ent.y, dist: wx + T - ent.x },
+            { x: ent.x, y: wy - r, dist: ent.y - wy },
+            { x: ent.x, y: wy + T + r, dist: wy + T - ent.y }
+          ].sort((a, b) => a.dist - b.dist);
+          let pushed = false;
+          for (const o of options) {
+            if (passable(o.x, o.y)) {
+              ent.x = o.x;
+              ent.y = o.y;
+              pushed = true;
+              break;
+            }
+          }
+          if (!pushed && options[0]) {
+            ent.x = options[0].x;
+            ent.y = options[0].y;
+          }
+          continue;
+        }
         const d = Math.sqrt(d2) || 0.001;
         const push = (r - d) / d;
         ent.x += dx * push;

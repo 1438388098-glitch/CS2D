@@ -423,6 +423,9 @@ export function update(game, dt) {
   dt = Math.min(dt, 0.05);
   if (game.hitPauseT > 0) {
     game.hitPauseT -= dt;
+    // hitPause 期间不消费鼠标增量：清零避免解除停顿后相机跳变
+    game._mlookDx = 0;
+    game._mlookDy = 0;
     return;
   }
   for (let i = game.dmgPops.length - 1; i >= 0; i--) {
@@ -621,7 +624,7 @@ export function update(game, dt) {
     game.camX = clamp(game.camX, hw, Math.max(hw, game.mapW - hw));
     game.camY = clamp(game.camY, hh, Math.max(hh, game.mapH - hh));
   }
-  updatePlayerAim(game, dt);
+  if (!game.player || game.player.dead) updatePlayerAim(game, dt);
   updateBombHud(game);
   if (game.ui && game.ui.isScoreboardOpen && game.ui.isScoreboardOpen()) {
     emit('refreshScoreboard');
@@ -912,7 +915,7 @@ function updatePlayerAim(game, dt) {
     // 标准 FPS 增量瞄准：指针锁定后仅消费 movementX/Y，鼠标停→朝向停，
     // 鼠标动→转动 yaw/pitch；观战同样作用于 _specAngle
     const dx = game._mlookDx || 0;
-    const dy = 0;
+    const dy = game._mlookDy || 0;
     game._mlookDx = 0;
     game._mlookDy = 0;
     if (game.state !== 'BUY' && game.state !== 'LIVE') return;
@@ -923,13 +926,13 @@ function updatePlayerAim(game, dt) {
     if (p2 && !p2.dead) {
       const scopeMul = p2.scoped ? 0.35 : 1;
       p2.angle += dx * sens * scopeMul;
-      p2.pitch = 0;
+      p2.pitch = clamp(p2.pitch + dy * sensY * yDir, -FPS_PITCH_LIMIT, FPS_PITCH_LIMIT);
     } else {
       if (game._specAngle == null) game._specAngle = game.player ? game.player.angle : 0;
       if (game._specPitch == null) game._specPitch = game.player ? (game.player.pitch || 0) : 0;
       if (dx || dy) game._specManual = game.time;
       game._specAngle += dx * sens;
-      game._specPitch = 0;
+      game._specPitch = clamp((game._specPitch || 0) + dy * sensY * yDir, -FPS_PITCH_LIMIT, FPS_PITCH_LIMIT);
     }
     return;
   }

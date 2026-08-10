@@ -8,6 +8,7 @@ let game = null;
 let D = {};
 let lastTop = 0;
 let lastSpecKey = '';
+let htMain = null;
 
 const ICON_BY_WEAPON = {
   ak: 'ic-ak', m4: 'ic-m4', famas: 'ic-rifle', mac10: 'ic-mac10', mp9: 'ic-mp9', p90: 'ic-p90',
@@ -22,7 +23,7 @@ const STATE_ICON = {
 export function initUiDom(gameRef) {
   game = gameRef;
   const ids = [
-    'hud-root', 'hudScoreT', 'hudTime', 'hudScoreC', 'hudBuyTip', 'hudHellTip',
+    'hud-root', 'hud-top', 'hud-left', 'hud-right', 'hudScoreT', 'hudTime', 'hudScoreC', 'hudBuyTip', 'hudHellTip',
     'hudWeaponIc', 'hudWeaponName', 'hudHp', 'hudHpBar', 'hudArmorBar', 'hudMoney',
     'hudStateRow', 'hudStateIc', 'hudStateText',
     'hudAmmoMag', 'hudAmmoRes', 'hudReloadRing', 'hudAmmoName',
@@ -39,6 +40,19 @@ export function updateHudDom(now) {
   const p = game.player;
   const inMatch = game.state !== 'MENU';
   if (D['hud-root']) D['hud-root'].style.display = inMatch ? 'block' : 'none';
+  // next 后端：canvas drawMatchOverlay 自绘计分/时间/血条/弹药/炸弹倒计时，隐藏重复的 DOM 面板
+  // （hud-left/hud-right 及 hud-top 的计分条），保留观战条与购买/地狱提示等画布不绘制的 DOM；切回 legacy 恢复
+  const nextHud = game._render3dBackend === 'next';
+  if (nextHud) {
+    if (D['hud-left']) D['hud-left'].style.display = 'none';
+    if (D['hud-right']) D['hud-right'].style.display = 'none';
+    if (!htMain && D['hud-top']) htMain = D['hud-top'].querySelector('.ht-main');
+    if (htMain) htMain.style.display = 'none';
+  } else {
+    if (D['hud-left']) D['hud-left'].style.display = '';
+    if (D['hud-right']) D['hud-right'].style.display = '';
+    if (htMain) htMain.style.display = '';
+  }
   if (!inMatch) return;
   updateLeft(p, now);
   updateRight(p, now);
@@ -55,21 +69,24 @@ function updateLeft(p, now) {
   D['hud-left'].classList.toggle('dead', dead);
   if (dead) return;
 
-  const hp = Math.max(0, Math.ceil(p.hp));
-  D.hudHp.textContent = hp;
-  D.hudHpBar.classList.toggle('low', hp <= 25);
-  D.hudHpBar.firstElementChild.style.width = clamp(p.hp / 100, 0, 1) * 100 + '%';
-  D.hudArmorBar.firstElementChild.style.width = clamp(p.armor / 100, 0, 1) * 100 + '%';
-  D.hudMoney.textContent = '$' + p.money;
-
+  const nextHud = game._render3dBackend === 'next';
   const wk = wkey(p);
   const wd = weaponDef(p);
-  const icon = ICON_BY_WEAPON[wk] || 'ic-p250';
-  if (D.hudWeaponIc.getAttribute('href') !== 'assets/icons.svg#' + icon) {
-    D.hudWeaponIc.setAttribute('href', 'assets/icons.svg#' + icon);
+  if (!nextHud) {
+    const hp = Math.max(0, Math.ceil(p.hp));
+    D.hudHp.textContent = hp;
+    D.hudHpBar.classList.toggle('low', hp <= 25);
+    D.hudHpBar.firstElementChild.style.width = clamp(p.hp / 100, 0, 1) * 100 + '%';
+    D.hudArmorBar.firstElementChild.style.width = clamp(p.armor / 100, 0, 1) * 100 + '%';
+    D.hudMoney.textContent = '$' + p.money;
+
+    const icon = ICON_BY_WEAPON[wk] || 'ic-p250';
+    if (D.hudWeaponIc.getAttribute('href') !== 'assets/icons.svg#' + icon) {
+      D.hudWeaponIc.setAttribute('href', 'assets/icons.svg#' + icon);
+    }
+    const nm = wd ? wd.name : (p.slot && p.slot.indexOf('nade:') === 0 ? '手雷' : '');
+    if (D.hudWeaponName.textContent !== nm) D.hudWeaponName.textContent = nm;
   }
-  const nm = wd ? wd.name : (p.slot && p.slot.indexOf('nade:') === 0 ? '手雷' : '');
-  if (D.hudWeaponName.textContent !== nm) D.hudWeaponName.textContent = nm;
 
   // 状态行：换弹 > 开镜 > 涉水 > 静步
   let st = null;
@@ -101,24 +118,26 @@ function updateRight(p, now) {
   if (!p || p.dead) return;
   const wd = weaponDef(p);
   const wk = wkey(p);
-  let mag = '∞', res = '';
-  let warn = null;
-  if (wd && wd.mag > 0) {
-    mag = String(ammoFor(p));
-    res = String(reserveFor(p));
-    warn = ammoWarning(ammoFor(p), wd.mag, now);
-  } else if (!wd) {
-    mag = '—';
+  if (game._render3dBackend !== 'next') {
+    let mag = '∞', res = '';
+    let warn = null;
+    if (wd && wd.mag > 0) {
+      mag = String(ammoFor(p));
+      res = String(reserveFor(p));
+      warn = ammoWarning(ammoFor(p), wd.mag, now);
+    } else if (!wd) {
+      mag = '—';
+    }
+    const ammoEl = D.hudAmmoMag;
+    if (ammoEl.textContent !== mag) ammoEl.textContent = mag;
+    ammoEl.classList.toggle('empty', mag === '0');
+    ammoEl.classList.toggle('low', !!warn && warn.level === 'low');
+    ammoEl.classList.toggle('critical', !!warn && warn.level === 'critical');
+    ammoEl.classList.toggle('blink-off', !!warn && !warn.blink);
+    if (D.hudAmmoRes.textContent !== res) D.hudAmmoRes.textContent = res;
+    const nm = wd ? wd.name : (p.slot && p.slot.indexOf('nade:') === 0 ? '投掷物' : '');
+    if (D.hudAmmoName.textContent !== nm) D.hudAmmoName.textContent = nm;
   }
-  const ammoEl = D.hudAmmoMag;
-  if (ammoEl.textContent !== mag) ammoEl.textContent = mag;
-  ammoEl.classList.toggle('empty', mag === '0');
-  ammoEl.classList.toggle('low', !!warn && warn.level === 'low');
-  ammoEl.classList.toggle('critical', !!warn && warn.level === 'critical');
-  ammoEl.classList.toggle('blink-off', !!warn && !warn.blink);
-  if (D.hudAmmoRes.textContent !== res) D.hudAmmoRes.textContent = res;
-  const nm = wd ? wd.name : (p.slot && p.slot.indexOf('nade:') === 0 ? '投掷物' : '');
-  if (D.hudAmmoName.textContent !== nm) D.hudAmmoName.textContent = nm;
 
   const nades = p.weapons.nades;
   const nk = p.slot && p.slot.indexOf('nade:') === 0 ? p.slot.split(':')[1] : null;
@@ -137,15 +156,18 @@ function updateRight(p, now) {
 }
 
 function updateTop(p, now) {
-  const tT = Math.max(0, Math.ceil((game.roundDur || ROUND.DURATION) - game.roundTime));
-  const tMin = Math.floor(tT / 60);
-  const tSec = tT % 60;
-  const timeStr = (tMin < 10 ? '0' : '') + tMin + ':' + (tSec < 10 ? '0' : '') + tSec;
-  if (D.hudTime.textContent !== timeStr) D.hudTime.textContent = timeStr;
-  const st = 'T ' + game.score.T;
-  const sc = game.score.CT + ' CT';
-  if (D.hudScoreT.textContent !== st) D.hudScoreT.textContent = st;
-  if (D.hudScoreC.textContent !== sc) D.hudScoreC.textContent = sc;
+  const nextHud = game._render3dBackend === 'next';
+  if (!nextHud) {
+    const tT = Math.max(0, Math.ceil((game.roundDur || ROUND.DURATION) - game.roundTime));
+    const tMin = Math.floor(tT / 60);
+    const tSec = tT % 60;
+    const timeStr = (tMin < 10 ? '0' : '') + tMin + ':' + (tSec < 10 ? '0' : '') + tSec;
+    if (D.hudTime.textContent !== timeStr) D.hudTime.textContent = timeStr;
+    const st = 'T ' + game.score.T;
+    const sc = game.score.CT + ' CT';
+    if (D.hudScoreT.textContent !== st) D.hudScoreT.textContent = st;
+    if (D.hudScoreC.textContent !== sc) D.hudScoreC.textContent = sc;
+  }
 
   if (game.state === 'BUY' && game.buyTime > 0) {
     D.hudBuyTip.style.display = 'block';
@@ -162,9 +184,9 @@ function updateTop(p, now) {
     D.hudHellTip.style.display = 'none';
   }
 
-  // 炸弹卡
+  // 炸弹卡（next 后端由 canvas drawMatchOverlay 绘制 BOMB 倒计时，DOM 不再重复）
   const bomb = game.bomb && game.bomb.planted;
-  if (bomb) {
+  if (bomb && !nextHud && game.viewMode !== 'fps') {
     const t = game.bomb.timer;
     D.hudBomb.style.display = 'flex';
     D.hudBombSecs.textContent = Math.max(0, t).toFixed(1);

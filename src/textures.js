@@ -60,6 +60,13 @@ function lcg(seed) {
   };
 }
 
+// ===== 字符串哈希：由地图 id 派生稳定 32 位种子（map 无 seed 字段）=====
+function strHash(id) {
+  let s = 0;
+  for (let i = 0; i < id.length; i++) s = (s * 31 + id.charCodeAt(i)) >>> 0;
+  return s || 1;
+}
+
 // ===== 程序化纹理生成器（图片缺失兜底）=====
 function mkCanvas(w, h) {
   const c = document.createElement('canvas');
@@ -68,20 +75,20 @@ function mkCanvas(w, h) {
   return c;
 }
 
-function genFloorTex(th) {
+function genFloorTex(th, rnd) {
   const c = mkCanvas(128, 128);
   const t = c.getContext('2d');
   t.fillStyle = 'rgb(' + th.floor.join(',') + ')';
   t.fillRect(0, 0, 128, 128);
   for (let i = 0; i < 900; i++) {
-    const v = Math.random() * 0.35;
+    const v = rnd() * 0.35;
     t.fillStyle = 'rgba(' + (th.floor[0] + v * 30) + ',' + (th.floor[1] + v * 30) + ',' + (th.floor[2] + v * 30) + ',0.6)';
-    t.fillRect(Math.random() * 128, Math.random() * 128, 2, 2);
+    t.fillRect(rnd() * 128, rnd() * 128, 2, 2);
   }
   return c;
 }
 
-function genWallTex(th) {
+function genWallTex(th, rnd) {
   const c = mkCanvas(128, 128);
   const t = c.getContext('2d');
   t.fillStyle = 'rgb(' + th.wall.join(',') + ')';
@@ -93,9 +100,9 @@ function genWallTex(th) {
   t.fillStyle = 'rgba(0,0,0,0.28)';
   t.fillRect(0, 124, 128, 4);
   for (let i = 0; i < 400; i++) {
-    const v = Math.random() * 0.5;
+    const v = rnd() * 0.5;
     t.fillStyle = 'rgba(' + (th.wallSpots[0] + v * 40) + ',' + (th.wallSpots[1] + v * 40) + ',' + (th.wallSpots[2] + v * 40) + ',0.5)';
-    t.fillRect(Math.random() * 128, Math.random() * 128, 3, 2);
+    t.fillRect(rnd() * 128, rnd() * 128, 3, 2);
   }
   return c;
 }
@@ -104,12 +111,12 @@ function genWallTex(th) {
 function genWallVariant(base, seed) {
   const c = mkCanvas(128, 128);
   const t = c.getContext('2d');
-  // 垂直错缝：base 为 repeat 平铺纹理，先纵向画两次铺出 128×132 源，再整体上移 seed*4 取 128×128 窗口（无缝衔接）
-  const tmp = mkCanvas(128, 132);
+  // 垂直错缝：base 为 repeat 平铺纹理，纵向画两遍铺出 128×256 源，再下移 seed*4 采样 128×128 窗口（无缝衔接）
+  const tmp = mkCanvas(128, 256);
   const tt = tmp.getContext('2d');
   tt.drawImage(base, 0, 0);
   tt.drawImage(base, 0, 128);
-  t.drawImage(tmp, 0, -seed * 4, 128, 128);
+  t.drawImage(tmp, 0, seed * 4, 128, 128, 0, 0, 128, 128);
   // 亮度差异：seed 1 全局提亮 6%，seed 2 压暗 6%
   if (seed === 1 || seed === 2) {
     t.globalCompositeOperation = 'source-atop';
@@ -146,28 +153,29 @@ function genThinTex() {
   return c;
 }
 
-function genWaterTex() {
+function genWaterTex(th, rnd) {
   const c = mkCanvas(64, 64);
   const t = c.getContext('2d');
-  t.fillStyle = 'rgb(29,74,94)';
+  t.fillStyle = 'rgb(' + th.water.join(',') + ')';
   t.fillRect(0, 0, 64, 64);
   for (let i = 0; i < 120; i++) {
-    t.fillStyle = 'rgba(' + (50 + Math.random() * 60) + ',' + (110 + Math.random() * 50) + ',' + (160 + Math.random() * 50) + ',0.4)';
-    t.fillRect(Math.random() * 64, Math.random() * 64, 4, 2);
+    t.fillStyle = 'rgba(' + (th.waterSpots[0] + rnd() * 60) + ',' + (th.waterSpots[1] + rnd() * 50) + ',' + (th.waterSpots[2] + rnd() * 50) + ',0.4)';
+    t.fillRect(rnd() * 64, rnd() * 64, 4, 2);
   }
   t.fillStyle = 'rgba(255,255,255,0.06)';
-  for (let i = 0; i < 6; i++) t.fillRect(0, Math.random() * 64, 64, 1);
+  for (let i = 0; i < 6; i++) t.fillRect(0, rnd() * 64, 64, 1);
   return c;
 }
 
-function genDeepWaterTex() {
+function genDeepWaterTex(th, rnd) {
   const c = mkCanvas(64, 64);
   const t = c.getContext('2d');
-  t.fillStyle = '#12304a';
+  const deep = [Math.floor(th.water[0] * 0.5), Math.floor(th.water[1] * 0.5), Math.floor(th.water[2] * 0.5)];
+  t.fillStyle = 'rgb(' + deep.join(',') + ')';
   t.fillRect(0, 0, 64, 64);
   for (let i = 0; i < 40; i++) {
-    t.fillStyle = 'rgba(' + (40 + Math.random() * 50) + ',' + (90 + Math.random() * 60) + ',' + (150 + Math.random() * 50) + ',0.35)';
-    t.fillRect(Math.random() * 64, Math.random() * 64, 3, 1);
+    t.fillStyle = 'rgba(' + (th.waterSpots[0] + rnd() * 50) + ',' + (th.waterSpots[1] + rnd() * 60) + ',' + (th.waterSpots[2] + rnd() * 50) + ',0.35)';
+    t.fillRect(rnd() * 64, rnd() * 64, 3, 1);
   }
   return c;
 }
@@ -309,7 +317,11 @@ export function initTextures(map) {
   const W = map.W, H = map.H;
   const th = THEMES[map.id] || THEMES.dust2;
   const grid = map.grid;
-  const rnd = lcg(map.seed);
+  // 稳定种子：map 无 seed 字段，改用地图 id 字符串哈希派生（同图稳定、异图不同）
+  const seedBase = strHash(map.id || '');
+  const rnd = lcg(seedBase);
+  // 纹理随机流：独立于装饰物 rnd，各生成器再用异或常数拆独立子流
+  const texSeed = seedBase ^ 0x9e3779b9;
 
   // 纹理选择：真实素材优先，缺失降级程序化
   const real = {
@@ -318,11 +330,12 @@ export function initTextures(map) {
     thin: texImg(TEX_SRC.thin)
   };
 
-  const floorTex = real.floor || genFloorTex(th);
-  const wallTex = real.wall || genWallTex(th);
+  // 各生成器独立 LCG 子流（不同异或常数）：素材加载与否不影响其他纹理的随机消费位置
+  const floorTex = real.floor || genFloorTex(th, lcg(texSeed ^ 0x51F10A));
+  const wallTex = real.wall || genWallTex(th, lcg(texSeed ^ 0xA11E50));
   const thinWallTex = real.thin || genThinTex();
-  const waterTex = genWaterTex();
-  const deepWaterTex = genDeepWaterTex();
+  const waterTex = genWaterTex(th, lcg(texSeed ^ 0xCAFEB0));
+  const deepWaterTex = genDeepWaterTex(th, lcg(texSeed ^ 0xDEE10C));
   const platformTex = genPlatformTex();
   const crateTex = real.thin || genThinTex(); // 木箱用木纹
   const barrelTex = genBarrelTex();

@@ -4,6 +4,7 @@ import { ACTIONS, matches, getBindLabel, getBindCodes, bind, resetBinds } from '
 import { setViewMode, requestFpsPointerLock, resizeCanvas } from './input.js';
 import { readAudioPrefs, writeAudioPrefs } from './audio/prefs.js';
 import { nextRoundBudget } from './economy.js';
+import { formatPerfMonitor } from './perf-monitor.js';
 
 let doc = null;
 let canvas = null;
@@ -400,7 +401,7 @@ const BUY_CATS = [
   { label: '手枪', items: [['p250', 'P250', '半自动'], ['deagle', '沙漠之鹰', '大口径半自动']] },
   { label: '冲锋枪', items: [['mac10', 'MAC-10', 'T 专用 · 全自动'], ['mp9', 'MP9', 'CT 专用 · 全自动'], ['p90', 'P90', '全自动 · 50 发']] },
   { label: '霰弹枪', items: [['xm', 'XM1014', '8 弹丸 · 近战']] },
-  { label: '步枪', items: [['ak', 'AK-47', 'T 专用 · 全自动'], ['m4', 'M4A4', 'CT 专用 · 全自动']] },
+  { label: '步枪', items: [['ak', 'AK-47', 'T 专用 · 全自动'], ['m4', 'M4A4', 'CT 专用 · 全自动'], ['famas', 'FAMAS', 'CT 专用 · 中间步枪']] },
   { label: '狙击枪', items: [['awp', 'AWP', '开镜 · 一枪致命']] },
   { label: '装备', items: [['armor', '防弹衣', '50% 减伤'], ['helm', '防弹衣+头盔', '防爆头'], ['kit', '拆弹钳', '拆弹减半']] },
   { label: '投掷物', items: [['he', '高爆手雷', '范围伤害'], ['flash', '闪光弹', '致盲敌人'], ['smoke', '烟雾弹', '遮挡视线']] }
@@ -1375,8 +1376,20 @@ export function isBuyOpen() { return buyOpen; }
 export function isScoreboardOpen() { return sbOpen; }
 export function setMutedFnExposed(fn) { setMutedFn(fn); }
 
-export function updateFpsUi(game) {
+let perfUiT = 0;
+export function updateFpsUi(game, force) {
+  const perfEl = document.getElementById('perfMonitor');
   const el = document.getElementById('fpsHint');
+  const now = performance.now();
+  if (perfEl && (force || !perfEl.dataset.seen || now - perfUiT >= 250)) {
+    perfEl.dataset.seen = '1';
+    const stats = (window.__cs2d && window.__cs2d.stats) || null;
+    const txt = formatPerfMonitor(stats, game);
+    if (perfEl.textContent !== txt) {
+      perfEl.textContent = txt;
+    }
+    perfUiT = now;
+  }
   if (!el) return;
   const inMatch = game.state === 'LIVE' || game.state === 'BUY';
   if (game.viewMode === 'follow') {

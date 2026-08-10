@@ -34,7 +34,7 @@ function fresh() {
   g._mlookDy = -60;
   update(g, 1 / 60);
   ok('mouse yaw still applied', Math.abs((p.angle - a0) - 40 * g.fpsSens) < 1e-9);
-  ok('mouse y locks pitch to zero', p.pitch === 0);
+  ok('mouse y applies vertical pitch', Math.abs(p.pitch - (0.1 + -60 * g.fpsSensY)) < 1e-9);
   ok('pitch accumulator consumed', g._mlookDy === 0 && g._mlookDx === 0);
 }
 
@@ -46,7 +46,7 @@ function fresh() {
   p.pitch = 0.1;
   g._mlookDy = -40;
   update(g, 1 / 60);
-  ok('invert Y is ignored in locked vertical aim', p.pitch === 0);
+  ok('invert Y flips vertical pitch', Math.abs(p.pitch - (0.1 + 40 * g.fpsSensY)) < 1e-9);
 }
 
 {
@@ -57,7 +57,7 @@ function fresh() {
   p.pitch = 0;
   g._mlookDy = -40;
   update(g, 1 / 60);
-  ok('vertical sensitivity is ignored', p.pitch === 0);
+  ok('vertical sensitivity is applied', Math.abs(p.pitch - (-40 * 0.001)) < 1e-9);
 }
 
 {
@@ -81,10 +81,10 @@ function fresh() {
   const p = g.player;
   g._mlookDy = -1e9;
   update(g, 1 / 60);
-  ok('pitch stays zero after high mouse Y', p.pitch === 0);
+  ok('pitch clamps at limit after high mouse Y', p.pitch <= -1.34);
   g._mlookDy = 1e9;
   update(g, 1 / 60);
-  ok('pitch stays zero after low mouse Y', p.pitch === 0);
+  ok('pitch clamps at limit after low mouse Y', p.pitch >= 1.34);
 }
 
 {
@@ -93,7 +93,7 @@ function fresh() {
   g.player.dead = true;
   g._mlookDy = -40;
   update(g, 1 / 60);
-  ok('spectate pitch locked to zero', g._specPitch === 0);
+  ok('spectate pitch applies vertical', Math.abs(g._specPitch - (-40 * g.fpsSensY)) < 1e-9);
   ok('spectate yaw initialized', typeof g._specAngle === 'number');
 }
 

@@ -22,6 +22,8 @@ let skyArr = null, skyBuf = null;
 
 let wallTexRefs = [];
 let texMap = null;        // canvas/Image → WebGLTexture
+let loc = null;           // program 的 attribute/uniform location 缓存（避免每帧查询）
+let quadOverflowWarned = false;
 let skyTex = null, skyTexKey = null, skyTexW = 0, skyTexH = 0; // 天空纹理缓存
 
 function compile(glc, vsSrc, fsSrc) {
@@ -136,6 +138,41 @@ varying float vAlpha;
 void main() {
   gl_FragColor = vec4(vCol, vAlpha);
 }`);
+
+  // 一次查询各 program 的 attribute/uniform location，后续 draw pass 直接读缓存
+  loc = {
+    wall: {
+      aPos: glc.getAttribLocation(progWall, 'aPos'),
+      aUv: glc.getAttribLocation(progWall, 'aUv'),
+      aShade: glc.getAttribLocation(progWall, 'aShade'),
+      aZ: glc.getAttribLocation(progWall, 'aZ'),
+      aBand: glc.getAttribLocation(progWall, 'aBand'),
+      uRes: glc.getUniformLocation(progWall, 'uRes'),
+      uTex: glc.getUniformLocation(progWall, 'uTex')
+    },
+    floor: {
+      aPos: glc.getAttribLocation(progFloor, 'aPos'),
+      aUv: glc.getAttribLocation(progFloor, 'aUv'),
+      aW: glc.getAttribLocation(progFloor, 'aW'),
+      aZ: glc.getAttribLocation(progFloor, 'aZ'),
+      aShade: glc.getAttribLocation(progFloor, 'aShade'),
+      uRes: glc.getUniformLocation(progFloor, 'uRes'),
+      uTex: glc.getUniformLocation(progFloor, 'uTex')
+    },
+    sky: {
+      aPos: glc.getAttribLocation(progSky, 'aPos'),
+      aUv: glc.getAttribLocation(progSky, 'aUv'),
+      uRes: glc.getUniformLocation(progSky, 'uRes'),
+      uTex: glc.getUniformLocation(progSky, 'uTex')
+    },
+    quad: {
+      aPos: glc.getAttribLocation(progQuad, 'aPos'),
+      aCol: glc.getAttribLocation(progQuad, 'aCol'),
+      aAlpha: glc.getAttribLocation(progQuad, 'aAlpha'),
+      aZ: glc.getAttribLocation(progQuad, 'aZ'),
+      uRes: glc.getUniformLocation(progQuad, 'uRes')
+    }
+  };
 }
 
 function isPow2(v) { return (v & (v - 1)) === 0 && v > 0; }
@@ -159,17 +196,23 @@ function texFor(src) {
     }
     t = gl.createTexture();
     gl.bindTexture(gl.TEXTURE_2D, t);
-    gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true);
     gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, upload);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+    if (isPow2(w) && isPow2(h)) {
+      gl.generateMipmap(gl.TEXTURE_2D);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_LINEAR);
+    } else {
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+    }
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.REPEAT);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.REPEAT);
-    gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false);
     texMap.set(src, t);
     return t;
   } catch (e) {
     return null;
+  } finally {
+    // 保证上传失败/异常时 FLIP_Y 不泄漏（本函数不再开启 FLIP_Y，此处置位仅作兜底）
+    if (gl) gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false);
   }
 }
 
@@ -181,13 +224,11 @@ function skyTextureFor(skyCanvas, key) {
   try {
     skyTex = gl.createTexture();
     gl.bindTexture(gl.TEXTURE_2D, skyTex);
-    gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true);
     gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, skyCanvas);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
-    gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false);
     skyTexKey = key;
     skyTexW = skyCanvas.width;
     skyTexH = skyCanvas.height;
@@ -210,6 +251,9 @@ export function initGL3d(w, h) {
     gl = glcv.getContext('webgl', { alpha: false, antialias: false, depth: true, stencil: false, premultipliedAlpha: false, preserveDrawingBuffer: true })
       || glcv.getContext('experimental-webgl', { alpha: false, antialias: false, depth: true, premultipliedAlpha: false, preserveDrawingBuffer: true });
     if (!gl) { gl = null; return false; }
+    // WebGL 上下文丢失后 GPU 路径永久停用：置 gl=null 后 render3d.js 的 gl3dReady() 返回 false，自动回退 CPU 像素直写。
+    // 当前架构不自动重建 program/纹理，故即便浏览器触发 webglcontextrestored 也不恢复（gl 对象已失效，需重新调用 initGL3d 才可恢复 GPU）。
+    glcv.addEventListener('webglcontextlost', e => { e.preventDefault(); gl = null; glcv = null; });
     curW = glcv.width; curH = glcv.height;
     wallArr = new Float32Array(MAX_WALLS * 4 * 10);  // pos2 uv2 shade1 z1 band4
     wallBuf = gl.createBuffer();
@@ -221,6 +265,7 @@ export function initGL3d(w, h) {
     skyBuf = gl.createBuffer();
     wallTexRefs = [];
     texMap = new Map();
+    quadOverflowWarned = false;
     skyTex = null; skyTexKey = null;
     buildPrograms(gl);
     gl.disable(gl.DEPTH_TEST);
@@ -233,7 +278,7 @@ export function initGL3d(w, h) {
   }
 }
 
-export function gl3dReady() { return !!gl; }
+export function gl3dReady() { return !!gl && !!glcv; }
 export function gl3dCanvas() { return glcv; }
 
 export function glResize(w, h) {
@@ -246,6 +291,24 @@ export function glResize(w, h) {
 }
 
 export function gl3dDispose() {
+  if (gl) {
+    if (texMap) for (const t of texMap.values()) gl.deleteTexture(t);
+    if (skyTex) gl.deleteTexture(skyTex);
+    if (wallBuf) gl.deleteBuffer(wallBuf);
+    if (floorBuf) gl.deleteBuffer(floorBuf);
+    if (quadBuf) gl.deleteBuffer(quadBuf);
+    if (skyBuf) gl.deleteBuffer(skyBuf);
+    if (progWall) gl.deleteProgram(progWall);
+    if (progFloor) gl.deleteProgram(progFloor);
+    if (progSky) gl.deleteProgram(progSky);
+    if (progQuad) gl.deleteProgram(progQuad);
+  }
+  wallBuf = null; floorBuf = null; quadBuf = null; skyBuf = null;
+  wallArr = null; floorArr = null; quadArr = null; skyArr = null;
+  wallTexRefs = [];
+  texMap = null; loc = null;
+  skyTex = null; skyTexKey = null; skyTexW = 0; skyTexH = 0;
+  progWall = null; progFloor = null; progSky = null; progQuad = null;
   gl = null;
   glcv = null;
 }
@@ -273,16 +336,14 @@ export function glSky(F, skyCanvas2d, key) {
   gl.bindBuffer(gl.ARRAY_BUFFER, skyBuf);
   gl.bufferData(gl.ARRAY_BUFFER, skyArr, gl.DYNAMIC_DRAW);
   gl.useProgram(progSky);
-  const aPos = gl.getAttribLocation(progSky, 'aPos');
-  const aUv = gl.getAttribLocation(progSky, 'aUv');
-  gl.enableVertexAttribArray(aPos);
-  gl.vertexAttribPointer(aPos, 2, gl.FLOAT, false, 16, 0);
-  gl.enableVertexAttribArray(aUv);
-  gl.vertexAttribPointer(aUv, 2, gl.FLOAT, false, 16, 8);
-  gl.uniform2f(gl.getUniformLocation(progSky, 'uRes'), F.iw, F.ih);
+  gl.enableVertexAttribArray(loc.sky.aPos);
+  gl.vertexAttribPointer(loc.sky.aPos, 2, gl.FLOAT, false, 16, 0);
+  gl.enableVertexAttribArray(loc.sky.aUv);
+  gl.vertexAttribPointer(loc.sky.aUv, 2, gl.FLOAT, false, 16, 8);
+  gl.uniform2f(loc.sky.uRes, F.iw, F.ih);
   gl.activeTexture(gl.TEXTURE0);
   gl.bindTexture(gl.TEXTURE_2D, t);
-  gl.uniform1i(gl.getUniformLocation(progSky, 'uTex'), 0);
+  gl.uniform1i(loc.sky.uTex, 0);
   gl.depthMask(true);
   gl.disable(gl.BLEND);
   gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
@@ -311,6 +372,8 @@ export function glWallColumn(F, col, d, yTop, yBottom, tex, texU, srcY, srcH, sh
   if (!gl || wallN >= MAX_WALLS || !tex || !tex.width) return;
   const o = wallN * 40;
   const z = clamp(d / F.fogMax, 0, 1);
+  // 用原始纹理尺寸归一化 UV：srcY/srcH/texU 由调用方按源图原始尺寸计算（如 barrel 48×48），
+  // 不能用 texFor 缩放后的 128×128 尺寸（否则 NPOT 素材只采样到源图左上小块）
   const u = (texU + 0.5) / tex.width;
   const v0 = (srcY + 0.5) / tex.height;
   const v1 = (srcY + srcH - 0.5) / tex.height;
@@ -336,13 +399,24 @@ export function glWallColumn(F, col, d, yTop, yBottom, tex, texU, srcY, srcH, sh
 
 // 地面四边形：三角扇（顶点带深度 z 用于遮挡）
 export function glGroundQuad(F, pts, depths, cTop, cBottom, alpha) {
-  if (!gl || !pts || pts.length < 3 || quadN >= MAX_QUADS) return;
+  if (!gl || !pts || pts.length < 3) return;
+  // 预检整瓦片所需三角形数，超限则整瓦片跳过（警告一次）——避免 pushTri 中途截断留下半三角孔
+  const triCount = pts.length - 2;
+  if (quadN + triCount > MAX_QUADS) {
+    if (!quadOverflowWarned) { console.warn('render3d-gl: MAX_QUADS 溢出，地面四边形被丢弃'); quadOverflowWarned = true; }
+    return;
+  }
+  let yMin = Infinity, yMax = -Infinity;
+  for (const p of pts) {
+    if (p[1] < yMin) yMin = p[1];
+    if (p[1] > yMax) yMax = p[1];
+  }
+  const ySpan = (yMax - yMin) || 1;
   const pushTri = (ai, bi, ci) => {
-    if (quadN >= MAX_QUADS) return;
     let o = quadN * 21;
     for (const idx of [ai, bi, ci]) {
       const p = pts[idx];
-      const t = idx === 0 ? 0 : 1; // 顶点颜色：第一个顶点取 cTop，其余取 cBottom（视觉渐变近似）
+      const t = clamp((p[1] - yMin) / ySpan, 0, 1); // 渐变插值因子：按顶点屏幕 y，顶部 0 → 底部 1
       const r = (cTop[0] + (cBottom[0] - cTop[0]) * t);
       const g = (cTop[1] + (cBottom[1] - cTop[1]) * t);
       const b = (cTop[2] + (cBottom[2] - cTop[2]) * t);
@@ -366,23 +440,23 @@ export function glFlush(F) {
     gl.bufferData(gl.ARRAY_BUFFER, floorArr.subarray(0, floorN * 28), gl.DYNAMIC_DRAW);
     gl.useProgram(progFloor);
     const stride = 28;
-    gl.enableVertexAttribArray(gl.getAttribLocation(progFloor, 'aPos'));
-    gl.vertexAttribPointer(gl.getAttribLocation(progFloor, 'aPos'), 2, gl.FLOAT, false, stride, 0);
-    gl.enableVertexAttribArray(gl.getAttribLocation(progFloor, 'aUv'));
-    gl.vertexAttribPointer(gl.getAttribLocation(progFloor, 'aUv'), 2, gl.FLOAT, false, stride, 8);
-    gl.enableVertexAttribArray(gl.getAttribLocation(progFloor, 'aW'));
-    gl.vertexAttribPointer(gl.getAttribLocation(progFloor, 'aW'), 1, gl.FLOAT, false, stride, 16);
-    gl.enableVertexAttribArray(gl.getAttribLocation(progFloor, 'aZ'));
-    gl.vertexAttribPointer(gl.getAttribLocation(progFloor, 'aZ'), 1, gl.FLOAT, false, stride, 20);
-    gl.enableVertexAttribArray(gl.getAttribLocation(progFloor, 'aShade'));
-    gl.vertexAttribPointer(gl.getAttribLocation(progFloor, 'aShade'), 1, gl.FLOAT, false, stride, 24);
-    gl.uniform2f(gl.getUniformLocation(progFloor, 'uRes'), F.iw, F.ih);
+    gl.enableVertexAttribArray(loc.floor.aPos);
+    gl.vertexAttribPointer(loc.floor.aPos, 2, gl.FLOAT, false, stride, 0);
+    gl.enableVertexAttribArray(loc.floor.aUv);
+    gl.vertexAttribPointer(loc.floor.aUv, 2, gl.FLOAT, false, stride, 8);
+    gl.enableVertexAttribArray(loc.floor.aW);
+    gl.vertexAttribPointer(loc.floor.aW, 1, gl.FLOAT, false, stride, 16);
+    gl.enableVertexAttribArray(loc.floor.aZ);
+    gl.vertexAttribPointer(loc.floor.aZ, 1, gl.FLOAT, false, stride, 20);
+    gl.enableVertexAttribArray(loc.floor.aShade);
+    gl.vertexAttribPointer(loc.floor.aShade, 1, gl.FLOAT, false, stride, 24);
+    gl.uniform2f(loc.floor.uRes, F.iw, F.ih);
     const ft = F.layers && F.layers.floorTex;
     const tex = texFor(ft);
     if (tex) {
       gl.activeTexture(gl.TEXTURE0);
       gl.bindTexture(gl.TEXTURE_2D, tex);
-      gl.uniform1i(gl.getUniformLocation(progFloor, 'uTex'), 0);
+      gl.uniform1i(loc.floor.uTex, 0);
       gl.enable(gl.DEPTH_TEST);
       gl.depthFunc(gl.LEQUAL);
       gl.disable(gl.BLEND);
@@ -395,15 +469,15 @@ export function glFlush(F) {
     gl.bufferData(gl.ARRAY_BUFFER, quadArr.subarray(0, quadN * 21), gl.DYNAMIC_DRAW);
     gl.useProgram(progQuad);
     const stride = 28;
-    gl.enableVertexAttribArray(gl.getAttribLocation(progQuad, 'aPos'));
-    gl.vertexAttribPointer(gl.getAttribLocation(progQuad, 'aPos'), 2, gl.FLOAT, false, stride, 0);
-    gl.enableVertexAttribArray(gl.getAttribLocation(progQuad, 'aCol'));
-    gl.vertexAttribPointer(gl.getAttribLocation(progQuad, 'aCol'), 3, gl.FLOAT, false, stride, 8);
-    gl.enableVertexAttribArray(gl.getAttribLocation(progQuad, 'aAlpha'));
-    gl.vertexAttribPointer(gl.getAttribLocation(progQuad, 'aAlpha'), 1, gl.FLOAT, false, stride, 20);
-    gl.enableVertexAttribArray(gl.getAttribLocation(progQuad, 'aZ'));
-    gl.vertexAttribPointer(gl.getAttribLocation(progQuad, 'aZ'), 1, gl.FLOAT, false, stride, 24);
-    gl.uniform2f(gl.getUniformLocation(progQuad, 'uRes'), F.iw, F.ih);
+    gl.enableVertexAttribArray(loc.quad.aPos);
+    gl.vertexAttribPointer(loc.quad.aPos, 2, gl.FLOAT, false, stride, 0);
+    gl.enableVertexAttribArray(loc.quad.aCol);
+    gl.vertexAttribPointer(loc.quad.aCol, 3, gl.FLOAT, false, stride, 8);
+    gl.enableVertexAttribArray(loc.quad.aAlpha);
+    gl.vertexAttribPointer(loc.quad.aAlpha, 1, gl.FLOAT, false, stride, 20);
+    gl.enableVertexAttribArray(loc.quad.aZ);
+    gl.vertexAttribPointer(loc.quad.aZ, 1, gl.FLOAT, false, stride, 24);
+    gl.uniform2f(loc.quad.uRes, F.iw, F.ih);
     gl.enable(gl.DEPTH_TEST);
     gl.depthFunc(gl.LEQUAL);
     gl.enable(gl.BLEND);
@@ -416,17 +490,17 @@ export function glFlush(F) {
     gl.bufferData(gl.ARRAY_BUFFER, wallArr.subarray(0, wallN * 40), gl.DYNAMIC_DRAW);
     gl.useProgram(progWall);
     const stride = 40;
-    gl.enableVertexAttribArray(gl.getAttribLocation(progWall, 'aPos'));
-    gl.vertexAttribPointer(gl.getAttribLocation(progWall, 'aPos'), 2, gl.FLOAT, false, stride, 0);
-    gl.enableVertexAttribArray(gl.getAttribLocation(progWall, 'aUv'));
-    gl.vertexAttribPointer(gl.getAttribLocation(progWall, 'aUv'), 2, gl.FLOAT, false, stride, 8);
-    gl.enableVertexAttribArray(gl.getAttribLocation(progWall, 'aShade'));
-    gl.vertexAttribPointer(gl.getAttribLocation(progWall, 'aShade'), 1, gl.FLOAT, false, stride, 16);
-    gl.enableVertexAttribArray(gl.getAttribLocation(progWall, 'aZ'));
-    gl.vertexAttribPointer(gl.getAttribLocation(progWall, 'aZ'), 1, gl.FLOAT, false, stride, 20);
-    gl.enableVertexAttribArray(gl.getAttribLocation(progWall, 'aBand'));
-    gl.vertexAttribPointer(gl.getAttribLocation(progWall, 'aBand'), 4, gl.FLOAT, false, stride, 24);
-    gl.uniform2f(gl.getUniformLocation(progWall, 'uRes'), F.iw, F.ih);
+    gl.enableVertexAttribArray(loc.wall.aPos);
+    gl.vertexAttribPointer(loc.wall.aPos, 2, gl.FLOAT, false, stride, 0);
+    gl.enableVertexAttribArray(loc.wall.aUv);
+    gl.vertexAttribPointer(loc.wall.aUv, 2, gl.FLOAT, false, stride, 8);
+    gl.enableVertexAttribArray(loc.wall.aShade);
+    gl.vertexAttribPointer(loc.wall.aShade, 1, gl.FLOAT, false, stride, 16);
+    gl.enableVertexAttribArray(loc.wall.aZ);
+    gl.vertexAttribPointer(loc.wall.aZ, 1, gl.FLOAT, false, stride, 20);
+    gl.enableVertexAttribArray(loc.wall.aBand);
+    gl.vertexAttribPointer(loc.wall.aBand, 4, gl.FLOAT, false, stride, 24);
+    gl.uniform2f(loc.wall.uRes, F.iw, F.ih);
     gl.enable(gl.DEPTH_TEST);
     gl.depthFunc(gl.LEQUAL);
     gl.disable(gl.BLEND);
@@ -434,17 +508,17 @@ export function glFlush(F) {
     while (i < wallN) {
       const ref = wallTexRefs[i] || (F.layers && F.layers.wallTex);
       const tex = texFor(ref);
-      if (tex) {
-        gl.activeTexture(gl.TEXTURE0);
-        gl.bindTexture(gl.TEXTURE_2D, tex);
-        gl.uniform1i(gl.getUniformLocation(progWall, 'uTex'), 0);
-      }
       let j = i;
       while (j < wallN && (wallTexRefs[j] || ref) === ref) j++;
+      if (!tex) { i = j; continue; } // 纹理上传失败：跳过整组，避免绑定陈旧纹理
+      gl.activeTexture(gl.TEXTURE0);
+      gl.bindTexture(gl.TEXTURE_2D, tex);
+      gl.uniform1i(loc.wall.uTex, 0);
       gl.drawArrays(gl.TRIANGLE_STRIP, i * 4, (j - i) * 4);
       i = j;
     }
   }
   gl.disable(gl.DEPTH_TEST);
   gl.disable(gl.BLEND);
+  gl.flush();
 }

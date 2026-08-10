@@ -623,6 +623,7 @@ export function redrawDecals(game) {
       t.beginPath(); t.arc(d.x - 1, d.y - 1, 1.2, 0, Math.PI * 2); t.fill();
     }
   }
+  game._decalRev = (game._decalRev || 0) + 1;
 }
 
 function spawnBlood(x, y, ang, head, game) {

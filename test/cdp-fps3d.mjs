@@ -72,6 +72,13 @@ try {
   if (!stats || typeof stats.total !== 'number' || !Number.isFinite(stats.total)) fail('render stats missing: ' + JSON.stringify(stats));
   else pass('render3d stats: total=' + stats.total.toFixed(2) + 'ms scale=' + stats.scale);
 
+  const monitor = await cdp.eval(`(()=>{const el=document.getElementById('perfMonitor');if(!el)return null;const st=window.__cs2d&&window.__cs2d.stats;return {text:el.textContent,frameNow:st&&st.frameNow,frameMaxMs:st&&st.frameMaxMs,frameDrops:st&&st.frameDrops,frameWindow:st&&st.frameWindow}})()`);
+  if (!monitor || !monitor.text || !/\d+ FPS/.test(monitor.text) || !/frame \d+\.\dms max \d+\.\dms/.test(monitor.text)) {
+    fail('perf monitor not rendering real frame stats: ' + JSON.stringify(monitor));
+  } else {
+    pass('perf monitor: ' + monitor.text.replace(/\n/g, ' | '));
+  }
+
   const pixels = await cdp.eval(`(()=>{const c=document.querySelector('canvas');if(!c)return null;const d=c.getContext('2d').getImageData(Math.floor(c.width/2)-8,Math.floor(c.height/2)-8,16,16).data;let lit=0;for(let i=0;i<d.length;i+=4){if(d[i]+d[i+1]+d[i+2]>40)lit++;}return {lit,total:d.length/4}})()`);
   if (!pixels || pixels.lit < 1) fail('3D canvas appears blank: ' + JSON.stringify(pixels));
   else pass('3D canvas pixels: ' + pixels.lit + '/' + pixels.total);

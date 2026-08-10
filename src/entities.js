@@ -8,7 +8,7 @@ export function createEntity(team, bot) {
   return {
     team, bot,
     name: bot ? BOT_NAMES[botNameIdx++ % BOT_NAMES.length] : 'You',
-    x: 0, y: 0, vx: 0, vy: 0, angle: 0, pitch: 0, rad: 13, moveRad: 7,
+    x: 0, y: 0, vx: 0, vy: 0, angle: 0, pitch: 0, rad: 13, moveRad: 10,
     hp: 100, armor: 0, helmet: false, money: ECONOMY.START_MONEY,
     weapons: { primary: null, secondary: null, knife: 'knife', nades: { he: 0, flash: 0, smoke: 0 }, kit: false },
     slot: 'secondary', lastSlot: 'knife',

@@ -209,11 +209,11 @@ try {
     fail('three.js frame too white: ' + JSON.stringify(pixels));
   }
 
-  const pitchLock = await cdp.eval(`(()=>{const g=window.__cs2d&&window.__cs2d.game;if(!g||!g.player)return null;g.state='LIVE';g.player.pitch=0.5;g._mlookDx=0;g._mlookDy=140;window.GAME.debug.tick(0.016);return {pitch:g.player.pitch,dy:g._mlookDy}})()`);
-  if (!pitchLock || pitchLock.pitch !== 0 || pitchLock.dy !== 0) {
-    fail('vertical aim not locked: ' + JSON.stringify(pitchLock));
+  const pitchLive = await cdp.eval(`(()=>{const g=window.__cs2d&&window.__cs2d.game;if(!g||!g.player)return null;g.state='LIVE';g.viewMode='fps';g.player.pitch=0;g._mlookDx=0;g._mlookDy=200;window.GAME.debug.tick(0.016);return {pitch:g.player.pitch,dy:g._mlookDy}})()`);
+  if (!pitchLive || !(pitchLive.pitch > 0) || pitchLive.dy !== 0) {
+    fail('vertical pitch not applied: ' + JSON.stringify(pitchLive));
   } else {
-    pass('vertical aim locked: ' + JSON.stringify(pitchLock));
+    pass('vertical pitch applied (clamped by FPS_PITCH_LIMIT=1.35): ' + JSON.stringify(pitchLive));
   }
 
   await cdp.eval(`(()=>{window.GAME.debug.setOpts({mapId:'canal'});window.GAME.startMatch();return true})()`);

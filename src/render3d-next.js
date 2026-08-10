@@ -4,6 +4,8 @@ import { getMap, groundElevationAt } from './map.js';
 import { themeOf } from './textures.js';
 import { WEAPONS } from './config.js';
 import { weaponDef, wkey, ammoFor, reserveFor } from './entities.js';
+import { weatherKind } from './weather-fx.js';
+import { TRACER_LIFE } from './render.js';
 
 export function tileToChar(grid, tx, ty) {
   if (!grid || !grid.length) return '#';
@@ -70,6 +72,7 @@ let particleMeshes = [];
 let shellMeshes = [];
 let shockwaveMeshes = [];
 let splashMeshes = [];
+let tracerLines = [];
 let corpseMeshes = new Map();
 let decalPointMeshes = new Map();
 const particleBuckets = { shell: [], boom: [], splash: [], other: [] };
@@ -80,6 +83,9 @@ const textureCache = new Map();
 const geometryCache = new Map();
 const MAX_TEXTURE_CACHE = 128;
 const MAX_GEOMETRY_CACHE = 512;
+const MAX_NORMALMAP_CACHE = 64;
+let cameraAspectLast = -1;
+let fpsScratchVec = null;
 let webglHealthy = true;
 let frameHealthTick = 0;
 let frameHealthProbe = null;
@@ -106,6 +112,12 @@ function disposeRenderer() {
     try { renderer.dispose(); } catch (err) { /* ignore */ }
     renderer = null;
   }
+  if (dynamicGroup) {
+    const bomb = dynamicGroup.getObjectByName('bombMesh');
+    if (bomb) disposeObject(bomb);
+  }
+  if (viewmodelGroup) clearGroup(viewmodelGroup);
+  disposeAllDynamic();
   scene = null;
   camera = null;
   mapGroup = null;
@@ -137,6 +149,7 @@ function disposeRenderer() {
   shellMeshes = [];
   shockwaveMeshes = [];
   splashMeshes = [];
+  tracerLines = [];
   corpseMeshes = new Map();
   decalPointMeshes = new Map();
   viewmodelKey = '';
@@ -190,7 +203,7 @@ export async function initRenderer3dNext(canvas, layers) {
     }, false);
     scene = new T.Scene();
     scene.fog = new T.Fog(0x20262e, 500, 2400);
-    camera = new T.PerspectiveCamera(75, 16 / 9, 0.05, 4000);
+    camera = new T.PerspectiveCamera(75, 16 / 9, 0.1, 4000);
     camera.rotation.order = 'YXZ';
     mapGroup = new T.Group();
     dynamicGroup = new T.Group();
@@ -290,16 +303,31 @@ export function render3dNext(game) {
     renderer.setPixelRatio(Math.max(1, Math.min(dpr, 2, 1.5, quality * 2)));
     renderer.setSize(w, h, false);
     camera.aspect = w / h;
-    const fovDeg = game.fov && isFinite(game.fov) ? game.fov * 180 / Math.PI : 75;
-    if (Math.abs(camera.fov - fovDeg) > 0.01) camera.fov = fovDeg;
-    camera.updateProjectionMatrix();
+    let fovH = (typeof game.fov === 'number' && isFinite(game.fov)) ? Math.max(0.3, Math.min(Math.PI, game.fov)) : Math.PI / 2;
+    const pScope = game.player && !game.player.dead && game.player.scoped;
+    const scopeT = pScope ? (Number.isFinite(game.scopeT) ? Math.max(0, Math.min(1, game.scopeT)) : 1) : 0;
+    if (scopeT > 0) fovH *= (1 - 0.65 * scopeT);
+    const vFovDeg = (2 * Math.atan(Math.tan(fovH / 2) * (h / w))) * 180 / Math.PI;
+    const camFar = Math.max(2000, (map && map.W) ? map.W * 2 : 2000);
+    if (camera.aspect !== cameraAspectLast || Math.abs(camera.fov - vFovDeg) > 0.01 || camera.near !== 0.1 || camera.far !== camFar) {
+      camera.fov = vFovDeg;
+      camera.near = 0.1;
+      camera.far = camFar;
+      cameraAspectLast = camera.aspect;
+      camera.updateProjectionMatrix();
+    }
     const renderT0 = performance.now();
     renderer.render(scene, camera);
     const renderMs = performance.now() - renderT0;
     const ctx = canvasRef.getContext('2d');
-    if (ctx) ctx.drawImage(renderer.domElement, 0, 0, canvasRef.width, canvasRef.height);
-    if (ctx) updateFrameHealth(game, ctx);
-    if (ctx) drawFpsHud(ctx, game, THREE);
+    if (ctx) {
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
+      ctx.imageSmoothingEnabled = true;
+      ctx.drawImage(renderer.domElement, 0, 0, canvasRef.width, canvasRef.height);
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      updateFrameHealth(game, ctx);
+      drawFpsHud(ctx, game, THREE);
+    }
     game._renderStats = {
       total: renderMs,
       render3dBackend: 'next',
@@ -363,25 +391,27 @@ function drawFpsHud(ctx, game, T) {
   const ent = fpsCameraEntity(game);
   if (!ent) return;
   const tile = (map && map.tile) || 16;
-  const cw = canvasRef.width || 1;
-  const ch = canvasRef.height || 1;
+  const cw = (canvasRef.width || 1) / (game.dpr || 1);
+  const ch = (canvasRef.height || 1) / (game.dpr || 1);
   camera.updateMatrixWorld(true);
   camera.matrixWorldInverse.copy(camera.matrixWorld).invert();
   const stats = { teamBars: 0, siteMarkers: 0, bombMarkers: 0, damageNumbers: 0 };
   const project = (wx, wy, wz) => {
-    const v = new T.Vector3(wx, wy, wz).project(camera);
-    if (v.z > 1 || v.z < -1) return null;
-    return { x: (v.x * 0.5 + 0.5) * cw, y: (-v.y * 0.5 + 0.5) * ch, z: v.z };
+    if (!fpsScratchVec) fpsScratchVec = new T.Vector3();
+    fpsScratchVec.set(wx, wy, wz).project(camera);
+    if (fpsScratchVec.z > 1 || fpsScratchVec.z < -1) return null;
+    return { x: (fpsScratchVec.x * 0.5 + 0.5) * cw, y: (-fpsScratchVec.y * 0.5 + 0.5) * ch, z: fpsScratchVec.z };
   };
   const onScreen = (p) => !!(p && p.x > -24 && p.x < cw + 24 && p.y > -24 && p.y < ch + 24);
   const edgePoint = (wx, wy, wz) => {
-    const cs = new T.Vector3(wx, wy, wz).applyMatrix4(camera.matrixWorldInverse);
-    let ax = cs.x;
-    let ay = -cs.y;
+    if (!fpsScratchVec) fpsScratchVec = new T.Vector3();
+    fpsScratchVec.set(wx, wy, wz).applyMatrix4(camera.matrixWorldInverse);
+    let ax = fpsScratchVec.x;
+    let ay = -fpsScratchVec.y;
     const len = Math.max(0.0001, Math.hypot(ax, ay));
     ax /= len;
     ay /= len;
-    if (cs.z > 0) {
+    if (fpsScratchVec.z > 0) {
       ax = -ax;
       ay = -ay;
     }
@@ -607,6 +637,12 @@ function disposeAllDynamic() {
   for (const mesh of splashMeshes) disposeObject(mesh);
   for (const mesh of corpseMeshes.values()) disposeObject(mesh);
   for (const mesh of decalPointMeshes.values()) disposeObject(mesh);
+  for (const mesh of tracerLines) disposeObject(mesh);
+  for (const mats of charMaterialCache.values()) {
+    for (const k in mats) mats[k].dispose();
+  }
+  charMaterialCache.clear();
+  if (charWeaponMat) { charWeaponMat.dispose(); charWeaponMat = null; }
   entityMeshes = new Map();
   dropMeshes = new Map();
   grenadeMeshes = new Map();
@@ -615,6 +651,7 @@ function disposeAllDynamic() {
   shellMeshes = [];
   shockwaveMeshes = [];
   splashMeshes = [];
+  tracerLines = [];
   corpseMeshes = new Map();
   decalPointMeshes = new Map();
   weatherPoints = null;
@@ -632,7 +669,9 @@ function clearGroup(group) {
 
 function disposeMaterial(mat) {
   if (!mat) return;
+  if (mat.userData && mat.userData._cached) return;
   if (mat.map && !mat.map.userData._cached) mat.map.dispose();
+  if (mat.normalMap && !mat.normalMap.userData._cached) mat.normalMap.dispose();
   mat.dispose();
 }
 
@@ -647,10 +686,16 @@ function clearResourceCaches() {
     try { geo.dispose(); } catch (err) { /* ignore */ }
   }
   geometryCache.clear();
-  for (const tex of normalMapCache.values()) {
-    try { tex.dispose(); } catch (err) { /* ignore */ }
+  for (const byRepeat of normalMapCache.values()) {
+    for (const tex of byRepeat.values()) {
+      try { tex.dispose(); } catch (err) { /* ignore */ }
+    }
   }
   normalMapCache.clear();
+  for (const tex of glowCache.values()) {
+    try { tex.dispose(); } catch (err) { /* ignore */ }
+  }
+  glowCache.clear();
 }
 
 function renderQualityFor(game) {
@@ -727,14 +772,57 @@ function sampleFrameHealth(ctx, w, h) {
   return frameHealthProbeCtx.getImageData(0, 0, pw, ph);
 }
 
+function cameraEyeFor(ent, map) {
+  if (!ent) return 0;
+  const tile = (map && map.tile) || 16;
+  const crouchBase = ent.crouched ? 0.35 : 0.5;
+  return (crouchBase + (ent.height || 0)) * tile + groundElevationAt(ent.x || 0, ent.y || 0);
+}
+
 function updateCamera(game, ent, map) {
   if (!camera || !ent) return;
-  const eye = 0.5 * ((map && map.tile) || 16);
-  const elev = groundElevationAt(ent.x || 0, ent.y || 0);
-  camera.position.set(ent.x || 0, eye + elev, ent.y || 0);
+  const p = game && game.player;
+  const alive = p && !p.dead;
+  const ownView = ent === p && alive;
+  let angle = ent.angle || 0;
+  let pitch = Number.isFinite(ent.pitch) ? ent.pitch : 0;
+  if (!ownView) {
+    const autoFollow = game._specManual === null || game._specManual === undefined ||
+      (game.time - game._specManual) > 1.2;
+    if (autoFollow && ent) {
+      game._specAngle = ent.angle;
+      game._specPitch = ent.pitch || 0;
+    } else {
+      if (game._specAngle === null || game._specAngle === undefined) {
+        game._specAngle = p ? p.angle : ent.angle;
+      }
+      if (game._specPitch === null || game._specPitch === undefined) {
+        game._specPitch = p ? (p.pitch || 0) : (ent.pitch || 0);
+      }
+    }
+    angle = game._specAngle;
+    pitch = game._specPitch;
+  }
+  pitch = Math.max(-1.35, Math.min(1.35, pitch));
+  const tile = (map && map.tile) || 16;
+  let eye = cameraEyeFor(ent, map);
+  const reduceMotion = !!(game.opts && game.opts.reduceMotion);
+  if (ownView && !reduceMotion && p.walking && !p.scoped) {
+    eye += Math.sin((p.bobPhase || 0) * 2) * tile * 0.02;
+  }
+  let shox = 0;
+  let shoy = 0;
+  if (!reduceMotion && (game.shake || 0) > 0) {
+    const shk = (game.shake || 0) * 0.5;
+    shox = (Math.random() * 2 - 1) * shk;
+    shoy = (Math.random() * 2 - 1) * shk;
+  }
+  camera.position.set((ent.x || 0) + shox, eye, (ent.y || 0) + shoy);
   if (skyMesh) skyMesh.position.set(camera.position.x, 0, camera.position.z);
-  camera.rotation.set(0, -(ent.angle || 0) - Math.PI / 2, 0);
-  camera.rotation.x = 0;
+  if (ownView && !reduceMotion && p.scoped && Number.isFinite(game.scopeT)) {
+    angle += Math.sin((game.time || 0) * 2.1) * 0.0012;
+  }
+  camera.rotation.set(pitch, -angle - Math.PI / 2, 0);
 }
 
 function updateLighting(map, game) {
@@ -940,8 +1028,8 @@ function buildMapScene(map, layers) {
   const T = THREE;
   const tile = map.tile || 16;
   const grid = map.grid || [];
-  const w = map.W || grid.length * tile;
-  const h = map.H || (grid.length ? grid[0].length * tile : 0);
+  const w = map.W || ((grid[0] || []).length) * tile;
+  const h = map.H || grid.length * tile;
 
   buildPbrEnvironment(map);
   buildSky(map);
@@ -963,7 +1051,7 @@ function buildMapScene(map, layers) {
   });
   const floorSeg = Math.min(64, Math.max(24, Math.floor(Math.max(w, h) / 110)));
   const floorGeo = planeGeometry(w, h, floorSeg, floorSeg);
-  setGroundVertexColors(floorGeo, w, h, grid, tile, map);
+  setGroundVertexColors(floorGeo, w, h, grid, tile, map, baked);
   const ground = new T.Mesh(floorGeo, floorMat);
   ground.rotation.x = -Math.PI / 2;
   ground.receiveShadow = true;
@@ -988,9 +1076,10 @@ function buildMapScene(map, layers) {
     roughness: 0.68,
     metalness: 0.04
   });
+  const platformSrc = (layers && layers.platformTex) || floorSrc;
   const platformMat = new T.MeshStandardMaterial({
-    map: textureFrom((layers && layers.platformTex) || floorTex, 1, 1),
-    normalMap: floorNorm,
+    map: textureFrom(platformSrc, 1, 1),
+    normalMap: normalMapFor(platformSrc, 1, 1),
     normalScale: new T.Vector2(0.35, 0.35),
     color: 0xffffff,
     roughness: 0.85,
@@ -1009,17 +1098,21 @@ function buildMapScene(map, layers) {
     roughness: 0.88,
     metalness: 0.02
   });
+  const waterTheme = themeOf((map && map.id) || 'dust2');
+  const wc = waterTheme.water || [29, 74, 94];
+  // 浅水：waterTex 贴图已由 genWaterTex 填充主题色，材质/实例保持中性，避免重复相乘变黑
   const waterMat = new T.MeshStandardMaterial({
     map: textureFrom(layers && layers.waterTex, 1, 1),
-    color: 0xbfe4ff,
+    color: 0xffffff,
     transparent: true,
     opacity: 0.72,
     roughness: 0.25,
     metalness: 0.05,
     depthWrite: false
   });
+  // 深水：无贴图，材质直接取主题色暗化（对齐 textures.js deep = water * 0.5）
   const deepWaterMat = new T.MeshStandardMaterial({
-    color: 0x194a6b,
+    color: new T.Color(wc[0] * 0.5 / 255, wc[1] * 0.5 / 255, wc[2] * 0.5 / 255),
     transparent: true,
     opacity: 0.82,
     roughness: 0.3,
@@ -1033,14 +1126,14 @@ function buildMapScene(map, layers) {
       setInstanceTransform(T, mesh, i, cx, tile * 0.5, cz, 1, 1, 1, 0, 0, 0);
       mesh.setColorAt(i, new T.Color(wallColor(c)));
     });
-  addInstancedBoxes(mapGroup, T, 'thin', counts.thin, boxGeometry(tile, tile, tile), wallMat,
+  addInstancedBoxes(mapGroup, T, 'thin', counts.thin, boxGeometry(tile, tile, tile), (wallMats && wallMats.thinMat) || wallMat,
     (tx, ty, c, cx, cz, i, mesh) => {
       setInstanceTransform(T, mesh, i, cx, tile * 0.275, cz, 1, 0.55, 1, 0, 0, 0);
       mesh.setColorAt(i, new T.Color(wallColor(c)));
     });
   addInstancedBoxes(mapGroup, T, 'crates', counts.crate, boxGeometry(tile, tile, tile), crateMat,
     (tx, ty, c, cx, cz, i, mesh) => {
-      setInstanceTransform(T, mesh, i, cx, tile * 0.275, cz, 0.92, 0.55, 0.92, 0, 0, (tx * 0.7 + ty * 0.3) % 1);
+      setInstanceTransform(T, mesh, i, cx, tile * 0.275, cz, 0.92, 0.55, 0.92, 0, 0, ((tx * 0.7 + ty * 0.3) % 1) * 0.04);
       mesh.setColorAt(i, new T.Color(0xb8865a));
     });
   addInstancedBoxes(mapGroup, T, 'platforms', counts.platform, boxGeometry(tile, tile, tile), platformMat,
@@ -1057,7 +1150,7 @@ function buildMapScene(map, layers) {
   addGroundDetail(mapGroup, T, grid, tile, w, h);
   addInstancedSites(mapGroup, T, grid, tile);
   addSiteMarkers(mapGroup, T, map, tile);
-  addInstancedDecos(mapGroup, T, layers && layers.decos, tile);
+  if (!baked) addInstancedDecos(mapGroup, T, layers && layers.decos, tile);
   addMapIdentity(mapGroup, T, map, tile);
   applyPbrProfile(mapGroup, map);
 }
@@ -1087,7 +1180,7 @@ function countWallVariants(grid, variantCount) {
     const row = grid[ty] || [];
     for (let tx = 0; tx < row.length; tx++) {
       if (row[tx] !== '#') continue;
-      counts[(tx * 7 + ty * 13) % counts.length]++;
+      counts[(((tx * 2654435761) ^ (ty * 1597334677)) >>> 0) % counts.length]++;
     }
   }
   return counts;
@@ -1119,6 +1212,15 @@ function makeWallMaterials(T, layers) {
       metalness: 0.02
     }));
   }
+  const thinSrc = (layers && layers.thinWallTex) || (layers && layers.wallTex) || null;
+  mats.thinMat = new T.MeshStandardMaterial({
+    map: textureFrom(thinSrc, 1, 1),
+    normalMap: normalMapFor(thinSrc, 1, 1),
+    normalScale: new T.Vector2(0.5, 0.5),
+    color: 0xffffff,
+    roughness: 0.68,
+    metalness: 0.04
+  });
   return mats;
 }
 
@@ -1139,7 +1241,7 @@ function addInstancedWallVariants(group, T, counts, geometry, materials, fill) {
       const row = grid[ty] || [];
       for (let tx = 0; tx < row.length && i < count; tx++) {
         const c = row[tx];
-        if (c !== '#' || (tx * 7 + ty * 13) % materials.length !== vi) continue;
+        if (c !== '#' || (((tx * 2654435761) ^ (ty * 1597334677)) >>> 0) % materials.length !== vi) continue;
         fill(tx, ty, c, tx * tile + tile / 2, ty * tile + tile / 2, i, mesh);
         i++;
       }
@@ -1164,7 +1266,7 @@ function groundAOAt(grid, tx, ty) {
   return Math.max(0.56, Math.min(1, 1 - occ));
 }
 
-function setGroundVertexColors(geo, w, h, grid, tile, map) {
+function setGroundVertexColors(geo, w, h, grid, tile, map, baked) {
   const pos = geo.attributes.position;
   const colors = new Float32Array(pos.count * 3);
   const hash = (x, y) => {
@@ -1173,29 +1275,54 @@ function setGroundVertexColors(geo, w, h, grid, tile, map) {
   };
   const theme = themeOf((map && map.id) || 'dust2');
   const floor = theme.floor || [36, 39, 44];
+  const maxTx = grid && grid.length ? Math.max(0, (grid[0] || []).length - 1) : 0;
+  const maxTy = grid ? Math.max(0, grid.length - 1) : 0;
+  const baseR = baked ? 1 : floor[0] / 255;
+  const baseG = baked ? 1 : floor[1] / 255;
+  const baseB = baked ? 1 : floor[2] / 255;
   for (let i = 0; i < pos.count; i++) {
     const wx = pos.getX(i) + w / 2;
-    const wy = pos.getY(i) + h / 2;
-    const tx = Math.floor(wx / tile);
-    const ty = Math.floor(wy / tile);
-    const n = hash(Math.floor(wx / 90), Math.floor(wy / 90));
+    const wz = h / 2 - pos.getY(i);
+    const tx = Math.max(0, Math.min(maxTx, Math.floor(wx / tile)));
+    const ty = Math.max(0, Math.min(maxTy, Math.floor(wz / tile)));
+    const n = hash(Math.floor(wx / 90), Math.floor(wz / 90));
     const ao = groundAOAt(grid, tx, ty);
-    const grain = 0.92 + n * 0.16 + Math.sin(wx * 0.0018 + wy * 0.0011) * 0.03;
+    const grain = 0.92 + n * 0.16 + Math.sin(wx * 0.0018 + wz * 0.0011) * 0.03;
     const c = tileToChar(grid, tx, ty);
     let tr = 1, tg = 1, tb = 1;
     if (c === 'a') { tr = 1.07; tg = 0.94; tb = 0.86; }
     if (c === 'b') { tr = 0.9; tg = 0.96; tb = 1.08; }
     if (c === '~' || c === '\u2248' || c === '\u224b') { tr = 0.82; tg = 0.94; tb = 1.12; }
-    colors[i * 3] = Math.min(1.15, (floor[0] / 255) * grain * ao * tr);
-    colors[i * 3 + 1] = Math.min(1.15, (floor[1] / 255) * grain * ao * tg);
-    colors[i * 3 + 2] = Math.min(1.15, (floor[2] / 255) * grain * ao * tb);
+    colors[i * 3] = Math.min(1.15, baseR * grain * ao * tr);
+    colors[i * 3 + 1] = Math.min(1.15, baseG * grain * ao * tg);
+    colors[i * 3 + 2] = Math.min(1.15, baseB * grain * ao * tb);
   }
   geo.setAttribute('color', new THREE.BufferAttribute(colors, 3));
 }
 
 function normalMapFor(source, repeatX, repeatY) {
   if (!THREE || !source || !source.width || !source.height || typeof document === 'undefined') return null;
-  if (normalMapCache.has(source)) return normalMapCache.get(source);
+  const repeatKey = (repeatX || 1) + ',' + (repeatY || 1);
+  let byRepeat = normalMapCache.get(source);
+  if (byRepeat) {
+    const hit = byRepeat.get(repeatKey);
+    if (hit) return hit;
+  } else {
+    if (normalMapCache.size >= MAX_NORMALMAP_CACHE) {
+      const oldestKey = normalMapCache.keys().next().value;
+      if (oldestKey !== undefined) {
+        const evicted = normalMapCache.get(oldestKey);
+        normalMapCache.delete(oldestKey);
+        if (evicted) {
+          for (const t of evicted.values()) {
+            try { t.dispose(); } catch (err) { /* ignore */ }
+          }
+        }
+      }
+    }
+    byRepeat = new Map();
+    normalMapCache.set(source, byRepeat);
+  }
   try {
     const size = Math.min(256, Math.max(64, source.width || 256));
     const canvas = document.createElement('canvas');
@@ -1205,13 +1332,15 @@ function normalMapFor(source, repeatX, repeatY) {
     g.drawImage(source, 0, 0, canvas.width, canvas.height);
     const src = g.getImageData(0, 0, canvas.width, canvas.height).data;
     const out = g.createImageData(canvas.width, canvas.height);
+    const rowBytes = canvas.width * 4;
+    const lastRow = (canvas.height - 1) * rowBytes;
     for (let y = 0; y < canvas.height; y++) {
       for (let x = 0; x < canvas.width; x++) {
         const i = (y * canvas.width + x) * 4;
-        const x0 = x > 0 ? i - 4 : i + 4;
-        const x1 = x < canvas.width - 1 ? i + 4 : i - 4;
-        const y0 = y > 0 ? i - canvas.width * 4 : i + canvas.width * 4;
-        const y1 = y < canvas.height - 1 ? i + canvas.width * 4 : i - canvas.width * 4;
+        const x0 = x > 0 ? i - 4 : i + (canvas.width - 1) * 4;
+        const x1 = x < canvas.width - 1 ? i + 4 : i - (canvas.width - 1) * 4;
+        const y0 = y > 0 ? i - rowBytes : i + lastRow;
+        const y1 = y < canvas.height - 1 ? i + rowBytes : i - lastRow;
         const lx0 = 0.299 * src[x0] + 0.587 * src[x0 + 1] + 0.114 * src[x0 + 2];
         const lx1 = 0.299 * src[x1] + 0.587 * src[x1 + 1] + 0.114 * src[x1 + 2];
         const ly0 = 0.299 * src[y0] + 0.587 * src[y0 + 1] + 0.114 * src[y0 + 2];
@@ -1231,7 +1360,10 @@ function normalMapFor(source, repeatX, repeatY) {
     tex.minFilter = THREE.LinearMipmapLinearFilter;
     tex.magFilter = THREE.LinearFilter;
     tex.anisotropy = 8;
-    normalMapCache.set(source, tex);
+    tex.userData._cached = true;
+    if (byRepeat.size < 4) {
+      byRepeat.set(repeatKey, tex);
+    }
     return tex;
   } catch (err) {
     return null;
@@ -1263,40 +1395,6 @@ function addInstancedBoxes(group, T, name, count, geometry, material, fill) {
     }
   }
   group.add(mesh);
-
-  const boltMat = new T.MeshStandardMaterial({
-    color: 0x2a3138,
-    roughness: 0.5,
-    metalness: 0.46
-  });
-  const boltCount = Math.min(96, count * 4);
-  const boltGeo = new T.BoxGeometry(tile * 0.06, tile * 0.028, tile * 0.06);
-  const boltMesh = new T.InstancedMesh(boltGeo, boltMat, boltCount);
-  boltMesh.name = 'siteCornerBolts';
-  boltMesh.frustumCulled = false;
-  boltMesh.receiveShadow = true;
-  let boltI = 0;
-  for (let ty = 0; ty < grid.length && boltI < boltCount; ty++) {
-    const row = grid[ty] || [];
-    for (let tx = 0; tx < row.length && boltI < boltCount; tx++) {
-      const c = row[tx];
-      if (c !== 'a' && c !== 'b') continue;
-      const cx = tx * tile + tile / 2;
-      const cz = ty * tile + tile / 2;
-      const offsets = [-tile * 0.38, tile * 0.38];
-      for (const ox of offsets) {
-        for (const oz of offsets) {
-          if (boltI >= boltCount) break;
-          setInstanceTransform(T, boltMesh, boltI, cx + ox, 0.03, cz + oz, 1, 1, 1, 0, 0, 0);
-          boltI++;
-        }
-      }
-    }
-  }
-  if (boltI) {
-    boltMesh.count = boltI;
-    group.add(boltMesh);
-  }
 }
 
 function addInstancedWallCaps(group, T, grid, tile, wallCount, thinCount, material) {
@@ -1429,7 +1527,7 @@ function addInstancedWallDetail(group, T, grid, tile, wallCount, thinCount) {
         const edge = alongX ? (ty % 2 ? tile * 0.92 : tile * 0.08) : (tx % 2 ? tile * 0.92 : tile * 0.08);
         const cx = tx * tile + (alongX ? tile / 2 : edge);
         const cz = ty * tile + (alongX ? edge : tile / 2);
-        setInstanceTransform(T, mesh, i, cx, tile * (isThin ? 0.3 : 0.76), cz, 1, 1, 1, alongX ? Math.PI / 2 : 0, 0, alongX ? 0 : Math.PI / 2);
+        setInstanceTransform(T, mesh, i, cx, tile * (isThin ? 0.3 : 0.76), cz, 1, 1, 1, alongX ? 0 : Math.PI / 2, 0, alongX ? Math.PI / 2 : 0);
         i++;
       }
     }
@@ -1565,6 +1663,9 @@ function addGroundDetail(group, T, grid, tile, w, h) {
   if (drainI) {
     drainMesh.count = drainI;
     group.add(drainMesh);
+  } else {
+    drainGeo.dispose();
+    drainMat.dispose();
   }
 }
 
@@ -1580,26 +1681,26 @@ function setInstanceTransform(T, mesh, index, x, y, z, sx, sy, sz, rx, ry, rz) {
 }
 
 function wallColor(c) {
-  if (c === '=') return 0xb8b2a8;
-  return 0xa5adb5;
+  void c;
+  return 0xffffff;
 }
 
 function addInstancedBarrels(group, T, count, material) {
   if (!count) return;
-  const geo = new T.CylinderGeometry(0.34, 0.34, 1, 10);
+  const map = getMap();
+  const grid = map && map.grid;
+  const tile = (map && map.tile) || 16;
+  const geo = new T.CylinderGeometry(tile * 0.34, tile * 0.34, 1, 10);
   const mesh = new T.InstancedMesh(geo, material, count);
   mesh.frustumCulled = false;
   mesh.castShadow = true;
   mesh.receiveShadow = true;
   let i = 0;
-  const map = getMap();
-  const grid = map && map.grid;
-  const tile = (map && map.tile) || 16;
   for (let ty = 0; ty < grid.length && i < count; ty++) {
     const row = grid[ty] || [];
     for (let tx = 0; tx < row.length && i < count; tx++) {
       if (row[tx] !== 'o') continue;
-      setInstanceTransform(T, mesh, i, tx * tile + tile / 2, tile * 0.225, ty * tile + tile / 2, 1, 0.45, 1, 0, 0, 0);
+      setInstanceTransform(T, mesh, i, tx * tile + tile / 2, tile * 0.225, ty * tile + tile / 2, 1, tile * 0.45, 1, 0, 0, 0);
       mesh.setColorAt(i, new T.Color(0xb85a38));
       i++;
     }
@@ -1628,7 +1729,8 @@ function addInstancedWater(group, T, grid, tile, waterCount, shallowMat, deepMat
         obj.position.set(tx * tile + tile / 2, isDeep ? 0.035 : 0.05, ty * tile + tile / 2);
         obj.updateMatrix();
         mesh.setMatrixAt(i, obj.matrix);
-        mesh.setColorAt(i, new T.Color(isDeep ? 0x17475f : 0xbfe4ff));
+        // 实例色保持中性：颜色由主题化贴图/材质提供（避免与主题色重复相乘变黑）
+        mesh.setColorAt(i, new T.Color(0xffffff));
         i++;
       }
     }
@@ -1660,6 +1762,43 @@ function addInstancedSites(group, T, grid, tile) {
     }
   }
   group.add(mesh);
+
+  const boltMat = new T.MeshStandardMaterial({
+    color: 0x2a3138,
+    roughness: 0.5,
+    metalness: 0.46
+  });
+  const boltCount = Math.min(96, count * 4);
+  const boltGeo = new T.BoxGeometry(tile * 0.06, tile * 0.028, tile * 0.06);
+  const boltMesh = new T.InstancedMesh(boltGeo, boltMat, boltCount);
+  boltMesh.name = 'siteCornerBolts';
+  boltMesh.frustumCulled = false;
+  boltMesh.receiveShadow = true;
+  let boltI = 0;
+  for (let ty = 0; ty < grid.length && boltI < boltCount; ty++) {
+    const row = grid[ty] || [];
+    for (let tx = 0; tx < row.length && boltI < boltCount; tx++) {
+      const c = row[tx];
+      if (c !== 'a' && c !== 'b') continue;
+      const cx = tx * tile + tile / 2;
+      const cz = ty * tile + tile / 2;
+      const offsets = [-tile * 0.38, tile * 0.38];
+      for (const ox of offsets) {
+        for (const oz of offsets) {
+          if (boltI >= boltCount) break;
+          setInstanceTransform(T, boltMesh, boltI, cx + ox, 0.03, cz + oz, 1, 1, 1, 0, 0, 0);
+          boltI++;
+        }
+      }
+    }
+  }
+  if (boltI) {
+    boltMesh.count = boltI;
+    group.add(boltMesh);
+  } else {
+    boltGeo.dispose();
+    boltMat.dispose();
+  }
 }
 
 function addSiteMarkers(group, T, map, tile) {
@@ -1736,16 +1875,30 @@ function addInstancedDecos(group, T, decos, tile) {
   }
   const geometryFor = (kind) => {
     switch (kind) {
-      case 'decoGrass': return new T.ConeGeometry(0.10, 0.24, 5);
-      case 'decoStone': return new T.DodecahedronGeometry(0.14, 0);
-      case 'decoBarrel': return new T.CylinderGeometry(0.12, 0.12, 0.22, 8);
-      case 'decoPot': return new T.CylinderGeometry(0.09, 0.06, 0.20, 6);
-      case 'decoPipe': return new T.CylinderGeometry(0.09, 0.09, 1.0, 8);
-      case 'decoTire': return new T.TorusGeometry(0.18, 0.07, 6, 10);
-      case 'decoRock': return new T.DodecahedronGeometry(0.20, 0);
-      case 'decoPallet': return new T.BoxGeometry(0.70, 0.08, 0.55);
-      case 'decoLamp': return new T.CylinderGeometry(0.03, 0.03, 0.60, 6);
-      default: return new T.BoxGeometry(0.18, 0.16, 0.18);
+      case 'decoGrass': return new T.ConeGeometry(tile * 0.10, tile * 0.24, 5);
+      case 'decoStone': return new T.DodecahedronGeometry(tile * 0.14, 0);
+      case 'decoBarrel': return new T.CylinderGeometry(tile * 0.12, tile * 0.12, tile * 0.22, 8);
+      case 'decoPot': return new T.CylinderGeometry(tile * 0.09, tile * 0.06, tile * 0.20, 6);
+      case 'decoPipe': return new T.CylinderGeometry(tile * 0.09, tile * 0.09, tile * 1.0, 8);
+      case 'decoTire': return new T.TorusGeometry(tile * 0.18, tile * 0.07, 6, 10);
+      case 'decoRock': return new T.DodecahedronGeometry(tile * 0.20, 0);
+      case 'decoPallet': return new T.BoxGeometry(tile * 0.70, tile * 0.08, tile * 0.55);
+      case 'decoLamp': return new T.CylinderGeometry(tile * 0.03, tile * 0.03, tile * 0.60, 6);
+      default: return new T.BoxGeometry(tile * 0.18, tile * 0.16, tile * 0.18);
+    }
+  };
+  const groundY = (kind) => {
+    switch (kind) {
+      case 'decoGrass': return 0.12;
+      case 'decoStone': return 0.14;
+      case 'decoBarrel': return 0.11;
+      case 'decoPot': return 0.10;
+      case 'decoPipe': return 0.09;
+      case 'decoTire': return 0.025;
+      case 'decoRock': return 0.20;
+      case 'decoPallet': return 0.04;
+      case 'decoLamp': return 0.30;
+      default: return 0.08;
     }
   };
   const colorFor = (kind) => {
@@ -1771,7 +1924,7 @@ function addInstancedDecos(group, T, decos, tile) {
       const z = d.ty * tile + tile / 2;
       const ry = (d.tx * 1.7 + d.ty * 0.9) % (Math.PI * 2);
       const rx = kind === 'decoTire' ? -Math.PI / 2 : kind === 'decoPipe' ? Math.PI / 2 : 0;
-      const y = tile * (kind === 'decoLamp' ? 0.35 : 0.12);
+      const y = tile * groundY(kind);
       const sy = kind === 'decoTire' ? 0.35 : 1;
       setInstanceTransform(T, mesh, i, x, y, z, 1, sy, 1, rx, 0, ry);
     }
@@ -1786,7 +1939,19 @@ function textureFrom(source, repeatX, repeatY) {
   if (byRepeat) {
     const hit = byRepeat.get(repeatKey);
     if (hit) return hit;
-  } else if (textureCache.size < MAX_TEXTURE_CACHE) {
+  } else {
+    if (textureCache.size >= MAX_TEXTURE_CACHE) {
+      const oldestKey = textureCache.keys().next().value;
+      if (oldestKey !== undefined) {
+        const evicted = textureCache.get(oldestKey);
+        textureCache.delete(oldestKey);
+        if (evicted) {
+          for (const t of evicted.values()) {
+            try { t.dispose(); } catch (err) { /* ignore */ }
+          }
+        }
+      }
+    }
     byRepeat = new Map();
     textureCache.set(source, byRepeat);
   }
@@ -1799,8 +1964,10 @@ function textureFrom(source, repeatX, repeatY) {
   tex.minFilter = THREE.LinearMipmapLinearFilter;
   tex.magFilter = THREE.LinearFilter;
   tex.anisotropy = 8;
-  tex.userData._cached = true;
-  if (byRepeat && byRepeat.size < 4) byRepeat.set(repeatKey, tex);
+  if (byRepeat.size < 4) {
+    byRepeat.set(repeatKey, tex);
+    tex.userData._cached = true;
+  }
   return tex;
 }
 
@@ -1878,7 +2045,7 @@ function buildSky(map) {
   ctx.fill();
   const tex = new THREE.CanvasTexture(canvas);
   if (THREE.SRGBColorSpace) tex.colorSpace = THREE.SRGBColorSpace;
-  const geo = new THREE.SphereGeometry(2200, 24, 16);
+  const geo = new THREE.SphereGeometry(Math.max(2000, (map && map.W) ? map.W * 2 : 2000), 24, 16);
   const mat = new THREE.MeshBasicMaterial({ map: tex, side: THREE.BackSide, fog: false });
   skyMesh = new THREE.Mesh(geo, mat);
   skyMesh.frustumCulled = false;
@@ -1901,7 +2068,9 @@ function buildSky(map) {
 function buildWeather(map, theme) {
   if (!dynamicGroup || !THREE) return;
   const weather = theme.weather || {};
-  const kind = weather.kind || 'none';
+  // 与 2D weather-fx.js 的 weatherKind(mapId) 规则保持一致；无规则时回退到主题天气。
+  const fxKind = weatherKind(map && map.id) || '';
+  const kind = fxKind || weather.kind || 'none';
   const key = (map && map.id) + ':' + kind;
   if (weatherKey === key) return;
   if (weatherPoints) {
@@ -1911,7 +2080,7 @@ function buildWeather(map, theme) {
     weatherPoints = null;
   }
   weatherKey = key;
-  if (!kind) return;
+  if (kind === 'none') return;
   const count = performanceBudgetFor({ renderQuality: 1 }).weatherPoints;
   weatherPoints = makeWeatherPoints(map, theme, count);
   dynamicGroup.add(weatherPoints);
@@ -1920,17 +2089,29 @@ function buildWeather(map, theme) {
 function makeWeatherPoints(map, theme, count) {
   const T = THREE;
   const weather = theme.weather || {};
+  const fxKind = weatherKind((map && map.id) || '') || '';
+  const kind = fxKind || weather.kind || 'none';
   const positions = new Float32Array(count * 3);
+  const seeds = new Float32Array(count * 3);
   const rangeW = Math.max(900, map.W * 0.65);
   const rangeH = Math.max(700, map.H * 0.55);
+  const tile = map.tile || 16;
+  const span = tile * 4;
   for (let i = 0; i < count; i++) {
-    positions[i * 3] = ((i * 173 + Math.sin(i * 17) * 991) % rangeW + rangeW) % rangeW - rangeW / 2;
-    positions[i * 3 + 1] = 0.8 + ((i * 91) % 70) / 70 * (map.tile || 16) * 2.2;
-    positions[i * 3 + 2] = ((i * 257 + Math.cos(i * 11) * 577) % rangeH + rangeH) % rangeH - rangeH / 2;
+    const sx = ((i * 173 + Math.sin(i * 17) * 991) % rangeW + rangeW) % rangeW;
+    const sy = ((i * 91 + Math.cos(i * 13) * 293) % span + span) % span;
+    const sz = ((i * 257 + Math.cos(i * 11) * 577) % rangeH + rangeH) % rangeH;
+    seeds[i * 3] = sx;
+    seeds[i * 3 + 1] = sy;
+    seeds[i * 3 + 2] = sz;
+    positions[i * 3] = sx - rangeW / 2;
+    positions[i * 3 + 1] = sy - span / 2;
+    positions[i * 3 + 2] = sz - rangeH / 2;
   }
   const geo = new T.BufferGeometry();
   geo.setAttribute('position', new T.BufferAttribute(positions, 3));
-  const color = weather.color || [180, 180, 180];
+  geo.userData.seeds = seeds;
+  const color = weather.color || (kind === 'rain' ? [150, 170, 225] : [180, 180, 180]);
   const mat = new T.PointsMaterial({
     color: new T.Color(color[0] / 255, color[1] / 255, color[2] / 255),
     size: 3,
@@ -1940,7 +2121,7 @@ function makeWeatherPoints(map, theme, count) {
     sizeAttenuation: true
   });
   const points = new T.Points(geo, mat);
-  points.name = 'weather:' + (theme.weather && theme.weather.kind || 'none');
+  points.name = 'weather:' + kind;
   points.frustumCulled = false;
   return points;
 }
@@ -1973,7 +2154,7 @@ function updateAimGuide(game) {
     laser.frustumCulled = false;
     dynamicGroup.add(laser);
   }
-  const eyeZ = groundElevationAt(p.x, p.y) + (0.5 + (p.height || 0)) * tile;
+  const eyeZ = cameraEyeFor(p, getMap());
   const pos = laser.geometry.attributes.position;
   pos.setXYZ(0, p.x, eyeZ, p.y);
   pos.setXYZ(1, ray.x, ray.z, ray.y);
@@ -2041,43 +2222,58 @@ function updateWeather(game) {
     dynamicGroup.add(weatherPoints);
   }
   const weather = theme.weather || {};
-  const kind = weather.kind || 'dust';
+  const fxKind = weatherKind(map.id) || '';
+  const kind = fxKind || weather.kind || 'dust';
   const speed = (weather.wind && weather.wind[0]) || 0.3;
-  const dirY = (weather.wind && weather.wind[1]) || 0.1;
+  const fall = kind === 'rain' ? 7 : kind === 'snow' ? 1.1 : 0.25;
   const cam = camera;
   const pos = weatherPoints.geometry.attributes.position;
   const arr = pos.array;
+  const seeds = weatherPoints.geometry.userData.seeds || null;
+  if (!seeds) return;
   const count = pos.count;
   const rangeW = Math.max(900, map.W * 0.65);
   const rangeH = Math.max(700, map.H * 0.55);
+  const span = tile * 4;
+  const time = game.time || 0;
   for (let i = 0; i < count; i++) {
     const i3 = i * 3;
-    arr[i3] = cam.position.x + (((i * 173 + arr[i3] + (game.time || 0) * speed * 45) % rangeW + rangeW) % rangeW) - rangeW / 2;
-    arr[i3 + 1] = 0.8 + ((i * 91 + arr[i3 + 1] * 31 + (game.time || 0) * dirY * 20) % 70) / 70 * tile * 2.2;
-    arr[i3 + 2] = cam.position.z + (((i * 257 + arr[i3 + 2] + (game.time || 0) * speed * 36) % rangeH + rangeH) % rangeH) - rangeH / 2;
+    const sx = seeds[i3];
+    const sy = seeds[i3 + 1];
+    const sz = seeds[i3 + 2];
+    const fallPos = (sy + time * fall) % span;
+    arr[i3] = cam.position.x + (((sx + time * speed * 45) % rangeW + rangeW) % rangeW) - rangeW / 2;
+    arr[i3 + 1] = cam.position.y + span / 2 - fallPos;
+    arr[i3 + 2] = cam.position.z + (((sz + time * speed * 36) % rangeH + rangeH) % rangeH) - rangeH / 2;
   }
   pos.needsUpdate = true;
-  weatherPoints.material.size = tile * (kind === 'snow' ? 0.16 : kind === 'sand' ? 0.13 : 0.2);
+  weatherPoints.material.size = tile * (kind === 'snow' || kind === 'rain' ? 0.16 : kind === 'sand' ? 0.13 : 0.2);
   weatherPoints.material.opacity = Math.max(0.18, Math.min(0.55, (weather.density || 0.5) * 0.85));
 }
 
 function updateViewmodelNext(game) {
   const p = game && game.player;
   if (!p || !camera || !viewmodelGroup) return;
-  const key = p.slot + ':' + (p.weapons && (p.weapons.primary || p.weapons.secondary || 'knife'));
+  const wid = resolveViewmodelWid(p);
+  const key = p.slot + ':' + (wid || 'none');
   if (key !== viewmodelKey) {
     viewmodelKey = key;
     clearGroup(viewmodelGroup);
     buildViewmodel(p);
   }
   const tile = (getMap() && getMap().tile) || 16;
+  const s = tile / 16;
   const recoil = Math.min(p.recoil || 0, 1);
   const reloadT = p.reloadT || 0;
   const reloading = !!p.reloading;
   const switching = !!p.lastSlot && p.lastSlot !== p.slot && (p.fireCd || 0) > 0.12;
   const scopeT = Math.max(0, Math.min(1, (game.scopeT || 0) * (p.scoped ? 1 : 0)));
-  const switchY = switching ? 0.26 * tile + Math.sin((p.fireCd || 0) * 12) * 0.05 * tile : 0;
-  const switchRot = switching ? Math.cos((p.fireCd || 0) * 10) * 0.45 : 0;
+  const wdef = wid && WEAPONS[wid] ? WEAPONS[wid] : null;
+  const reloadDur = wdef && wdef.reload > 0 ? wdef.reload / 1000 * (p.reloadMult || 1) : Math.max(0.001, reloadT);
+  const reloadProg = Math.min(1, Math.max(0, 1 - reloadT / reloadDur));
+  const reloadPulse = reloading ? Math.sin(reloadProg * Math.PI) : 0;
+  const switchY = switching ? 0.26 * tile + Math.sin((p.fireCd || 0) * 14) * 0.05 * tile : 0;
+  const switchRot = switching ? Math.cos((p.fireCd || 0) * 14) * 0.45 : 0;
   const bob = p.bobPhase || 0;
   const idleX = Math.sin((game.time || 0) * 1.35) * tile * 0.007;
   const idleY = Math.sin((game.time || 0) * 1.7 + 1.2) * tile * 0.006;
@@ -2088,11 +2284,11 @@ function updateViewmodelNext(game) {
   const swayRotZ = ((p.walking ? Math.sin(bob * 2) * 0.025 : Math.sin((game.time || 0) * 0.7) * 0.008)) * (1 - scopeT);
   viewmodelGroup.position.set(
     0.26 * tile + scopeT * 0.38 * tile + swayX,
-    -0.18 * tile + recoil * 0.018 * tile + (reloading ? Math.sin(reloadT * 22) * 0.02 * tile : 0) - switchY + scopeT * 0.12 * tile + swayY,
+    -0.18 * tile + recoil * 0.018 * tile + (reloading ? reloadPulse * 0.022 * tile : 0) - switchY + scopeT * 0.12 * tile + swayY,
     -0.48 * tile - scopeT * 0.12 * tile
   );
-  viewmodelGroup.rotation.set(reloading ? Math.sin(reloadT * 10) * 0.12 : recoil * 0.14, scopeT * 0.38 + switchRot, recoil * 0.08 + scopeT * 0.16 + swayRotZ);
-  game._viewmodelSway = { swayX, swayY, recoil, scopeT, bob };
+  viewmodelGroup.rotation.set(reloading ? reloadPulse * 0.12 : recoil * 0.14, scopeT * 0.38 + switchRot, recoil * 0.08 + scopeT * 0.16 + swayRotZ);
+  game._viewmodelSway = { swayX, swayY, recoil, scopeT, bob, reloadProg };
   const muzzle = viewmodelGroup.getObjectByName('muzzle');
   if (muzzle) {
     muzzle.visible = (p.muzzleT || 0) > 0;
@@ -2100,12 +2296,27 @@ function updateViewmodelNext(game) {
   }
   const mag = viewmodelGroup.getObjectByName('mag');
   if (mag) {
-    const drop = reloading ? 0.9 + Math.sin(reloadT * 9) * 0.2 : 0;
-    mag.rotation.x = drop * (p.slot === 'primary' ? 1 : 0.8);
-    mag.position.y = reloading ? -0.18 * tile / 16 - drop * 0.12 * tile / 16 : -0.18 * tile / 16;
+    if (reloading) {
+      const extract = Math.min(1, reloadProg / 0.45);
+      const insert = Math.max(0, (reloadProg - 0.6) / 0.4);
+      const drop = extract * 0.42 * (1 - insert);
+      mag.position.y = -0.18 * s - drop * 0.32 * s;
+      mag.rotation.x = drop * (p.slot === 'primary' ? 0.9 : 0.7);
+    } else {
+      mag.position.y = -0.18 * s;
+      mag.rotation.x = 0;
+    }
   }
   const sight = viewmodelGroup.getObjectByName('frontSight');
   if (sight) sight.visible = !p.scoped;
+}
+
+function resolveViewmodelWid(p) {
+  const slot = p && p.slot;
+  if (slot === 'knife') return 'knife';
+  if (slot && String(slot).indexOf('nade:') === 0) return slot;
+  if (slot === 'primary') return (p.weapons && p.weapons.primary) || null;
+  return (p.weapons && p.weapons.secondary) || null;
 }
 
 function updateEntities(game) {
@@ -2113,10 +2324,26 @@ function updateEntities(game) {
   const cam = fpsCameraEntity(game);
   const budget = performanceBudgetFor(game);
   const seen = new Set();
-  let visibleCount = 0;
+  const camX = cam ? (cam.x || 0) : 0;
+  const camY = cam ? (cam.y || 0) : 0;
+  const map = getMap();
+  const farCut = map ? map.W * 0.8 : Infinity;
+  const candidates = [];
+  const alive = new Set();
   for (const e of game.entities || []) {
-    if (e === cam || e.dead) continue;
+    if (!e || e.dead) continue;
+    alive.add(e);
+    if (e === cam) continue;
+    const dx = (e.x || 0) - camX;
+    const dy = (e.y || 0) - camY;
+    candidates.push({ e, d: dx * dx + dy * dy });
+  }
+  candidates.sort((a, b) => a.d - b.d);
+  let visibleCount = 0;
+  for (const item of candidates) {
     if (visibleCount >= budget.dynamicEntityCap) break;
+    if (item.d > farCut * farCut) continue;
+    const e = item.e;
     visibleCount++;
     seen.add(e);
     let group = entityMeshes.get(e);
@@ -2128,17 +2355,17 @@ function updateEntities(game) {
     const tile = (getMap() && getMap().tile) || 16;
     group.position.set(e.x || 0, 0, e.y || 0);
     group.rotation.set(0, -(e.angle || 0) - Math.PI / 2, 0);
-    group.position.y = groundElevationAt(e.x || 0, e.y || 0) + (e.crouched ? tile * 0.16 : tile * 0.0);
-    group.scale.y = e.crouched ? 0.72 : 1;
-    const bob = (e.walking ? Math.sin((e.bobPhase || 0) * 2) * tile * 0.025 : 0);
+    group.position.y = groundElevationAt(e.x || 0, e.y || 0);
+    group.scale.y = (e.crouched ? 0.72 : 1) * (group.userData.charScale || 1);
+    const phase = e.bobPhase != null ? e.bobPhase : (e.walking ? (game.time || 0) * 9 : 0);
+    const bob = (e.walking ? Math.sin(phase * 2) * tile * 0.025 : 0);
     group.position.y += bob;
     const marker = group.getObjectByName('teamMarker');
     if (marker) marker.visible = !!(game.player && e.team === game.player.team);
-    const walk = (e.bobPhase || 0);
     const legA = group.getObjectByName('legA');
     const legB = group.getObjectByName('legB');
     if (legA && legB) {
-      const sw = e.walking ? Math.sin(walk * 2) * 0.45 : 0;
+      const sw = e.walking ? Math.sin(phase * 2) * 0.45 : 0;
       legA.rotation.x = sw;
       legB.rotation.x = -sw;
     }
@@ -2155,59 +2382,94 @@ function updateEntities(game) {
     group.visible = true;
   }
   for (const [e, mesh] of entityMeshes) {
-    if (seen.has(e) || !dynamicGroup.children.includes(mesh)) continue;
+    if (!dynamicGroup.children.includes(mesh)) continue;
+    if (alive.has(e)) {
+      if (seen.has(e)) continue;
+      mesh.visible = false;
+      continue;
+    }
     dynamicGroup.remove(mesh);
     disposeObject(mesh);
     entityMeshes.delete(e);
   }
 }
 
+const CHAR_SCALE = 0.7; // 角色总高约 1.5 格→1.05 格，与墙体(1.0 格)及旧后端立绘(≈1.1 格)协调
+
+const charMaterialCache = new Map();
+let charWeaponMat = null;
+
+function characterMaterials(T, team) {
+  const key = team === 't' ? 't' : 'ct';
+  let m = charMaterialCache.get(key);
+  if (!m) {
+    const teamC = team === 't' ? 0xe0a35a : 0x4f9dd8;
+    const darkC = team === 't' ? 0x7d5230 : 0x2b5d82;
+    const gearC = team === 't' ? 0x8a5a32 : 0x3f6f95;
+    const skinC = team === 't' ? 0xd29a6a : 0xd2b08a;
+    m = {
+      team: new T.MeshLambertMaterial({ color: teamC }),
+      dark: new T.MeshLambertMaterial({ color: darkC }),
+      gear: new T.MeshLambertMaterial({ color: gearC }),
+      skin: new T.MeshLambertMaterial({ color: skinC }),
+      marker: new T.MeshBasicMaterial({ color: teamC, transparent: true, opacity: 0.95, depthWrite: false })
+    };
+    for (const k in m) m[k].userData._cached = true;
+    charMaterialCache.set(key, m);
+  }
+  if (!charWeaponMat) {
+    charWeaponMat = new T.MeshLambertMaterial({ color: 0x2c3035 });
+    charWeaponMat.userData._cached = true;
+  }
+  return { team: m.team, dark: m.dark, gear: m.gear, skin: m.skin, marker: m.marker, weapon: charWeaponMat };
+}
+
 function makeCharacter(T, e, tile) {
   const group = new T.Group();
-  const team = e.team === 't' ? 0xe0a35a : 0x4f9dd8;
-  const dark = e.team === 't' ? 0x7d5230 : 0x2b5d82;
-  const gear = e.team === 't' ? 0x8a5a32 : 0x3f6f95;
-  const mat = new T.MeshLambertMaterial({ color: team });
-  const darkMat = new T.MeshLambertMaterial({ color: dark });
-  const gearMat = new T.MeshLambertMaterial({ color: gear });
-  const body = new T.Mesh(new T.BoxGeometry(tile * 0.60, tile * 0.68, tile * 0.30), mat);
+  const mats = characterMaterials(T, e.team);
+  const body = new T.Mesh(boxGeometry(tile * 0.60, tile * 0.68, tile * 0.30), mats.team);
   body.name = 'body';
   body.position.y = tile * 0.80;
   body.castShadow = true;
-  const chest = new T.Mesh(new T.BoxGeometry(tile * 0.46, tile * 0.44, tile * 0.34), gearMat);
+  const chest = new T.Mesh(boxGeometry(tile * 0.46, tile * 0.44, tile * 0.34), mats.gear);
   chest.name = 'chest';
   chest.position.y = tile * 0.88;
   chest.castShadow = true;
-  const head = new T.Mesh(new T.BoxGeometry(tile * 0.34, tile * 0.30, tile * 0.30), new T.MeshLambertMaterial({ color: e.team === 't' ? 0xd29a6a : 0xd2b08a }));
+  const head = new T.Mesh(boxGeometry(tile * 0.34, tile * 0.30, tile * 0.30), mats.skin);
   head.name = 'head';
   head.position.y = tile * 1.28;
   head.castShadow = true;
-  const helmet = new T.Mesh(new T.BoxGeometry(tile * 0.38, tile * 0.13, tile * 0.34), gearMat);
+  const helmet = new T.Mesh(boxGeometry(tile * 0.38, tile * 0.13, tile * 0.34), mats.gear);
   helmet.name = 'helmet';
   helmet.position.y = tile * 1.43;
   helmet.castShadow = true;
-  const legA = new T.Mesh(new T.BoxGeometry(tile * 0.17, tile * 0.50, tile * 0.20), darkMat);
+  const legA = new T.Group();
   legA.name = 'legA';
-  legA.position.set(-tile * 0.14, tile * 0.25, 0);
-  legA.castShadow = true;
-  const legB = legA.clone();
+  legA.position.set(-tile * 0.14, tile * 0.50, 0);
+  const legAMesh = new T.Mesh(boxGeometry(tile * 0.17, tile * 0.50, tile * 0.20), mats.dark);
+  legAMesh.position.y = -tile * 0.25;
+  legAMesh.castShadow = true;
+  legA.add(legAMesh);
+  const legB = new T.Group();
   legB.name = 'legB';
-  legB.position.x = tile * 0.14;
-  const armA = new T.Mesh(new T.BoxGeometry(tile * 0.15, tile * 0.58, tile * 0.18), darkMat);
+  legB.position.set(tile * 0.14, tile * 0.50, 0);
+  const legBMesh = legAMesh.clone();
+  legB.add(legBMesh);
+  const armA = new T.Mesh(boxGeometry(tile * 0.15, tile * 0.58, tile * 0.18), mats.dark);
   armA.name = 'armA';
   armA.position.set(-tile * 0.43, tile * 0.82, 0);
   armA.castShadow = true;
   const armB = armA.clone();
   armB.name = 'armB';
   armB.position.x = tile * 0.43;
-  const backpack = new T.Mesh(new T.BoxGeometry(tile * 0.34, tile * 0.42, tile * 0.18), gearMat);
+  const backpack = new T.Mesh(boxGeometry(tile * 0.34, tile * 0.42, tile * 0.18), mats.gear);
   backpack.name = 'backpack';
   backpack.position.set(0, tile * 0.88, -tile * 0.24);
   backpack.castShadow = true;
-  const weapon = new T.Mesh(new T.BoxGeometry(tile * 0.16, tile * 0.12, tile * 0.76), new T.MeshLambertMaterial({ color: 0x2c3035 }));
+  // 枪身长轴沿局部 Z；角色正面是局部 -Z，去掉 90° 旋转使枪口朝前
+  const weapon = new T.Mesh(boxGeometry(tile * 0.16, tile * 0.12, tile * 0.76), mats.weapon);
   weapon.name = 'weaponMesh';
-  weapon.position.set(tile * 0.58, tile * 0.88, 0);
-  weapon.rotation.y = Math.PI / 2;
+  weapon.position.set(tile * 0.58, tile * 0.88, -tile * 0.12);
   weapon.castShadow = true;
   const muzzle = new T.Sprite(new T.SpriteMaterial({
     map: makeGlowTexture(),
@@ -2218,21 +2480,17 @@ function makeCharacter(T, e, tile) {
     depthWrite: false
   }));
   muzzle.name = 'muzzle';
-  muzzle.position.set(tile * 0.88, tile * 0.90, 0);
+  muzzle.position.set(tile * 0.58, tile * 0.90, -tile * 0.48);
   muzzle.scale.setScalar(tile * 0.42);
   muzzle.visible = false;
   muzzle.renderOrder = 9;
-  const marker = new T.Mesh(new T.ConeGeometry(tile * 0.24, tile * 0.62, 6), new T.MeshBasicMaterial({
-    color: team,
-    transparent: true,
-    opacity: 0.95,
-    depthWrite: false
-  }));
+  const marker = new T.Mesh(coneGeometry(tile * 0.24, tile * 0.62, 6), mats.marker);
   marker.name = 'teamMarker';
   marker.position.y = tile * 1.92;
   marker.renderOrder = 8;
   group.add(body, chest, head, helmet, legA, legB, armA, armB, backpack, weapon, muzzle, marker);
-  group.userData = { bodyMat: mat, baseColor: team };
+  group.userData = { bodyMat: mats.team, baseColor: e.team === 't' ? 0xe0a35a : 0x4f9dd8, charScale: CHAR_SCALE };
+  group.scale.setScalar(CHAR_SCALE);
   return group;
 }
 
@@ -2250,7 +2508,8 @@ function updateDrops(game) {
     }
     const tile = (getMap() && getMap().tile) || 16;
     mesh.position.set(drop.x || 0, groundElevationAt(drop.x || 0, drop.y || 0) + tile * 0.08, drop.y || 0);
-    mesh.rotation.y = 0;
+    const d = ((drop.x || 0) * 0.618 + (drop.y || 0) * 0.318) % 1;
+    mesh.rotation.y = d * Math.PI * 2;
   }
   for (const [drop, mesh] of dropMeshes) {
     if (seen.has(drop) || !dynamicGroup.children.includes(mesh)) continue;
@@ -2327,25 +2586,25 @@ function updateSmokes(game) {
     smokeMeshes.push(sprite);
     dynamicGroup.add(sprite);
   }
-  for (let i = smokeMeshes.length - 1; i >= wanted; i--) {
-    const s = smokeMeshes.pop();
-    dynamicGroup.remove(s);
-    if (s.material) s.material.dispose();
-  }
+  for (let i = 0; i < smokeMeshes.length; i++) smokeMeshes[i].visible = i < wanted;
   const tile = (getMap() && getMap().tile) || 16;
   for (let i = 0; i < wanted; i++) {
     const smoke = source[Math.floor(i / 3)];
     const s = smokeMeshes[i];
-    if (!smoke) continue;
+    if (!smoke) { s.visible = false; continue; }
     const layer = i % 3;
     const pulse = 0.7 + Math.sin((game.time || 0) * 2.1 + i * 1.3) * 0.08;
     const ox = layer === 1 ? Math.sin((game.time || 0) * 1.7 + i * 0.7) * tile * 0.26 : layer === 2 ? Math.cos(i * 1.1) * tile * 0.34 : 0;
     const oz = layer === 1 ? Math.cos((game.time || 0) * 1.4 + i * 0.5) * tile * 0.24 : layer === 2 ? Math.sin(i * 0.8) * tile * 0.31 : 0;
     s.position.set((smoke.x || 0) + ox, groundElevationAt(smoke.x || 0, smoke.y || 0) + tile * (0.45 + layer * 0.42 + pulse * 0.22), (smoke.y || 0) + oz);
-    const scale = ((smoke.r || tile * 3) * 0.012 + 0.6) * tile * (1 + layer * 0.34);
+    const worldR = (smoke.r || tile * 2) * tile / 16;
+    const scale = worldR * 2 * (0.72 + layer * 0.28);
     s.scale.set(scale, scale * 0.82, 1);
     s.material.rotation = (game.time || 0) * 0.05 + i * 0.37;
-    s.material.opacity = Math.min(0.56, 0.16 + layer * 0.12 + (smoke.life || 1) * 0.02);
+    const life = smoke.life == null ? 12 : smoke.life;
+    let opacity = Math.min(0.56, 0.16 + layer * 0.12 + life * 0.02);
+    if (life < 2) opacity *= life / 2;
+    s.material.opacity = Math.max(0, Math.min(0.56, opacity));
   }
 }
 
@@ -2375,9 +2634,10 @@ function updateParticles(game) {
   const others = particleBuckets.other;
   const tile = (getMap() && getMap().tile) || 16;
 
-  while (shellMeshes.length < shells.length) {
+  const wantedShell = shells.length;
+  while (shellMeshes.length < wantedShell) {
     const mesh = new THREE.Mesh(
-      new THREE.BoxGeometry(tile * 0.11, tile * 0.035, tile * 0.11),
+      boxGeometry(tile * 0.11, tile * 0.035, tile * 0.11),
       new THREE.MeshLambertMaterial({ color: 0xc99a3f })
     );
     mesh.name = 'shell';
@@ -2385,22 +2645,21 @@ function updateParticles(game) {
     shellMeshes.push(mesh);
     dynamicGroup.add(mesh);
   }
-  for (let i = shellMeshes.length - 1; i >= shells.length; i--) {
-    const mesh = shellMeshes.pop();
-    dynamicGroup.remove(mesh);
-    disposeObject(mesh);
-  }
-  for (let i = 0; i < shells.length; i++) {
+  for (let i = 0; i < shellMeshes.length; i++) shellMeshes[i].visible = i < wantedShell;
+  for (let i = 0; i < wantedShell; i++) {
     const p = shells[i];
     const mesh = shellMeshes[i];
-    mesh.visible = true;
-    mesh.position.set(p.x || 0, groundElevationAt(p.x || 0, p.y || 0) + tile * 0.05, p.y || 0);
+    const airT = p._airT || 0;
+    const t01 = Math.min(1, airT / 0.075);
+    const arcH = p.landed ? 0 : Math.sin(t01 * Math.PI) * tile * 0.5;
+    mesh.position.set(p.x || 0, groundElevationAt(p.x || 0, p.y || 0) + tile * 0.05 + arcH, p.y || 0);
     mesh.rotation.set((p.spin || 0) + i, 0, 0);
   }
 
-  while (shockwaveMeshes.length < booms.length) {
+  const wantedBoom = booms.length;
+  while (shockwaveMeshes.length < wantedBoom) {
     const ring = new THREE.Mesh(
-      new THREE.RingGeometry(0.42, 0.58, 32),
+      ringGeometry(0.42, 0.58, 32),
       new THREE.MeshBasicMaterial({
         color: 0xffb45a,
         transparent: true,
@@ -2416,26 +2675,23 @@ function updateParticles(game) {
     shockwaveMeshes.push(ring);
     dynamicGroup.add(ring);
   }
-  for (let i = shockwaveMeshes.length - 1; i >= booms.length; i--) {
-    const mesh = shockwaveMeshes.pop();
-    dynamicGroup.remove(mesh);
-    disposeObject(mesh);
-  }
-  for (let i = 0; i < booms.length; i++) {
+  for (let i = 0; i < shockwaveMeshes.length; i++) shockwaveMeshes[i].visible = i < wantedBoom;
+  for (let i = 0; i < wantedBoom; i++) {
     const p = booms[i];
     const ring = shockwaveMeshes[i];
-    ring.visible = true;
     ring.position.set(p.x || 0, groundElevationAt(p.x || 0, p.y || 0) + tile * 0.04, p.y || 0);
     const life = Math.max(0.01, p.life || 0.3);
-    const grow = 1 + (0.8 - life) * 8;
-    const size = ((p.size || 160) / 12) * tile * 0.08 * grow;
-    ring.scale.set(size, size, 1);
+    const sz = (p.size || 160);
+    const growth = 0.25 + 0.85 * Math.max(0, Math.min(1, 1 - life / 0.5));
+    const scale = sz * growth / 0.58;
+    ring.scale.set(scale, scale, 1);
     ring.material.opacity = Math.max(0, Math.min(0.9, life * 1.8));
   }
 
-  while (splashMeshes.length < splashes.length) {
+  const wantedSplash = splashes.length;
+  while (splashMeshes.length < wantedSplash) {
     const cone = new THREE.Mesh(
-      new THREE.ConeGeometry(tile * 0.18, tile * 0.44, 8),
+      coneGeometry(tile * 0.18, tile * 0.44, 8),
       new THREE.MeshBasicMaterial({
         color: 0x65c8ff,
         transparent: true,
@@ -2447,23 +2703,18 @@ function updateParticles(game) {
     splashMeshes.push(cone);
     dynamicGroup.add(cone);
   }
-  for (let i = splashMeshes.length - 1; i >= splashes.length; i--) {
-    const mesh = splashMeshes.pop();
-    dynamicGroup.remove(mesh);
-    disposeObject(mesh);
-  }
-  for (let i = 0; i < splashes.length; i++) {
+  for (let i = 0; i < splashMeshes.length; i++) splashMeshes[i].visible = i < wantedSplash;
+  for (let i = 0; i < wantedSplash; i++) {
     const p = splashes[i];
     const cone = splashMeshes[i];
-    cone.visible = true;
     cone.position.set(p.x || 0, groundElevationAt(p.x || 0, p.y || 0) + tile * 0.14, p.y || 0);
     cone.rotation.set(0, 0, (p.spin || 0) + i * 0.4);
     cone.scale.setScalar(Math.max(0.2, (p.life || 0.3) * 1.8));
     cone.material.opacity = Math.max(0, Math.min(0.8, (p.life || 0.3) * 1.6));
   }
 
-  const wanted = others.length;
-  while (particleMeshes.length < wanted) {
+  const wantedOther = others.length;
+  while (particleMeshes.length < wantedOther) {
     const sprite = new THREE.Sprite(new THREE.SpriteMaterial({
       map: makeGlowTexture(),
       color: 0xffcf6a,
@@ -2475,64 +2726,85 @@ function updateParticles(game) {
     particleMeshes.push(sprite);
     dynamicGroup.add(sprite);
   }
-  for (let i = particleMeshes.length - 1; i >= wanted; i--) {
-    const s = particleMeshes.pop();
-    dynamicGroup.remove(s);
-    if (s.material) s.material.dispose();
-  }
-  for (let i = 0; i < wanted; i++) {
+  for (let i = 0; i < particleMeshes.length; i++) particleMeshes[i].visible = i < wantedOther;
+  for (let i = 0; i < wantedOther; i++) {
     const p = others[i];
     const s = particleMeshes[i];
-    const col = p.kind === 'blood' ? 0x9a2d2d : p.kind === 'spark' ? 0xffd25a : p.kind === 'fire' ? 0xff7a35 : p.kind === 'water' || p.kind === 'splash' ? 0x65c8ff : 0xc9b28a;
+    let col;
+    switch (p.kind) {
+      case 'blood': col = 0x9a2d2d; break;
+      case 'spark': col = 0xffd25a; break;
+      case 'fire': col = 0xff7a35; break;
+      case 'smokep': col = 0x9a9aa2; break;
+      case 'wood': col = 0x8a6a3f; break;
+      default: col = 0xc9b28a;
+    }
     s.material.color.setHex(col);
-    s.position.set(p.x || 0, groundElevationAt(p.x || 0, p.y || 0) + tile * (0.05 + Math.min(0.8, Math.max(0, (p.life || 0.3) * 0.35))), p.y || 0);
+    const life = Math.min(1, Math.max(0, p.life || 0));
+    let yOff;
+    if (p.kind === 'fire' || p.kind === 'smokep') {
+      yOff = tile * (0.15 + (1 - life) * 0.55);
+    } else if (p.kind === 'blood' || p.kind === 'spark' || p.kind === 'wood') {
+      yOff = tile * (0.05 + life * 0.6);
+    } else {
+      yOff = tile * 0.12;
+    }
+    s.position.set(p.x || 0, groundElevationAt(p.x || 0, p.y || 0) + yOff, p.y || 0);
     const size = ((p.size || 2) / 2) * tile * 0.25;
     s.scale.set(size, size, 1);
-    s.material.opacity = Math.max(0, Math.min(1, (p.life || 0.3) * 1.6));
+    s.material.opacity = Math.max(0, Math.min(1, life * 2));
   }
 }
 
 function updateTracers(game) {
   if (!dynamicGroup || !THREE) return;
-  let lines = dynamicGroup.getObjectByName('tracers');
   const tracers = game.tracers || [];
-  if (!tracers.length) {
-    if (lines) {
-      dynamicGroup.remove(lines);
-      lines.geometry.dispose();
-      lines.material.dispose();
-    }
-    return;
-  }
-  const needed = Math.max(performanceBudgetFor(game).tracerPoints, tracers.length * 6);
-  if (!lines || lines.geometry.attributes.position.array.length < needed) {
-    if (lines) {
-      dynamicGroup.remove(lines);
-      lines.geometry.dispose();
-      lines.material.dispose();
-    }
+  const cap = performanceBudgetFor(game).tracerPoints;
+  const needed = Math.max(tracers.length, 8);
+  while (tracerLines.length < Math.min(needed, cap)) {
     const geo = new THREE.BufferGeometry();
-    const positions = new Float32Array(needed);
-    geo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
-    const mat = new THREE.LineBasicMaterial({ color: 0xffd88a, transparent: true, opacity: 0.55 });
-    lines = new THREE.LineSegments(geo, mat);
-    lines.name = 'tracers';
-    lines.frustumCulled = false;
-    dynamicGroup.add(lines);
+    const pos = new Float32Array(6);
+    geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+    const mat = new THREE.LineBasicMaterial({
+      color: 0xffd88a,
+      transparent: true,
+      opacity: 0.55,
+      depthWrite: false
+    });
+    const line = new THREE.LineSegments(geo, mat);
+    line.name = 'tracer';
+    line.frustumCulled = false;
+    tracerLines.push(line);
+    dynamicGroup.add(line);
   }
-  const pos = lines.geometry.attributes.position.array;
-  for (let i = 0; i < tracers.length; i++) {
+  for (let i = 0; i < tracerLines.length; i++) tracerLines[i].visible = i < tracers.length;
+  const tile = (getMap() && getMap().tile) || 16;
+  for (let i = 0; i < tracers.length && i < tracerLines.length; i++) {
     const t = tracers[i];
-    const baseY = groundElevationAt(t.x1, t.y1) + 0.4;
-    pos[i * 6] = t.x1;
-    pos[i * 6 + 1] = baseY;
-    pos[i * 6 + 2] = t.y1;
-    pos[i * 6 + 3] = t.x2;
-    pos[i * 6 + 4] = baseY + (t.y2 - t.y1) * 0.01;
-    pos[i * 6 + 5] = t.y2;
+    const line = tracerLines[i];
+    const g0 = groundElevationAt(t.x1, t.y1);
+    let tier = 0;
+    let crouched = false;
+    let bestD = Infinity;
+    for (const e of game.entities || []) {
+      if (!e || e.dead) continue;
+      const dx = (e.x || 0) - t.x1;
+      const dy = (e.y || 0) - t.y1;
+      const dd = dx * dx + dy * dy;
+      if (dd < bestD) { bestD = dd; tier = e.height || 0; crouched = !!e.crouched; }
+    }
+    // 弹道起点眼高：蹲姿 0.35，站姿 0.5+高度；tracer 未带射手 crouch，用起始点最近存活实体兜底（射手通常即最近）
+    const eyeH = g0 + (crouched ? 0.35 : 0.5 + tier) * tile;
+    const dist = Math.hypot(t.x2 - t.x1, t.y2 - t.y1);
+    const endY = eyeH + dist * Math.tan(0);
+    const p = line.geometry.attributes.position;
+    p.setXYZ(0, t.x1, eyeH, t.y1);
+    p.setXYZ(1, t.x2, endY, t.y2);
+    p.needsUpdate = true;
+    line.geometry.setDrawRange(0, 2);
+    const fade = Math.max(0, Math.min(1, (t.life || 0) / TRACER_LIFE));
+    line.material.opacity = 0.55 * fade;
   }
-  lines.geometry.attributes.position.needsUpdate = true;
-  lines.geometry.setDrawRange(0, tracers.length * 2);
 }
 
 function updateDecalsNext(game) {
@@ -2561,24 +2833,30 @@ function updateDecalsNext(game) {
         dynamicGroup.add(mesh);
       }
       mesh.visible = true;
-      if (d.type === 'bullet') {
-        const map = getMap();
-        const grid = map && map.grid;
-        const c = tileToChar(grid, Math.floor((d.x || 0) / tile), Math.floor((d.y || 0) / tile));
-        const wallH = c === '=' || c === 'C' ? tile * 0.28 : tile * 0.78;
-        const back = tile * 0.56;
+      const map = getMap();
+      const grid = map && map.grid;
+      const ang = d.angle || 0;
+      const cx = Math.floor((d.x || 0) / tile);
+      const cy = Math.floor((d.y || 0) / tile);
+      const c = tileToChar(grid, cx, cy);
+      const wall = isSolidTile(c) || c === 'D';
+      if (wall && d.type !== 'hole') {
+        const wallH = c === '=' || c === 'C' ? tile * 0.28 : c === 'o' ? tile * 0.22 : tile * 0.78;
+        const off = tile * 0.04;
         mesh.position.set(
-          (d.x || 0) - Math.cos(d.angle || 0) * back,
+          (d.x || 0) + Math.cos(ang) * off,
           groundElevationAt(d.x || 0, d.y || 0) + wallH,
-          (d.y || 0) - Math.sin(d.angle || 0) * back
+          (d.y || 0) + Math.sin(ang) * off
         );
-        mesh.scale.setScalar(tile * 0.26);
-        mesh.material.opacity = Math.max(0.22, Math.min(1, (d.life || 1) * 0.15));
+        // 法线取 -ang（朝向射手），微前移避免嵌墙被近面遮挡；DoubleSide 兜底
+        mesh.rotation.set(0, Math.PI / 2 + ang, 0);
+        mesh.scale.setScalar(tile * (d.type === 'spark' ? 0.16 : 0.2));
       } else {
-        mesh.position.set(d.x || 0, groundElevationAt(d.x || 0, d.y || 0) + tile * 0.06, d.y || 0);
-        mesh.scale.setScalar(tile * (d.type === 'hole' ? 0.3 : 0.58));
-        mesh.material.opacity = Math.max(0.18, Math.min(1, (d.life || 1) * 0.12));
+        mesh.position.set(d.x || 0, groundElevationAt(d.x || 0, d.y || 0) + tile * 0.04, d.y || 0);
+        mesh.rotation.set(-Math.PI / 2, 0, 0);
+        mesh.scale.setScalar(tile * (d.type === 'hole' ? 0.24 : 0.3));
       }
+      mesh.material.opacity = Math.max(0.18, Math.min(1, (d.life || 1) * 0.15));
     }
   }
   for (const [d, mesh] of corpseMeshes) {
@@ -2618,16 +2896,17 @@ function makeCorpseMesh(T, team, tile) {
 }
 
 function makeDecalPointMesh(T, type) {
-  const mat = new T.SpriteMaterial({
+  const mat = new T.MeshBasicMaterial({
     map: makeGlowTexture(),
     color: type === 'hole' || type === 'bullet' ? 0x0b0d0f : 0xffd166,
     transparent: true,
     opacity: 0.9,
-    depthWrite: false
+    depthWrite: false,
+    side: T.DoubleSide
   });
-  const sprite = new T.Sprite(mat);
-  sprite.name = 'decal:' + type;
-  return sprite;
+  const mesh = new T.Mesh(planeGeometry(1, 1, 1, 1), mat);
+  mesh.name = 'decal:' + type;
+  return mesh;
 }
 
 function buildViewmodel(p) {
@@ -2638,7 +2917,7 @@ function buildViewmodel(p) {
   const isKnife = p.slot === 'knife' || (p.weapons && p.weapons.knife && p.slot === 'knife');
   const isNade = p.slot && String(p.slot).indexOf('nade:') === 0;
   const group = new T.Group();
-  const wid = isKnife ? 'knife' : isNade ? null : (p.slot === 'primary' ? (p.weapons && p.weapons.primary) : (p.weapons && p.weapons.secondary));
+  const wid = resolveViewmodelWid(p);
   const w = wid && WEAPONS[wid] ? WEAPONS[wid] : null;
   const kind = w && w.kind ? w.kind : 'rifle';
   const longGun = kind === 'rifle' || kind === 'sniper' || kind === 'smg' || kind === 'shotgun';
@@ -2707,7 +2986,8 @@ function buildViewmodel(p) {
     depthWrite: false
   }));
   muzzle.name = 'muzzle';
-  muzzle.position.set(0, 0.02 * s, longGun ? -0.98 * s : -0.58 * s);
+  const muzzleZ = isNade || isKnife ? -0.5 * s : (longGun ? -0.98 * s : -0.58 * s);
+  muzzle.position.set(0, 0.02 * s, muzzleZ);
   muzzle.visible = false;
   group.add(muzzle);
   viewmodelGroup.add(group);
@@ -2727,6 +3007,7 @@ function makeGlowTexture() {
     ctx.fillStyle = g;
     ctx.fillRect(0, 0, 64, 64);
     const tex = new THREE.CanvasTexture(cv);
+    tex.userData._cached = true;
     glowCache.set(key, tex);
   }
   return glowCache.get(key);
@@ -2755,6 +3036,7 @@ function makeCloudTexture() {
       ctx.fill();
     }
     const tex = new THREE.CanvasTexture(cv);
+    tex.userData._cached = true;
     glowCache.set(key, tex);
   }
   return glowCache.get(key);

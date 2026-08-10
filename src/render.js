@@ -18,9 +18,13 @@ import {enhancedBoomSpec, drawEnhancedBoom} from './boom-fx.js';
 import {visibleShadows, drawShadows} from './shadow-fx.js';
 import {killLabel, drawKillLabel, KILL_LABEL_DUR} from './killcam-fx.js';
 import {footprintsForPath, drawFootprint, FOOTPRINT_GAP, FOOTPRINT_LIFE, FOOTPRINT_TIME_LIFE} from './footprint-fx.js';
+import {initRenderer2dGpu, render2dGpuFrame, render2dGpuReady, render2dGpuIsSoftware, updateFogGpu} from './render2d-gpu.js';
 
 let ctx = null;
 let layers = null;
+let gpu2d = false;
+let baseLayer = null;
+let baseLayerRev = -1;
 
 // 脚步动画渲染态：每实体累积移动距离 + 稳定 seed（渲染私有，不影响游戏逻辑）
 const stepFXState = new Map();
@@ -34,9 +38,40 @@ const SHADOW_LIGHT_DIR = Math.PI * 0.25;
 export function initRenderer(canvas, layersRef) {
   ctx = canvas.getContext('2d');
   layers = layersRef;
+  gpu2d = initRenderer2dGpu(canvas, layersRef);
+  baseLayer = null;
+  baseLayerRev = -1;
+}
+
+// 静态底图合成：把不变的地图/贴花/阴影叠成一张画布，普通帧只画一次，
+// 避免软件 Canvas 每帧重复栅格化三张全图图层。
+function ensureBaseLayer(game) {
+  if (!layers || !layers.staticLayer) return null;
+  const rev = game._decalRev || 0;
+  const W = layers.staticLayer.width;
+  const H = layers.staticLayer.height;
+  if (baseLayer && baseLayer.width === W && baseLayer.height === H && baseLayerRev === rev) {
+    return baseLayer;
+  }
+  if (!baseLayer || baseLayer.width !== W || baseLayer.height !== H) {
+    baseLayer = document.createElement('canvas');
+    baseLayer.width = W;
+    baseLayer.height = H;
+  }
+  const bctx = baseLayer.getContext('2d');
+  bctx.setTransform(1, 0, 0, 1, 0, 0);
+  bctx.clearRect(0, 0, W, H);
+  bctx.drawImage(layers.staticLayer, 0, 0);
+  bctx.drawImage(layers.decalLayer, 0, 0);
+  if (layers.shadowLayer) bctx.drawImage(layers.shadowLayer, 0, 0);
+  baseLayerRev = rev;
+  return baseLayer;
 }
 
 export function render(game) {
+  const __t0 = performance.now();
+  const __marks = {};
+  game._renderStageMs = __marks;
   const dpr = game.dpr || 1;
   const w2 = ctx.canvas.width / dpr;
   const h2 = ctx.canvas.height / dpr;
@@ -44,6 +79,10 @@ export function render(game) {
   if (!p || p.dead) {
     if (!(game.cyber && game.state === 'LIVE' && !game.cyber.ended)) game.zoom = 0.75;
   }
+  const useGpu = gpu2d && render2dGpuReady();
+  const useGpuBase = useGpu && !render2dGpuIsSoftware();
+  game._render2dGpu = useGpu;
+  game._render2dGpuBase = useGpuBase;
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   ctx.fillStyle = '#14161a';
   ctx.fillRect(0, 0, w2, h2);
@@ -55,13 +94,23 @@ export function render(game) {
   }
   game._shx = shx;
   game._shy = shy;
+  if (useGpuBase) render2dGpuFrame(game, 'base');
   ctx.save();
   ctx.translate(w2 / 2, h2 / 2);
   // 地图固定：所有视角都不旋转世界（人物朝向由实体 sprite 的 angle 表现）
   ctx.scale(scale, scale);
   ctx.translate(-game.camX + shx, -game.camY + shy);
-  ctx.drawImage(layers.staticLayer, 0, 0);
-  ctx.drawImage(layers.decalLayer, 0, 0);
+  if (!useGpuBase) {
+    const base = ensureBaseLayer(game);
+    if (base) {
+      ctx.drawImage(base, 0, 0);
+    } else {
+      ctx.drawImage(layers.staticLayer, 0, 0);
+      ctx.drawImage(layers.decalLayer, 0, 0);
+    }
+  }
+  __marks.static = performance.now() - __t0;
+  let __s = performance.now();
   drawWaterOverlay(game);
   drawWaterRipples(game);
   drawBombSiteMarks(game);
@@ -70,21 +119,52 @@ export function render(game) {
   drawDrops(game);
   drawGrenades(game);
   drawNadePreview(game);
-  drawShadowsLayer(game);
+  __marks.staticFx = performance.now() - __s;
+  __s = performance.now();
+  if (!useGpuBase) {
+    if (baseLayer && layers.shadowLayer) {
+      // 阴影已包含在合成底图中。
+    } else if (useGpu && layers.shadowLayer) {
+      ctx.drawImage(layers.shadowLayer, 0, 0);
+    } else {
+      drawShadowsLayer(game);
+    }
+  }
+  __marks.shadows = performance.now() - __s;
+  __s = performance.now();
   drawEntities(game);
   drawDeathFX(game);
   drawHitOutlines(game);
   drawLaser(game);
+  __marks.entities = performance.now() - __s;
+  __s = performance.now();
   drawSmokes(game);
   drawParticles(game);
   drawImpacts(game);
   drawTracers(game);
+  __marks.fx = performance.now() - __s;
+  __s = performance.now();
   drawWeatherLayer(game);
-  drawFog(game);
+  __marks.weather = performance.now() - __s;
+  __s = performance.now();
+  if (useGpu && useGpuBase) {
+    updateFogGpu(game);
+  } else {
+    drawFog(game);
+  }
+  __marks.fog = performance.now() - __s;
+  __s = performance.now();
   drawAmbientDust(ctx, game);
+  __marks.ambient = performance.now() - __s;
+  __s = performance.now();
   drawDmgPops2D(game);
+  __marks.dmgPops = performance.now() - __s;
   ctx.restore();
+  __s = performance.now();
+  if (useGpu && useGpuBase && fogEnabled(game)) render2dGpuFrame(game, 'fog');
+  __marks.gpuBlit = performance.now() - __s;
   drawKillLabelFx(game);
+  game._renderStageMs = __marks;
 }
 
 // 子弹弹孔印记：按 game.time 从 game.impacts 生成存活弹孔并逐个绘制
@@ -157,6 +237,7 @@ function drawKillLabelFx(game) {
 // 脚印渲染态 + 绘制：每实体按 FOOTPRINT_GAP 间距记录最近路径采样点（渲染私有），
 // 用 footprintsForPath + drawFootprint 在实体脚下绘制存活脚印（确定性，无 Math.random）。
 function drawEntityFootprints(game, e) {
+  if (e !== game.player) return;
   let st = footprintPathState.get(e);
   if (!st) {
     st = { pts: [{ x: e.x, y: e.y, t: game.time }], acc: 0, seed: ((Math.floor(e.x) * 73856093 ^ Math.floor(e.y) * 19349663) >>> 0) || 1 };
@@ -624,13 +705,40 @@ function getStepFX(e, tSec) {
 
 function drawEntities(game) {
   const tSec = performance.now() / 1000;
+  const z = game.zoom || 1;
+  const vw = (game.canvasW || 0) / z;
+  const vh = (game.canvasH || 0) / z;
+  const margin = 96;
+  const vx0 = (game.camX || 0) - (game._shx || 0) - vw / 2 - margin;
+  const vy0 = (game.camY || 0) - (game._shy || 0) - vh / 2 - margin;
+  const vx1 = (game.camX || 0) - (game._shx || 0) + vw / 2 + margin;
+  const vy1 = (game.camY || 0) - (game._shy || 0) + vh / 2 + margin;
+  let fpMs = 0;
+  let calcMs = 0;
+  let stepMs = 0;
+  let bodyMs = 0;
+  let otherMs = 0;
+  const stepCounts = { entities: 0, feet: 0, dust: 0 };
   for (const e of game.entities) {
+    if (e.x < vx0 || e.x > vx1 || e.y < vy0 || e.y > vy1) continue;
+    const calcT = performance.now();
     const stFx = getStepFX(e, tSec);
+    calcMs += performance.now() - calcT;
     if (e.dead) continue;
+    const fpT = performance.now();
     drawEntityFootprints(game, e);
-    if (stFx) drawStepFx(ctx, e, stFx);
+    fpMs += performance.now() - fpT;
+    const stepT = performance.now();
+    if (stFx) {
+      stepCounts.entities++;
+      if (stFx.swinging > 0) stepCounts.feet += 2;
+      stepCounts.dust += stFx.dust ? stFx.dust.length : 0;
+      drawStepFx(ctx, e, stFx);
+    }
+    stepMs += performance.now() - stepT;
     const isP = e === game.player;
     const darkCol = e.team === 'ct' ? '#4d9bff' : '#ffa03d';
+    const bodyT = performance.now();
     ctx.save();
     ctx.translate(e.x, e.y);
     ctx.fillStyle = 'rgba(0,0,0,0.35)';
@@ -685,6 +793,8 @@ function drawEntities(game) {
     ctx.fillStyle = isP ? '#1c2b3a' : (e.team === 'ct' ? '#1d3557' : '#3a2413');
     ctx.fillRect(-4, -6, 8, 4);
     ctx.restore();
+    bodyMs += performance.now() - bodyT;
+    const otherT = performance.now();
     if (e.bot) {
       ctx.save();
       ctx.globalAlpha = 0.85;
@@ -716,7 +826,14 @@ function drawEntities(game) {
       ctx.arc(e.x + 14, e.y - 12, 4, 0, Math.PI * 2);
       ctx.fill();
     }
+    otherMs += performance.now() - otherT;
   }
+  game._renderStageMs.footprints = fpMs;
+  game._renderStageMs.stepCalc = calcMs;
+  game._renderStageMs.stepFx = stepMs;
+  game._renderStageMs.stepCounts = stepCounts;
+  game._renderStageMs.entityBodies = bodyMs;
+  game._renderStageMs.entityOther = otherMs;
 }
 
 function drawSmokes(game) {

@@ -7,6 +7,11 @@ import { SWITCH_POP_DURATION } from './weapon-fx.js';
 
 let lastWheelT = 0;
 let fpsCanvas = null;
+// 指针锁定被拒/不支持时的兜底瞄准：记录上一帧绝对鼠标位置，以增量代替 movementX/Y
+let fpsFallbackX = null;
+let fpsFallbackY = null;
+// pointer lock 首帧 movementX/Y 含光标回中偏移，锁定后首个 mousemove 丢弃一次增量
+let firstLockFrame = false;
 
 const VIEW_MODES = ['top', 'follow', 'fps'];
 
@@ -23,6 +28,8 @@ export function clearFpsMouseDeltas(game) {
   if (!game) return;
   game._mlookDx = 0;
   game._mlookDy = 0;
+  fpsFallbackX = null;
+  fpsFallbackY = null;
 }
 
 export function syncFpsCursor(game) {
@@ -147,15 +154,42 @@ export function initInput(game, canvasRef) {
   }, false);
 
   windowRef.addEventListener('mousemove', (e) => {
-    if (isFpsPointerLockActive(game)) {
-      // 标准 FPS 增量瞄准：pointer lock 下累积 X/Y 位移，游戏循环统一消费一次
-      game._mlookDx = (game._mlookDx || 0) + (e.movementX || 0);
-      game._mlookDy = (game._mlookDy || 0) + (e.movementY || 0);
-    }
     // 同时记录绝对位置（俯视/跟随瞄准与 HUD 使用）
     const r = canvasRef.getBoundingClientRect();
     mouse.x = e.clientX - r.left;
     mouse.y = e.clientY - r.top;
+    if (game.viewMode !== 'fps') return;
+    if (isFpsPointerLockActive(game)) {
+      // 标准 FPS 增量瞄准：pointer lock 下累积 X/Y 位移，游戏循环统一消费一次
+      if (firstLockFrame) {
+        // 锁定首帧 movementX/Y 含光标回中偏移，丢弃一次增量避免视角大跳
+        firstLockFrame = false;
+        fpsFallbackX = null;
+        fpsFallbackY = null;
+        return;
+      }
+      game._mlookDx = (game._mlookDx || 0) + (e.movementX || 0);
+      game._mlookDy = (game._mlookDy || 0) + (e.movementY || 0);
+      // 锁定期间重置兜底基线，避免解锁后首帧产生跳变
+      fpsFallbackX = null;
+      fpsFallbackY = null;
+      return;
+    }
+    // 指针锁定被拒/不支持：以绝对坐标增量兜底瞄准（dX = curX - lastX），
+    // 行为与 movementX/Y 一致（鼠标停→朝向停），避免无锁时 FPS 视角冻结
+    if (fpsFallbackX != null && fpsFallbackY != null) {
+      // 与 mousedown 相同的 UI 拦截判定：鼠标落在购买菜单/DOM 面板上时不累积瞄准
+      const hit = typeof document !== 'undefined' && document.elementFromPoint ? document.elementFromPoint(e.clientX, e.clientY) : null;
+      const onUi = hit && hit.closest && hit.closest('#ui, .cyber-panel, button, [data-speed], [data-skip]');
+      const inAim = (game.state === 'BUY' || game.state === 'LIVE') &&
+        (!game.ui || !game.ui.isPaused()) && !onUi;
+      if (inAim) {
+        game._mlookDx = (game._mlookDx || 0) + (mouse.x - fpsFallbackX);
+        game._mlookDy = (game._mlookDy || 0) + (mouse.y - fpsFallbackY);
+      }
+    }
+    fpsFallbackX = mouse.x;
+    fpsFallbackY = mouse.y;
   }, false);
 
   canvasRef.addEventListener('mousedown', (e) => {
@@ -191,6 +225,7 @@ export function initInput(game, canvasRef) {
   canvasRef.addEventListener('contextmenu', (e) => e.preventDefault(), false);
 
   document.addEventListener('pointerlockchange', () => {
+    if (document.pointerLockElement) firstLockFrame = true;
     if (!document.pointerLockElement && game.viewMode === 'fps') {
       clearFpsMouseDeltas(game);
     }
