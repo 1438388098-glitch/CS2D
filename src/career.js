@@ -232,6 +232,42 @@ export function sponsorPreview(s) {
   };
 }
 
+export function sponsorSeasonPreview(s) {
+  const list = sortedStandings(s);
+  const rank = list.findIndex((x) => x.teamId === 'player') + 1;
+  const pace = seasonPace(s);
+  const projectedRank = pace.projectedRank || rank;
+  const currentLeague = s.team.league;
+  const likelyLeague = promoteLeague(currentLeague, projectedRank);
+  const morale = careerMorale(s);
+  const rating = Number((s.season.teams.find((t) => t.id === 'player') || {}).rating) || 65;
+  const rows = Object.keys(LEAGUE_SPONSOR).map((league) => {
+    const base = LEAGUE_SPONSOR[league] || 0;
+    return {
+      league,
+      base,
+      income: Math.round(base * (0.7 + morale / 200) * (0.8 + rating / 500)),
+      current: league === currentLeague,
+      likely: league === likelyLeague
+    };
+  });
+  const next = rows.find((r) => r.likely) || rows.find((r) => r.current);
+  const current = rows.find((r) => r.current) || rows[0];
+  return {
+    currentLeague,
+    rank,
+    projectedRank,
+    likelyLeague,
+    currentIncome: sponsorIncome(s),
+    likelyIncome: next ? next.income : sponsorIncome(s),
+    delta: next ? next.income - sponsorIncome(s) : 0,
+    rows,
+    risk: likelyLeague !== currentLeague && next && next.income < sponsorIncome(s)
+      ? '按预测将降档，保住排名可避免赞助损失'
+      : (likelyLeague !== currentLeague && next && next.income > sponsorIncome(s) ? '按预测将升档，继续维持排名即可提高赞助' : '按预测可保住当前赞助档位')
+  };
+}
+
 export function cashflowForecast(s) {
   const current = Number(s.team && s.team.bank) || 0;
   const totalRounds = Number(s.season && s.season.totalRounds) || 14;

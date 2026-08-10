@@ -1,7 +1,7 @@
 import {
   resetCareer, setStorage, setRng, getState, settlePlayerMatch, train, trainTeammate, sellPlayer, sellPreview, buyPlayer, candidates, filterCandidates,
   nextSeason, save, loadCareer, __clearStateForTest, candidateProfile,
-  sponsorIncome, sponsorPreview, cashflowForecast, seasonBudget, financeTrend, remainingPrizePreview, transferProfit, formBonus, fatiguePenalty, careerMorale, restPlayer, seasonGoals, goalProgress, trainingPreview, trainingSuggestion, rotationAdvice, trainingHistory, rosterStatus, transferBudget, contractStatus, renewPlayer, rosterContribution, positionBalance,
+  sponsorIncome, sponsorPreview, sponsorSeasonPreview, cashflowForecast, seasonBudget, financeTrend, remainingPrizePreview, transferProfit, formBonus, fatiguePenalty, careerMorale, restPlayer, seasonGoals, goalProgress, trainingPreview, trainingSuggestion, rotationAdvice, trainingHistory, rosterStatus, transferBudget, contractStatus, renewPlayer, rosterContribution, positionBalance,
   achievementDefs, achievements, careerRecords, migrateCareerState, matchReadiness
 } from '../src/career.js';
 
@@ -42,6 +42,10 @@ const playerTeamForSponsor = s.season.teams.find((t) => t.id === 'player');
 playerTeamForSponsor.rating = 95;
 const spHigh = sponsorPreview(s);
 ok('sponsor next tier', spHigh.current > sp.current && (!spHigh.next || spHigh.next.income > spHigh.current));
+
+s = resetCareer();
+const sponsorSeason = sponsorSeasonPreview(s);
+ok('sponsor season preview', sponsorSeason && sponsorSeason.rows.length === 3 && sponsorSeason.currentLeague === '乙级' && sponsorSeason.likelyLeague && sponsorSeason.currentIncome > 0 && sponsorSeason.delta !== null && sponsorSeason.risk.length > 0);
 
 s = resetCareer();
 const cash = cashflowForecast(s);
