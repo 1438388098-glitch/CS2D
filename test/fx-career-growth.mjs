@@ -2,7 +2,7 @@ import {
   resetCareer, setStorage, setRng, getState, settlePlayerMatch, train, trainTeammate, sellPlayer, sellPreview, buyPlayer, candidates, filterCandidates,
   nextSeason, save, loadCareer, __clearStateForTest, candidateProfile,
   sponsorIncome, sponsorPreview, sponsorSeasonPreview, homeTicketIncome, ticketPreview, cashflowForecast, seasonBudget, financialRisk, financeTrend, seasonFinancialSummary, remainingPrizePreview, transferProfit, facilityStatus, upgradeFacility, formBonus, fatiguePenalty, careerMorale, restPlayer, seasonGoals, goalProgress, trainingPreview, trainingSuggestion, rotationAdvice, trainingHistory, rosterStatus, transferBudget, contractStatus, renewPlayer, rosterContribution, positionBalance,
-  achievementDefs, achievements, achievementProgress, careerRecords, migrateCareerState, matchReadiness
+  achievementDefs, achievements, achievementProgress, careerRecords, honorTitle, migrateCareerState, matchReadiness
 } from '../src/career.js';
 
 const ok = (name, cond) => {
@@ -26,6 +26,8 @@ setRng(() => 0.5);
 let s = resetCareer();
 ok('new career fields', s.version === 3 && Array.isArray(s.team.ledger) && s.team.morale === 65 && Array.isArray(s.player.form) && s.player.fatigue === 0 && Array.isArray(s.player.achievements) && s.player.records && typeof s.player.records === 'object');
 ok('achievement defs', achievementDefs().length >= 6 && achievementDefs()[0].id === 'first_win');
+const honorStart = honorTitle(s);
+ok('honor title start', honorStart.title && honorStart.reason && honorStart.badges.length === 0);
 const achProgressStart = achievementProgress(s);
 ok('achievement progress start', achProgressStart.total >= 6 && achProgressStart.unlockedCount === 0 && achProgressStart.lockedCount === achProgressStart.total && achProgressStart.pct === 0 && achProgressStart.next && achProgressStart.next.id === 'first_win');
 
@@ -255,6 +257,7 @@ s.season.cup = {
 s.pendingMatch = { oppId: 't1', venue: 'home', isCup: true };
 settlePlayerMatch(true, 6, 3, { mvp: true });
 ok('cup champion record', careerRecords(s).cupChampions === 1 && achievements(s).some((a) => a.id === 'cup_champion'));
+ok('honor title champion', honorTitle(s).title.includes('冠军') && honorTitle(s).badges.includes('杯赛冠军'));
 
 s = resetCareer();
 let goals = seasonGoals(s);

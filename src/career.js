@@ -630,6 +630,23 @@ export function achievementProgress(s) {
   };
 }
 
+export function honorTitle(s) {
+  const ach = new Set((s.player && Array.isArray(s.player.achievements) ? s.player.achievements : [])
+    .map((a) => a && a.id)
+    .filter(Boolean));
+  const rec = careerRecords(s);
+  const badges = [];
+  if (Number(rec.cupChampions) >= 3) badges.push('三冠教头');
+  else if (Number(rec.cupChampions) >= 1) badges.push('杯赛冠军');
+  if (ach.has('promotion')) badges.push('升级功臣');
+  if ((Number(rec.bestSeasonRank) || 99) <= 2) badges.push('争冠核心');
+  if (ach.has('rich100k')) badges.push('百万经理');
+  if (ach.has('veteran')) badges.push('老将');
+  const title = badges[0] || titleFor(s.player.level);
+  const reason = badges.length ? badges.slice(0, 3).join(' · ') : titleFor(s.player.level) + ' · 等级 ' + s.player.level;
+  return { title, badges: badges.slice(0, 3), reason };
+}
+
 export function unlockAchievement(s, id) {
   if (!Array.isArray(s.player.achievements)) s.player.achievements = [];
   const def = ACHIEVEMENTS.find((a) => a.id === id);

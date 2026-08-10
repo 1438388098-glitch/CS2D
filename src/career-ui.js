@@ -5,7 +5,7 @@ import {
   seasonStats, seasonAwards, seasonPerformanceSummary, seasonSeries, seasonStreaks, careerSummary, matchDetail, seasonTimeline, headToHead, importantMatches, seasonTrends, favoriteMatches, cupHistory, trophyCase, careerTimeline,
   sponsorIncome, sponsorPreview, sponsorSeasonPreview, homeTicketIncome, ticketPreview, cashflowForecast, seasonBudget, financialRisk, financeTrend, seasonFinancialSummary, remainingPrizePreview, formBonus, fatiguePenalty, careerMorale, restPlayer, seasonGoals, seasonPace, goalProgress, relegationProjection, rosterContribution,
   positionBalance,
-  achievementDefs, achievements, achievementProgress, careerRecords
+  achievementDefs, achievements, achievementProgress, careerRecords, honorTitle
 } from './career.js';
 
 let doc = null;
@@ -226,6 +226,7 @@ function renderDash(s) {
   const fat = Math.round(fatiguePenalty(s) * 100);
   const winInfo = transferWindowInfo(s);
   const readiness = matchReadiness(s);
+  const honor = honorTitle(s);
   const readinessHtml = '<div class="career-card"><h4>赛前状态</h4><div class="career-kpis">' +
     '<div class="career-kpi"><b>' + readiness.base + '</b><span>基础评级</span></div>' +
     '<div class="career-kpi"><b>' + readiness.effectiveAvg + '</b><span>疲劳后属性</span></div>' +
@@ -270,7 +271,8 @@ function renderDash(s) {
   const news = s.news.slice(0, 8).map((n) => '<div class="career-news ' + esc(n.type) + '">' + esc(n.text) + '</div>').join('') || '<div class="career-news">暂无事件</div>';
   const top = [...s.season.standings].sort((a, b) => b.pts - a.pts).slice(0, 5).map((x, i) => '<div class="career-row"><span>' + (i + 1) + '. ' + esc(teamName(s, x.teamId)) + '</span><b>' + x.pts + ' 分</b></div>').join('');
   return '<div class="career-grid2">' +
-    '<div class="career-card"><h4>玩家档案</h4><div class="career-player"><b>' + esc(s.player.name) + '</b><span>' + esc(titleFor(s.player.level)) + ' 等级 ' + s.player.level + '</span></div><div class="career-xp">经验 ' + s.player.xp + ' / ' + xpNeeded(s.player.level) + '<div class="career-bar"><i style="width:' + Math.min(100, Math.round(s.player.xp / xpNeeded(s.player.level) * 100)) + '%"></i></div></div>' + attrsBars(s) +
+    '<div class="career-card"><h4>玩家档案</h4><div class="career-player"><b>' + esc(s.player.name) + '</b><span>' + esc(honor.title) + ' · 等级 ' + s.player.level + '</span></div><div class="career-xp">经验 ' + s.player.xp + ' / ' + xpNeeded(s.player.level) + '<div class="career-bar"><i style="width:' + Math.min(100, Math.round(s.player.xp / xpNeeded(s.player.level) * 100)) + '%"></i></div></div>' + attrsBars(s) +
+    '<div class="career-stats"><span>荣誉 ' + esc(honor.reason) + '</span></div>' +
     '<div class="career-stats"><span>状态 ' + (form >= 0 ? '+' : '') + form + ' · 士气 ' + mor + ' · 疲劳 ' + fat + '%</span><span>本赛季 ' + stats.played + ' 场 ' + stats.w + '胜' + stats.l + '负 · ' + stats.kills + ' 杀 / ' + stats.deaths + ' 死</span></div></div>' +
     matchHtml +
     readinessHtml +
