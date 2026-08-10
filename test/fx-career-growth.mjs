@@ -2,7 +2,7 @@ import {
   resetCareer, setStorage, setRng, getState, settlePlayerMatch, train, trainTeammate, sellPlayer, sellPreview, buyPlayer, candidates, filterCandidates,
   nextSeason, save, loadCareer, __clearStateForTest, candidateProfile,
   sponsorIncome, sponsorPreview, sponsorSeasonPreview, homeTicketIncome, ticketPreview, cashflowForecast, seasonBudget, financialRisk, financeTrend, seasonFinancialSummary, remainingPrizePreview, transferProfit, facilityStatus, upgradeFacility, formBonus, fatiguePenalty, careerMorale, restPlayer, seasonGoals, goalProgress, trainingPreview, trainingSuggestion, rotationAdvice, trainingHistory, rosterStatus, transferBudget, contractStatus, renewPlayer, rosterContribution, positionBalance,
-  achievementDefs, achievements, achievementProgress, careerRecords, honorTitle, migrateCareerState, matchReadiness, seasonGoalHistory
+  achievementDefs, achievements, achievementProgress, careerRecords, honorTitle, migrateCareerState, matchReadiness, seasonGoalHistory, goalAdvice
 } from '../src/career.js';
 
 const ok = (name, cond) => {
@@ -103,6 +103,15 @@ s.season.standings.forEach((row, i) => {
 nextSeason();
 const goalHistory = seasonGoalHistory(s);
 ok('season goal history', goalHistory.length === 1 && goalHistory[0].seasonId === 1 && goalHistory[0].rankGoal === 2 && goalHistory[0].achieved === true && goalHistory[0].reward > 0);
+
+s = resetCareer();
+const goalAdv = goalAdvice(s);
+ok('goal advice base', goalAdv && goalAdv.priority.length > 0 && goalAdv.lines.length >= 1 && typeof goalAdv.onTrack === 'boolean');
+const playerStandingForAdvice = s.season.standings.find((x) => x.teamId === 'player');
+playerStandingForAdvice.played = Number(s.season.totalRounds) - 1;
+playerStandingForAdvice.pts = 0;
+const goalAdvRisk = goalAdvice(s);
+ok('goal advice priority', goalAdvRisk.priority !== goalAdv.priority || goalAdvRisk.lines.length > 0);
 
 s = resetCareer();
 s.team.bank = 5000;

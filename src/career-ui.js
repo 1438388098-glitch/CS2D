@@ -3,7 +3,7 @@ import {
   train, sellPlayer, sellPreview, buyPlayer, renewPlayer, candidates, filterCandidates, candidateProfile, nextSeason, seasonReport, nextMatch, nextMatchInfo, matchImportance, teamRecentForm, matchReadiness, teamProfile, leagueRules,
   transferWindowOpen, transferWindowInfo, transferBudget, transferProfit, contractStatus, isStorageAvailable, cupMap, cupPrizeInfo, cupMapForRound, fixtureMapFor, fixtureMatchRecord, winChance, trainingTiers, trainingPreview, trainingSuggestion, rotationAdvice, trainingHistory, rosterStatus, facilityStatus, upgradeFacility, xpNeeded,
   seasonStats, seasonAwards, seasonPerformanceSummary, seasonSeries, seasonStreaks, careerSummary, matchDetail, seasonTimeline, headToHead, importantMatches, seasonTrends, favoriteMatches, cupHistory, trophyCase, careerTimeline,
-  sponsorIncome, sponsorPreview, sponsorSeasonPreview, homeTicketIncome, ticketPreview, cashflowForecast, seasonBudget, financialRisk, financeTrend, seasonFinancialSummary, remainingPrizePreview, formBonus, fatiguePenalty, careerMorale, restPlayer, seasonGoals, seasonPace, goalProgress, relegationProjection, rosterContribution,
+  sponsorIncome, sponsorPreview, sponsorSeasonPreview, homeTicketIncome, ticketPreview, cashflowForecast, seasonBudget, financialRisk, financeTrend, seasonFinancialSummary, remainingPrizePreview, formBonus, fatiguePenalty, careerMorale, restPlayer, seasonGoals, seasonPace, goalProgress, goalAdvice, relegationProjection, rosterContribution,
   seasonGoalHistory,
   positionBalance,
   achievementDefs, achievements, achievementProgress, careerRecords, honorTitle
@@ -279,6 +279,7 @@ function renderDash(s) {
   const rankGoalText = goalP.currentRank <= goals.rankGoal
     ? '已进入目标区'
     : '距前 ' + goals.rankGoal + ' 还需 ' + goalP.rankPointsGap + ' 分';
+  const advice = goalAdvice(s);
   const cupGoalText = goals.cupGoal === 0 ? '八强' : '四强';
   const cupCurrentText = goalP.currentCupRound === 3 ? '冠军' : goalP.currentCupRound === 2 ? '亚军' : goalP.currentCupRound === 1 ? '四强' : goalP.currentCupRound === -1 ? '未决' : '八强';
   const goalHtml = '<div class="career-card"><h4>赛季目标</h4>' +
@@ -288,6 +289,7 @@ function renderDash(s) {
     '<div class="career-row"><span>杯赛 ' + cupCurrentText + ' · 目标至少' + cupGoalText + '</span><b>' + goalP.cupProgress + '%</b></div>' +
     '<div class="career-bar"><i style="width:' + goalP.cupProgress + '%"></i></div>' +
     (goalP.projectedPoints != null ? '<div class="career-stats"><span>已赛 ' + goalP.played + ' 场 · 剩 ' + goalP.remaining + ' 场 · 预测 ' + goalP.projectedPoints + ' 分 / 第 ' + goalP.projectedRank + ' 名</span></div>' : '') +
+    '<div class="career-news' + (advice.onTrack ? '' : ' warn') + '">' + esc(advice.priority) + '：' + advice.lines.map(esc).join('；') + '</div>' +
     '</div>';
   const news = s.news.slice(0, 8).map((n) => '<div class="career-news ' + esc(n.type) + '">' + esc(n.text) + '</div>').join('') || '<div class="career-news">暂无事件</div>';
   const top = [...s.season.standings].sort((a, b) => b.pts - a.pts).slice(0, 5).map((x, i) => '<div class="career-row"><span>' + (i + 1) + '. ' + esc(teamName(s, x.teamId)) + '</span><b>' + x.pts + ' 分</b></div>').join('');

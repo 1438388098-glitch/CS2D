@@ -2345,6 +2345,47 @@ export function goalProgress(s) {
   };
 }
 
+export function goalAdvice(s) {
+  const goals = seasonGoals(s);
+  const progress = goalProgress(s);
+  const rel = relegationProjection(s);
+  const cupPhase = s.season.cup.phase;
+  const cupAlive = cupPhase === 'active' && !!findCupMatch(s);
+  const rankOnTrack = goals.currentRank <= goals.rankGoal ||
+    (progress.projectedRank != null && progress.projectedRank <= goals.rankGoal);
+  const cupOnTrack = goals.cupGoal === 0 ||
+    (goals.currentCupRound >= 0 && goals.currentCupRound >= goals.cupGoal);
+  const lines = [];
+  let priority = '联赛目标';
+  if (!rankOnTrack && rel && rel.relegationRisk) {
+    priority = '保级优先';
+    lines.push('当前保级风险高，剩余 ' + rel.remaining + ' 场至少追回 ' + rel.pointsToSafety + ' 分，优先稳守后场');
+  } else if (!rankOnTrack) {
+    priority = '争排名';
+    lines.push('距目标前 ' + goals.rankGoal + ' 还差 ' + progress.rankPointsGap + ' 分，剩余 ' + progress.remaining + ' 场可冲击');
+  } else {
+    lines.push('联赛排名已进入目标区，保持现有赛程节奏即可');
+  }
+  if (cupAlive && !cupOnTrack) {
+    priority = '杯赛优先';
+    lines.push('杯赛仍在进行且尚未达到目标，本场应以杯赛晋级为第一优先级');
+  } else if (cupPhase === 'active' && !cupAlive) {
+    lines.push('杯赛已淘汰，剩余联赛轮次决定最终排名');
+  } else if (cupPhase === 'idle') {
+    lines.push('杯赛第 14 轮后开启，联赛轮次可同步为杯赛练兵');
+  }
+  if (rel && rel.pointsToPromotion > 0 && !rel.relegationRisk) {
+    lines.push('距升级区 ' + rel.pointsToPromotion + ' 分，可尝试在关键轮次前争取连胜');
+  }
+  return {
+    priority,
+    onTrack: rankOnTrack && cupOnTrack,
+    rankGap: progress.rankPointsGap,
+    cupGap: goals.cupGoal - Math.max(0, goals.currentCupRound),
+    lines: lines.slice(0, 3)
+  };
+}
+
 export function seasonReport() {
   const s = getState();
   const list = sortedStandings(s);
