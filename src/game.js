@@ -10,6 +10,7 @@ import {explodeBomb, plantBomb, defuseBomb, pickupBomb} from './bomb.js';
 import {ctx, seedWorld} from './ctx.js';
 import {getMode} from './registry.js';
 import {clamp, lerp, rand, angDiff, rotateInputVector} from './utils.js';
+import { aimSensitivityCurve } from './aim.js';
 import {pressed, getBindLabel} from './keymap.js';
 import {initInfo, prune} from './info.js';
 import {initOppModel} from './ai/oppmodel.js';
@@ -860,7 +861,9 @@ function updatePlayerAim(game, dt) {
     const mx = game.input.mouse.x - sx, my = game.input.mouse.y - sy;
     if (mx * mx + my * my > dead * dead) {
       const target = Math.atan2(my, mx);
-      p.angle += angDiff(target, p.angle) * Math.min(1, smooth * dt);
+      const diff = angDiff(target, p.angle);
+      const curve = aimSensitivityCurve(Math.abs(diff) / Math.PI);
+      p.angle += diff * Math.min(1, smooth * dt * (0.35 + 1.65 * curve));
     }
     return;
   }
