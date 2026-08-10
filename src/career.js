@@ -240,6 +240,7 @@ export function migrateCareerState(parsed) {
   parsed.team.rested = !!parsed.team.rested;
   parsed.team.pool = parsed.team.pool || null;
   parsed.season.cup = parsed.season.cup || { phase: 'idle', bracket: [] };
+  assignFixtureMaps(parsed);
   parsed.matchHistory = Array.isArray(parsed.matchHistory) ? parsed.matchHistory : [];
   return parsed;
 }
@@ -289,6 +290,20 @@ function makeFixtures(teamIds) {
     }
   });
   return fixtures;
+}
+
+export function fixtureMapFor(s, f) {
+  if (!f) return null;
+  if (f.mapId) return f.mapId;
+  const home = s && Array.isArray(s.season && s.season.teams) ? s.season.teams.find((t) => t.id === f.home) : null;
+  return home ? home.homeMap : null;
+}
+
+export function assignFixtureMaps(s) {
+  if (!s || !Array.isArray(s.season && s.season.fixtures) || !Array.isArray(s.season && s.season.teams)) return;
+  for (const f of s.season.fixtures) {
+    if (!f.mapId) f.mapId = fixtureMapFor(s, f);
+  }
 }
 
 function makeStandings(teams) {
@@ -347,7 +362,7 @@ export function newCareerState() {
   const roster = makeRoster();
   const playerRating = effectiveRatingFor(roster, { aim: 50, move: 50, react: 50, nade: 40 });
   const teams = makeTeams('乙级', playerRating);
-  return {
+  const state = {
     version: VERSION,
     player: {
       name: 'donk', level: 1, xp: 0,
@@ -372,6 +387,8 @@ export function newCareerState() {
     matchHistory: [],
     news: []
   };
+  assignFixtureMaps(state);
+  return state;
 }
 
 export function loadCareer() {
@@ -675,18 +692,20 @@ export function applyPlayerResult(s, r) {
 
 export function startCareerMatch(game, oppId, venue, isCup) {
   const s = getState();
+  let pendingMapId = null;
   if (!isCup) {
     const f = findPlayerFixture(s);
     if (!f) return { ok: false, error: '\u5f53\u524d\u8f6e\u6b21\u6ca1\u6709\u5f85\u6253\u6bd4\u8d5b' };
     const expected = f.home === 'player' ? f.away : f.home;
     if (expected !== oppId) return { ok: false, error: '\u53ea\u80fd\u5f00\u59cb\u5f53\u524d\u8f6e\u6b21\u7684\u6bd4\u8d5b' };
+    pendingMapId = fixtureMapFor(s, f);
   } else {
     const m = findCupMatch(s);
     if (!m || (m.a !== 'player' && m.b !== 'player')) return { ok: false, error: '\u5f53\u524d\u676f\u8d5b\u6ca1\u6709\u5f85\u6253\u6bd4\u8d5b' };
     const expected = m.a === 'player' ? m.b : m.a;
     if (expected !== oppId) return { ok: false, error: '\u53ea\u80fd\u5f00\u59cb\u5f53\u524d\u676f\u8d5b' };
   }
-  s.pendingMatch = { oppId, venue, isCup: !!isCup };
+  s.pendingMatch = { oppId, venue, isCup: !!isCup, mapId: pendingMapId };
   save();
   game.opts.mode = 'career';
   startMatch(game);
@@ -705,7 +724,7 @@ function careerStart(game) {
   const opp = teams.find((t) => t.id === pm.oppId) || teams.find((t) => t.id !== 'player') || teams[0];
   const venue = pm.venue || 'home';
   game.careerMatch = { oppId: opp.id, venue, isCup: !!pm.isCup, settled: false };
-  game.opts.mapId = pm.isCup ? cupMap(s) : (venue === 'home' ? playerTeam.homeMap : opp.homeMap);
+  game.opts.mapId = pm.isCup ? cupMap(s) : (pm.mapId || fixtureMapFor(s, findPlayerFixture(s)) || (venue === 'home' ? playerTeam.homeMap : opp.homeMap));
   game.opts.team = venue === 'home' ? 't' : 'ct';
   game.opts.bots = 4;
   game.opts.diff = 'hard';
@@ -972,6 +991,7 @@ export function nextSeason() {
   const teams = makeTeams(s.team.league, effectiveTeamRating(s));
   s.season.teams = teams;
   s.season.fixtures = makeFixtures(teams.map((t) => t.id));
+  assignFixtureMaps(s);
   s.season.standings = makeStandings(teams);
   s.season.cup = { phase: 'idle', bracket: [] };
   delete s.season.cupPrizeEarned;
