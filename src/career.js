@@ -1126,6 +1126,47 @@ export function seasonPace(s, teamId = 'player') {
   };
 }
 
+export function relegationProjection(s) {
+  const list = sortedStandings(s);
+  const row = list.find((x) => x.teamId === 'player');
+  if (!row) return null;
+  const rank = list.indexOf(row) + 1;
+  const league = s.team.league;
+  const promotionTargetRank = league === '甲级' ? null : 2;
+  const safetyTargetRank = league === '丙级' ? null : 6;
+  const promotionRow = promotionTargetRank ? list[promotionTargetRank - 1] : null;
+  const safetyRow = safetyTargetRank ? list[safetyTargetRank - 1] : null;
+  const pointsToPromotion = promotionRow && rank > promotionTargetRank
+    ? Math.max(0, promotionRow.pts + 1 - row.pts)
+    : 0;
+  const pointsToSafety = safetyRow && rank > safetyTargetRank
+    ? Math.max(0, safetyRow.pts + 1 - row.pts)
+    : 0;
+  const remaining = Math.max(0, Number(s.season.totalRounds || 14) - row.played);
+  const maxRemainingPoints = remaining * 3;
+  const projectedRank = seasonPace(s).projectedRank;
+  let status = '安全';
+  if (promotionTargetRank && rank <= promotionTargetRank) status = '升级区';
+  else if (league !== '丙级' && rank >= 7) status = '降级区';
+  else if (league !== '甲级' && rank <= 2) status = '升级区';
+  return {
+    league,
+    rank,
+    points: row.pts,
+    played: row.played,
+    remaining,
+    maxRemainingPoints,
+    promotionTargetRank,
+    safetyTargetRank,
+    pointsToPromotion,
+    pointsToSafety,
+    canPromote: promotionTargetRank ? maxRemainingPoints >= pointsToPromotion : false,
+    relegationRisk: safetyTargetRank ? pointsToSafety > maxRemainingPoints : false,
+    projectedRank,
+    status
+  };
+}
+
 export function goalProgress(s) {
   const goals = seasonGoals(s);
   const pace = seasonPace(s);

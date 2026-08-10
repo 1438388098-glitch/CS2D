@@ -264,7 +264,7 @@ ok('career training radar renders', trainingHtml.includes('career-radar') && tra
 const financeHtml = __renderTabForTest('finance');
 ok('career finance renders', financeHtml.includes('财务概览') && financeHtml.includes('资金流水'));
 const standingsHtml = __renderTabForTest('standings');
-ok('career standings form column', standingsHtml.includes('近5') && standingsHtml.includes('预测最终'));
+ok('career standings form column', standingsHtml.includes('近5') && standingsHtml.includes('预测最终') && standingsHtml.includes('升降级预测'));
 const schedState = getState();
 const schedFi = schedState.season.fixtures.find((f) => f.home === 'player' || f.away === 'player');
 schedFi.played = true;

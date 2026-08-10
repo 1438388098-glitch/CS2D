@@ -2,7 +2,7 @@ import {
   resetCareer, setStorage, setRng, nextSeason, migrateCareerState,
   fixtureMapFor, assignFixtureMaps, startCareerMatch, findPlayerFixture,
   nextMatchInfo, teamRecentForm, opponentStanding, matchImportance, seasonPace,
-  cupPrizeInfo, cupMapForRound, cupPreview, transferWindowInfo, scoutReport, winChance, fixtureMatchRecord
+  cupPrizeInfo, cupMapForRound, cupPreview, transferWindowInfo, scoutReport, winChance, fixtureMatchRecord, relegationProjection
 } from '../src/career.js';
 import { createGame, startMatch } from '../src/game.js';
 
@@ -95,6 +95,23 @@ playerStanding.pts = 12;
 const pace = seasonPace(s);
 ok('season pace projects points', pace.played === 6 && pace.remaining === 8 && pace.projected === 28);
 ok('season pace rank', pace.currentRank === 1 && pace.projectedRank === 1);
+
+s = resetCareer();
+s.team.league = '乙级';
+s.season.standings.forEach((x, i) => {
+  x.played = 12;
+  x.pts = i < 7 ? 55 - i : 15;
+});
+const riskPlayer = s.season.standings.find((x) => x.teamId === 'player');
+riskPlayer.pts = 20;
+const risk = relegationProjection(s);
+ok('relegation risk', risk && risk.rank === 7 && risk.pointsToSafety === 30 && risk.pointsToPromotion === 34 && risk.relegationRisk === true);
+s.season.standings.forEach((x, i) => {
+  x.pts = i === 1 ? 32 : i === 2 ? 31 : 27 - i;
+});
+riskPlayer.pts = 28;
+const promo = relegationProjection(s);
+ok('promotion projection', promo && promo.rank === 3 && promo.pointsToPromotion === 4 && promo.canPromote === true && promo.pointsToSafety === 0);
 
 const prizes = cupPrizeInfo();
 ok('cup prize info', prizes.perRound === 5000 && prizes.champion === 30000 && prizes.rounds.length === 3);

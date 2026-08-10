@@ -3,7 +3,7 @@ import {
   train, sellPlayer, buyPlayer, candidates, filterCandidates, nextSeason, seasonReport, nextMatch, nextMatchInfo, matchImportance, teamRecentForm,
   transferWindowOpen, transferWindowInfo, isStorageAvailable, cupMap, cupPrizeInfo, cupMapForRound, fixtureMapFor, fixtureMatchRecord, winChance, trainingTiers, trainingPreview, xpNeeded,
   seasonStats, seasonAwards, seasonPerformanceSummary, seasonSeries, seasonStreaks, careerSummary, matchDetail, seasonTimeline, headToHead, importantMatches, seasonTrends, favoriteMatches, cupHistory, trophyCase, careerTimeline,
-  sponsorIncome, formBonus, fatiguePenalty, careerMorale, restPlayer, seasonGoals, seasonPace, goalProgress, rosterContribution,
+  sponsorIncome, formBonus, fatiguePenalty, careerMorale, restPlayer, seasonGoals, seasonPace, goalProgress, relegationProjection, rosterContribution,
   achievementDefs, achievements, careerRecords
 } from './career.js';
 
@@ -368,6 +368,7 @@ function renderRoster(s) {
 function renderStandings(s) {
   const list = [...s.season.standings].sort((a, b) => b.pts - a.pts || b.w - a.w);
   const pace = seasonPace(s);
+  const proj = relegationProjection(s);
   let html = '<div class="career-card"><h4>积分榜</h4><div class="career-table">';
   html += '<div class="career-row head"><span>球队</span><b>场</b><b>胜</b><b>平</b><b>负</b><b>近5</b><b>分</b></div>';
   for (let i = 0; i < list.length; i++) {
@@ -378,7 +379,16 @@ function renderStandings(s) {
     const cls = 'career-row' + (x.teamId === 'player' ? ' mine' : '') + (promo ? ' promo' : '') + (releg ? ' releg' : '');
     html += '<div class="' + cls + '"><span>' + esc(teamName(s, x.teamId)) + '</span><b>' + x.played + '</b><b>' + x.w + '</b><b>' + x.d + '</b><b>' + x.l + '</b><b>' + (teamRecentForm(s, x.teamId) || '-') + '</b><b>' + x.pts + '</b></div>';
   }
-  return html + '</div><p>' + (pace.projected != null ? '玩家当前第 ' + pace.currentRank + ' · 剩余 ' + pace.remaining + ' 场 · 预测最终 ' + pace.projected + ' 分（预计第 ' + pace.projectedRank + '）' : '玩家当前第 ' + pace.currentRank + ' · 暂无足够赛果预测最终积分') + '</p><p>甲级第 7-8 名降乙；乙级第 1-2 名升甲、第 7-8 名降丙；丙级第 1-2 名升乙。</p></div>';
+  const riskHtml = '<div class="career-card"><h4>升降级预测</h4><div class="career-kpis">' +
+    '<div class="career-kpi"><b>' + proj.rank + '</b><span>当前排名</span></div>' +
+    '<div class="career-kpi"><b>' + proj.points + '</b><span>当前积分</span></div>' +
+    '<div class="career-kpi"><b>' + proj.remaining + '</b><span>剩余场次</span></div>' +
+    '<div class="career-kpi"><b>' + proj.maxRemainingPoints + '</b><span>最多可再拿</span></div>' +
+    '</div>' +
+    (proj.promotionTargetRank != null ? '<div class="career-row"><span>升入前 ' + proj.promotionTargetRank + ' 还需</span><b>' + proj.pointsToPromotion + ' 分</b></div>' : '') +
+    (proj.safetyTargetRank != null ? '<div class="career-row"><span>保级安全分（前 ' + proj.safetyTargetRank + '）还需</span><b>' + proj.pointsToSafety + ' 分</b></div>' : '') +
+    '<div class="career-stats"><span>' + (proj.canPromote ? '仍可冲击升级' : '升级空间不足') + ' · ' + (proj.relegationRisk ? '降级风险高' : '保级压力可控') + ' · 预测最终第 ' + (proj.projectedRank || '-') + '</span></div></div>';
+  return html + '</div><p>' + (pace.projected != null ? '玩家当前第 ' + pace.currentRank + ' · 剩余 ' + pace.remaining + ' 场 · 预测最终 ' + pace.projected + ' 分（预计第 ' + pace.projectedRank + '）' : '玩家当前第 ' + pace.currentRank + ' · 暂无足够赛果预测最终积分') + '</p><p>甲级第 7-8 名降乙；乙级第 1-2 名升甲、第 7-8 名降丙；丙级第 1-2 名升乙。</p></div>' + riskHtml;
 }
 
 function renderCup(s) {
