@@ -7,6 +7,7 @@ import {clamp, rand, angDiff, viewCap} from './utils.js';
 import {report, MSG} from './info.js';
 
 import {endRound, spawnParticle} from './game.js';
+import {DEATH_MARKER_LIFE} from './render.js';
 import {dropBomb} from './bomb.js';
 import {throwGrenade} from './grenades.js';
 import {effectiveSpread, registerShot, headshotChance, distanceFalloff} from './ballistic.js';
@@ -416,6 +417,7 @@ export function killEntity(v, killer, weapon, head, game) {
   v.dead = true;
   v.deaths++;
   v.vx = 0; v.vy = 0;
+  v.deathT = DEATH_MARKER_LIFE;
   if (v.team === 'ct' && game.bomb && game.bomb.planted && game.bomb.defusing) game.bomb.defusing = false;
   const wname = WEAPONS[weapon] ? WEAPONS[weapon].name : (weapon === 'bomb' ? '炸弹' : (weapon === 'grenade' ? '手雷' : (weapon === 'barrel' ? '油桶' : '战术刀')));
   if (killer && killer !== v) {

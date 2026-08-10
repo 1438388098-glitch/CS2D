@@ -82,6 +82,25 @@ export function spawnParticle(game, props) {
   return p;
 }
 
+export function shellLandingStep(pa, dt, spawnDust) {
+  if (!pa || pa.kind !== 'shell') return pa;
+  pa._airT = (pa._airT || 0) + dt;
+  if (!pa.landed && pa._airT >= 0.075) {
+    pa.landed = true;
+    pa.vx *= 0.45;
+    pa.vy *= 0.35;
+    pa.spin = (pa.spin || 0) + 1.8;
+    if (spawnDust) spawnDust(pa);
+  } else {
+    pa.spin = (pa.spin || 0) + 9 * dt;
+    if (pa.landed) {
+      pa.vx *= Math.max(0, 1 - 16 * dt);
+      pa.vy *= Math.max(0, 1 - 16 * dt);
+    }
+  }
+  return pa;
+}
+
 export function startMatch(game) {
   const ui = game.ui;
   const viewSettings = {
@@ -350,6 +369,7 @@ export function finishMatch(game) {
   const all = game.entities.slice();
   all.sort((a, b) => b.kills - a.kills);
   const mvp = all[0];
+  const mvpInfo = game.opts && game.opts.mode === 'ranked' && game.rankedMatch && game.rankedMatch.mvpInfo ? game.rankedMatch.mvpInfo : null;
   let bestWeapon = null;
   let bestN = 0;
   for (const key in p.wKills) {
@@ -357,7 +377,9 @@ export function finishMatch(game) {
   }
   ui.showMatchEnd(win, game.score.T + ' : ' + game.score.CT,
     p.kills + ' 杀 / ' + p.deaths + ' 死 / ' + p.assists + ' 助攻',
-    mvp.name + ' (' + (mvp.team === 'ct' ? 'CT' : 'T') + ') — ' + mvp.kills + ' 击杀',
+    mvpInfo
+      ? mvpInfo.name + ' (' + (mvpInfo.team === 'ct' ? 'CT' : 'T') + ') — 综合评分 ' + mvpInfo.score
+      : mvp.name + ' (' + (mvp.team === 'ct' ? 'CT' : 'T') + ') — ' + mvp.kills + ' 击杀',
     {
       hits: game.stats.hits,
       shots: game.stats.shots,
@@ -478,6 +500,20 @@ export function update(game, dt) {
     if (pa.life <= 0) { game._particlePool.push(pa); game.particles[i] = game.particles[game.particles.length - 1]; game.particles.pop(); continue; }
     pa.x += pa.vx * dt;
     pa.y += pa.vy * dt;
+    if (pa.kind === 'shell') {
+      shellLandingStep(pa, dt, (shell) => {
+        if (game.particles.length >= MAX_PARTICLES - 4) return;
+        spawnParticle(game, {
+          kind: 'dust',
+          x: shell.x,
+          y: shell.y,
+          vx: rand(-18, 18),
+          vy: rand(-24, -6),
+          life: 0.32,
+          size: rand(1.5, 3)
+        });
+      });
+    }
     pa.vx *= Math.max(0, 1 - 3 * dt);
     pa.vy *= Math.max(0, 1 - 3 * dt);
   }
@@ -490,6 +526,11 @@ export function update(game, dt) {
   for (let t2 = game.tracers.length - 1; t2 >= 0; t2--) {
     game.tracers[t2].life -= dt;
     if (game.tracers[t2].life <= 0) game.tracers.splice(t2, 1);
+  }
+  // 尸体死亡特效倒计时：死亡实体 deathT 逐帧衰减，归零后死亡标记消失（由 render 的 deathMarkerSpec 驱动）
+  for (const e of game.entities) {
+    if (!e.dead || !(e.deathT > 0)) continue;
+    e.deathT = Math.max(0, e.deathT - dt);
   }
   // 弹孔/尸体渐隐：life 衰减，进入淡出窗口（<3s）或移除时重绘静态层
   let decalDirty = false;

@@ -15,6 +15,7 @@ export function createEntity(team, bot) {
     reloading: false, reloadT: 0, fireCd: 0, recoil: 0, shotStreak: 0, crouched: false,
     ammoMap: {}, reserveMap: {},
     dead: false, kills: 0, deaths: 0, assists: 0, plants: 0, defuses: 0,
+    deathT: 0,
     hasBomb: false, walking: false, blind: 0, scoped: false, lossStreak: 0,
     stepT: 0, stepFlip: false, lastDmgFrom: null, lastDmgT: -99999, muzzleT: 0,
     strafeDir: 1, strafeT: 0, reaction: 0, aimTarget: null, aimLostT: 0, aimLastPos: null,
@@ -46,6 +47,7 @@ export function spawnEntity(e, spawnList, preferIdx) {
   e.x = s.x;
   e.y = s.y;
   e.vx = 0; e.vy = 0; e.dead = false; e.hp = 100;
+  e.deathT = 0;
   e.angle = ctx.rand() * Math.PI * 2;
   e.pitch = 0;
   e.slot = e.weapons.primary ? 'primary' : 'secondary';

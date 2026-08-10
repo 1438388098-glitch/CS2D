@@ -6,6 +6,7 @@ import {clamp, rand} from './utils.js';
 const mapTile = () => getMap()?.tile || TILE;
 import {ARCHETYPES} from './persona.js';
 import {fogEnabled, castVisionPolygon} from './fog.js';
+import {drawAmbientDust} from './ambient-fx.js';
 
 let ctx = null;
 let layers = null;
@@ -48,12 +49,14 @@ export function render(game) {
   drawDrops(game);
   drawGrenades(game);
   drawEntities(game);
+  drawDeathFX(game);
   drawHitOutlines(game);
   drawLaser(game);
   drawSmokes(game);
   drawParticles(game);
   drawTracers(game);
   drawFog(game);
+  drawAmbientDust(ctx, game);
   drawDmgPops2D(game);
   ctx.restore();
 }
@@ -192,6 +195,89 @@ export function boomShockwaveSpec(p) {
     inner: p.size * (0.18 + 0.5 * t),
     alpha: (1 - t) * 0.8
   };
+}
+
+// 死亡特效生命周期：闪白轮廓在 DEATH_FLASH_TIME 内衰减，尸体星/十字标记停留 DEATH_MARKER_LIFE
+export const DEATH_MARKER_LIFE = 1.8;
+export const DEATH_FLASH_TIME = 0.28;
+
+// 死亡特效纯计算：统一由死亡剩余时间驱动（确定性，无 Math.random），供绘制与测试断言
+export function deathMarkerSpec(e) {
+  if (!e) return { x: 0, y: 0, alpha: 0, scale: 0, t: 1, flash: 0, shape: 'cross', rot: 0 };
+  const dead = !!e.dead;
+  const x = e.x, y = e.y;
+  const t = dead ? clamp(1 - (e.deathT || 0) / DEATH_MARKER_LIFE, 0, 1) : 1;
+  // 闪白：死亡瞬间最亮，DEATH_FLASH_TIME 内线性衰减到零
+  const flash = dead ? clamp(1 - t * (DEATH_MARKER_LIFE / DEATH_FLASH_TIME), 0, 1) : 0;
+  // 标记淡入（前 10%）→ 稳定 → 末 30% 淡出
+  let alpha = 0;
+  if (dead) {
+    if (t < 0.1) alpha = t / 0.1;
+    else if (t > 0.7) alpha = clamp((1 - t) / 0.3, 0, 1);
+    else alpha = 1;
+  }
+  // 弹出：死亡瞬间 0.55，DEATH_FLASH_TIME 内弹到 1，之后保持
+  const scale = dead ? 0.55 + 0.45 * clamp(t * (DEATH_MARKER_LIFE / DEATH_FLASH_TIME), 0, 1) : 1;
+  // 形状/旋转：位置哈希确定性选择星形或十字（同 seed 可复现）
+  const seed = (Math.floor(x) * 374761393 ^ Math.floor(y) * 668265263) >>> 0;
+  const h = (seed ^ (seed >>> 13)) >>> 0;
+  return {
+    x, y, alpha, scale, t, flash,
+    shape: h % 2 === 0 ? 'star' : 'cross',
+    rot: (h % 8) * Math.PI / 8
+  };
+}
+
+function traceMarkerShape(e, shape, rot, R) {
+  ctx.beginPath();
+  if (shape === 'star') {
+    for (let i = 0; i < 10; i++) {
+      const rr = i % 2 === 0 ? R : R * 0.42;
+      const a = rot + i * Math.PI / 5 - Math.PI / 2;
+      const px = e.x + Math.cos(a) * rr;
+      const py = e.y + Math.sin(a) * rr;
+      if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+    }
+    ctx.closePath();
+  } else {
+    ctx.moveTo(e.x - R, e.y); ctx.lineTo(e.x + R, e.y);
+    ctx.moveTo(e.x, e.y - R); ctx.lineTo(e.x, e.y + R);
+  }
+}
+
+// 2D 死亡特效：死亡瞬间闪白轮廓 + 尸体星/十字标记（黑边 + 队伍色，短暂停留后淡出）
+function drawDeathFX(game) {
+  ctx.save();
+  ctx.lineCap = 'round';
+  for (const e of game.entities) {
+    if (!e.dead || !(e.deathT > 0)) continue;
+    const s = deathMarkerSpec(e);
+    if (s.flash > 0) {
+      ctx.strokeStyle = 'rgba(255,255,255,' + (0.9 * s.flash) + ')';
+      ctx.lineWidth = 3.5;
+      ctx.beginPath();
+      ctx.ellipse(e.x, e.y, 17, 17, 0, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.strokeStyle = 'rgba(255,255,255,' + (0.32 * s.flash) + ')';
+      ctx.lineWidth = 7;
+      ctx.beginPath();
+      ctx.ellipse(e.x, e.y, 19, 19, 0, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+    if (s.alpha > 0 && s.scale > 0) {
+      const col = e.team === 'ct' ? '110,185,255' : '255,175,90';
+      const R = 8.5 * s.scale;
+      ctx.strokeStyle = 'rgba(0,0,0,' + (0.55 * s.alpha) + ')';
+      ctx.lineWidth = 5;
+      traceMarkerShape(e, s.shape, s.rot, R);
+      ctx.stroke();
+      ctx.strokeStyle = 'rgba(' + col + ',' + s.alpha + ')';
+      ctx.lineWidth = 2.5;
+      traceMarkerShape(e, s.shape, s.rot, R);
+      ctx.stroke();
+    }
+  }
+  ctx.restore();
 }
 
 function drawCrates(game) {
@@ -517,7 +603,8 @@ function drawParticles(game) {
     spark: 'rgba(255,200,110,',
     smokep: 'rgba(190,193,198,',
     splash: 'rgba(120,190,235,',
-    wood: 'rgba(150,110,60,'
+    wood: 'rgba(150,110,60,',
+    dust: 'rgba(172,158,126,'
   };
   for (const kind of Object.keys(styles)) {
     ctx.fillStyle = styles[kind];
