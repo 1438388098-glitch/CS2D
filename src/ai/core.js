@@ -111,7 +111,7 @@ function botThink(e, game, dt) {
   if (e.aimTarget && (e.aimTarget.dead || !hasLineOfSight(game, e, e.aimTarget, viewCap(game) * 1.2))) {
     if (e.aimLostT > 1.4) {
       if (e.aimLastPos) {
-        e.lastKnown = { x: e.aimLastPos.x, y: e.aimLastPos.y };
+        e.lastKnown = { x: e.aimLastPos.x, y: e.aimLastPos.y, conf: 1 };
         e.lastKnownT = 0;
       }
       e.aimTarget = null;

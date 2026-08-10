@@ -1,5 +1,6 @@
 import { BOT_AI } from '../config.js';
 import { los } from '../map.js';
+import { shouldRefreshObjective } from './shared.js';
 
 const HEAR_BASE = Math.round(BOT_AI.HEAR_RADIUS * 0.9);
 
@@ -14,8 +15,13 @@ export function weaponHearRadius(w) {
 }
 
 function remember(e, x, y, game, conf) {
-  e.lastKnown = { x, y };
-  e.lastKnownT = 0;
+  // 警报覆盖缓存：新警报置信度高于旧目标时立即覆盖 lastKnown（不等 TTL），
+  // 否则保留更强的旧目标；记忆槽始终记录本次感知
+  const alert = { x, y, t: game.time, conf };
+  if (shouldRefreshObjective(e.lastKnown, alert, game.time)) {
+    e.lastKnown = { x, y, conf, t: game.time };
+    e.lastKnownT = 0;
+  }
   if (!e.memory) e.memory = [];
   e.memory.push({ x, y, t: game.time, conf });
   if (e.memory.length > 8) e.memory.shift();
@@ -32,7 +38,7 @@ export function hearGunshot(e, shooter, game, weapon) {
   const spread = Math.max(34, d * (clear ? 0.26 : 0.4));
   const px = e.x + Math.cos(angle) * d + Math.cos(angle + Math.PI / 2) * spread * err;
   const py = e.y + Math.sin(angle) * d + Math.sin(angle + Math.PI / 2) * spread * err;
-  e.lastHear = { angle, dist: d, x: shooter.x, y: shooter.y, t: game.time };
+  e.lastHear = { angle, dist: d, x: shooter.x, y: shooter.y, t: game.time, conf: clear ? 0.55 : 0.35 };
   remember(e, px, py, game, clear ? 0.55 : 0.35);
   return true;
 }
@@ -44,7 +50,7 @@ export function hearWorldSound(e, game) {
   if (age > 0.75) return false;
   const d = Math.hypot(e.x - s.x, e.y - s.y);
   if (d > s.radius) return false;
-  e.lastHear = { angle: Math.atan2(s.y - e.y, s.x - e.x), dist: d, t: game.time };
+  e.lastHear = { angle: Math.atan2(s.y - e.y, s.x - e.x), dist: d, t: game.time, conf: s.conf || 0.55 };
   remember(e, s.x, s.y, game, s.conf || 0.55);
   return true;
 }
@@ -57,7 +63,7 @@ export function hearStep(e, game) {
   const radius = s.walk ? 380 : 760;
   const d = Math.hypot(e.x - s.x, e.y - s.y);
   if (d > radius) return false;
-  e.lastHear = { angle: Math.atan2(s.y - e.y, s.x - e.x), dist: d, t: game.time };
+  e.lastHear = { angle: Math.atan2(s.y - e.y, s.x - e.x), dist: d, t: game.time, conf: s.walk ? 0.32 : 0.48 };
   // 脚步位置模糊化：只能定位大致区域（±110px），不能精确锁点——防静步偷袭者被隔墙精确定位
   remember(e, s.x + Math.sin(game.time * 3 + (e.anchorIdx || 0) * 2.2) * 140, s.y + Math.cos(game.time * 4 + (e.anchorIdx || 0) * 1.3) * 140, game, s.walk ? 0.32 : 0.48);
   return true;

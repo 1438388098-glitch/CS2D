@@ -3,7 +3,7 @@ import {BOT_AI, diffOf} from '../config.js';
 import {getMap, nearestSite, inSite, los} from '../map.js';
 import {weaponDef, ammoFor} from '../entities.js';
 import {rand, clamp} from '../utils.js';
-import {logAct, styleOf, canFinishDefuse, aliveCount, hasGoodGun, redistributeTLanes} from './shared.js';
+import {logAct, styleOf, canFinishDefuse, aliveCount, hasGoodGun, redistributeTLanes, alertConf, shouldRefreshObjective} from './shared.js';
 import {dqnFromJSON} from '../dqn.js';
 import {oppAimPoint} from './oppmodel.js';
 import {shouldRetakeBomb, shouldRushDefuser, shouldRetreatWithoutBomb, pickPlantSite, shouldEscortCarrier, shouldPushLatePlant, shouldRushPlant} from './rules.js';
@@ -332,6 +332,26 @@ function netObjective(e, game, act) {
   return null;
 }
 
+// 当前 bot 最新个人警报（lastKnown/lastHear 中取置信度更高者）；无新鲜情报返回 null
+// 用于目标缓存失效判定：新警报比缓存目标"更强/更新"时，跳过 TTL 立即重算
+function alertFrom(e, game) {
+  const now = game.time;
+  let best = null;
+  if (e.lastKnown && e.lastKnownT !== undefined && e.lastKnownT < 2) {
+    best = { x: e.lastKnown.x, y: e.lastKnown.y, t: now - e.lastKnownT, conf: alertConf(e.lastKnown) };
+  }
+  if (e.lastHear && e.lastHear.t !== undefined && now - e.lastHear.t < 1.2) {
+    const cand = {
+      x: e.lastHear.x !== undefined ? e.lastHear.x : e.x + Math.cos(e.lastHear.angle) * e.lastHear.dist,
+      y: e.lastHear.y !== undefined ? e.lastHear.y : e.y + Math.sin(e.lastHear.angle) * e.lastHear.dist,
+      t: e.lastHear.t,
+      conf: alertConf(e.lastHear)
+    };
+    if (!best || cand.conf > best.conf || (cand.conf === best.conf && cand.t > best.t)) best = cand;
+  }
+  return best;
+}
+
 export function botObjective(e, game) {
   const now = game.time * 1000;
   const bombState = game.bomb ? (game.bomb.planted ? (game.bomb.defusing ? 'pd' + game.bomb.site : 'p' + game.bomb.site) : (game.bomb.dropped ? 'd' : 'n')) : 'n';
@@ -341,9 +361,12 @@ export function botObjective(e, game) {
   const cacheKey = bombState + '|' + (game.tAttackSite || '') + '|' + hot + '|' + (e.hasBomb ? 1 : 0) + '|' + (e.netLane || '-');
   const cacheTtl = e.objCache && e.objCache.search ? 600 : 3000;
   const keyHit = e.objKey === cacheKey || e.objBombState === bombState;
-  // 新鲜个人情报强制失效：有近期目击记忆/枪声感知时跳过 3 秒缓存，让 CT 转点/T 执行即时响应
-  const freshIntel = e.lastKnown && e.lastKnownT !== undefined && now - e.lastKnownT < 1000;
-  if (e.objCache && keyHit && !freshIntel && now - e.objAt < cacheTtl) return e.objCache;
+  // 警报覆盖缓存：新强警报（枪声/目击/呼叫）更新 lastKnown/lastHear 后立即失效旧目标缓存，
+  // 而非等 3s TTL 到期 —— 让 CT 转点/T 执行即时响应（旧实现 now-lastKnownT 单位混用导致恒不触发）
+  const alert = alertFrom(e, game);
+  const oldKnown = e.objCache ? { ...e.objCache, t: e.objAt ? e.objAt / 1000 : 0 } : null;
+  const alertHot = alert ? shouldRefreshObjective(oldKnown, alert, game.time) : false;
+  if (e.objCache && keyHit && !alertHot && now - e.objAt < cacheTtl) return e.objCache;
   const o = botObjectiveRaw(e, game);
   if (o && (!Number.isFinite(o.x) || !Number.isFinite(o.y))) return null;
   e.objCache = o;

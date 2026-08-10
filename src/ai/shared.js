@@ -71,3 +71,52 @@ export function aliveCount(game, team) {
 export function shouldSwitchPistol(ammo, closeEnemy) {
   return closeEnemy && ammo <= 2;
 }
+
+// ===== 警报置信度与目标缓存覆盖（candidate-151）=====
+// 感知警报统一置信度标度：目击 > 清晰枪声 > 呼叫/受击 > 模糊枪声/脚步 > 击杀
+// 显式 conf 字段优先；lastKnown/lastHear 均按此归一，供缓存覆盖决策比较
+export function alertConf(a) {
+  if (!a) return 0;
+  if (a.conf !== undefined && a.conf !== null) return a.conf;
+  switch (a.type) {
+    case 'sight':
+    case 'focus':
+      return 1;
+    case 'shot':
+      return 0.55;
+    case 'call':
+    case 'dmg':
+      return 0.5;
+    case 'step':
+      return 0.45;
+    case 'kill':
+      return 0.35;
+    default:
+      return 0.5;
+  }
+}
+
+// 判断新警报是否应立即覆盖旧目标缓存（而非等 TTL 到期）：
+// - 无新警报 → 不覆盖
+// - 无旧目标 → 直接写入
+// - 新警报置信度更高 → 立即覆盖（强警报压过旧位置，让 bot 更快转向新威胁）
+// - 旧目标已超 4s TTL → 任何新警报接管
+// - 新警报置信度更低 → 不覆盖（弱情报不冲掉强目标）
+// - 同置信度 → 更新的情报覆盖旧的（避免追已过时位置）
+// oldKnown/newAlert 均接受 {x,y,conf?,t?} 或 lastKnown 形态 {x,y,conf?,lastKnownT?}
+// 纯函数、确定性：仅由输入决定，无随机/时间状态
+export function shouldRefreshObjective(oldKnown, newAlert, now) {
+  if (!newAlert) return false;
+  if (!oldKnown) return true;
+  const newConf = alertConf(newAlert);
+  const oldConf = alertConf(oldKnown);
+  const newAge = Math.max(0, now - (newAlert.t !== undefined ? newAlert.t : now));
+  // t = 时间戳（now - t = 年龄）；lastKnownT 本身就是年龄（秒），直接取用
+  const oldAge = oldKnown.t !== undefined
+    ? Math.max(0, now - oldKnown.t)
+    : Math.max(0, oldKnown.lastKnownT !== undefined ? oldKnown.lastKnownT : 0);
+  if (newConf > oldConf) return true;
+  if (oldAge >= 4) return true;
+  if (newConf < oldConf) return false;
+  return newAge < oldAge;
+}
