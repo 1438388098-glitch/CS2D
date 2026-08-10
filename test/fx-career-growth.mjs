@@ -1,6 +1,6 @@
 import {
   resetCareer, setStorage, setRng, getState, settlePlayerMatch, train, sellPlayer, buyPlayer, candidates, filterCandidates,
-  nextSeason, save, loadCareer, __clearStateForTest,
+  nextSeason, save, loadCareer, __clearStateForTest, candidateProfile,
   sponsorIncome, sponsorPreview, formBonus, fatiguePenalty, careerMorale, restPlayer, seasonGoals, goalProgress, trainingPreview, trainingSuggestion, rosterContribution,
   achievementDefs, achievements, careerRecords, migrateCareerState, matchReadiness
 } from '../src/career.js';
@@ -87,6 +87,11 @@ ok('candidate filter rating', filterCandidates(filterPool, { minRating: 80 }).sh
 ok('candidate filter price', filterCandidates(filterPool, { maxPrice: 10000 }).shown === 2);
 ok('candidate filter combined', filterCandidates(filterPool, { role: '指挥', minRating: 90, maxPrice: 20000 }).shown === 1);
 ok('candidate filter empty', filterCandidates(filterPool, { role: '指挥', minRating: 99 }).shown === 0);
+
+s = resetCareer();
+const candProfile = candidateProfile({ id: 'x', rating: 60, price: 1000, role: '突破' });
+ok('candidate profile', candProfile && candProfile.potential >= 60 && candProfile.growth === candProfile.potential - 60 && typeof candProfile.youth === 'boolean');
+ok('candidate pool potential', candidates().every((c) => c.potential > 0 && typeof c.youth === 'boolean'));
 
 s = resetCareer();
 s.season.round = 5;

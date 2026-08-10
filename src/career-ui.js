@@ -1,6 +1,6 @@
 import {
   loadCareer, getState, titleFor, startCareerMatch, careerEndMatch, abandonPendingMatch, simulatePlayerMatch, resetCareer,
-  train, sellPlayer, buyPlayer, candidates, filterCandidates, nextSeason, seasonReport, nextMatch, nextMatchInfo, matchImportance, teamRecentForm, matchReadiness,
+  train, sellPlayer, buyPlayer, candidates, filterCandidates, candidateProfile, nextSeason, seasonReport, nextMatch, nextMatchInfo, matchImportance, teamRecentForm, matchReadiness,
   transferWindowOpen, transferWindowInfo, isStorageAvailable, cupMap, cupPrizeInfo, cupMapForRound, fixtureMapFor, fixtureMatchRecord, winChance, trainingTiers, trainingPreview, trainingSuggestion, xpNeeded,
   seasonStats, seasonAwards, seasonPerformanceSummary, seasonSeries, seasonStreaks, careerSummary, matchDetail, seasonTimeline, headToHead, importantMatches, seasonTrends, favoriteMatches, cupHistory, trophyCase, careerTimeline,
   sponsorIncome, sponsorPreview, formBonus, fatiguePenalty, careerMorale, restPlayer, seasonGoals, seasonPace, goalProgress, relegationProjection, rosterContribution,
@@ -365,7 +365,8 @@ function renderRoster(s) {
     const pool = poolResult.list;
     if (pool.length) {
       for (const c of pool) {
-        html += '<div class="career-player-card"><b>' + esc(c.name) + '</b><span>' + esc(c.role) + '</span><i>' + esc(c.team || '') + ' · 评级 ' + c.rating + ' · ' + money(c.price) + '</i>';
+        const profile = candidateProfile(c);
+        html += '<div class="career-player-card"><b>' + esc(c.name) + '</b><span>' + esc(c.role) + '</span><i>' + esc(c.team || '') + ' · 评级 ' + c.rating + ' · 潜力 ' + profile.potential + (profile.youth ? ' · 青训' : '') + ' · ' + money(c.price) + '</i>';
         if (s.team.bank >= c.price && s.team.transfersLeft > 0) html += '<button class="btn small" data-act="buy" data-id="' + c.id + '">买入</button>';
         html += '</div>';
       }

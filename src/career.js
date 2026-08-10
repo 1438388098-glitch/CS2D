@@ -414,7 +414,8 @@ function makeCandidates() {
       const idx = ri * 2 + j;
       const pi = picks[idx];
       const rating = randInt(55, 85);
-      out.push({ id: 'c' + (idx + 1), name: CAND_NAMES[pi], team: teamDisplay(CAND_TEAMS[pi]), role, rating, price: playerPrice(rating) });
+      const potential = Math.min(96, rating + randInt(3, 12));
+      out.push({ id: 'c' + (idx + 1), name: CAND_NAMES[pi], team: teamDisplay(CAND_TEAMS[pi]), role, rating, price: playerPrice(rating), potential, youth: rng() < 0.35 });
     }
   });
   return out;
@@ -496,6 +497,18 @@ export function candidates() {
     save();
   }
   return s.team.pool;
+}
+
+export function candidateProfile(c) {
+  if (!c) return null;
+  const rating = Number(c.rating) || 70;
+  const potential = Number.isFinite(Number(c.potential)) ? Number(c.potential) : Math.min(96, rating + 5);
+  return {
+    ...c,
+    potential,
+    youth: !!c.youth,
+    growth: potential - rating
+  };
 }
 
 export function filterCandidates(pool, filters = {}) {
@@ -667,14 +680,15 @@ export function buyPlayer(candId) {
   const cand = s.team.pool.find((c) => c.id === candId);
   if (!cand) return { ok: false, error: '候选不存在' };
   if (s.team.bank < cand.price) return { ok: false, error: '资金不足' };
+  const profile = candidateProfile(cand);
   let refund = 0;
   let slot = s.team.roster.find((p) => p.role === cand.role && p.id !== cand.id);
   if (slot) {
     refund = Math.floor(slot.price * 0.5);
     s.team.bank += refund;
-    slot.name = cand.name; slot.team = cand.team || s.team.name; slot.rating = cand.rating; slot.price = cand.price;
+    slot.name = cand.name; slot.team = cand.team || s.team.name; slot.rating = cand.rating; slot.price = cand.price; slot.potential = profile.potential; slot.youth = profile.youth;
   } else {
-    s.team.roster.push({ id: 'r' + Date.now(), name: cand.name, team: cand.team || s.team.name, role: cand.role, rating: cand.rating, price: cand.price });
+    s.team.roster.push({ id: 'r' + Date.now(), name: cand.name, team: cand.team || s.team.name, role: cand.role, rating: cand.rating, price: cand.price, potential: profile.potential, youth: profile.youth });
   }
   s.team.bank -= cand.price;
   s.team.transfersLeft--;
