@@ -73,7 +73,11 @@ export function botBuyAll(game) {
     const lossStreak = e.team === 't' ? (game.lossStreakT || 0) : (game.lossStreakCT || 0);
     const forceWeapon = e.archetype === 'sniper' ? 'deagle' : smg;
     if (lossStreak >= 3 && game.round >= 4 && e.money < WEAPONS[rifle].price + PRICES.ARMOR) {
-      if (e.money >= WEAPONS[forceWeapon].price + PRICES.ARMOR) {
+      if (e.team === 'ct' && e.money >= WEAPONS.famas.price) {
+        e.weapons.primary = 'famas';
+        e.slot = 'primary';
+        e.money -= WEAPONS.famas.price;
+      } else if (e.money >= WEAPONS[forceWeapon].price + PRICES.ARMOR) {
         e.weapons.primary = forceWeapon;
         e.slot = 'primary';
         e.money -= WEAPONS[forceWeapon].price + PRICES.ARMOR;
@@ -117,7 +121,15 @@ export function botBuyAll(game) {
       }
       tries.push(
         { w: rifle, cost: WEAPONS[rifle].price + fullArmor, equip: () => { e.armor = 100; e.helmet = true; } },
-        { w: rifle, cost: WEAPONS[rifle].price + PRICES.ARMOR, equip: () => { e.armor = 100; } },
+        { w: rifle, cost: WEAPONS[rifle].price + PRICES.ARMOR, equip: () => { e.armor = 100; } }
+      );
+      if (e.team === 'ct') {
+        tries.push(
+          { w: 'famas', cost: WEAPONS.famas.price + PRICES.ARMOR, equip: () => { e.armor = 100; } },
+          { w: 'famas', cost: WEAPONS.famas.price, equip: () => {} }
+        );
+      }
+      tries.push(
         { w: rifle, cost: WEAPONS[rifle].price, equip: () => {} },
         { w: smg, cost: WEAPONS[smg].price + PRICES.ARMOR, equip: () => { e.armor = 100; } },
         { w: smg, cost: WEAPONS[smg].price, equip: () => {} },
