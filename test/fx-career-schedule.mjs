@@ -2,7 +2,7 @@ import {
   resetCareer, setStorage, setRng, nextSeason, migrateCareerState,
   fixtureMapFor, assignFixtureMaps, startCareerMatch, findPlayerFixture,
   nextMatchInfo, teamRecentForm, opponentStanding, matchImportance, seasonPace,
-  cupPrizeInfo, cupMapForRound, cupPreview, transferWindowInfo
+  cupPrizeInfo, cupMapForRound, cupPreview, transferWindowInfo, scoutReport
 } from '../src/career.js';
 import { createGame, startMatch } from '../src/game.js';
 
@@ -105,5 +105,13 @@ ok('transfer countdown before', !closedWin.open && closedWin.opensIn === 4 && cl
 s.season.round = 6;
 const openWin = transferWindowInfo(s);
 ok('transfer countdown open', openWin.open && openWin.closesIn === 2 && openWin.text.includes('2'));
+
+s = resetCareer();
+const scoutInfo = nextMatchInfo(s);
+const scout = scoutReport(s, scoutInfo.oppId);
+ok('scout report fields', scout && scout.rank >= 1 && scout.rank <= 8 && scout.avgKills >= 5 && scout.homeMap && scout.bestMap === scout.homeMap);
+s.matchHistory = [{ oppId: scout.oppId, kills: 10, deaths: 4 }];
+const scoutWithData = scoutReport(s, scout.oppId);
+ok('scout report averages', scoutWithData.avgKills === 10 && scoutWithData.avgDeaths === 4);
 
 console.log('fx-career-schedule: all PASS');

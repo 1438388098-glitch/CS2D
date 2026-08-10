@@ -588,6 +588,42 @@ export function opponentStanding(s, teamId) {
   return idx < 0 ? null : idx + 1;
 }
 
+export function scoutReport(s, oppId) {
+  const opp = s.season.teams.find((x) => x.id === oppId);
+  if (!opp) return null;
+  const recent = (Array.isArray(s.matchHistory) ? s.matchHistory : []).filter((m) => m && m.oppId === oppId).slice(-5);
+  const avgKills = recent.length
+    ? round2(recent.reduce((a, m) => a + (m.kills || 0), 0) / recent.length)
+    : Math.max(5, Math.round((opp.rating - 60) * 0.35 + 8));
+  const avgDeaths = recent.length
+    ? round2(recent.reduce((a, m) => a + (m.deaths || 0), 0) / recent.length)
+    : Math.max(4, Math.round(avgKills * 0.85));
+  const mapWins = {};
+  for (const f of Array.isArray(s.season.fixtures) ? s.season.fixtures : []) {
+    if (!f.played || f.winner !== oppId) continue;
+    const mapId = fixtureMapFor(s, f);
+    if (mapId) mapWins[mapId] = (mapWins[mapId] || 0) + 1;
+  }
+  for (const m of Array.isArray(s.season.cup && s.season.cup.bracket) ? s.season.cup.bracket : []) {
+    if (!m.played || m.winner !== oppId) continue;
+    const mapId = cupMapForRound(m.round);
+    if (mapId) mapWins[mapId] = (mapWins[mapId] || 0) + 1;
+  }
+  const bestMap = Object.entries(mapWins).sort((a, b) => b[1] - a[1])[0] ? Object.entries(mapWins).sort((a, b) => b[1] - a[1])[0][0] : opp.homeMap;
+  return {
+    oppId,
+    name: opp.name,
+    rating: opp.rating,
+    rank: opponentStanding(s, oppId),
+    points: (s.season.standings.find((x) => x.teamId === oppId) || {}).pts || 0,
+    form: teamRecentForm(s, oppId),
+    avgKills,
+    avgDeaths,
+    homeMap: opp.homeMap,
+    bestMap
+  };
+}
+
 export function matchImportance(s, match) {
   if (!match) return '普通战';
   if (s.season.cup.phase === 'active') return '杯赛';
@@ -628,7 +664,8 @@ export function nextMatchInfo(s) {
     form: teamRecentForm(s, oppId),
     ratingDiff,
     threat,
-    importance: matchImportance(s, nm)
+    importance: matchImportance(s, nm),
+    scout: scoutReport(s, oppId)
   };
 }
 

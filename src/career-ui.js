@@ -200,7 +200,7 @@ function renderDash(s) {
     const oppId = info ? info.oppId : (s.season.cup.phase === 'active' ? (nm.a === 'player' ? nm.b : nm.a) : (nm.home === 'player' ? nm.away : nm.home));
     const venue = info ? info.venue : (s.season.cup.phase === 'active' ? 'home' : (nm.home === 'player' ? 'home' : 'away'));
     matchHtml += '<p>对阵 <b>' + esc(info ? info.oppName : oppId) + '</b> · 评级 ' + (info && info.rating != null ? info.rating : '-') + (info ? ' · ' + info.threat : '') + ' · ' + (venue === 'home' ? '主场' : '客场') + ' · ' + esc(mapName((info && info.mapId) || (opp || {}).homeMap || '')) + (s.season.cup.phase === 'active' ? ' · 杯赛' : '') + '</p>';
-    if (info) matchHtml += '<p class="career-scout">对手排名 ' + (info.rank || '-') + ' · 近 5 场 ' + (info.form || '暂无') + ' · 重要性 ' + info.importance + ' · 胜率预估待评级差' + '</p>';
+    if (info) matchHtml += '<p class="career-scout">对手排名 ' + (info.rank || '-') + ' · 近 5 场 ' + (info.form || '暂无') + ' · 场均击杀 ' + (info.scout ? info.scout.avgKills : '-') + ' · 主场图 ' + esc(mapName((info.scout && info.scout.homeMap) || '')) + ' · 重要性 ' + info.importance + '</p>';
     matchHtml += '<div class="career-actions"><button class="btn primary small" data-act="play" data-opp="' + oppId + '" data-venue="' + venue + '" data-cup="' + (s.season.cup.phase === 'active' ? '1' : '0') + '">开赛</button><button class="btn small" data-act="sim">模拟本场</button></div>';
   } else {
     matchHtml += '<p>' + (s.season.cup.phase === 'finished' ? '本赛季已结束' : (s.season.cup.phase === 'active' ? '杯赛已淘汰，等待赛季结算' : '当前轮次已打完')) + '</p>';
