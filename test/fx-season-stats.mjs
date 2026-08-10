@@ -1,7 +1,7 @@
 import {
   resetCareer, setStorage, setRng, getState, settlePlayerMatch, nextSeason,
   save, loadCareer, __clearStateForTest,
-  seasonStats, seasonAwards, seasonSeries, seasonStreaks, careerSummary, matchDetail, seasonTimeline, headToHead, importantMatches, seasonTrends, favoriteMatches, cupHistory, trophyCase, careerTimeline
+  seasonStats, seasonAwards, seasonPerformanceSummary, seasonSeries, seasonStreaks, careerSummary, matchDetail, seasonTimeline, headToHead, importantMatches, seasonTrends, favoriteMatches, cupHistory, trophyCase, careerTimeline
 } from '../src/career.js';
 
 const ok = (name, cond) => {
@@ -53,6 +53,9 @@ ok('season awards best', awards.bestKills.kills === 20 && awards.bestDmg.dmg ===
 ok('season awards averages', awards.avgKills === Math.round(43 / 3 * 100) / 100 && awards.avgDmg === Math.round(3010 / 3));
 ok('season awards top', awards.topPerformance && awards.topPerformance.mvp === true);
 ok('season awards empty', seasonAwards([], 1).matches === 0 && seasonAwards([], 1).bestKills === null);
+
+const perf = seasonPerformanceSummary({ matchHistory: h, season: { id: 1 } }, 1);
+ok('season performance summary', perf.matches === 3 && perf.mvpCount === 1 && perf.totalDmg === 3010 && perf.totalMoney === 3500 && perf.bestKills === 20 && perf.avgDmg === Math.round(3010 / 3));
 
 st = seasonStats(h, (m) => m.win);
 ok('predicate filter', st.matches === 3 && st.wins === 3 && st.losses === 0);

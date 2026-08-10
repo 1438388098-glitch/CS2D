@@ -1233,6 +1233,32 @@ export function seasonAwards(history, season) {
   };
 }
 
+export function seasonPerformanceSummary(s, seasonId) {
+  const id = seasonId == null ? (s && s.season ? s.season.id : null) : seasonId;
+  const history = Array.isArray(s && s.matchHistory) ? s.matchHistory : [];
+  const stats = seasonStats(history, id);
+  const awards = seasonAwards(history, id);
+  return {
+    seasonId: id,
+    matches: stats.matches,
+    wins: stats.wins,
+    losses: stats.losses,
+    winRate: stats.winRate,
+    kd: stats.kd,
+    kills: stats.kills,
+    deaths: stats.deaths,
+    avgKills: awards.avgKills,
+    totalDmg: stats.totalDmg,
+    avgDmg: stats.avgDmg,
+    totalMoney: stats.totalMoney,
+    mvpCount: stats.mvp,
+    mvpMatches: awards.mvpMatches,
+    bestKills: awards.bestKills ? awards.bestKills.kills : 0,
+    bestDmg: awards.bestDmg ? awards.bestDmg.dmg : 0,
+    topPerformance: awards.topPerformance
+  };
+}
+
 export function seasonSeries(history, season) {
   return filterMatches(history, season).map((m) => ({
     win: !!m.win,

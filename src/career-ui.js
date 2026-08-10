@@ -2,7 +2,7 @@ import {
   loadCareer, getState, titleFor, startCareerMatch, careerEndMatch, abandonPendingMatch, simulatePlayerMatch, resetCareer,
   train, sellPlayer, buyPlayer, candidates, filterCandidates, nextSeason, seasonReport, nextMatch, nextMatchInfo, matchImportance, teamRecentForm,
   transferWindowOpen, transferWindowInfo, isStorageAvailable, cupMap, cupPrizeInfo, cupMapForRound, fixtureMapFor, fixtureMatchRecord, winChance, trainingTiers, trainingPreview, xpNeeded,
-  seasonStats, seasonAwards, seasonSeries, seasonStreaks, careerSummary, matchDetail, seasonTimeline, headToHead, importantMatches, seasonTrends, favoriteMatches, cupHistory, trophyCase, careerTimeline,
+  seasonStats, seasonAwards, seasonPerformanceSummary, seasonSeries, seasonStreaks, careerSummary, matchDetail, seasonTimeline, headToHead, importantMatches, seasonTrends, favoriteMatches, cupHistory, trophyCase, careerTimeline,
   sponsorIncome, formBonus, fatiguePenalty, careerMorale, restPlayer, seasonGoals, seasonPace, goalProgress, rosterContribution,
   achievementDefs, achievements, careerRecords
 } from './career.js';
@@ -417,8 +417,19 @@ function renderCup(s) {
 function renderSettlement(s) {
   const r = seasonReport();
   const cupRoundText = cupRoundLabel(r.cupRound);
+  const perf = seasonPerformanceSummary(s);
+  const perfHtml = '<div class="career-card"><h4>赛季个人表现</h4><div class="career-kpis">' +
+    '<div class="career-kpi"><b>' + perf.matches + '</b><span>场次</span></div>' +
+    '<div class="career-kpi"><b>' + perf.wins + ' / ' + perf.losses + '</b><span>胜负</span></div>' +
+    '<div class="career-kpi"><b>' + perf.kd + '</b><span>K/D</span></div>' +
+    '<div class="career-kpi"><b>' + perf.mvpCount + '</b><span>MVP</span></div>' +
+    '<div class="career-kpi"><b>' + perf.totalDmg + '</b><span>总伤害</span></div>' +
+    '<div class="career-kpi"><b>' + perf.avgDmg + '</b><span>场均伤害</span></div>' +
+    '<div class="career-kpi"><b>' + perf.bestKills + '</b><span>最佳击杀</span></div>' +
+    '<div class="career-kpi"><b>' + money(perf.totalMoney) + '</b><span>比赛奖金</span></div></div>' +
+    (perf.topPerformance ? '<div class="career-row"><span>最佳单场 · ' + esc(perf.topPerformance.oppName || perf.topPerformance.oppId || '-') + ' · ' + esc(mapName(perf.topPerformance.mapId || '')) + '</span><b>' + perf.topPerformance.kills + 'K / ' + perf.topPerformance.deaths + 'D · ' + perf.topPerformance.dmg + ' 伤 · ' + money(perf.topPerformance.money) + '</b></div>' : '') + '</div>';
   const history = s.history.slice().reverse().map((h) => '<div class="career-history">第 ' + h.seasonId + ' 赛季 · ' + esc(h.league) + ' · 第 ' + h.rank + ' 名 · 杯赛 ' + cupRoundLabel(h.cupRound) + ' · 奖金 ' + money(h.prize) + '</div>').join('');
-  return '<div class="career-card"><h4>赛季结算</h4><div class="career-settle"><span>联赛：' + esc(r.league) + ' · 第 ' + r.rank + ' 名</span><span>排名奖金：' + money(r.rankPrize) + '</span><span>杯赛：' + cupRoundText + ' · ' + money(r.cupPrize) + '</span><span>总奖金：' + money(r.prize) + '</span></div></div><div class="career-card"><h4>历史记录</h4>' + (history || '<div class="career-history">暂无</div>') + '</div><div class="career-card"><button class="btn primary" data-act="next-season">下一赛季</button></div>';
+  return '<div class="career-card"><h4>赛季结算</h4><div class="career-settle"><span>联赛：' + esc(r.league) + ' · 第 ' + r.rank + ' 名</span><span>排名奖金：' + money(r.rankPrize) + '</span><span>杯赛：' + cupRoundText + ' · ' + money(r.cupPrize) + '</span><span>总奖金：' + money(r.prize) + '</span></div></div>' + perfHtml + '<div class="career-card"><h4>历史记录</h4>' + (history || '<div class="career-history">暂无</div>') + '</div><div class="career-card"><button class="btn primary" data-act="next-season">下一赛季</button></div>';
 }
 
 function renderFinance(s) {
