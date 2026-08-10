@@ -593,16 +593,26 @@ export function filterCandidates(pool, filters = {}) {
   const role = filters.role || '';
   const minRating = Number.isFinite(Number(filters.minRating)) ? Number(filters.minRating) : 0;
   const maxPrice = Number.isFinite(Number(filters.maxPrice)) ? Number(filters.maxPrice) : 30000;
+  const sortBy = filters.sortBy || 'rating';
+  const sortDir = filters.sortDir === 'asc' ? 1 : -1;
   const list = source.filter((c) =>
     (!role || c.role === role) &&
     (c.rating || 0) >= minRating &&
     (c.price || 0) <= maxPrice
-  );
+  ).sort((a, b) => {
+    const av = sortBy === 'potential'
+      ? (Number.isFinite(Number(a.potential)) ? Number(a.potential) : Math.min(96, (Number(a.rating) || 70) + 5))
+      : (Number(a[sortBy]) || 0);
+    const bv = sortBy === 'potential'
+      ? (Number.isFinite(Number(b.potential)) ? Number(b.potential) : Math.min(96, (Number(b.rating) || 70) + 5))
+      : (Number(b[sortBy]) || 0);
+    return (av - bv) * sortDir;
+  });
   return {
     list,
     total: source.length,
     shown: list.length,
-    filters: { role, minRating, maxPrice }
+    filters: { role, minRating, maxPrice, sortBy, sortDir }
   };
 }
 

@@ -16,6 +16,8 @@ let scheduleDetail = null;
 let transferRole = '';
 let transferMinRating = 0;
 let transferMaxPrice = 30000;
+let transferSort = 'rating';
+let transferSortDir = 'desc';
 
 function el(id) { return doc ? doc.getElementById(id) : null; }
 function esc(s) {
@@ -66,6 +68,8 @@ function onChange(e) {
   if (filter === 'role') transferRole = target.value || '';
   else if (filter === 'min-rating') transferMinRating = Math.max(0, Math.min(100, Number(target.value) || 0));
   else if (filter === 'max-price') transferMaxPrice = Math.max(0, Math.min(30000, Number(target.value) || 30000));
+  else if (filter === 'sort') transferSort = target.value || 'rating';
+  else if (filter === 'sort-dir') transferSortDir = target.value === 'asc' ? 'asc' : 'desc';
   render();
 }
 
@@ -379,11 +383,13 @@ function renderRoster(s) {
     const roleOptions = ROLE_CN.map((role) => '<option value="' + esc(role) + '"' + (transferRole === role ? ' selected' : '') + '>' + esc(role) + '</option>').join('');
     const filterHtml = '<div class="career-train-row"><b>筛选</b><select data-filter="role"><option value="">全部角色</option>' + roleOptions + '</select>' +
       '<span>最低评级 <input type="number" data-filter="min-rating" min="0" max="100" value="' + transferMinRating + '"></span>' +
-      '<span>最高价格 <input type="number" data-filter="max-price" min="0" max="30000" step="500" value="' + transferMaxPrice + '"></span></div>';
+      '<span>最高价格 <input type="number" data-filter="max-price" min="0" max="30000" step="500" value="' + transferMaxPrice + '"></span>' +
+      '<span>排序 <select data-filter="sort"><option value="rating"' + (transferSort === 'rating' ? ' selected' : '') + '>评级</option><option value="price"' + (transferSort === 'price' ? ' selected' : '') + '>价格</option><option value="potential"' + (transferSort === 'potential' ? ' selected' : '') + '>潜力</option></select></span>' +
+      '<span>方向 <select data-filter="sort-dir"><option value="desc"' + (transferSortDir === 'desc' ? ' selected' : '') + '>降序</option><option value="asc"' + (transferSortDir === 'asc' ? ' selected' : '') + '>升序</option></select></span></div>';
     const budget = transferBudget(s);
     html += '<div class="career-card"><h4>转会窗 · 剩余 ' + s.team.transfersLeft + ' 次</h4>' + filterHtml +
       '<div class="career-stats"><span>可负担 ' + budget.affordable + ' / ' + budget.total + ' · 最高可买评级 ' + (budget.maxAffordableRating || '-') + ' · 买入后余额 ' + money(budget.afterBestBuy) + '</span></div><div class="career-pool">';
-    const poolResult = filterCandidates(candidates(), { role: transferRole, minRating: transferMinRating, maxPrice: transferMaxPrice });
+    const poolResult = filterCandidates(candidates(), { role: transferRole, minRating: transferMinRating, maxPrice: transferMaxPrice, sortBy: transferSort, sortDir: transferSortDir });
     const pool = poolResult.list;
     if (pool.length) {
       for (const c of pool) {

@@ -114,6 +114,14 @@ ok('candidate filter rating', filterCandidates(filterPool, { minRating: 80 }).sh
 ok('candidate filter price', filterCandidates(filterPool, { maxPrice: 10000 }).shown === 2);
 ok('candidate filter combined', filterCandidates(filterPool, { role: '指挥', minRating: 90, maxPrice: 20000 }).shown === 1);
 ok('candidate filter empty', filterCandidates(filterPool, { role: '指挥', minRating: 99 }).shown === 0);
+const sortPool = [
+  { id: 'a', role: '突破', rating: 60, price: 9000, potential: 95 },
+  { id: 'b', role: '补枪', rating: 70, price: 4000, potential: 65 },
+  { id: 'c', role: '指挥', rating: 91, price: 18000, potential: 80 }
+];
+ok('candidate sort rating', filterCandidates(sortPool, { sortBy: 'rating', sortDir: 'desc' }).list.map((x) => x.id).join(',') === 'c,b,a');
+ok('candidate sort price', filterCandidates(sortPool, { sortBy: 'price', sortDir: 'asc' }).list[0].id === 'b');
+ok('candidate sort potential', filterCandidates(sortPool, { sortBy: 'potential', sortDir: 'desc' }).list[0].id === 'a');
 
 s = resetCareer();
 const candProfile = candidateProfile({ id: 'x', rating: 60, price: 1000, role: '突破' });
