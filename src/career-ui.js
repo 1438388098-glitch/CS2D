@@ -1,7 +1,7 @@
 import {
   loadCareer, getState, titleFor, startCareerMatch, careerEndMatch, abandonPendingMatch, simulatePlayerMatch, resetCareer,
   train, sellPlayer, sellPreview, buyPlayer, renewPlayer, candidates, filterCandidates, candidateProfile, nextSeason, seasonReport, nextMatch, nextMatchInfo, matchImportance, teamRecentForm, matchReadiness,
-  transferWindowOpen, transferWindowInfo, transferBudget, contractStatus, isStorageAvailable, cupMap, cupPrizeInfo, cupMapForRound, fixtureMapFor, fixtureMatchRecord, winChance, trainingTiers, trainingPreview, trainingSuggestion, rotationAdvice, xpNeeded,
+  transferWindowOpen, transferWindowInfo, transferBudget, contractStatus, isStorageAvailable, cupMap, cupPrizeInfo, cupMapForRound, fixtureMapFor, fixtureMatchRecord, winChance, trainingTiers, trainingPreview, trainingSuggestion, rotationAdvice, trainingHistory, xpNeeded,
   seasonStats, seasonAwards, seasonPerformanceSummary, seasonSeries, seasonStreaks, careerSummary, matchDetail, seasonTimeline, headToHead, importantMatches, seasonTrends, favoriteMatches, cupHistory, trophyCase, careerTimeline,
   sponsorIncome, sponsorPreview, formBonus, fatiguePenalty, careerMorale, restPlayer, seasonGoals, seasonPace, goalProgress, relegationProjection, rosterContribution,
   positionBalance,
@@ -331,6 +331,7 @@ function renderTraining(s) {
   const fat = Math.round(fatiguePenalty(s) * 100);
   const suggestion = trainingSuggestion(s);
   const rotation = rotationAdvice(s);
+  const history = trainingHistory(s);
   let html = '<div class="career-card"><h4>训练课</h4><p>本轮剩余 ' + s.team.trainingLeft + ' 次 · 资金 ' + money(s.team.bank) + ' · 疲劳 ' + fat + '%</p>' + attrsRadar(s.player.attrs);
   html += '<div class="career-train-row"><b>恢复</b><button class="btn small"' + (s.team.rested ? ' disabled' : '') + ' data-act="rest">休息（疲劳清零）</button><span>' + (s.team.rested ? '本轮已休息' : '每轮最多一次') + '</span></div>';
   if (suggestion.suggestion) html += '<div class="career-train-row"><b>建议</b><span>训练 ' + cn(suggestion.suggestion.attr, ATTR_CN) + ' ' + suggestion.suggestion.label + ' · +' + suggestion.suggestion.gained + ' 属性 · 花费 ' + money(suggestion.suggestion.cost) + ' · 疲劳+' + suggestion.suggestion.fatigueGain + '</span></div>';
@@ -345,6 +346,8 @@ function renderTraining(s) {
     }
     html += '</div>';
   }
+  const historyRows = history.recent.map((h) => '<div class="career-row"><span>' + (h.type === 'teammate' ? '队友 ' + esc(h.target || '') + ' · ' + esc(h.role || '') : '玩家 ' + cn(h.attr, ATTR_CN)) + ' · ' + esc(h.label || '') + '</span><b>+' + h.gained + ' · ' + money(h.cost) + '</b></div>').join('') || '<div class="career-news">暂无训练记录</div>';
+  html += '<div class="career-card"><h4>训练履历</h4><div class="career-stats"><span>累计 ' + history.totalCount + ' 次 · 玩家 ' + history.playerCount + ' · 队友 ' + history.teammateCount + ' · 花费 ' + money(history.totalSpend) + '</span></div>' + historyRows + '</div>';
   return html + '</div><div class="career-card"><h4>收益预览</h4><p>训练会提升指定属性，同时累积疲劳；精英训练收益最高但疲劳代价也更大。</p></div>';
 }
 

@@ -1,7 +1,7 @@
 import {
-  resetCareer, setStorage, setRng, getState, settlePlayerMatch, train, sellPlayer, sellPreview, buyPlayer, candidates, filterCandidates,
+  resetCareer, setStorage, setRng, getState, settlePlayerMatch, train, trainTeammate, sellPlayer, sellPreview, buyPlayer, candidates, filterCandidates,
   nextSeason, save, loadCareer, __clearStateForTest, candidateProfile,
-  sponsorIncome, sponsorPreview, formBonus, fatiguePenalty, careerMorale, restPlayer, seasonGoals, goalProgress, trainingPreview, trainingSuggestion, rotationAdvice, transferBudget, contractStatus, renewPlayer, rosterContribution, positionBalance,
+  sponsorIncome, sponsorPreview, formBonus, fatiguePenalty, careerMorale, restPlayer, seasonGoals, goalProgress, trainingPreview, trainingSuggestion, rotationAdvice, trainingHistory, transferBudget, contractStatus, renewPlayer, rosterContribution, positionBalance,
   achievementDefs, achievements, careerRecords, migrateCareerState, matchReadiness
 } from '../src/career.js';
 
@@ -61,6 +61,15 @@ ok('training preview caps', cappedPreview.after === 100 && cappedPreview.gained 
 s = resetCareer();
 const suggestion = trainingSuggestion(s);
 ok('training suggestion', suggestion && suggestion.suggestion && suggestion.suggestion.attr === 'nade' && suggestion.suggestion.tierKey === 'elite' && suggestion.options.length >= 1 && suggestion.trainingLeft === 2);
+
+s = resetCareer();
+s.team.bank = 5000;
+train('aim', 'basic');
+s.team.bank = 5000;
+const mateForHistory = s.team.roster[0];
+trainTeammate(mateForHistory.id, 'basic');
+const history = trainingHistory(s);
+ok('training history', history && history.totalCount === 2 && history.playerCount === 1 && history.teammateCount === 1 && history.recent.length === 2 && history.logs.some((x) => x.target === mateForHistory.name));
 
 s = resetCareer();
 const rotation = rotationAdvice(s);

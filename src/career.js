@@ -339,6 +339,7 @@ export function migrateCareerState(parsed) {
   parsed.team.morale = Number.isFinite(Number(parsed.team.morale)) ? parsed.team.morale : 65;
   parsed.team.rested = !!parsed.team.rested;
   parsed.team.pool = parsed.team.pool || null;
+  parsed.team.trainingLog = Array.isArray(parsed.team.trainingLog) ? parsed.team.trainingLog : [];
   parsed.season.cup = parsed.season.cup || { phase: 'idle', bracket: [] };
   assignFixtureMaps(parsed);
   parsed.matchHistory = Array.isArray(parsed.matchHistory) ? parsed.matchHistory : [];
@@ -348,6 +349,18 @@ export function migrateCareerState(parsed) {
 export function xpNeeded(level) { return level * 500; }
 export function titleFor(level) { return TITLES[Math.max(0, Math.min(level - 1, TITLES.length - 1))]; }
 export function trainingTiers() { return TRAIN_TIERS.map((t) => ({ ...t })); }
+export function trainingHistory(s) {
+  const logs = Array.isArray(s && s.team && s.team.trainingLog) ? s.team.trainingLog : [];
+  const sorted = [...logs].sort((a, b) => (b.t || 0) - (a.t || 0));
+  return {
+    logs: sorted,
+    recent: sorted.slice(0, 6),
+    playerCount: logs.filter((x) => x.type === 'player').length,
+    teammateCount: logs.filter((x) => x.type === 'teammate').length,
+    totalCount: logs.length,
+    totalSpend: logs.reduce((a, x) => a + (Number(x.cost) || 0), 0)
+  };
+}
 export function careerMapPool() { return MAP_IDS.slice(); }
 
 function makeRoster() {
@@ -478,7 +491,7 @@ export function newCareerState() {
     team: {
       name: PLAYER_TEAM.name, league: '乙级', bank: 12000,
       roster, trainingLeft: 2, transfersLeft: 2, transferWindow: false, pool: null,
-      ledger: [], morale: 65, rested: false
+      ledger: [], trainingLog: [], morale: 65, rested: false
     },
     season: {
       id: 1, round: 1, totalRounds: 14,
@@ -644,6 +657,8 @@ export function train(attr, tierKey) {
   s.team.trainingLeft--;
   refreshPlayerRating(s);
   addLedger(s, 'expense', -tier.cost, '训练：' + attr);
+  if (!Array.isArray(s.team.trainingLog)) s.team.trainingLog = [];
+  s.team.trainingLog.push({ t: Date.now(), type: 'player', attr, tierKey: tier.key, label: tier.label, cost: tier.cost, gained: tier.points });
   addNews(s, 'info', '训练完成：' + attr + ' +' + tier.points);
   save();
   return { ok: true };
@@ -759,6 +774,8 @@ export function trainTeammate(id, tierKey) {
   s.team.trainingLeft--;
   refreshPlayerRating(s);
   addLedger(s, 'expense', -tier.cost, '训练：' + p.name);
+  if (!Array.isArray(s.team.trainingLog)) s.team.trainingLog = [];
+  s.team.trainingLog.push({ t: Date.now(), type: 'teammate', target: p.name, role: p.role, tierKey: tier.key, label: tier.label, cost: tier.cost, gained: tier.points });
   addNews(s, 'info', '训练完成：' + p.name + ' rating +' + tier.points);
   save();
   return { ok: true };
