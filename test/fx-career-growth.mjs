@@ -1,7 +1,7 @@
 import {
   resetCareer, setStorage, setRng, getState, settlePlayerMatch, train, sellPlayer, buyPlayer, candidates,
   nextSeason, save, loadCareer, __clearStateForTest,
-  sponsorIncome, formBonus, fatiguePenalty, careerMorale, restPlayer, seasonGoals, goalProgress,
+  sponsorIncome, formBonus, fatiguePenalty, careerMorale, restPlayer, seasonGoals, goalProgress, trainingPreview,
   achievementDefs, achievements, careerRecords, migrateCareerState
 } from '../src/career.js';
 
@@ -38,6 +38,16 @@ s = resetCareer();
 s.team.bank = 5000;
 train('aim', 'basic');
 ok('train ledger', Array.isArray(s.team.ledger) && s.team.ledger.some((x) => x.type === 'expense' && x.label && x.label.includes('训练')) && s.team.bank === 4500);
+ok('train fatigue applied', s.player.fatigue === 3);
+
+s = resetCareer();
+s.team.bank = 5000;
+const preview = trainingPreview(s, 'aim', 'basic');
+ok('training preview fields', preview && preview.before === 50 && preview.after === 52 && preview.cost === 500 && preview.fatigueGain === 3 && preview.affordable === true && preview.blocked === false);
+ok('training preview invalids', trainingPreview(s, 'nope', 'basic') === null && trainingPreview(s, 'aim', 'nope') === null);
+s.player.attrs.aim = 99;
+const cappedPreview = trainingPreview(s, 'aim', 'elite');
+ok('training preview caps', cappedPreview.after === 100 && cappedPreview.gained === 1 && cappedPreview.fatigueGain === 10);
 
 s = resetCareer();
 s.season.round = 5;

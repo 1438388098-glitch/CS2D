@@ -1,7 +1,7 @@
 import {
   loadCareer, getState, titleFor, startCareerMatch, careerEndMatch, abandonPendingMatch, simulatePlayerMatch, resetCareer,
   train, sellPlayer, buyPlayer, candidates, nextSeason, seasonReport, nextMatch, nextMatchInfo, matchImportance, teamRecentForm,
-  transferWindowOpen, transferWindowInfo, isStorageAvailable, cupMap, cupPrizeInfo, cupMapForRound, fixtureMapFor, fixtureMatchRecord, winChance, trainingTiers, xpNeeded,
+  transferWindowOpen, transferWindowInfo, isStorageAvailable, cupMap, cupPrizeInfo, cupMapForRound, fixtureMapFor, fixtureMatchRecord, winChance, trainingTiers, trainingPreview, xpNeeded,
   seasonStats, seasonSeries, seasonStreaks, careerSummary, matchDetail, seasonTimeline, headToHead, importantMatches, seasonTrends, favoriteMatches, cupHistory, careerTimeline,
   sponsorIncome, formBonus, fatiguePenalty, careerMorale, restPlayer, seasonGoals, seasonPace, goalProgress,
   achievementDefs, achievements, careerRecords
@@ -301,13 +301,14 @@ function renderTraining(s) {
   for (const [attr, v] of Object.entries(s.player.attrs)) {
     html += '<div class="career-train-row"><b>' + cn(attr, ATTR_CN) + ' (' + v + ')</b>';
     for (const tier of trainingTiers()) {
-      const label = tier.label + ' ' + tier.cost + ' / +' + tier.points;
-      const disabled = s.team.bank < tier.cost || s.team.trainingLeft <= 0 || v >= 100;
+      const pre = trainingPreview(s, attr, tier.key);
+      const label = tier.label + ' ' + tier.cost + ' / +' + tier.points + ' (' + (pre ? pre.before + '→' + pre.after : '-') + ' · 疲劳+' + (pre ? pre.fatigueGain : tier.fatigue || 3) + ')';
+      const disabled = !pre || pre.blocked || !pre.affordable || pre.trainingLeft <= 0;
       html += '<button class="btn small"' + (disabled ? ' disabled' : '') + ' data-act="train" data-attr="' + attr + '" data-tier="' + tier.key + '">' + label + '</button>';
     }
     html += '</div>';
   }
-  return html + '</div>';
+  return html + '</div><div class="career-card"><h4>收益预览</h4><p>训练会提升指定属性，同时累积疲劳；精英训练收益最高但疲劳代价也更大。</p></div>';
 }
 
 function renderRoster(s) {

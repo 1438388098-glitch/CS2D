@@ -47,9 +47,9 @@ const TEAM_POOL = [
   { name: 'Complexity', tag: 'COL' }
 ];
 const TRAIN_TIERS = [
-  { key: 'basic', label: '基础', cost: 500, points: 2 },
-  { key: 'pro', label: '进阶', cost: 1200, points: 6 },
-  { key: 'elite', label: '精英', cost: 2500, points: 15 }
+  { key: 'basic', label: '基础', cost: 500, points: 2, fatigue: 3 },
+  { key: 'pro', label: '进阶', cost: 1200, points: 6, fatigue: 6 },
+  { key: 'elite', label: '精英', cost: 2500, points: 15, fatigue: 10 }
 ];
 const PRIZE = { 1: 30000, 2: 20000, 3: 15000, 4: 8000, 5: 8000, 6: 8000, 7: 4000, 8: 4000 };
 const LEAGUE_RATING = { '甲级': [80, 92], '乙级': [70, 85], '丙级': [60, 74] };
@@ -458,12 +458,35 @@ export function train(attr, tierKey) {
   if (s.team.bank < tier.cost) return { ok: false, error: '资金不足' };
   s.team.bank -= tier.cost;
   s.player.attrs[attr] = Math.min(100, s.player.attrs[attr] + tier.points);
+  s.player.fatigue = clamp(Number(s.player.fatigue) + (tier.fatigue || 3), 0, 100);
   s.team.trainingLeft--;
   refreshPlayerRating(s);
   addLedger(s, 'expense', -tier.cost, '训练：' + attr);
   addNews(s, 'info', '训练完成：' + attr + ' +' + tier.points);
   save();
   return { ok: true };
+}
+
+export function trainingPreview(s, attr, tierKey) {
+  const tier = TRAIN_TIERS.find((t) => t.key === tierKey);
+  if (!tier || !s || !s.player || !s.player.attrs || !(attr in s.player.attrs)) return null;
+  const before = Number(s.player.attrs[attr]) || 0;
+  const after = Math.min(100, before + tier.points);
+  const fatigueAfter = Math.min(100, (Number(s.player.fatigue) || 0) + (tier.fatigue || 3));
+  return {
+    attr,
+    tierKey,
+    label: tier.label,
+    cost: tier.cost,
+    before,
+    after,
+    gained: after - before,
+    fatigueAfter,
+    fatigueGain: fatigueAfter - (Number(s.player.fatigue) || 0),
+    affordable: Number(s.team && s.team.bank) >= tier.cost,
+    trainingLeft: Number(s.team && s.team.trainingLeft) || 0,
+    blocked: before >= 100
+  };
 }
 
 export function restPlayer() {
