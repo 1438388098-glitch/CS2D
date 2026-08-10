@@ -262,7 +262,7 @@ ok('career trophy case renders', cupTabHtml.includes('奖杯陈列'));
 const trainingHtml = __renderTabForTest('training');
 ok('career training radar renders', trainingHtml.includes('career-radar') && trainingHtml.includes('综合能力'));
 const financeHtml = __renderTabForTest('finance');
-ok('career finance renders', financeHtml.includes('财务概览') && financeHtml.includes('资金流水'));
+ok('career finance renders', financeHtml.includes('财务概览') && financeHtml.includes('资金流水') && financeHtml.includes('赞助目标'));
 const standingsHtml = __renderTabForTest('standings');
 ok('career standings form column', standingsHtml.includes('近5') && standingsHtml.includes('预测最终') && standingsHtml.includes('升降级预测'));
 const schedState = getState();

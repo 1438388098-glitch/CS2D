@@ -1,7 +1,7 @@
 import {
   resetCareer, setStorage, setRng, getState, settlePlayerMatch, train, sellPlayer, buyPlayer, candidates, filterCandidates,
   nextSeason, save, loadCareer, __clearStateForTest,
-  sponsorIncome, formBonus, fatiguePenalty, careerMorale, restPlayer, seasonGoals, goalProgress, trainingPreview, rosterContribution,
+  sponsorIncome, sponsorPreview, formBonus, fatiguePenalty, careerMorale, restPlayer, seasonGoals, goalProgress, trainingPreview, rosterContribution,
   achievementDefs, achievements, careerRecords, migrateCareerState
 } from '../src/career.js';
 
@@ -33,6 +33,15 @@ const playerTeam = s.season.teams.find((t) => t.id === 'player');
 const sponsorLow = sponsorIncome({ team: { ...s.team, league: '丙级', morale: 20 }, season: { teams: [{ ...playerTeam, rating: 55 }] } });
 const sponsorHigh = sponsorIncome({ team: { ...s.team, league: '甲级', morale: 100 }, season: { teams: [{ ...playerTeam, rating: 95 }] } });
 ok('sponsor scales', sponsorHigh > baseSponsor && baseSponsor > sponsorLow);
+
+s = resetCareer();
+const sp = sponsorPreview(s);
+ok('sponsor preview', sp && sp.current === sponsorIncome(s) && sp.targets.length === 5 && sp.progress >= 0 && sp.remaining >= 0 && sp.seasonProjection >= 0);
+s.team.morale = 100;
+const playerTeamForSponsor = s.season.teams.find((t) => t.id === 'player');
+playerTeamForSponsor.rating = 95;
+const spHigh = sponsorPreview(s);
+ok('sponsor next tier', spHigh.current > sp.current && (!spHigh.next || spHigh.next.income > spHigh.current));
 
 s = resetCareer();
 s.team.bank = 5000;

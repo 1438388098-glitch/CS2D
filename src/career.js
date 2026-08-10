@@ -162,6 +162,44 @@ export function sponsorIncome(s) {
   return Math.round(base * (0.7 + morale / 200) * (0.8 + rating / 500));
 }
 
+export function sponsorPreview(s) {
+  const league = s.team.league;
+  const base = LEAGUE_SPONSOR[league] || LEAGUE_SPONSOR['乙级'];
+  const morale = Number(s.team.morale) || 65;
+  const rating = Number((s.season.teams.find((t) => t.id === 'player') || {}).rating) || 65;
+  const totalRounds = Number(s.season.totalRounds) || 14;
+  const round = Math.min(totalRounds, Number(s.season.round) || 1);
+  const progress = Math.round((round / totalRounds) * 100);
+  const remaining = Math.max(0, totalRounds - (s.season.standings.find((x) => x.teamId === 'player') || {}).played || 0);
+  const targets = [
+    { label: '士气 80', morale: 80, rating },
+    { label: '士气 100', morale: 100, rating },
+    { label: '评级 80', morale, rating: 80 },
+    { label: '评级 90', morale, rating: 90 },
+    { label: '评级 95', morale, rating: 95 }
+  ].map((t) => ({
+    ...t,
+    income: Math.round(base * (0.7 + t.morale / 200) * (0.8 + t.rating / 500))
+  }));
+  const current = sponsorIncome(s);
+  const next = targets.filter((t) => t.income > current).sort((a, b) => a.income - b.income)[0] || null;
+  const ledger = Array.isArray(s.team.ledger) ? s.team.ledger : [];
+  const seasonEarned = ledger.reduce((a, x) => a + (x.type === 'income' && x.label && x.label.includes('赞助') ? (x.amount || 0) : 0), 0);
+  return {
+    league,
+    base,
+    morale,
+    rating,
+    current,
+    progress,
+    remaining,
+    seasonEarned,
+    seasonProjection: current * remaining,
+    targets,
+    next
+  };
+}
+
 function currentWinStreak(s) {
   const list = Array.isArray(s.player.form) ? s.player.form : [];
   let n = 0;
