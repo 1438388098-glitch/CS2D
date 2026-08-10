@@ -2,7 +2,7 @@ import {
   resetCareer, setStorage, setRng, getState, settlePlayerMatch, train, sellPlayer, buyPlayer, candidates, filterCandidates,
   nextSeason, save, loadCareer, __clearStateForTest,
   sponsorIncome, sponsorPreview, formBonus, fatiguePenalty, careerMorale, restPlayer, seasonGoals, goalProgress, trainingPreview, rosterContribution,
-  achievementDefs, achievements, careerRecords, migrateCareerState
+  achievementDefs, achievements, careerRecords, migrateCareerState, matchReadiness
 } from '../src/career.js';
 
 const ok = (name, cond) => {
@@ -57,6 +57,13 @@ ok('training preview invalids', trainingPreview(s, 'nope', 'basic') === null && 
 s.player.attrs.aim = 99;
 const cappedPreview = trainingPreview(s, 'aim', 'elite');
 ok('training preview caps', cappedPreview.after === 100 && cappedPreview.gained === 1 && cappedPreview.fatigueGain === 10);
+
+s = resetCareer();
+const ready = matchReadiness(s);
+ok('match readiness base', ready && ready.rawAvg === 48 && ready.effectiveAvg === 48 && ready.base > 0 && ready.final > 0 && ready.netAdjust === ready.final - ready.base && ready.next && ready.next.oppRating > 0 && ready.next.winChance >= 5);
+s.player.fatigue = 100;
+const tired = matchReadiness(s);
+ok('match readiness fatigue', tired.effectiveAvg < ready.rawAvg && tired.fatiguePct === 25 && tired.netAdjust === tired.final - tired.base);
 
 s = resetCareer();
 let rc = rosterContribution(s);

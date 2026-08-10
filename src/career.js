@@ -798,6 +798,38 @@ export function nextMatchInfo(s) {
   };
 }
 
+export function matchReadiness(s) {
+  const rawAttrs = { ...s.player.attrs };
+  const effectiveAttrsCopy = effectiveAttrs(s);
+  const rosterAvg = teamAvgRating(s.team.roster);
+  const rawAvg = (rawAttrs.aim + rawAttrs.move + rawAttrs.react + rawAttrs.nade) / 4;
+  const effAvg = (effectiveAttrsCopy.aim + effectiveAttrsCopy.move + effectiveAttrsCopy.react + effectiveAttrsCopy.nade) / 4;
+  const base = Math.round(rosterAvg * 0.8 + effAvg * 0.2);
+  const form = formBonus(s);
+  const morale = moraleModifier(s);
+  const final = Math.round(effectiveTeamRating(s));
+  const info = nextMatchInfo(s);
+  return {
+    rawAttrs,
+    effectiveAttrs: effectiveAttrsCopy,
+    rawAvg: Math.round(rawAvg),
+    effectiveAvg: Math.round(effAvg),
+    fatiguePct: Math.round(fatiguePenalty(s) * 100),
+    form,
+    morale,
+    base,
+    final,
+    netAdjust: final - base,
+    next: info ? {
+      oppId: info.oppId,
+      oppName: info.oppName,
+      oppRating: info.rating,
+      winChance: info.winChance,
+      venue: info.venue
+    } : null
+  };
+}
+
 export function cupMapForRound(round) {
   const order = { QF: 0, SF: 1, F: 2 };
   return MAP_IDS[order[round] != null ? order[round] : 0];

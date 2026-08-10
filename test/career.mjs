@@ -251,6 +251,8 @@ initCareerUi(document, fakeGame);
 openCareer();
 const panelHtml = document.getElementById('careerPanel').innerHTML;
 ok('career ui renders', panelHtml.includes('生涯模式') && panelHtml.includes('赛季结算'));
+const dashHtml = __renderTabForTest('dash');
+ok('career readiness renders', dashHtml.includes('赛前状态') && dashHtml.includes('最终评级') && dashHtml.includes('对手评级'));
 for (const key of ['dash', 'schedule', 'training', 'roster', 'standings', 'cup', 'finance', 'stats']) {
   const html = __renderTabForTest(key);
   ok('career tab renders ' + key, html && html.length > 0);

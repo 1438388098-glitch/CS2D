@@ -1,6 +1,6 @@
 import {
   loadCareer, getState, titleFor, startCareerMatch, careerEndMatch, abandonPendingMatch, simulatePlayerMatch, resetCareer,
-  train, sellPlayer, buyPlayer, candidates, filterCandidates, nextSeason, seasonReport, nextMatch, nextMatchInfo, matchImportance, teamRecentForm,
+  train, sellPlayer, buyPlayer, candidates, filterCandidates, nextSeason, seasonReport, nextMatch, nextMatchInfo, matchImportance, teamRecentForm, matchReadiness,
   transferWindowOpen, transferWindowInfo, isStorageAvailable, cupMap, cupPrizeInfo, cupMapForRound, fixtureMapFor, fixtureMatchRecord, winChance, trainingTiers, trainingPreview, xpNeeded,
   seasonStats, seasonAwards, seasonPerformanceSummary, seasonSeries, seasonStreaks, careerSummary, matchDetail, seasonTimeline, headToHead, importantMatches, seasonTrends, favoriteMatches, cupHistory, trophyCase, careerTimeline,
   sponsorIncome, sponsorPreview, formBonus, fatiguePenalty, careerMorale, restPlayer, seasonGoals, seasonPace, goalProgress, relegationProjection, rosterContribution,
@@ -212,6 +212,18 @@ function renderDash(s) {
   const mor = careerMorale(s);
   const fat = Math.round(fatiguePenalty(s) * 100);
   const winInfo = transferWindowInfo(s);
+  const readiness = matchReadiness(s);
+  const readinessHtml = '<div class="career-card"><h4>赛前状态</h4><div class="career-kpis">' +
+    '<div class="career-kpi"><b>' + readiness.base + '</b><span>基础评级</span></div>' +
+    '<div class="career-kpi"><b>' + readiness.effectiveAvg + '</b><span>疲劳后属性</span></div>' +
+    '<div class="career-kpi"><b>' + (readiness.form >= 0 ? '+' : '') + readiness.form + '</b><span>状态加成</span></div>' +
+    '<div class="career-kpi"><b>' + (readiness.morale >= 0 ? '+' : '') + readiness.morale + '</b><span>士气加成</span></div>' +
+    '<div class="career-kpi"><b>' + readiness.final + '</b><span>最终评级</span></div>' +
+    '<div class="career-kpi"><b>' + (readiness.next && readiness.next.oppRating != null ? readiness.next.oppRating : '-') + '</b><span>对手评级</span></div>' +
+    '<div class="career-kpi"><b>' + (readiness.next && readiness.next.winChance != null ? readiness.next.winChance + '%' : '-') + '</b><span>预计胜率</span></div>' +
+    '</div>' +
+    (readiness.next ? '<div class="career-row"><span>下场对手 ' + esc(readiness.next.oppName || readiness.next.oppId || '-') + ' 路 ' + (readiness.next.venue === 'home' ? '主场' : '客场') + '</span><b>变动 ' + (readiness.netAdjust >= 0 ? '+' : '') + readiness.netAdjust + '</b></div>' : '<div class="career-news">暂无待赛赛程</div>') +
+    '</div>';
   let matchHtml = '<div class="career-card"><h4>下一场</h4>' + (winInfo.open ? '<p class="career-window">转会窗开放 · 剩余 ' + winInfo.remaining + ' 次 · ' + winInfo.text + '</p>' : '<p class="career-window">转会窗：' + winInfo.text + '</p>');
   if (pending) {
     const opp = s.season.teams.find((x) => x.id === pending.oppId);
@@ -248,6 +260,7 @@ function renderDash(s) {
     '<div class="career-card"><h4>玩家档案</h4><div class="career-player"><b>' + esc(s.player.name) + '</b><span>' + esc(titleFor(s.player.level)) + ' 等级 ' + s.player.level + '</span></div><div class="career-xp">经验 ' + s.player.xp + ' / ' + xpNeeded(s.player.level) + '<div class="career-bar"><i style="width:' + Math.min(100, Math.round(s.player.xp / xpNeeded(s.player.level) * 100)) + '%"></i></div></div>' + attrsBars(s) +
     '<div class="career-stats"><span>状态 ' + (form >= 0 ? '+' : '') + form + ' · 士气 ' + mor + ' · 疲劳 ' + fat + '%</span><span>本赛季 ' + stats.played + ' 场 ' + stats.w + '胜' + stats.l + '负 · ' + stats.kills + ' 杀 / ' + stats.deaths + ' 死</span></div></div>' +
     matchHtml +
+    readinessHtml +
     goalHtml +
     '<div class="career-card"><h4>事件流</h4>' + news + '</div>' +
     '<div class="career-card"><h4>积分榜速览</h4>' + top + '</div>' +
