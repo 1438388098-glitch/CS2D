@@ -1228,6 +1228,25 @@ export function careerSummary(history) {
   };
 }
 
+export function seasonTrends(history) {
+  const ids = [...new Set((Array.isArray(history) ? history : []).filter((m) => m && m.seasonId != null).map((m) => m.seasonId))].sort((a, b) => a - b);
+  return ids.map((seasonId) => {
+    const st = seasonStats(history, seasonId);
+    return {
+      seasonId,
+      matches: st.matches,
+      wins: st.wins,
+      losses: st.losses,
+      winRate: st.winRate,
+      kd: st.kd,
+      avgDmg: st.avgDmg,
+      totalMoney: st.totalMoney,
+      kills: st.kills,
+      deaths: st.deaths
+    };
+  });
+}
+
 function promoteLeague(league, rank) {
   if (league === '甲级') return rank >= 7 ? '乙级' : '甲级';
   if (league === '乙级') return rank <= 2 ? '甲级' : (rank >= 7 ? '丙级' : '乙级');

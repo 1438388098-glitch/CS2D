@@ -1,7 +1,7 @@
 import {
   resetCareer, setStorage, setRng, getState, settlePlayerMatch, nextSeason,
   save, loadCareer, __clearStateForTest,
-  seasonStats, seasonSeries, seasonStreaks, careerSummary, matchDetail, seasonTimeline, headToHead, importantMatches
+  seasonStats, seasonSeries, seasonStreaks, careerSummary, matchDetail, seasonTimeline, headToHead, importantMatches, seasonTrends
 } from '../src/career.js';
 
 const ok = (name, cond) => {
@@ -99,6 +99,10 @@ const imp = importantMatches([
 ], 5);
 ok('importantMatches filters', imp.length === 2 && imp[0].importance === '杯赛' && imp[1].importance === '关键战');
 ok('importantMatches limit', importantMatches([{ importance: '关键战', win: true, kills: 1, deaths: 1, dmg: 70, money: 1500 }, { importance: '争冠战', win: true, kills: 2, deaths: 1, dmg: 140, money: 1500 }], 1).length === 1);
+
+const trends = seasonTrends(h);
+ok('seasonTrends seasons', trends.length === 2 && trends[0].seasonId === 1 && trends[1].seasonId === 2);
+ok('seasonTrends fields', trends[0].matches === 3 && trends[0].winRate === 67 && trends[0].totalMoney === 3500 && trends[1].avgDmg === 560);
 
 ok('seasonStats deterministic', JSON.stringify(seasonStats(h, 1)) === JSON.stringify(seasonStats(h, 1)));
 ok('seasonSeries deterministic', JSON.stringify(seasonSeries(h, 1)) === JSON.stringify(seasonSeries(h, 1)));
