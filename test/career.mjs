@@ -259,7 +259,28 @@ const financeHtml = __renderTabForTest('finance');
 ok('career finance renders', financeHtml.includes('财务概览') && financeHtml.includes('资金流水'));
 const standingsHtml = __renderTabForTest('standings');
 ok('career standings form column', standingsHtml.includes('近5') && standingsHtml.includes('预测最终'));
+const schedState = getState();
+const schedFi = schedState.season.fixtures.find((f) => f.home === 'player' || f.away === 'player');
+schedFi.played = true;
+schedFi.score = [13, 8];
+schedFi.winner = 'player';
+schedState.matchHistory.push({
+  seasonId: schedState.season.id,
+  round: schedFi.round,
+  isCup: false,
+  oppId: schedFi.home === 'player' ? schedFi.away : schedFi.home,
+  oppName: '测试对手',
+  win: true,
+  kills: 9,
+  deaths: 4,
+  dmg: 630,
+  money: 1500,
+  score: [13, 8],
+  mapId: schedFi.mapId,
+  importance: '关键战'
+});
+save();
 const scheduleHtml = __renderTabForTest('schedule');
-ok('career schedule calendar', scheduleHtml.includes('主场') && scheduleHtml.includes('future') && scheduleHtml.includes('地图'));
+ok('career schedule calendar', scheduleHtml.includes('主场') && scheduleHtml.includes('future') && scheduleHtml.includes('地图') && scheduleHtml.includes('data-act="fixture-detail"'));
 
 console.log('career: all PASS');

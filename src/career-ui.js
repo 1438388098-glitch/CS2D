@@ -1,7 +1,7 @@
 import {
   loadCareer, getState, titleFor, startCareerMatch, careerEndMatch, abandonPendingMatch, simulatePlayerMatch, resetCareer,
   train, sellPlayer, buyPlayer, candidates, nextSeason, seasonReport, nextMatch, nextMatchInfo, matchImportance, teamRecentForm,
-  transferWindowOpen, transferWindowInfo, isStorageAvailable, cupMap, cupPrizeInfo, cupMapForRound, fixtureMapFor, winChance, trainingTiers, xpNeeded,
+  transferWindowOpen, transferWindowInfo, isStorageAvailable, cupMap, cupPrizeInfo, cupMapForRound, fixtureMapFor, fixtureMatchRecord, winChance, trainingTiers, xpNeeded,
   seasonStats, seasonSeries, seasonStreaks, careerSummary, matchDetail, seasonTimeline, headToHead, importantMatches,
   sponsorIncome, formBonus, fatiguePenalty, careerMorale, restPlayer, seasonGoals, seasonPace,
   achievementDefs, achievements, careerRecords
@@ -11,6 +11,7 @@ let doc = null;
 let game = null;
 let tab = 'dash';
 let statsSeason = null;
+let scheduleDetail = null;
 
 function el(id) { return doc ? doc.getElementById(id) : null; }
 function esc(s) {
@@ -124,6 +125,12 @@ function onClick(e) {
   } else if (act === 's-season') {
     statsSeason = Number(t.getAttribute('data-season'));
     render();
+  } else if (act === 'fixture-detail') {
+    scheduleDetail = t.getAttribute('data-key');
+    render();
+  } else if (act === 'close-detail') {
+    scheduleDetail = null;
+    render();
   }
 }
 
@@ -231,9 +238,11 @@ function renderSchedule(s) {
       const mapId = fixtureMapFor(s, f);
       const roundCls = f.played ? ' done' : (r === s.season.round ? ' cur' : (r > s.season.round ? ' future' : ' done'));
       const venueCls = mine ? (venue === 'home' ? ' home' : ' away') : '';
+      const key = r + ':' + f.home + ':' + f.away;
       html += '<div class="career-fixture' + (mine ? ' mine' : '') + roundCls + venueCls + '">';
       if (f.played) {
         html += (mine ? '<span class="career-venue">' + (venue === 'home' ? '主场' : '客场') + '</span>' : '') + esc(teamName(s, f.home)) + ' ' + f.score[0] + ' : ' + f.score[1] + ' ' + esc(teamName(s, f.away)) + ' <span>地图 ' + esc(mapName(mapId || '')) + '</span>';
+        if (mine) html += ' <button class="btn small" data-act="fixture-detail" data-key="' + key + '">复盘</button>';
       } else if (mine) {
         html += '<span class="career-venue">' + (venue === 'home' ? '主场' : '客场') + '</span>' + esc(teamName(s, f.home)) + ' 对 ' + esc(teamName(s, f.away)) + ' <span>地图 ' + esc(mapName(mapId || '')) + ' · ' + (r === s.season.round ? matchImportance(s, f) + ' · 胜率 ' + winChance(s, oppId, venue) + '%' : '未来轮次') + '</span>';
         if (r === s.season.round) html += ' <button class="btn small" data-act="play" data-opp="' + oppId + '" data-venue="' + venue + '" data-cup="0">开赛</button> <button class="btn small" data-act="sim">模拟本场</button>';
@@ -245,6 +254,23 @@ function renderSchedule(s) {
     html += '</div></div>';
   }
   html += '</div>';
+  if (scheduleDetail) {
+    const f = s.season.fixtures.find((x) => (x.round + ':' + x.home + ':' + x.away) === scheduleDetail);
+    if (f && f.played) {
+      const rec = fixtureMatchRecord(s, f);
+      const d = rec ? matchDetail(rec) : null;
+      const oppId = f.home === 'player' ? f.away : f.home;
+      const oppName = (d && d.oppName) || teamName(s, oppId);
+      const scoreText = d ? d.scoreText : (Array.isArray(f.score) ? f.score.join(':') : '未记录');
+      const ratingText = d && d.playerRating != null && d.oppRating != null ? ('赛前评级 ' + d.playerRating + ' : ' + d.oppRating) : '';
+      const detailVenue = f.home === 'player' ? 'home' : 'away';
+      const detailMapId = fixtureMapFor(s, f);
+      html += '<div class="career-card"><h4>已赛详情 · ' + esc(oppName) + '</h4>' +
+        '<div class="career-settle"><span>' + (detailVenue === 'home' ? '主场' : '客场') + ' · ' + esc(mapName(detailMapId || '')) + '</span><span>比分 ' + esc(scoreText) + '</span><span>' + (d ? (d.win ? '胜利' : '失利') : '已结束') + '</span>' + (ratingText ? '<span>' + ratingText + '</span>' : '') + '</div>' +
+        (d ? '<div class="career-stats"><span>K/D ' + d.kills + ' / ' + d.deaths + ' · 伤害 ' + d.dmg + '</span><span>奖金 ' + money(d.money) + ' · ' + esc(d.importance) + (d.mvp ? ' · MVP' : '') + '</span></div>' : '<div class="career-stats"><span>暂无完整比赛数据</span></div>') +
+        '<button class="btn small" data-act="close-detail">返回赛程</button></div>';
+    }
+  }
   if (s.season.cup.phase === 'active') {
     const m = nextMatch(s);
     if (m) {

@@ -546,6 +546,12 @@ export function buyPlayer(candId) {
 export function findPlayerFixture(s) {
   return s.season.fixtures.find((f) => f.round === s.season.round && !f.played && (f.home === 'player' || f.away === 'player'));
 }
+export function fixtureMatchRecord(s, f) {
+  if (!s || !f || !Array.isArray(s.matchHistory)) return null;
+  const opp = f.home === 'player' ? f.away : f.home;
+  const rows = s.matchHistory.filter((m) => m && !m.isCup && m.seasonId === s.season.id && m.oppId === opp);
+  return rows.find((m) => m.round == null || Number(m.round) === Number(f.round)) || rows[rows.length - 1] || null;
+}
 export function findCupMatch(s) {
   const b = s.season.cup.bracket;
   return b.find((m) => !m.played && (m.a === 'player' || m.b === 'player'));

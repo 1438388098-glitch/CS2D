@@ -2,7 +2,7 @@ import {
   resetCareer, setStorage, setRng, nextSeason, migrateCareerState,
   fixtureMapFor, assignFixtureMaps, startCareerMatch, findPlayerFixture,
   nextMatchInfo, teamRecentForm, opponentStanding, matchImportance, seasonPace,
-  cupPrizeInfo, cupMapForRound, cupPreview, transferWindowInfo, scoutReport, winChance
+  cupPrizeInfo, cupMapForRound, cupPreview, transferWindowInfo, scoutReport, winChance, fixtureMatchRecord
 } from '../src/career.js';
 import { createGame, startMatch } from '../src/game.js';
 
@@ -75,6 +75,9 @@ ok('opponent standing deterministic', opponentStanding(s, 'player') >= 1 && oppo
 
 s.season.fixtures[0].played = true;
 s.season.fixtures[0].winner = s.season.fixtures[0].home;
+s.matchHistory.push({ seasonId: s.season.id, round: s.season.fixtures[0].round, isCup: false, oppId: s.season.fixtures[0].home === 'player' ? s.season.fixtures[0].away : s.season.fixtures[0].home, win: true, kills: 8, deaths: 3, dmg: 560, money: 1500, score: [13, 8], mapId: s.season.fixtures[0].mapId });
+const playedRec = fixtureMatchRecord(s, s.season.fixtures[0]);
+ok('fixture match record', playedRec && playedRec.kills === 8 && playedRec.score.join(':') === '13:8');
 const formHome = teamRecentForm(s, s.season.fixtures[0].home);
 ok('recent form reads fixtures', formHome === 'W');
 
