@@ -367,6 +367,64 @@ export function seasonBudget(s) {
   };
 }
 
+export function financialRisk(s) {
+  const bank = Number(s && s.team && s.team.bank) || 0;
+  const sponsor = sponsorIncome(s);
+  const cash = cashflowForecast(s);
+  const budget = seasonBudget(s);
+  const remaining = Number(cash.remainingLeagueMatches) || 0;
+  const transferOpen = transferWindowOpen(s);
+  const advice = [];
+  let score = 0;
+  if (bank < 5000) {
+    score += 35;
+    advice.push('当前资金低于 5000，暂停大额转会并优先保留比赛与续约底线');
+  } else if (bank < 10000) {
+    score += 18;
+    advice.push('当前资金中等，优先基础训练和小成本补强');
+  }
+  if (cash.projectedBank < 6000) {
+    score += 25;
+    advice.push('赛季末预测低于安全垫，避免连续高投入');
+  } else if (cash.cushion < 3000) {
+    score += 15;
+    advice.push('安全垫偏薄，训练和转会建议按最低档进行');
+  }
+  if (transferOpen && bank < 10000) {
+    score += 20;
+    advice.push('转会窗期间资金偏低，只适合低成本补强或暂缓引援');
+  }
+  if (remaining <= 2 && bank < 8000) {
+    score += 15;
+    advice.push('剩余赛程少且资金不足，收入恢复空间有限');
+  }
+  if (remaining >= 8 && bank >= 10000) {
+    score -= 15;
+    advice.push('赛程充足且资金健康，可继续投入训练或合理补强');
+  }
+  if (sponsor * 2 > bank) {
+    score += 10;
+    advice.push('赞助收入相对余额占比较高，近期需控制固定支出');
+  }
+  score += Math.min(10, budget.warnings.length * 5);
+  score = clamp(Math.round(score), 0, 100);
+  const level = score >= 75 ? '高风险' : score >= 50 ? '紧张' : score >= 25 ? '谨慎' : '安全';
+  const mode = score >= 50 ? '低资金模式' : score >= 25 ? '稳健运营' : '可投入';
+  if (!advice.length) advice.push('当前财务健康，保持现有训练和转会节奏即可');
+  return {
+    bank,
+    sponsor,
+    remaining,
+    transferOpen,
+    projectedBank: cash.projectedBank,
+    cushion: cash.cushion,
+    score,
+    level,
+    mode,
+    advice
+  };
+}
+
 export function financeTrend(s) {
   const ledger = Array.isArray(s.team && s.team.ledger) ? s.team.ledger : [];
   const maxRound = Math.max(1, Number(s.season && s.season.round) || 1);

@@ -1,7 +1,7 @@
 import {
   resetCareer, setStorage, setRng, getState, settlePlayerMatch, train, trainTeammate, sellPlayer, sellPreview, buyPlayer, candidates, filterCandidates,
   nextSeason, save, loadCareer, __clearStateForTest, candidateProfile,
-  sponsorIncome, sponsorPreview, sponsorSeasonPreview, homeTicketIncome, ticketPreview, cashflowForecast, seasonBudget, financeTrend, seasonFinancialSummary, remainingPrizePreview, transferProfit, facilityStatus, upgradeFacility, formBonus, fatiguePenalty, careerMorale, restPlayer, seasonGoals, goalProgress, trainingPreview, trainingSuggestion, rotationAdvice, trainingHistory, rosterStatus, transferBudget, contractStatus, renewPlayer, rosterContribution, positionBalance,
+  sponsorIncome, sponsorPreview, sponsorSeasonPreview, homeTicketIncome, ticketPreview, cashflowForecast, seasonBudget, financialRisk, financeTrend, seasonFinancialSummary, remainingPrizePreview, transferProfit, facilityStatus, upgradeFacility, formBonus, fatiguePenalty, careerMorale, restPlayer, seasonGoals, goalProgress, trainingPreview, trainingSuggestion, rotationAdvice, trainingHistory, rosterStatus, transferBudget, contractStatus, renewPlayer, rosterContribution, positionBalance,
   achievementDefs, achievements, careerRecords, migrateCareerState, matchReadiness
 } from '../src/career.js';
 
@@ -61,6 +61,15 @@ ok('season budget', budgetCtrl && budgetCtrl.budget > 20000 && budgetCtrl.spent 
 s.team.bank = 3000;
 const tightBudget = seasonBudget(s);
 ok('season budget warnings', tightBudget.warnings.length >= 1 && tightBudget.warnings.some((w) => w.includes('5000')));
+
+s = resetCareer();
+const riskSafe = financialRisk(s);
+ok('financial risk safe', riskSafe && riskSafe.score < 50 && riskSafe.level === '安全' && riskSafe.mode === '可投入' && riskSafe.advice.length > 0);
+s.team.bank = 1000;
+const playerStanding = s.season.standings.find((x) => x.teamId === 'player');
+playerStanding.played = Number(s.season.totalRounds) - 1;
+const riskTight = financialRisk(s);
+ok('financial risk tight', riskTight.score > riskSafe.score && riskTight.level !== '安全' && riskTight.advice.some((a) => a.includes('5000') || a.includes('安全垫') || a.includes('低资金')));
 
 s = resetCareer();
 s.team.bank = 5000;
