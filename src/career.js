@@ -66,12 +66,12 @@ const SEASON_GOALS = {
   '丙级': { rank: 4, cup: 0, reward: 7000 }
 };
 const ACHIEVEMENTS = [
-  { id: 'first_win', title: '首胜', desc: '赢得第一场生涯比赛' },
-  { id: 'streak5', title: '五连胜', desc: '创造一次五连胜' },
-  { id: 'promotion', title: '升级', desc: '带队升入更高级别联赛' },
-  { id: 'cup_champion', title: '杯赛冠军', desc: '拿下淘汰赛冠军' },
-  { id: 'rich100k', title: '百万俱乐部', desc: '累计赛季奖金达到 100000' },
-  { id: 'veteran', title: '老将', desc: '玩家达到 10 级' }
+  { id: 'first_win', title: '首胜', desc: '赢得第一场生涯比赛', category: '表现', hint: '赢下一场联赛或杯赛' },
+  { id: 'streak5', title: '五连胜', desc: '创造一次五连胜', category: '表现', hint: '连续赢下 5 场正式比赛' },
+  { id: 'promotion', title: '升级', desc: '带队升入更高级别联赛', category: '赛季', hint: '以升级区排名结束赛季' },
+  { id: 'cup_champion', title: '杯赛冠军', desc: '拿下淘汰赛冠军', category: '杯赛', hint: '赢下杯赛决赛' },
+  { id: 'rich100k', title: '百万俱乐部', desc: '累计赛季奖金达到 100000', category: '财务', hint: '通过排名、杯赛与目标奖励累计奖金' },
+  { id: 'veteran', title: '老将', desc: '玩家达到 10 级', category: '生涯', hint: '持续比赛提升玩家等级' }
 ];
 
 let storage = null;
@@ -608,6 +608,26 @@ export function achievementDefs() {
 
 export function achievements(s) {
   return (Array.isArray(s.player.achievements) ? s.player.achievements : []).slice();
+}
+
+export function achievementProgress(s) {
+  const unlocked = new Set((s.player && Array.isArray(s.player.achievements) ? s.player.achievements : [])
+    .map((a) => a && a.id)
+    .filter(Boolean));
+  const rows = ACHIEVEMENTS.map((def) => ({
+    ...def,
+    unlocked: unlocked.has(def.id)
+  }));
+  const unlockedCount = rows.filter((r) => r.unlocked).length;
+  const total = rows.length;
+  return {
+    total,
+    unlockedCount,
+    lockedCount: total - unlockedCount,
+    pct: total ? Math.round((unlockedCount / total) * 100) : 0,
+    next: rows.find((r) => !r.unlocked) || null,
+    rows
+  };
 }
 
 export function unlockAchievement(s, id) {

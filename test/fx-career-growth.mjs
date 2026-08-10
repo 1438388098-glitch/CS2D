@@ -2,7 +2,7 @@ import {
   resetCareer, setStorage, setRng, getState, settlePlayerMatch, train, trainTeammate, sellPlayer, sellPreview, buyPlayer, candidates, filterCandidates,
   nextSeason, save, loadCareer, __clearStateForTest, candidateProfile,
   sponsorIncome, sponsorPreview, sponsorSeasonPreview, homeTicketIncome, ticketPreview, cashflowForecast, seasonBudget, financialRisk, financeTrend, seasonFinancialSummary, remainingPrizePreview, transferProfit, facilityStatus, upgradeFacility, formBonus, fatiguePenalty, careerMorale, restPlayer, seasonGoals, goalProgress, trainingPreview, trainingSuggestion, rotationAdvice, trainingHistory, rosterStatus, transferBudget, contractStatus, renewPlayer, rosterContribution, positionBalance,
-  achievementDefs, achievements, careerRecords, migrateCareerState, matchReadiness
+  achievementDefs, achievements, achievementProgress, careerRecords, migrateCareerState, matchReadiness
 } from '../src/career.js';
 
 const ok = (name, cond) => {
@@ -26,6 +26,8 @@ setRng(() => 0.5);
 let s = resetCareer();
 ok('new career fields', s.version === 3 && Array.isArray(s.team.ledger) && s.team.morale === 65 && Array.isArray(s.player.form) && s.player.fatigue === 0 && Array.isArray(s.player.achievements) && s.player.records && typeof s.player.records === 'object');
 ok('achievement defs', achievementDefs().length >= 6 && achievementDefs()[0].id === 'first_win');
+const achProgressStart = achievementProgress(s);
+ok('achievement progress start', achProgressStart.total >= 6 && achProgressStart.unlockedCount === 0 && achProgressStart.lockedCount === achProgressStart.total && achProgressStart.pct === 0 && achProgressStart.next && achProgressStart.next.id === 'first_win');
 
 const baseSponsor = sponsorIncome(s);
 ok('sponsor positive', baseSponsor > 0);
@@ -218,6 +220,8 @@ ok('form bonus positive', formBonus(s) >= 2);
 ok('fatigue penalty', Math.abs(fatiguePenalty(s) - 6 / 400) < 1e-9);
 ok('career morale clamp', careerMorale(s) === 69);
 ok('first win achievement', achievements(s).some((a) => a.id === 'first_win'));
+const achProgressAfterWin = achievementProgress(s);
+ok('achievement progress after win', achProgressAfterWin.unlockedCount === 1 && achProgressAfterWin.pct > 0 && achProgressAfterWin.next && achProgressAfterWin.next.id !== 'first_win');
 ok('records best kills', careerRecords(s).bestKills === 8 && careerRecords(s).longestWinStreak === 1 && careerRecords(s).totalPrize > 0);
 
 const rest = restPlayer();

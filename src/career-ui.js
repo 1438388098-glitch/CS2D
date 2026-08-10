@@ -5,7 +5,7 @@ import {
   seasonStats, seasonAwards, seasonPerformanceSummary, seasonSeries, seasonStreaks, careerSummary, matchDetail, seasonTimeline, headToHead, importantMatches, seasonTrends, favoriteMatches, cupHistory, trophyCase, careerTimeline,
   sponsorIncome, sponsorPreview, sponsorSeasonPreview, homeTicketIncome, ticketPreview, cashflowForecast, seasonBudget, financialRisk, financeTrend, seasonFinancialSummary, remainingPrizePreview, formBonus, fatiguePenalty, careerMorale, restPlayer, seasonGoals, seasonPace, goalProgress, relegationProjection, rosterContribution,
   positionBalance,
-  achievementDefs, achievements, careerRecords
+  achievementDefs, achievements, achievementProgress, careerRecords
 } from './career.js';
 
 let doc = null;
@@ -595,6 +595,7 @@ function renderSeasonStats(s) {
   const overview = careerSummary(mh);
   const rec = careerRecords(s);
   const achList = achievements(s);
+  const achProgress = achievementProgress(s);
   const selBtns = seasons.map((sid) => '<button class="btn small' + (sid === sel ? ' sel' : '') + '" data-act="s-season" data-season="' + sid + '">第 ' + sid + ' 赛季</button>').join('');
   const kpis = [['场次', stats.matches], ['胜 / 负', stats.wins + ' / ' + stats.losses], ['胜率', stats.winRate + '%'], ['K/D', stats.kd], ['场均伤害', stats.avgDmg], ['总奖金', money(stats.totalMoney)], ['总击杀', stats.kills], ['最佳场次', stats.mvp]];
   const kpiHtml = kpis.map(([k, v]) => '<div class="career-kpi"><b>' + v + '</b><span>' + k + '</span></div>').join('');
@@ -644,7 +645,13 @@ function renderSeasonStats(s) {
   const ov = [['赛季数', overview.seasons], ['总场次', overview.matches], ['胜率', overview.winRate + '%'], ['K/D', overview.kd], ['场均伤害', overview.avgDmg], ['总奖金', money(overview.totalMoney)], ['总击杀', overview.kills]];
   const ovHtml = ov.map(([k, v]) => '<div class="career-kpi"><b>' + v + '</b><span>' + k + '</span></div>').join('');
   const recordHtml = '<div class="career-card"><h4>生涯纪录</h4><div class="career-kpis"><div class="career-kpi"><b>' + (rec.bestKills || 0) + '</b><span>单场最高击杀</span></div><div class="career-kpi"><b>' + (rec.longestWinStreak || 0) + '</b><span>最长连胜</span></div><div class="career-kpi"><b>' + money(rec.totalPrize || 0) + '</b><span>累计奖金</span></div><div class="career-kpi"><b>' + (rec.cupChampions || 0) + '</b><span>杯赛冠军</span></div><div class="career-kpi"><b>' + (rec.bestSeasonRank || '-') + '</b><span>最佳赛季排名</span></div></div></div>';
-  const achHtml = '<div class="career-card"><h4>成就</h4>' + (achList.length ? achList.map((a) => '<div class="career-news award" style="border-left-color:#ffd75e">' + esc(a.title) + '</div>').join('') : '<div class="career-news">暂无成就</div>') + '</div>';
+  const achHtml = '<div class="career-card"><h4>成就</h4><div class="career-kpis">' +
+    '<div class="career-kpi"><b>' + achProgress.unlockedCount + ' / ' + achProgress.total + '</b><span>已解锁</span></div>' +
+    '<div class="career-kpi"><b>' + achProgress.pct + '%</b><span>完成度</span></div>' +
+    '<div class="career-kpi"><b>' + (achProgress.next ? esc(achProgress.next.title) : '全部完成') + '</b><span>下一枚</span></div></div>' +
+    '<div class="career-bar"><i style="width:' + achProgress.pct + '%"></i></div>' +
+    (achProgress.next ? '<div class="career-news">下一枚：' + esc(achProgress.next.desc) + ' · ' + esc(achProgress.next.hint) + '</div>' : '') +
+    (achList.length ? achList.map((a) => '<div class="career-news award" style="border-left-color:#ffd75e">' + esc(a.title) + '</div>').join('') : '<div class="career-news">暂无成就</div>') + '</div>';
   const awardHtml = '<div class="career-card"><h4>赛季个人奖项</h4><div class="career-kpis">' +
     '<div class="career-kpi"><b>' + awards.mvpMatches.length + '</b><span>MVP场次</span></div>' +
     '<div class="career-kpi"><b>' + (awards.bestKills ? awards.bestKills.kills : '-') + '</b><span>最佳击杀</span></div>' +
