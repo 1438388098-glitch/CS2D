@@ -7,6 +7,7 @@ const mapTile = () => getMap()?.tile || TILE;
 import {ARCHETYPES} from './persona.js';
 import {fogEnabled, castVisionPolygon} from './fog.js';
 import {drawAmbientDust} from './ambient-fx.js';
+import {weaponSwitchPop, muzzleSmoke, drawMuzzleSmoke, drawWeaponPop, MUZZLE_SMOKE_LIFE} from './weapon-fx.js';
 
 let ctx = null;
 let layers = null;
@@ -491,31 +492,15 @@ function drawEntities(game) {
       // 后坐偏移：开火时枪身沿后向退，与准星扩散视觉一致
       const recoilOff = (e.recoil || 0) * 4;
       const gl = gunLen(w);
-      ctx.fillStyle = '#1a1d22';
-      ctx.fillRect(4 - recoilOff, -3, gl, 6);
-      ctx.fillStyle = '#0c0e11';
-      ctx.fillRect(4 - recoilOff, -2, gl, 2);
-      if (w.kind === 'sniper') {
-        ctx.strokeStyle = '#33383f';
-        ctx.lineWidth = 3;
-        ctx.beginPath();
-        ctx.moveTo(14 - recoilOff, -5);
-        ctx.lineTo(14 - recoilOff, 5);
-        ctx.stroke();
+      const pop = weaponSwitchPop(e.switchT || 0);
+      drawWeaponPop(ctx, { scale: pop.scale, gl, recoilOff, kind: w.kind, muzzleT: e.muzzleT });
+      // 开火枪口烟：由 lastShot 距游戏时间推得烟龄，确定性（无 Math.random）
+      const elapsed = (game.time || 0) - (e.lastShot || 0) / 1000;
+      const smokePts = muzzleSmoke(elapsed >= 0 && elapsed < MUZZLE_SMOKE_LIFE, elapsed, (Math.floor(e.x) * 374761393 ^ Math.floor(e.y) * 668265263) >>> 0);
+      if (smokePts.length) {
+        const mz = 2 + (gl - recoilOff - 2) * pop.scale;
+        drawMuzzleSmoke(ctx, mz, 0, 0, smokePts);
       }
-    }
-    if (e.muzzleT > 0 && w) {
-      const recoilOff = (e.recoil || 0) * 4;
-      ctx.fillStyle = '#ffd75e';
-      ctx.beginPath();
-      ctx.moveTo(gunLen(w) - recoilOff, -5);
-      ctx.lineTo(gunLen(w) - recoilOff + 16, -1);
-      ctx.lineTo(gunLen(w) - recoilOff, 3);
-      ctx.fill();
-      ctx.fillStyle = '#fff3c0';
-      ctx.beginPath();
-      ctx.arc(gunLen(w) - recoilOff, 0, 4, 0, Math.PI * 2);
-      ctx.fill();
     }
     ctx.restore();
     ctx.save();
@@ -727,14 +712,56 @@ function drawFog(game) {
   ctx.restore();
 }
 
+// 弹道拖尾生命周期：可见时长从旧的 0.09s 延长，配合 len 拉伸形成更清晰的弹道拖尾
+export const TRACER_LIFE = 0.16;
+
+// 口径分档样式：大威力（步枪/狙击）更长更亮更粗，手枪/冲锋枪较短（颜色为 RGB 三元组）
+const TRACER_STYLE = {
+  sniper:  { alpha: 1.0, width: 3.4, len: 2.5, color: '255,240,205' },
+  rifle:   { alpha: 0.95, width: 2.8, len: 2.1, color: '255,224,170' },
+  shotgun: { alpha: 0.8, width: 2.2, len: 1.5, color: '255,206,130' },
+  smg:     { alpha: 0.62, width: 1.6, len: 1.15, color: '255,186,118' },
+  pistol:  { alpha: 0.5, width: 1.2, len: 1.0, color: '255,166,96' },
+  default: { alpha: 0.6, width: 1.6, len: 1.2, color: '255,186,118' }
+};
+
+// 弹道拖尾纯计算：t∈[0,1] 为剩余寿命进度（1 刚发射 → 0 消失），weaponKind 决定口径档位
+// 返回 {alpha, width, len, color}，确定性、无 Math.random
+export function tracerStyle(t, weaponKind) {
+  const s = TRACER_STYLE[weaponKind] || TRACER_STYLE.default;
+  const fade = clamp(1 - t, 0, 1);
+  return {
+    alpha: s.alpha * fade,
+    width: s.width,
+    len: s.len,
+    color: s.color
+  };
+}
+
 function drawTracers(game) {
-  for (const t of game.tracers) {
-    const a = clamp(t.life / 0.09, 0, 1);
-    ctx.strokeStyle = t.team === 'ct' ? 'rgba(110,180,255,' + a + ')' : 'rgba(255,190,90,' + a + ')';
-    ctx.lineWidth = 1.6;
+  const tracers = game.tracers;
+  if (!tracers.length) return;
+  ctx.save();
+  ctx.lineCap = 'round';
+  for (const t of tracers) {
+    const s = tracerStyle(clamp(t.life / TRACER_LIFE, 0, 1), t.kind);
+    if (s.alpha <= 0.004) continue;
+    // 拖尾沿弹道方向延长 len 倍，从发射点延伸到末端
+    const dx = t.x2 - t.x1, dy = t.y2 - t.y1;
+    const dist = Math.hypot(dx, dy) || 1;
+    const ux = dx / dist, uy = dy / dist;
+    const ex = t.x1 + ux * dist * s.len, ey = t.y1 + uy * dist * s.len;
+    // 渐变：发射点最亮 → 末端淡出；CT 冷蓝、T 方武器口径暖色
+    const rgb = t.team === 'ct' ? '135,190,255' : s.color;
+    const g = ctx.createLinearGradient(t.x1, t.y1, ex, ey);
+    g.addColorStop(0, 'rgba(' + rgb + ',' + s.alpha + ')');
+    g.addColorStop(1, 'rgba(' + rgb + ',0)');
+    ctx.strokeStyle = g;
+    ctx.lineWidth = s.width;
     ctx.beginPath();
     ctx.moveTo(t.x1, t.y1);
-    ctx.lineTo(t.x2, t.y2);
+    ctx.lineTo(ex, ey);
     ctx.stroke();
   }
+  ctx.restore();
 }

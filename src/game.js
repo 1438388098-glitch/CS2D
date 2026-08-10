@@ -41,7 +41,7 @@ export function createGame(opts = {}) {
     round: 0, roundTime: 0, roundDur: ROUND.DURATION, buyTime: 0,
     freezeT: 0, endedT: 0,
     score: { T: 0, CT: 0 },
-    bomb: null, flashT: 0, dmgT: 0, shake: 0, dmgSpreadT: 0, killRingT: 0,
+    bomb: null, flashT: 0, dmgT: 0, shake: 0, dmgSpreadT: 0, killRingT: 0, killFlashT: 0,
     over: false, spectateIdx: 0, lastPlantSite: null, dt: 0.016,
     lossStreakT: 0, lossStreakCT: 0,
     hitMarkT: 0, hitFlashT: 0, headshotT: 0, zoom: 0.75, hitPauseT: 0, dmgPops: [], hitOutlines: [], scopeT: 0, lastKiller: null,
@@ -545,9 +545,11 @@ export function update(game, dt) {
   if (game.dmgT > 0) game.dmgT -= dt;
   if (game.dmgSpreadT > 0) game.dmgSpreadT -= dt;
   if (game.killRingT > 0) game.killRingT -= dt;
+  if (game.killFlashT > 0) game.killFlashT -= dt;
   if (game.hitMarkT > 0) game.hitMarkT -= dt;
   if (game.hitFlashT > 0) game.hitFlashT -= dt;
   if (game.headshotT > 0) game.headshotT -= dt;
+  if (game.player && game.player.hitFxT > 0) game.player.hitFxT -= dt;
   for (let i = game.hitOutlines.length - 1; i >= 0; i--) {
     const ho = game.hitOutlines[i];
     ho.t -= dt;
@@ -776,6 +778,7 @@ function updatePlayer(game, dt) {
   updateShotStreak(p, dt);
   if (p.fireCd > 0) p.fireCd -= dt;
   if (p.muzzleT > 0) p.muzzleT -= dt;
+  if (p.switchT > 0) p.switchT -= dt;
   if (p.reloading) {
     p.reloadT -= dt;
     if (p.reloadT <= 0) finishReload(p, game);

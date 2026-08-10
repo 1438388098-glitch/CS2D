@@ -7,7 +7,8 @@ import {clamp, rand, angDiff, viewCap} from './utils.js';
 import {report, MSG} from './info.js';
 
 import {endRound, spawnParticle} from './game.js';
-import {DEATH_MARKER_LIFE} from './render.js';
+import {DEATH_MARKER_LIFE, TRACER_LIFE} from './render.js';
+import {HIT_ARC_DURATION} from './damage-fx.js';
 import {dropBomb} from './bomb.js';
 import {throwGrenade} from './grenades.js';
 import {effectiveSpread, registerShot, headshotChance, distanceFalloff} from './ballistic.js';
@@ -225,10 +226,10 @@ function fireRay(e, game, ang, w, dmg, isPellet) {
     const hitLen = Math.max(4, best.t - Math.sqrt(Math.max(0, hit.rad * hit.rad - best.perp * best.perp)));
     const hx = ox + cos * hitLen, hy = oy + sin * hitLen;
     spawnBlood(hx, hy, ang, head, game);
-    game.tracers.push({ x1: ox, y1: oy, x2: hx, y2: hy, life: 0.09, team: e.team });
+    game.tracers.push({ x1: ox, y1: oy, x2: hx, y2: hy, life: TRACER_LIFE, kind: w.kind, team: e.team });
     addDecal(game, hx, hy, 'hole', ang);
   } else {
-    game.tracers.push({ x1: ox, y1: oy, x2: tx, y2: ty, life: 0.09, team: e.team });
+    game.tracers.push({ x1: ox, y1: oy, x2: tx, y2: ty, life: TRACER_LIFE, kind: w.kind, team: e.team });
     addDecal(game, tx, ty, 'spark', ang);
     for (let sp = 0; sp < 6; sp++) {
       spawnParticle(game, { kind: 'spark', x: tx, y: ty, vx: Math.cos(ang + rand(-1, 1)) * rand(60, 260), vy: Math.sin(ang + rand(-1, 1)) * rand(60, 260), life: rand(0.1, 0.3), size: 1.5 });
@@ -378,6 +379,11 @@ export function applyDamage(v, dmg, opt, game) {
       game.dmgSpreadT = Math.max(game.dmgSpreadT || 0, head ? 0.9 : 0.55);
       game.shake = Math.max(game.shake, head ? 8 : 4);
     }
+    // 受击方向红弧（candidate-308）：玩家被击中时记录伤害来源方向与闪现倒计时（0.3s 渐隐）
+    if (v === game.player) {
+      v.lastHitAng = Math.atan2(opt.killer.y - v.y, opt.killer.x - v.x);
+      v.hitFxT = HIT_ARC_DURATION;
+    }
   }
   v.armor = Math.max(0, v.armor - armLoss);
   v.hp -= hpLoss;
@@ -436,6 +442,7 @@ export function killEntity(v, killer, weapon, head, game) {
   if (killer === game.player) {
     emit('sfx', { name: 'kill', vol: 0.6, game });
     game.killRingT = 0.7;
+    game.killFlashT = 0.35;
     killer.streak = (killer.streak || 0) + 1;
     killer.wKills[weapon] = (killer.wKills[weapon] || 0) + 1;
     if (head) game.stats.headshots++;

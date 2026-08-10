@@ -3,6 +3,7 @@ import { initAudio, setMuted, uiSfx } from './audio.js';
 import { isMiniZoomed } from './hud.js';
 import { matches } from './keymap.js';
 import { setPlayerOrder } from './ai.js';
+import { SWITCH_POP_DURATION } from './weapon-fx.js';
 
 let lastWheelT = 0;
 let fpsCanvas = null;
@@ -271,6 +272,7 @@ export function switchWeapon(e, slot) {
   e.reloadT = 0;
   e.fireCd = 0.25;
   e.scoped = false;
+  e.switchT = SWITCH_POP_DURATION;
 }
 
 export function switchNade(e, nade) {
@@ -280,6 +282,7 @@ export function switchNade(e, nade) {
   e.slot = 'nade:' + nade;
   e.reloading = false;
   e.fireCd = 0.3;
+  e.switchT = SWITCH_POP_DURATION;
 }
 
 // 快速投掷：切雷并立即抛出（瞄准即当前朝向）

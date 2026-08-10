@@ -46,3 +46,50 @@ export function drawLowHpVignette(ctx, w, h, fx) {
   ctx.fillRect(0, 0, w, h);
   ctx.restore();
 }
+
+// 击杀屏幕边缘白色闪光（candidate-304，2D 画面增强）。
+// 玩家击杀时左右下三边缘短暂白色闪光，0.35s 内从 1 衰减到 0。
+// 核心为确定性纯函数：仅依赖传入时间 t（击杀后流逝秒数），不使用 Date/performance。
+
+const KILL_FLASH_DUR = 0.35; // 闪光总时长
+const KILL_FLASH_EDGES = ['left', 'right', 'bottom']; // 闪光边缘：左/右/下
+const KILL_FLASH_DEPTH = 0.22; // 边缘闪光深度（相对 min(w,h) 的比例）
+
+// 击杀闪光参数：返回 { alpha, edge }，alpha ∈ [0,1] 随时间线性衰减。
+// t ≤ 0 视为刚击杀（alpha=1），t ≥ 0.35 视为结束（alpha=0）。
+export function killFlash(t) {
+  const ts = Number.isFinite(t) ? t : 0;
+  const alpha = clamp(1 - ts / KILL_FLASH_DUR, 0, 1);
+  return { alpha, edge: KILL_FLASH_EDGES };
+}
+
+// 绘制：左/右/下三边缘白色渐变闪光（外缘白 -> 内缘透明），叠加在既有画面之上。
+export function drawKillFlash(ctx, w, h, fx) {
+  if (!fx || !(fx.alpha > 0) || !(w > 0) || !(h > 0)) return;
+  const edges = Array.isArray(fx.edge) ? fx.edge : KILL_FLASH_EDGES;
+  const depth = Math.min(w, h) * KILL_FLASH_DEPTH;
+  const a = fx.alpha.toFixed(3);
+  ctx.save();
+  for (const e of edges) {
+    if (e === 'left') {
+      const g = ctx.createLinearGradient(0, 0, depth, 0);
+      g.addColorStop(0, 'rgba(255,255,255,' + a + ')');
+      g.addColorStop(1, 'rgba(255,255,255,0)');
+      ctx.fillStyle = g;
+      ctx.fillRect(0, 0, depth, h);
+    } else if (e === 'right') {
+      const g = ctx.createLinearGradient(w, 0, w - depth, 0);
+      g.addColorStop(0, 'rgba(255,255,255,' + a + ')');
+      g.addColorStop(1, 'rgba(255,255,255,0)');
+      ctx.fillStyle = g;
+      ctx.fillRect(w - depth, 0, depth, h);
+    } else if (e === 'bottom') {
+      const g = ctx.createLinearGradient(0, h, 0, h - depth);
+      g.addColorStop(0, 'rgba(255,255,255,' + a + ')');
+      g.addColorStop(1, 'rgba(255,255,255,0)');
+      ctx.fillStyle = g;
+      ctx.fillRect(0, h - depth, w, depth);
+    }
+  }
+  ctx.restore();
+}

@@ -17,7 +17,8 @@ export function createEntity(team, bot) {
     dead: false, kills: 0, deaths: 0, assists: 0, plants: 0, defuses: 0,
     deathT: 0,
     hasBomb: false, walking: false, blind: 0, scoped: false, lossStreak: 0,
-    stepT: 0, stepFlip: false, lastDmgFrom: null, lastDmgT: -99999, muzzleT: 0,
+    stepT: 0, stepFlip: false, lastDmgFrom: null, lastDmgT: -99999, muzzleT: 0, switchT: 0,
+    lastHitAng: 0, hitFxT: 0,
     strafeDir: 1, strafeT: 0, reaction: 0, aimTarget: null, aimLostT: 0, aimLastPos: null,
     lastKnown: null, lastKnownT: 99,
     path: null, pathI: 0, role: 'a', repathT: 0, stuckT: 0, lastSample: { x: 0, y: 0 },
@@ -62,7 +63,7 @@ export function spawnEntity(e, spawnList, preferIdx) {
   e.trigger = false; e.triggerHeld = false; e.triggerWas = false;
   e.shotStreak = 0; e.crouched = false;
   e.objCache = null; e.objAt = 0; e.objKey = null; e.guardPoint = null; e.guardPointSite = null;
-  e.walking = false; e.muzzleT = 0;
+  e.walking = false; e.muzzleT = 0; e.switchT = 0;
   e.rushMode = false; e.vanguard = false; e.plantedSmokeRound = 0;
   // 跨回合残留清理（决策/感知状态不得跨回合携带）
   e.lastShot = 0;              // 防"幻听"：上回合枪声当新情报

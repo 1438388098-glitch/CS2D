@@ -7,7 +7,8 @@ import { crosshairSpreadPx, shouldDrawFpsSpreadCrosshair, crosshairHitFeedback, 
 import { getBindLabel } from './keymap.js';
 import { fogEnabled } from './fog.js';
 import { castAimRay } from './fps-laser.js';
-import { lowHpVignette, drawLowHpVignette } from './screen-fx.js';
+import { lowHpVignette, drawLowHpVignette, killFlash, drawKillFlash } from './screen-fx.js';
+import { damageArc, drawDamageArc, HIT_ARC_DURATION } from './damage-fx.js';
 
 let ctx = null;
 let layers = null;
@@ -672,10 +673,21 @@ export function renderHud(game) {
     ctx.fillText('后座', w2 / 2, by - 3);
     ctx.restore();
   }
+  // candidate-308：受击方向红弧——受击瞬间屏幕边缘朝向伤害来源闪现红色弧形，0.3s 渐隐
+  if (p && !p.dead && p.hitFxT > 0) {
+    let ang = p.lastHitAng || 0;
+    if (game.viewMode !== 'top') ang = ang - p.angle - Math.PI / 2;
+    const fx = damageArc(ang, HIT_ARC_DURATION - p.hitFxT);
+    drawDamageArc(ctx, w2, h2, fx);
+  }
   // D6 低血量屏幕边缘红边脉冲警示：血量 <30% 时出现，越低越明显，死亡后消失
   if (p && !p.dead) {
     const fx = lowHpVignette(p.hp, p.maxHp || 100, game.time || 0, dpr);
     drawLowHpVignette(ctx, w2, h2, fx);
+  }
+  // 2D 击杀屏幕边缘白色闪光（candidate-304）：左右下三边 0.35s 内从 1 衰减到 0
+  if (game.killFlashT > 0) {
+    drawKillFlash(ctx, w2, h2, killFlash(game.killFlashT));
   }
   ctx.restore();
 }
