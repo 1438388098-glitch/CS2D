@@ -778,6 +778,78 @@ export function seasonRecordAlerts(s, seasonId) {
   return log.filter((x) => x.seasonId === seasonId);
 }
 
+export function recordDetails(s) {
+  const rec = careerRecords(s);
+  const mh = Array.isArray(s && s.matchHistory) ? s.matchHistory : [];
+  const hist = Array.isArray(s && s.history) ? s.history : [];
+  const alerts = Array.isArray(s && s.player && s.player.recordAlertLog) ? s.player.recordAlertLog : [];
+  const latestAlert = (type) => alerts.slice().reverse().find((x) => x.type === type);
+  const bestMatch = { kills: null, dmg: null };
+  for (const m of mh) {
+    const d = matchDetail(m);
+    if (!bestMatch.kills || d.kills > bestMatch.kills.value) bestMatch.kills = { value: d.kills, seasonId: d.seasonId };
+    if (!bestMatch.dmg || d.dmg > bestMatch.dmg.value) bestMatch.dmg = { value: d.dmg, seasonId: d.seasonId };
+  }
+  const bestKills = Math.max(Number(rec.bestKills) || 0, bestMatch.kills ? bestMatch.kills.value : 0);
+  const bestDmg = Math.max(Number(rec.bestDmg) || 0, bestMatch.dmg ? bestMatch.dmg.value : 0);
+  const bestKd = Math.max(Number(rec.bestKd) || 0, 0);
+  const rankSeasons = hist.slice().sort((a, b) => (a.rank - b.rank) || (b.seasonId - a.seasonId));
+  const championSeasons = hist.filter((h) => h.cupRound === 3).sort((a, b) => b.seasonId - a.seasonId);
+  const latestHist = hist.slice().sort((a, b) => b.seasonId - a.seasonId)[0];
+  const rows = [
+    {
+      key: 'bestKills',
+      label: '单场最高击杀',
+      value: bestKills,
+      achievedSeason: (latestAlert('bestKills') || bestMatch.kills || {}).seasonId || null,
+      historicalBest: bestKills
+    },
+    {
+      key: 'bestDmg',
+      label: '单场最高伤害',
+      value: bestDmg,
+      achievedSeason: (latestAlert('bestDmg') || bestMatch.dmg || {}).seasonId || null,
+      historicalBest: bestDmg
+    },
+    {
+      key: 'bestKd',
+      label: '单场最高 K/D',
+      value: bestKd,
+      achievedSeason: (latestAlert('bestKd') || {}).seasonId || null,
+      historicalBest: bestKd
+    },
+    {
+      key: 'longestWinStreak',
+      label: '最长连胜',
+      value: Number(rec.longestWinStreak) || 0,
+      achievedSeason: (latestAlert('longestWinStreak') || {}).seasonId || null,
+      historicalBest: Number(rec.longestWinStreak) || 0
+    },
+    {
+      key: 'bestSeasonRank',
+      label: '最佳赛季排名',
+      value: Number(rec.bestSeasonRank) || null,
+      achievedSeason: rankSeasons.length ? rankSeasons[0].seasonId : null,
+      historicalBest: Number(rec.bestSeasonRank) || null
+    },
+    {
+      key: 'cupChampions',
+      label: '杯赛冠军',
+      value: Number(rec.cupChampions) || 0,
+      achievedSeason: championSeasons.length ? championSeasons[0].seasonId : null,
+      historicalBest: Number(rec.cupChampions) || 0
+    },
+    {
+      key: 'totalPrize',
+      label: '累计奖金',
+      value: Math.round(Number(rec.totalPrize) || 0),
+      achievedSeason: latestHist ? latestHist.seasonId : (s && s.season ? s.season.id : null),
+      historicalBest: Math.round(Number(rec.totalPrize) || 0)
+    }
+  ];
+  return rows;
+}
+
 function updateRecords(s, win, kills, bankGain, cupChampion, meta = {}) {
   const rec = careerRecords(s);
   const matchSeq = Number.isFinite(Number(meta.matchSeq))
@@ -789,6 +861,18 @@ function updateRecords(s, win, kills, bankGain, cupChampion, meta = {}) {
     addRecordAlert(s, matchSeq, 'bestKills', '单场最高击杀', oldBestKills, newBestKills);
   }
   rec.bestKills = newBestKills;
+  const oldBestDmg = Number(rec.bestDmg) || 0;
+  const newBestDmg = Math.max(oldBestDmg, Number(meta.dmg) || 0);
+  if (newBestDmg > oldBestDmg) {
+    addRecordAlert(s, matchSeq, 'bestDmg', '单场最高伤害', oldBestDmg, newBestDmg);
+  }
+  rec.bestDmg = newBestDmg;
+  const oldBestKd = Number(rec.bestKd) || 0;
+  const kd = Number(meta.deaths) ? round2((kills || 0) / Number(meta.deaths)) : (kills || 0);
+  if (kd > oldBestKd) {
+    addRecordAlert(s, matchSeq, 'bestKd', '单场最高 K/D', oldBestKd, kd);
+  }
+  rec.bestKd = Math.max(oldBestKd, kd);
   rec.totalPrize = Math.round((Number(rec.totalPrize) || 0) + (bankGain || 0));
   if (win) {
     const oldStreak = Number(rec.longestWinStreak) || 0;
@@ -2137,7 +2221,7 @@ export function applyPlayerResult(s, r) {
     players: Array.isArray(r.players) ? r.players : undefined
   });
   if (s.matchHistory.length > 500) s.matchHistory.splice(0, s.matchHistory.length - 500);
-  updateRecords(s, win, kills, bankGain + sponsor + ticket, isCup && s.season.cup.champion === 'player', { matchSeq: s.matchHistory.length });
+  updateRecords(s, win, kills, bankGain + sponsor + ticket, isCup && s.season.cup.champion === 'player', { matchSeq: s.matchHistory.length, dmg: matchDmg, deaths });
   if (s.player.seasonStats.w === 1) unlockAchievement(s, 'first_win');
   if (s.player.level >= 10) unlockAchievement(s, 'veteran');
   if ((Number(careerRecords(s).totalPrize) || 0) >= 100000) unlockAchievement(s, 'rich100k');

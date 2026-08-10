@@ -2,7 +2,7 @@ import {
   resetCareer, setStorage, setRng, getState, settlePlayerMatch, train, trainTeammate, sellPlayer, sellPreview, buyPlayer, candidates, filterCandidates,
   nextSeason, save, loadCareer, __clearStateForTest, candidateProfile,
   sponsorIncome, sponsorPreview, sponsorSeasonPreview, homeTicketIncome, ticketPreview, cashflowForecast, seasonBudget, financialRisk, financeTrend, seasonFinancialSummary, remainingPrizePreview, transferProfit, facilityStatus, upgradeFacility, formBonus, fatiguePenalty, careerMorale, restPlayer, seasonGoals, goalProgress, trainingPreview, trainingSuggestion, rotationAdvice, trainingHistory, rosterStatus, transferBudget, contractStatus, renewPlayer, rosterContribution, positionBalance,
-  achievementDefs, achievements, achievementProgress, careerRecords, honorTitle, migrateCareerState, matchReadiness, seasonGoalHistory, goalAdvice, lastRecordAlerts, seasonRecordAlerts
+  achievementDefs, achievements, achievementProgress, careerRecords, honorTitle, migrateCareerState, matchReadiness, seasonGoalHistory, goalAdvice, lastRecordAlerts, seasonRecordAlerts, recordDetails
 } from '../src/career.js';
 
 const ok = (name, cond) => {
@@ -254,6 +254,8 @@ s.player.records = { bestKills: 4, longestWinStreak: 0 };
 settlePlayerMatch(true, 6, 2);
 const recordAlertCompare = lastRecordAlerts(s);
 ok('record refresh compare', recordAlertCompare.some((x) => x.type === 'bestKills' && x.oldValue === 4 && x.newValue === 6) && recordAlertCompare.some((x) => x.type === 'longestWinStreak' && x.oldValue === 0 && x.newValue === 1));
+const recordDetailRows = recordDetails(s);
+ok('record details table', recordDetailRows.length >= 7 && recordDetailRows.some((r) => r.key === 'bestKills' && r.value === 6 && r.achievedSeason === 1) && recordDetailRows.some((r) => r.key === 'bestDmg' && r.value === 420));
 
 const rest = restPlayer();
 ok('rest player', rest.ok && s.player.fatigue === 0 && s.team.rested === true);
