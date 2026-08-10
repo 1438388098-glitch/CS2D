@@ -78,33 +78,45 @@ function pitch() { return 1 + (rand() - 0.5) * 0.08; } // ±4%
 
 // 武器音色 ---------------------------------------------------------------
 const SHOT_PROFILE = {
-  ak: { dur: 0.36, f0: 165, f1: 55, high: 2100, noise: 0.9, body: 0.8 },
-  rifle: { dur: 0.34, f0: 185, f1: 70, high: 2200, noise: 0.85, body: 0.7 },
-  smg: { dur: 0.3, f0: 240, f1: 95, high: 3100, noise: 0.82, body: 0.55 },
-  sniper: { dur: 0.5, f0: 92, f1: 28, high: 1400, noise: 0.9, body: 1 },
-  pistol: { dur: 0.32, f0: 300, f1: 120, high: 3200, noise: 0.82, body: 0.5 },
-  shotgun: { dur: 0.46, f0: 130, f1: 45, high: 1600, noise: 0.88, body: 0.62 },
-  knife: { dur: 0.28, f0: 1400, f1: 900, high: 2800, noise: 0.7, body: 0.3 }
+  ak: { dur: 0.36, f0: 165, f1: 55, high: 2100, noise: 0.9, body: 0.8, crack: 0.62, snap: 0.3, mech: 0.14, mechAt: 0.012, tail: 0.22 },
+  rifle: { dur: 0.34, f0: 185, f1: 70, high: 2200, noise: 0.85, body: 0.7, crack: 0.55, snap: 0.28, mech: 0.15, mechAt: 0.011, tail: 0.2 },
+  smg: { dur: 0.3, f0: 240, f1: 95, high: 3100, noise: 0.82, body: 0.55, crack: 0.68, snap: 0.36, mech: 0.18, mechAt: 0.009, tail: 0.15 },
+  sniper: { dur: 0.5, f0: 92, f1: 28, high: 1400, noise: 0.9, body: 1, crack: 0.72, snap: 0.35, mech: 0.08, mechAt: 0.024, tail: 0.3 },
+  pistol: { dur: 0.32, f0: 300, f1: 120, high: 3200, noise: 0.82, body: 0.5, crack: 0.58, snap: 0.3, mech: 0.18, mechAt: 0.009, tail: 0.14 },
+  shotgun: { dur: 0.46, f0: 130, f1: 45, high: 1600, noise: 0.88, body: 0.62, crack: 0.76, snap: 0.42, mech: 0.24, mechAt: 0.018, tail: 0.24 },
+  knife: { dur: 0.28, f0: 1400, f1: 900, high: 2800, noise: 0.7, body: 0.3, crack: 0.48, snap: 0.2, mech: 0.26, mechAt: 0.005, tail: 0.08 }
 };
 
-function makeShotBuffer(ac, variant) {
+export function makeShotBuffer(ac, variant) {
   const p = SHOT_PROFILE[variant] || SHOT_PROFILE.rifle;
   const sr = ac.sampleRate || 44100;
   const len = Math.ceil(sr * p.dur);
   const buf = ac.createBuffer(1, len, sr);
   const d = buf.getChannelData(0);
-  const bodyRate = variant === 'sniper' ? 4 : 5.5;
-  const tailRate = variant === 'sniper' ? 4.2 : 8.5;
+  const bodyRate = variant === 'sniper' ? 4 : 5.8;
+  const tailRate = variant === 'sniper' ? 4 : 8;
+  const crackRate = variant === 'sniper' ? 48 : 70;
+  const snapRate = variant === 'sniper' ? 110 : 150;
+  const mechAt = p.mechAt || 0.012;
+  let lp = 0;
   for (let i = 0; i < len; i++) {
     const t = i / sr;
     const noise = Math.random() * 2 - 1;
+    lp += 0.18 * (noise - lp);
+    const hp = noise - lp;
     const freq = p.f0 + (p.f1 - p.f0) * Math.min(1, t * 2.6);
+    const attack = Math.min(1, t * 1400);
+    const crack = hp * Math.exp(-t * crackRate) * p.noise * p.crack;
+    const snap = noise * Math.exp(-t * snapRate) * p.snap;
     const body = Math.sin(Math.PI * 2 * freq * t) * Math.exp(-t * bodyRate) * p.body;
-    const high = Math.sin(Math.PI * 2 * (p.high - (p.high - p.f1) * Math.min(1, t * 7)) * t) * Math.exp(-t * 22) * (variant === 'sniper' ? 0.06 : 0.16);
-    const crack = Math.sin(Math.PI * 2 * (p.high + 700) * t) * Math.exp(-t * 42) * (variant === 'knife' ? 0.28 : 0.1);
-    const attack = Math.min(1, t * 900);
-    const tail = Math.exp(-t * tailRate);
-    d[i] = Math.tanh((noise * p.noise + body + high + crack) * attack * tail * 0.62);
+    const bodyLow = Math.sin(Math.PI * 2 * freq * 0.5 * t) * Math.exp(-t * bodyRate * 0.72) * p.body * 0.34;
+    const bodyHarmonic = Math.sin(Math.PI * 2 * freq * 1.9 * t) * Math.exp(-t * bodyRate * 1.7) * p.body * 0.18;
+    const ring = Math.sin(Math.PI * 2 * (p.high + (p.f1 - p.high) * Math.min(1, t * 8)) * t) * Math.exp(-t * 26) * (variant === 'sniper' ? 0.06 : 0.12);
+    const tm = Math.max(0, t - mechAt);
+    const mech = (Math.random() * 2 - 1) * Math.exp(-tm * (variant === 'shotgun' ? 60 : 105)) * p.mech;
+    const tail = Math.sin(Math.PI * 2 * Math.max(26, p.f1) * t) * Math.exp(-t * tailRate) * p.body * p.tail;
+    const tailNoise = lp * Math.exp(-t * tailRate * 0.8) * p.noise * 0.28;
+    d[i] = Math.tanh((crack + snap + body + bodyLow + bodyHarmonic + ring + mech + tail + tailNoise) * attack * 0.78);
   }
   return buf;
 }
