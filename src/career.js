@@ -273,6 +273,26 @@ export function sponsorSeasonPreview(s) {
   };
 }
 
+export function homeTicketIncome(s, win) {
+  const base = { '甲级': 1200, '乙级': 800, '丙级': 500 }[s.team.league] || 500;
+  const rating = Number((s.season.teams.find((t) => t.id === 'player') || {}).rating) || 65;
+  const morale = careerMorale(s);
+  const multiplier = (0.8 + rating / 250) * (0.8 + morale / 150) * (win ? 1.35 : 0.8);
+  return Math.round(base * multiplier);
+}
+
+export function ticketPreview(s) {
+  const ledger = Array.isArray(s.team.ledger) ? s.team.ledger : [];
+  const seasonEarned = ledger.reduce((a, x) => a + (x.type === 'income' && x.label === '主场票房' ? (x.amount || 0) : 0), 0);
+  return {
+    homeWin: homeTicketIncome(s, true),
+    homeLoss: homeTicketIncome(s, false),
+    awayWin: 0,
+    seasonEarned,
+    venue: '主场与客场'
+  };
+}
+
 export function cashflowForecast(s) {
   const current = Number(s.team && s.team.bank) || 0;
   const totalRounds = Number(s.season && s.season.totalRounds) || 14;
@@ -1450,6 +1470,7 @@ export function applyPlayerResult(s, r) {
   s.team.rested = false;
   refreshPlayerRating(s);
   let bankGain = 0;
+  let ticket = 0;
   if (!noReward) {
     bankGain = (win ? 1500 : 300) + (mvp ? 200 : 0);
     gainXp(s, (win ? 300 : 50) + kills * 10 + (mvp ? 100 : 0));
@@ -1478,9 +1499,13 @@ export function applyPlayerResult(s, r) {
     }
   }
   const sponsor = !noReward ? sponsorIncome(s) : 0;
-  s.team.bank += bankGain + sponsor;
+  const f = !isCup ? findPlayerFixture(s) : null;
+  const venue = isCup ? 'home' : (f && f.home === 'player' ? 'home' : 'away');
+  if (venue === 'home' && !noReward) ticket = homeTicketIncome(s, win);
+  s.team.bank += bankGain + sponsor + ticket;
   if (bankGain) addLedger(s, 'income', bankGain, '比赛奖金');
   if (sponsor) addLedger(s, 'income', sponsor, '赞助收入');
+  if (ticket) addLedger(s, 'income', ticket, '主场票房');
   s.team.trainingLeft = 2;
   if (!Array.isArray(s.matchHistory)) s.matchHistory = [];
   const matchDmg = r.dmg != null ? Math.round(r.dmg) : Math.round((kills || 0) * 70);
@@ -1505,7 +1530,7 @@ export function applyPlayerResult(s, r) {
     importance: matchImportanceLabel
   });
   if (s.matchHistory.length > 500) s.matchHistory.splice(0, s.matchHistory.length - 500);
-  updateRecords(s, win, kills, bankGain + sponsor, isCup && s.season.cup.champion === 'player');
+  updateRecords(s, win, kills, bankGain + sponsor + ticket, isCup && s.season.cup.champion === 'player');
   if (s.player.seasonStats.w === 1) unlockAchievement(s, 'first_win');
   if (s.player.level >= 10) unlockAchievement(s, 'veteran');
   if ((Number(careerRecords(s).totalPrize) || 0) >= 100000) unlockAchievement(s, 'rich100k');
