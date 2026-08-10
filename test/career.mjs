@@ -255,6 +255,8 @@ for (const key of ['dash', 'schedule', 'training', 'roster', 'standings', 'cup',
   const html = __renderTabForTest(key);
   ok('career tab renders ' + key, html && html.length > 0);
 }
+const statsTabHtml = __renderTabForTest('stats');
+ok('career awards renders', statsTabHtml.includes('赛季个人奖项'));
 const trainingHtml = __renderTabForTest('training');
 ok('career training radar renders', trainingHtml.includes('career-radar') && trainingHtml.includes('综合能力'));
 const financeHtml = __renderTabForTest('finance');

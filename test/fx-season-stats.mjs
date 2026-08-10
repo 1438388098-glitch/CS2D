@@ -1,7 +1,7 @@
 import {
   resetCareer, setStorage, setRng, getState, settlePlayerMatch, nextSeason,
   save, loadCareer, __clearStateForTest,
-  seasonStats, seasonSeries, seasonStreaks, careerSummary, matchDetail, seasonTimeline, headToHead, importantMatches, seasonTrends, favoriteMatches, cupHistory, careerTimeline
+  seasonStats, seasonAwards, seasonSeries, seasonStreaks, careerSummary, matchDetail, seasonTimeline, headToHead, importantMatches, seasonTrends, favoriteMatches, cupHistory, careerTimeline
 } from '../src/career.js';
 
 const ok = (name, cond) => {
@@ -46,6 +46,13 @@ ok('season2 isolated', st.matches === 2 && st.wins === 1 && st.losses === 1 && s
 
 st = seasonStats(h, null);
 ok('null season aggregates all', st.matches === 5 && st.wins === 3 && st.losses === 2);
+
+const awards = seasonAwards(h, 1);
+ok('season awards mvp', awards.mvpMatches.length === 1 && awards.mvpMatches[0].kills === 20);
+ok('season awards best', awards.bestKills.kills === 20 && awards.bestDmg.dmg === 1400);
+ok('season awards averages', awards.avgKills === Math.round(43 / 3 * 100) / 100 && awards.avgDmg === Math.round(3010 / 3));
+ok('season awards top', awards.topPerformance && awards.topPerformance.mvp === true);
+ok('season awards empty', seasonAwards([], 1).matches === 0 && seasonAwards([], 1).bestKills === null);
 
 st = seasonStats(h, (m) => m.win);
 ok('predicate filter', st.matches === 3 && st.wins === 3 && st.losses === 0);

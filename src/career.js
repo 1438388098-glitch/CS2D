@@ -1206,6 +1206,33 @@ export function seasonStats(history, season) {
   };
 }
 
+export function seasonAwards(history, season) {
+  const list = filterMatches(history, season).map(matchDetail);
+  if (!list.length) {
+    return { matches: 0, mvpMatches: 0, bestKills: null, bestDmg: null, avgKills: 0, avgDmg: 0, bestKd: 0, topPerformance: null };
+  }
+  const mvpMatches = list.filter((m) => m.mvp);
+  const bestKills = list.reduce((a, b) => (b.kills > a.kills ? b : a), list[0]);
+  const bestDmg = list.reduce((a, b) => (b.dmg > a.dmg ? b : a), list[0]);
+  const avgKills = round2(list.reduce((a, m) => a + m.kills, 0) / list.length);
+  const avgDmg = Math.round(list.reduce((a, m) => a + m.dmg, 0) / list.length);
+  const topPerformance = list.slice().sort((a, b) =>
+    (b.kills + b.dmg / 100 + (b.mvp ? 4 : 0) + (b.win ? 2 : 0)) -
+    (a.kills + a.dmg / 100 + (a.mvp ? 4 : 0) + (a.win ? 2 : 0))
+  )[0];
+  const bestKd = list.slice().sort((a, b) => b.kd - a.kd)[0];
+  return {
+    matches: list.length,
+    mvpMatches,
+    bestKills,
+    bestDmg,
+    avgKills,
+    avgDmg,
+    bestKd,
+    topPerformance
+  };
+}
+
 export function seasonSeries(history, season) {
   return filterMatches(history, season).map((m) => ({
     win: !!m.win,

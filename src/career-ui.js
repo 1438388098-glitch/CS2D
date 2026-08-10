@@ -2,7 +2,7 @@ import {
   loadCareer, getState, titleFor, startCareerMatch, careerEndMatch, abandonPendingMatch, simulatePlayerMatch, resetCareer,
   train, sellPlayer, buyPlayer, candidates, filterCandidates, nextSeason, seasonReport, nextMatch, nextMatchInfo, matchImportance, teamRecentForm,
   transferWindowOpen, transferWindowInfo, isStorageAvailable, cupMap, cupPrizeInfo, cupMapForRound, fixtureMapFor, fixtureMatchRecord, winChance, trainingTiers, trainingPreview, xpNeeded,
-  seasonStats, seasonSeries, seasonStreaks, careerSummary, matchDetail, seasonTimeline, headToHead, importantMatches, seasonTrends, favoriteMatches, cupHistory, careerTimeline,
+  seasonStats, seasonAwards, seasonSeries, seasonStreaks, careerSummary, matchDetail, seasonTimeline, headToHead, importantMatches, seasonTrends, favoriteMatches, cupHistory, careerTimeline,
   sponsorIncome, formBonus, fatiguePenalty, careerMorale, restPlayer, seasonGoals, seasonPace, goalProgress, rosterContribution,
   achievementDefs, achievements, careerRecords
 } from './career.js';
@@ -434,6 +434,7 @@ function renderSeasonStats(s) {
   const sel = statsSeason != null && seasonSet.has(statsSeason) ? statsSeason : s.season.id;
   const stats = seasonStats(mh, sel);
   const series = seasonSeries(mh, sel);
+  const awards = seasonAwards(mh, sel);
   const streaks = seasonStreaks(series);
   const overview = careerSummary(mh);
   const rec = careerRecords(s);
@@ -488,7 +489,15 @@ function renderSeasonStats(s) {
   const ovHtml = ov.map(([k, v]) => '<div class="career-kpi"><b>' + v + '</b><span>' + k + '</span></div>').join('');
   const recordHtml = '<div class="career-card"><h4>生涯纪录</h4><div class="career-kpis"><div class="career-kpi"><b>' + (rec.bestKills || 0) + '</b><span>单场最高击杀</span></div><div class="career-kpi"><b>' + (rec.longestWinStreak || 0) + '</b><span>最长连胜</span></div><div class="career-kpi"><b>' + money(rec.totalPrize || 0) + '</b><span>累计奖金</span></div><div class="career-kpi"><b>' + (rec.cupChampions || 0) + '</b><span>杯赛冠军</span></div><div class="career-kpi"><b>' + (rec.bestSeasonRank || '-') + '</b><span>最佳赛季排名</span></div></div></div>';
   const achHtml = '<div class="career-card"><h4>成就</h4>' + (achList.length ? achList.map((a) => '<div class="career-news award" style="border-left-color:#ffd75e">' + esc(a.title) + '</div>').join('') : '<div class="career-news">暂无成就</div>') + '</div>';
+  const awardHtml = '<div class="career-card"><h4>赛季个人奖项</h4><div class="career-kpis">' +
+    '<div class="career-kpi"><b>' + awards.mvpMatches.length + '</b><span>MVP场次</span></div>' +
+    '<div class="career-kpi"><b>' + (awards.bestKills ? awards.bestKills.kills : '-') + '</b><span>最佳击杀</span></div>' +
+    '<div class="career-kpi"><b>' + (awards.bestDmg ? awards.bestDmg.dmg : '-') + '</b><span>最高伤害</span></div>' +
+    '<div class="career-kpi"><b>' + awards.avgKills + '</b><span>场均击杀</span></div>' +
+    '<div class="career-kpi"><b>' + awards.avgDmg + '</b><span>场均伤害</span></div>' +
+    '</div>' + (awards.topPerformance ? '<div class="career-row"><span>最佳单场 · ' + esc(awards.topPerformance.oppName || awards.topPerformance.oppId || '-') + ' · ' + esc(mapName(awards.topPerformance.mapId || '')) + '</span><b>' + awards.topPerformance.kills + 'K / ' + awards.topPerformance.deaths + 'D · ' + awards.topPerformance.dmg + ' 伤 · ' + (awards.topPerformance.mvp ? 'MVP' : awards.topPerformance.win ? '胜利' : '失利') + '</b></div>' : '<div class="career-news">暂无比赛数据</div>') + '</div>';
   return '<div class="career-card"><h4>赛季数据统计</h4><div class="career-season">' + selBtns + '</div><div class="career-kpis">' + kpiHtml + '</div></div>' +
+    awardHtml +
     '<div class="career-card"><h4>单场走势 · 第 ' + sel + ' 赛季（共 ' + stats.matches + ' 场）</h4><div class="career-series">' + seriesHtml + '</div><div class="career-stats"><span>当前连胜 ' + streaks.current + ' · 最长连胜 ' + streaks.longest + '</span><span>绿 = 胜 · 红 = 负 · 描金 = 杯赛 · 高度 = 击杀数</span></div></div>' +
     '<div class="career-card"><h4>赛季比赛时间线</h4>' + timelineRows + '</div>' +
     '<div class="career-card"><h4>赛季近场明细</h4>' + detailRows + '</div>' +
