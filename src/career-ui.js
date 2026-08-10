@@ -1,7 +1,7 @@
 import {
   loadCareer, getState, titleFor, startCareerMatch, careerEndMatch, abandonPendingMatch, simulatePlayerMatch, resetCareer,
   train, sellPlayer, sellPreview, buyPlayer, renewPlayer, candidates, filterCandidates, candidateProfile, nextSeason, seasonReport, nextMatch, nextMatchInfo, matchImportance, teamRecentForm, matchReadiness, teamProfile, leagueRules,
-  transferWindowOpen, transferWindowInfo, transferBudget, transferProfit, contractStatus, isStorageAvailable, cupMap, cupPrizeInfo, cupMapForRound, fixtureMapFor, fixtureMatchRecord, winChance, trainingTiers, trainingPreview, trainingSuggestion, rotationAdvice, trainingHistory, rosterStatus, facilityStatus, upgradeFacility, xpNeeded,
+  transferWindowOpen, transferWindowInfo, transferBudget, transferProfit, contractStatus, isStorageAvailable, cupMap, cupPrizeInfo, cupMapForRound, fixtureMapFor, fixtureMatchRecord, winChance, trainingTiers, trainingPreview, trainingSuggestion, rotationAdvice, trainingHistory, rosterStatus, facilityStatus, upgradeFacility, xpNeeded, cupOpponentScouting,
   seasonStats, seasonAwards, seasonPerformanceSummary, seasonSeries, seasonStreaks, careerSummary, matchDetail, seasonTimeline, headToHead, importantMatches, seasonTrends, favoriteMatches, cupHistory, trophyCase, careerTimeline, careerReview, cupSeasonRecord,
   sponsorIncome, sponsorPreview, sponsorSeasonPreview, homeTicketIncome, ticketPreview, cashflowForecast, seasonBudget, financialRisk, financeTrend, seasonFinancialSummary, remainingPrizePreview, formBonus, fatiguePenalty, careerMorale, restPlayer, seasonGoals, seasonPace, goalProgress, goalAdvice, relegationProjection, rosterContribution,
   seasonGoalHistory,
@@ -501,6 +501,17 @@ function renderCup(s) {
   const b = s.season.cup.bracket || [];
   const prizes = cupPrizeInfo(s);
   const trophy = trophyCase(s.history);
+  const scouting = cupOpponentScouting(s);
+  const intelHtml = scouting ? '<div class="career-card"><h4>杯赛对阵情报</h4>' +
+    profileChip(scouting.profile) +
+    '<div class="career-kpis">' +
+    '<div class="career-kpi"><b>' + scouting.winChance + '%</b><span>预估胜率</span></div>' +
+    '<div class="career-kpi"><b>' + esc(scouting.roundName) + '</b><span>当前轮次</span></div>' +
+    '<div class="career-kpi"><b>' + esc(mapName(scouting.map)) + '</b><span>比赛地图</span></div>' +
+    '<div class="career-kpi"><b>' + esc(scouting.threat) + '</b><span>威胁评估</span></div>' +
+    '<div class="career-kpi"><b>' + esc(scouting.mapEdge) + '</b><span>地图参考</span></div></div>' +
+    '<div class="career-row"><span>近期状态</span><b>' + esc(scouting.scout ? (scouting.scout.form || '-') : '-') + ' · 场均 ' + (scouting.scout ? scouting.scout.avgKills : '-') + 'K / ' + (scouting.scout ? scouting.scout.avgDeaths : '-') + 'D</b></div>' +
+    '<div class="career-row"><span>胜负参考</span><b>' + (scouting.h2h.matches ? scouting.h2h.wins + ' 胜 ' + scouting.h2h.losses + ' 负 · ' + scouting.h2h.winRate + '% · K/D ' + scouting.h2h.kd : '暂无直接交手') + '</b></div></div>' : '';
   const trophyHtml = '<div class="career-card"><h4>奖杯陈列</h4><div class="career-kpis">' +
     '<div class="career-kpi"><b>' + trophy.championCount + '</b><span>冠军</span></div>' +
     '<div class="career-kpi"><b>' + trophy.runnerUpCount + '</b><span>亚军</span></div>' +
@@ -527,7 +538,7 @@ function renderCup(s) {
     }
     html += '</div>';
   }
-  return html + '</div><div class="career-card"><h4>奖金</h4><p>每轮晋级奖 ' + money(prizes.perRound) + ' · 冠军另奖 ' + money(prizes.champion) + ' · 决赛单场最高 ' + money(prizes.finalTotal || prizes.perRound + prizes.champion) + '</p></div>' + trophyHtml;
+  return html + '</div>' + intelHtml + '<div class="career-card"><h4>奖金</h4><p>每轮晋级奖 ' + money(prizes.perRound) + ' · 冠军另奖 ' + money(prizes.champion) + ' · 决赛单场最高 ' + money(prizes.finalTotal || prizes.perRound + prizes.champion) + '</p></div>' + trophyHtml;
 }
 
 function renderSettlement(s) {

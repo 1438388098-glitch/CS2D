@@ -1899,6 +1899,37 @@ export function cupMap(s) {
   return cupMapForRound(m && m.round);
 }
 
+export function cupOpponentScouting(s) {
+  const m = s && s.season && s.season.cup ? findCupMatch(s) : null;
+  if (!m || !m.a || !m.b) return null;
+  const oppId = m.a === 'player' ? m.b : m.a;
+  if (oppId === 'player') return null;
+  const profile = teamProfile(s, oppId);
+  const scout = scoutReport(s, oppId);
+  const h2h = headToHead(Array.isArray(s.matchHistory) ? s.matchHistory : [], oppId);
+  const chance = winChance(s, oppId, 'home');
+  const playerTeam = s.season.teams.find((x) => x.id === 'player');
+  const ratingDiff = profile && playerTeam ? Number(profile.rating) - Number(playerTeam.rating) : 0;
+  const mapId = cupMapForRound(m.round);
+  const mapPrefs = Array.isArray(profile && profile.mapPrefs) ? profile.mapPrefs : [];
+  return {
+    oppId,
+    oppName: profile && profile.name ? profile.name : (scout && scout.name ? scout.name : oppId),
+    round: m.round,
+    roundName: m.round === 'QF' ? '八强' : m.round === 'SF' ? '四强' : '决赛',
+    map: mapId,
+    prize: cupPrizeFor(s.team.league, m.round),
+    rating: profile ? profile.rating : null,
+    ratingDiff,
+    threat: ratingDiff > 10 ? '强敌' : (ratingDiff < -10 ? '弱旅' : '势均力敌'),
+    winChance: chance,
+    mapEdge: mapPrefs.includes(mapId) ? '擅长此图' : (profile && profile.homeMap === mapId ? '主场地图' : '常规地图'),
+    profile,
+    scout,
+    h2h
+  };
+}
+
 function simFormScore(form) {
   if (!Array.isArray(form)) return 0;
   let score = 0;

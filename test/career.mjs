@@ -286,6 +286,15 @@ ok('career record detail renders', statsTabHtml.includes('生涯纪录详情') &
 ok('career achievement filter renders', statsTabHtml.includes('成就筛选') && statsTabHtml.includes('全部分类') && statsTabHtml.includes('未解锁'));
 const cupTabHtml = __renderTabForTest('cup');
 ok('career trophy case renders', cupTabHtml.includes('奖杯陈列'));
+const cupIntelState = getState();
+cupIntelState.season.cup = {
+  phase: 'active',
+  bracket: [{ round: 'QF', a: 'player', b: 't1', score: null, played: false, winner: null }]
+};
+cupIntelState.pendingMatch = { oppId: 't1', venue: 'home', isCup: true };
+save();
+const cupIntelHtml = __renderTabForTest('cup');
+ok('career cup intel renders', cupIntelHtml.includes('杯赛对阵情报') && cupIntelHtml.includes('预估胜率') && cupIntelHtml.includes('career-team-chip'));
 const trainingHtml = __renderTabForTest('training');
 ok('career training radar renders', trainingHtml.includes('career-radar') && trainingHtml.includes('综合能力'));
 const financeHtml = __renderTabForTest('finance');

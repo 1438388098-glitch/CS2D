@@ -2,7 +2,7 @@ import {
   resetCareer, setStorage, setRng, getState, settlePlayerMatch, train, trainTeammate, sellPlayer, sellPreview, buyPlayer, candidates, filterCandidates,
   nextSeason, save, loadCareer, __clearStateForTest, candidateProfile,
   sponsorIncome, sponsorPreview, sponsorSeasonPreview, homeTicketIncome, ticketPreview, cashflowForecast, seasonBudget, financialRisk, financeTrend, seasonFinancialSummary, remainingPrizePreview, transferProfit, facilityStatus, upgradeFacility, formBonus, fatiguePenalty, careerMorale, restPlayer, seasonGoals, goalProgress, trainingPreview, trainingSuggestion, rotationAdvice, trainingHistory, rosterStatus, transferBudget, contractStatus, renewPlayer, rosterContribution, positionBalance,
-  achievementDefs, achievements, achievementCatalog, achievementProgress, careerRecords, honorTitle, migrateCareerState, matchReadiness, seasonGoalHistory, goalAdvice, lastRecordAlerts, seasonRecordAlerts, recordDetails, seasonHighlights, careerReview, cupSeasonRecord
+  achievementDefs, achievements, achievementCatalog, achievementProgress, careerRecords, honorTitle, migrateCareerState, matchReadiness, seasonGoalHistory, goalAdvice, lastRecordAlerts, seasonRecordAlerts, recordDetails, seasonHighlights, careerReview, cupSeasonRecord, cupOpponentScouting
 } from '../src/career.js';
 
 const ok = (name, cond) => {
@@ -309,6 +309,15 @@ ok('cup champion record', careerRecords(s).cupChampions === 1 && achievements(s)
 ok('honor title champion', honorTitle(s).title.includes('冠军') && honorTitle(s).badges.includes('杯赛冠军'));
 const cupSeason = cupSeasonRecord(s);
 ok('cup season record', cupSeason && cupSeason.resultLabel === '冠军' && cupSeason.earned > 0 && cupSeason.maxPrize > cupSeason.earned && cupSeason.path.some((p) => p.status === '夺冠') && cupSeason.comparisons.some((h) => h.current && h.cupLabel === '冠军'));
+
+s = resetCareer();
+s.season.cup = {
+  phase: 'active',
+  bracket: [{ round: 'QF', a: 'player', b: 't1', score: null, played: false, winner: null }]
+};
+s.pendingMatch = { oppId: 't1', venue: 'home', isCup: true };
+const cupScout = cupOpponentScouting(s);
+ok('cup opponent scouting', cupScout && cupScout.oppId === 't1' && cupScout.round === 'QF' && cupScout.map === 'dust2' && cupScout.profile && cupScout.profile.mapPrefs.length > 0 && cupScout.winChance > 0 && typeof cupScout.threat === 'string' && cupScout.h2h.matches >= 0);
 
 s = resetCareer();
 let goals = seasonGoals(s);
