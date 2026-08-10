@@ -218,6 +218,7 @@ export function newCareerState() {
       cup: { phase: 'idle', bracket: [] }
     },
     history: [],
+    matchHistory: [],
     news: []
   };
 }
@@ -232,6 +233,7 @@ export function loadCareer() {
         state = parsed;
         if (!state.team.pool) state.team.pool = null;
         if (!state.season.cup) state.season.cup = { phase: 'idle', bracket: [] };
+        if (!Array.isArray(state.matchHistory)) state.matchHistory = [];
         return state;
       }
     } catch (e) { /* fallthrough */ }
@@ -344,6 +346,13 @@ export function findCupMatch(s) {
   const b = s.season.cup.bracket;
   return b.find((m) => !m.played && (m.a === 'player' || m.b === 'player'));
 }
+function currentMatch(s, isCup) {
+  return isCup ? findCupMatch(s) : findPlayerFixture(s);
+}
+function matchOpponent(m, isCup) {
+  if (!m) return null;
+  return isCup ? (m.a === 'player' ? m.b : m.a) : (m.home === 'player' ? m.away : m.home);
+}
 export function nextMatch(s) {
   if (s.season.cup.phase === 'active') return findCupMatch(s);
   return findPlayerFixture(s);
@@ -423,6 +432,8 @@ function simulateRemainingCup(s) {
 
 export function applyPlayerResult(s, r) {
   const { win, kills, deaths, mvp, score, isCup, noReward } = r;
+  const match = currentMatch(s, !!isCup);
+  const opp = matchOpponent(match, !!isCup);
   s.player.seasonStats.played++;
   if (win) s.player.seasonStats.w++; else s.player.seasonStats.l++;
   s.player.seasonStats.kills += kills;
@@ -458,6 +469,22 @@ export function applyPlayerResult(s, r) {
   }
   s.team.bank += bankGain;
   s.team.trainingLeft = 2;
+  if (!Array.isArray(s.matchHistory)) s.matchHistory = [];
+  s.matchHistory.push({
+    seasonId: s.season.id,
+    round: isCup ? (match ? match.round : null) : s.season.round,
+    isCup: !!isCup,
+    oppId: opp,
+    venue: isCup ? 'home' : (match && match.home === 'player' ? 'home' : 'away'),
+    win: !!win,
+    kills: kills || 0,
+    deaths: deaths || 0,
+    mvp: !!mvp,
+    dmg: r.dmg != null ? Math.round(r.dmg) : Math.round((kills || 0) * 70),
+    money: bankGain,
+    score: score || null
+  });
+  if (s.matchHistory.length > 500) s.matchHistory.splice(0, s.matchHistory.length - 500);
   if (noReward) {
     addNews(s, 'info', '放弃本场（' + (isCup ? '杯赛' : '联赛') + '）');
   } else {
@@ -617,6 +644,114 @@ export function seasonReport() {
   const cupPrize = s.season.cupPrizeEarned || 0;
   const cupRound = s.season.cupResult === undefined ? 0 : s.season.cupResult;
   return { league: s.team.league, rank, rankPrize, cupPrize, cupRound, prize: rankPrize + cupPrize, standings: list };
+}
+
+function filterMatches(history, season) {
+  return (Array.isArray(history) ? history : []).filter((m) => {
+    if (!m) return false;
+    if (typeof season === 'function') return !!season(m);
+    if (season == null) return true;
+    return m.seasonId === season;
+  });
+}
+
+function round2(n) { return Math.round(n * 100) / 100; }
+
+export function seasonStats(history, season) {
+  const matches = filterMatches(history, season);
+  let wins = 0;
+  let kills = 0;
+  let deaths = 0;
+  let money = 0;
+  let dmg = 0;
+  let mvp = 0;
+  for (const m of matches) {
+    if (m.win) wins++;
+    kills += m.kills || 0;
+    deaths += m.deaths || 0;
+    money += m.money || 0;
+    dmg += m.dmg || 0;
+    if (m.mvp) mvp++;
+  }
+  const n = matches.length;
+  return {
+    matches: n,
+    wins,
+    losses: n - wins,
+    winRate: n ? Math.round((wins / n) * 100) : 0,
+    kd: deaths ? round2(kills / deaths) : kills,
+    totalMoney: money,
+    avgDmg: n ? Math.round(dmg / n) : 0,
+    kills,
+    deaths,
+    totalDmg: dmg,
+    mvp
+  };
+}
+
+export function seasonSeries(history, season) {
+  return filterMatches(history, season).map((m) => ({
+    win: !!m.win,
+    kills: m.kills || 0,
+    deaths: m.deaths || 0,
+    dmg: m.dmg || 0,
+    money: m.money || 0,
+    isCup: !!m.isCup,
+    round: m.round != null ? m.round : null
+  }));
+}
+
+export function seasonStreaks(series) {
+  const list = Array.isArray(series) ? series : [];
+  let current = 0;
+  for (let i = list.length - 1; i >= 0; i--) {
+    if (!list[i].win) break;
+    current++;
+  }
+  let longest = 0;
+  let run = 0;
+  for (const m of list) {
+    if (m.win) {
+      run++;
+      if (run > longest) longest = run;
+    } else {
+      run = 0;
+    }
+  }
+  return { current, longest };
+}
+
+export function careerSummary(history) {
+  const seasons = new Set();
+  let matches = 0;
+  let wins = 0;
+  let kills = 0;
+  let deaths = 0;
+  let money = 0;
+  let dmg = 0;
+  for (const m of Array.isArray(history) ? history : []) {
+    if (!m) continue;
+    if (m.seasonId != null) seasons.add(m.seasonId);
+    matches++;
+    if (m.win) wins++;
+    kills += m.kills || 0;
+    deaths += m.deaths || 0;
+    money += m.money || 0;
+    dmg += m.dmg || 0;
+  }
+  return {
+    seasons: seasons.size,
+    matches,
+    wins,
+    losses: matches - wins,
+    winRate: matches ? Math.round((wins / matches) * 100) : 0,
+    kd: deaths ? round2(kills / deaths) : kills,
+    totalMoney: money,
+    totalDmg: dmg,
+    avgDmg: matches ? Math.round(dmg / matches) : 0,
+    kills,
+    deaths
+  };
 }
 
 function promoteLeague(league, rank) {
