@@ -1329,6 +1329,18 @@ export function cupHistory(seasonHistory) {
     }));
 }
 
+export function trophyCase(seasonHistory) {
+  const rows = cupHistory(seasonHistory).filter((h) => h.cupRound >= 2);
+  const championCount = rows.filter((h) => h.cupRound === 3).length;
+  const runnerUpCount = rows.filter((h) => h.cupRound === 2).length;
+  return {
+    championCount,
+    runnerUpCount,
+    total: rows.length,
+    rows
+  };
+}
+
 export function careerTimeline(s, limit = 60) {
   const entries = [];
   const mh = Array.isArray(s && s.matchHistory) ? s.matchHistory.slice().reverse() : [];

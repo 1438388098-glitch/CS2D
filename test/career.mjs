@@ -257,6 +257,8 @@ for (const key of ['dash', 'schedule', 'training', 'roster', 'standings', 'cup',
 }
 const statsTabHtml = __renderTabForTest('stats');
 ok('career awards renders', statsTabHtml.includes('赛季个人奖项'));
+const cupTabHtml = __renderTabForTest('cup');
+ok('career trophy case renders', cupTabHtml.includes('奖杯陈列'));
 const trainingHtml = __renderTabForTest('training');
 ok('career training radar renders', trainingHtml.includes('career-radar') && trainingHtml.includes('综合能力'));
 const financeHtml = __renderTabForTest('finance');

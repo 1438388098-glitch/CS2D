@@ -1,7 +1,7 @@
 import {
   resetCareer, setStorage, setRng, getState, settlePlayerMatch, nextSeason,
   save, loadCareer, __clearStateForTest,
-  seasonStats, seasonAwards, seasonSeries, seasonStreaks, careerSummary, matchDetail, seasonTimeline, headToHead, importantMatches, seasonTrends, favoriteMatches, cupHistory, careerTimeline
+  seasonStats, seasonAwards, seasonSeries, seasonStreaks, careerSummary, matchDetail, seasonTimeline, headToHead, importantMatches, seasonTrends, favoriteMatches, cupHistory, trophyCase, careerTimeline
 } from '../src/career.js';
 
 const ok = (name, cond) => {
@@ -120,6 +120,13 @@ const cups = cupHistory([
   { seasonId: 2, league: '甲级', rank: 6, cupRound: 2, prize: 20000 }
 ]);
 ok('cupHistory champion', cups.length === 2 && cups[0].seasonId === 2 && cups[0].cupLabel === '亚军' && cups[1].cupLabel === '冠军');
+
+const trophy = trophyCase([
+  { seasonId: 1, league: '乙级', rank: 2, cupRound: 3, prize: 45000 },
+  { seasonId: 2, league: '甲级', rank: 6, cupRound: 2, prize: 20000 },
+  { seasonId: 3, league: '甲级', rank: 4, cupRound: 1, prize: 5000 }
+]);
+ok('trophy case counts', trophy.championCount === 1 && trophy.runnerUpCount === 1 && trophy.total === 2 && trophy.rows[0].seasonId === 2);
 
 const life = careerTimeline({
   matchHistory: [{ seasonId: 1, win: true, isCup: false, oppName: 'A', kills: 8, deaths: 4, dmg: 560, money: 1500, score: [13, 8], importance: '关键战' }],

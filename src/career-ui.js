@@ -2,7 +2,7 @@ import {
   loadCareer, getState, titleFor, startCareerMatch, careerEndMatch, abandonPendingMatch, simulatePlayerMatch, resetCareer,
   train, sellPlayer, buyPlayer, candidates, filterCandidates, nextSeason, seasonReport, nextMatch, nextMatchInfo, matchImportance, teamRecentForm,
   transferWindowOpen, transferWindowInfo, isStorageAvailable, cupMap, cupPrizeInfo, cupMapForRound, fixtureMapFor, fixtureMatchRecord, winChance, trainingTiers, trainingPreview, xpNeeded,
-  seasonStats, seasonAwards, seasonSeries, seasonStreaks, careerSummary, matchDetail, seasonTimeline, headToHead, importantMatches, seasonTrends, favoriteMatches, cupHistory, careerTimeline,
+  seasonStats, seasonAwards, seasonSeries, seasonStreaks, careerSummary, matchDetail, seasonTimeline, headToHead, importantMatches, seasonTrends, favoriteMatches, cupHistory, trophyCase, careerTimeline,
   sponsorIncome, formBonus, fatiguePenalty, careerMorale, restPlayer, seasonGoals, seasonPace, goalProgress, rosterContribution,
   achievementDefs, achievements, careerRecords
 } from './career.js';
@@ -383,8 +383,14 @@ function renderStandings(s) {
 
 function renderCup(s) {
   const b = s.season.cup.bracket || [];
-  if (!b.length) return '<div class="career-card"><h4>杯赛</h4><p>第 14 轮结束后进入。</p></div>';
   const prizes = cupPrizeInfo();
+  const trophy = trophyCase(s.history);
+  const trophyHtml = '<div class="career-card"><h4>奖杯陈列</h4><div class="career-kpis">' +
+    '<div class="career-kpi"><b>' + trophy.championCount + '</b><span>冠军</span></div>' +
+    '<div class="career-kpi"><b>' + trophy.runnerUpCount + '</b><span>亚军</span></div>' +
+    '<div class="career-kpi"><b>' + trophy.total + '</b><span>领奖台</span></div></div>' +
+    (trophy.rows.length ? trophy.rows.map((h) => '<div class="career-row' + (h.cupRound === 3 ? ' cup' : '') + '"><span>第 ' + h.seasonId + ' 赛季 · ' + esc(h.league) + ' · 联赛第 ' + h.rank + ' 名</span><b>' + (h.cupRound === 3 ? '冠军' : '亚军') + ' · ' + money(h.prize) + '</b></div>').join('') : '<div class="career-news">暂无冠军或亚军记录</div>') + '</div>';
+  if (!b.length) return '<div class="career-card"><h4>杯赛</h4><p>第 14 轮结束后进入。</p></div>' + trophyHtml;
   const names = (m, side) => {
     const id = side === 'a' ? m.a : m.b;
     if (!id) return '待定';
@@ -405,7 +411,7 @@ function renderCup(s) {
     }
     html += '</div>';
   }
-  return html + '</div><div class="career-card"><h4>奖金</h4><p>每轮晋级奖 ' + money(prizes.perRound) + ' · 冠军另奖 ' + money(prizes.champion) + ' · 决赛单场最高 ' + money(35000) + '</p></div>';
+  return html + '</div><div class="career-card"><h4>奖金</h4><p>每轮晋级奖 ' + money(prizes.perRound) + ' · 冠军另奖 ' + money(prizes.champion) + ' · 决赛单场最高 ' + money(35000) + '</p></div>' + trophyHtml;
 }
 
 function renderSettlement(s) {
