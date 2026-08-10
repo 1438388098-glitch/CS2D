@@ -9,7 +9,7 @@ function ok(name, cond, detail = '') {
   if (!cond) failed = true;
 }
 
-for (const mapId of ['dust2', 'canal', 'metro']) {
+for (const mapId of ['dust2', 'metro', 'forge']) {
   for (const seed of [1, 2, 3]) {
   const game = createGame({ team: 'ct', diff: 'normal', bots: 5, mapId, seed });
   const canvasStub = { getBoundingClientRect: () => ({ left: 0, top: 0 }), addEventListener: () => {}, getContext: () => null, style: {} };

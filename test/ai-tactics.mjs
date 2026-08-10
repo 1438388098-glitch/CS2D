@@ -223,7 +223,7 @@ ok('hell mix distinct', hellA.variant !== hellB.variant || hellA.params.rushChan
 {
   const g = createGame({ mode: 'cyber', seed: 90210 });
   g.seed = 90210;
-  g.opts.cyber = { leftId: 'navi', rightId: 'vitality', mapId: 'canal', bet: 50, side: 'left' };
+  g.opts.cyber = { leftId: 'navi', rightId: 'vitality', mapId: 'metro', bet: 50, side: 'left' };
   startMatch(g);
   const bots = g.entities.filter((e) => e.bot);
   ok('cyber hell mix', bots.length === 10 && bots.every((e) => e.aiParams && e.aiParams.tacticalMix && e.aiParams.tacticalMix.includes('H')));

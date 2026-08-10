@@ -1,4 +1,4 @@
-import {ROUND, ECONOMY, MAX_PARTICLES, resolveDiff, MAP_CT_REACT} from './config.js';
+import {ROUND, ECONOMY, MAX_PARTICLES, resolveDiff, MAP_CT_REACT, hellParamsAt} from './config.js';
 import {addMoney, clearEquipment} from './economy.js';
 import {getMap, loadMap, findMapById, collideCircle, los, pathTo, tileAt, passableTolerant, fallbackSpawn} from './map.js';
 import {createEntity, spawnEntity, weaponDef, ammoFor} from './entities.js';
@@ -6,6 +6,8 @@ import {fireWeapon, startReload, finishReload, pickupWeapon, redrawDecals, RECOI
 import {updateShotStreak} from './ballistic.js';
 import {updateGrenades} from './grenades.js';
 import {updateBots, assignRoles, botBuyAll, recordRoundResult} from './ai.js';
+import {refreshLeadership} from './ai/roles.js';
+import {planTeamEconomy} from './ai/buys.js';
 import {explodeBomb, plantBomb, defuseBomb, pickupBomb} from './bomb.js';
 import {ctx, seedWorld} from './ctx.js';
 import {getMode} from './registry.js';
@@ -23,6 +25,69 @@ import { addRipple, pruneRipples } from './water-fx.js';
 import { IMPACT_LIFE } from './impact-fx.js';
 
 const emit = (evt, p) => ctx.bus.emit(evt, p);
+
+// —— 难度自适应（item 10）——
+// localStorage 记录玩家各档位胜率：胜率 >65% 升档、<40% 降档（每 0.5 档平滑步进），
+// 用 hellParamsAt 做相邻档位插值平滑；浏览器外（Node 测试）自动禁用。
+const HELL_ADJ_KEY = 'cs2d_hell_adj';
+function readHellAdj() {
+  try {
+    if (typeof localStorage === 'undefined') return null;
+    const raw = localStorage.getItem(HELL_ADJ_KEY);
+    if (!raw) return null;
+    const v = JSON.parse(raw);
+    return (v && Number.isFinite(v.t)) ? v : null;
+  } catch (e) { return null; }
+}
+function writeHellAdj(adj) {
+  try {
+    if (typeof localStorage === 'undefined') return;
+    localStorage.setItem(HELL_ADJ_KEY, JSON.stringify(adj));
+  } catch (e) { /* 隐私/禁用时静默 */ }
+}
+function adaptiveHellParams(game) {
+  const base = game.opts.hellLevel || 10;
+  const adj = readHellAdj();
+  const t = adj ? Math.max(1, Math.min(12, adj.t)) : base;
+  game.opts.hellLevel = Math.round(t);
+  return hellParamsAt(t);
+}
+export function recordDifficultyResult(game, won) {
+  if (!game || game.opts.diff !== 'hell') return;
+  if (typeof localStorage === 'undefined') return;
+  const adj = readHellAdj() || { t: game.opts.hellLevel || 10, w: 0, l: 0 };
+  adj.w += won ? 1 : 0;
+  adj.l += won ? 0 : 1;
+  const n = adj.w + adj.l;
+  if (n >= 3) {
+    const rate = adj.w / n;
+    if (rate > 0.65) adj.t = Math.min(12, adj.t + 0.5);
+    else if (rate < 0.4) adj.t = Math.max(1, adj.t - 0.5);
+    adj.w = 0;
+    adj.l = 0;
+  }
+  writeHellAdj(adj);
+}
+
+// —— IGL 继任 / 补位接线（item 5）——
+// combat.js 的 killEntity 是唯一致死点（他代理文件，不改）；game.js 在帧循环里
+// 检测「本帧是否有 bot 阵亡」，有则调用 roles.js 的 refreshLeadership（幂等、不抛错）。
+function refreshLeadershipOnDeath(game) {
+  let tDead = 0, ctDead = 0;
+  for (const e of game.entities) {
+    if (!e.bot || !e.dead) continue;
+    if (e.team === 't') tDead++;
+    else if (e.team === 'ct') ctDead++;
+  }
+  const sig = tDead + ':' + ctDead;
+  if (game._leadSig === sig) return;
+  game._leadSig = sig;
+  try {
+    refreshLeadership(game);
+  } catch (err) {
+    // 角色刷新异常不中断游戏帧
+  }
+}
 
 export const FPS_PITCH_LIMIT = 1.35;
 
@@ -128,7 +193,7 @@ export function startMatch(game) {
   // 保留调用者传入的世界种子（训练/回放确定性）：Object.assign 会用 fresh.seed=null 覆盖
   const callerSeed = game.seed;
   fresh.opts = game.opts;
-  fresh.opts.diffParams = resolveDiff(game.opts.diff, game.opts.hellLevel);
+  fresh.opts.diffParams = game.opts.diff === 'hell' ? adaptiveHellParams(game) : resolveDiff(game.opts.diff, game.opts.hellLevel);
   fresh.mode = game.opts.mode || null;
   fresh.noRoundEnd = false;
   fresh.ui = game.ui;
@@ -227,6 +292,13 @@ function spawnRound(game) {
       if (target) e.angle = Math.atan2(target.y - e.y, target.x - e.x);
     }
   }
+  // 清理上回合遗留（含 drop 清空）：必须先于 planTeamEconomy/botBuyAll，
+  // 保证武器 drop（富→穷）与领导继任签名在本回合干净起步
+  game.drops.length = 0;
+  game._leadSig = null;
+  // 团队经济规划（第一遍，投票层）：在 assignRoles 前写入 game.teamBuyType，
+  // 供 roles.js 的 roundPlan 读 teamBuyType 做买→打闭环覆盖
+  planTeamEconomy(game);
   assignRoles(game);
   botBuyAll(game);
   // H11 信息优势（intel 模式）：回合初获知 CT 防守分布（角色+锚点），供弱侧选择与预瞄
@@ -265,7 +337,6 @@ function spawnRound(game) {
   game.particles.length = 0;
   game.tracers.length = 0;
   game.ripples.length = 0;
-  game.drops.length = 0;
   game.lastPlantSite = null;
   game.decals.length = 0;
   game.impacts.length = 0;
@@ -370,6 +441,7 @@ export function finishMatch(game) {
   const winAt = game.ot ? (game.otWin || ROUND.OT_WIN) : (game.matchWin || ROUND.MATCH_WIN);
   const win = (game.score.T >= winAt && game.player.team === 't') ||
     (game.score.CT >= winAt && game.player.team === 'ct');
+  recordDifficultyResult(game, win);
   const ui = game.ui;
   if (!ui) return;
   const p = game.player;
@@ -453,6 +525,8 @@ export function update(game, dt) {
   else updateBots(game, dt);
 
   updateGrenades(game, dt);
+  // IGL 继任 / 补位：本帧有 bot 阵亡则刷新（幂等、不抛错）
+  refreshLeadershipOnDeath(game);
   for (const e of game.entities) {
     if (e.dead) continue;
     const curTile = tileAt(e.x, e.y);

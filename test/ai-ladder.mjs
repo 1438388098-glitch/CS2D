@@ -10,7 +10,7 @@ function ok(name, cond, detail = '') {
 }
 
 const runs = [];
-for (const mapId of ['dust2', 'canal', 'metro']) {
+for (const mapId of ['dust2', 'metro', 'forge']) {
   for (const [diff, hellLevel] of [['easy', null], ['normal', null], ['hard', null], ['hell', 11]]) {
     runs.push({ mapId, diff, hellLevel });
   }

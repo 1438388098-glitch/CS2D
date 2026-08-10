@@ -25,7 +25,7 @@ function countCoverNearSite(map, g, key, r = 4) {
   }
   return n;
 }
-for (const id of ['dust2', 'canal', 'metro']) {
+for (const id of ['dust2', 'metro']) {
   const def = MAPS.find((m) => m.id === id);
   loadMap(def);
   const map = getMap();
@@ -47,7 +47,6 @@ for (const id of ['dust2', 'canal', 'metro']) {
   const vertical = g.flat().filter((c) => c === '^' || c === 'R').length;
   const gates = {
     dust2: { minVertical: 45, minSite: 6, maxRun: 130, minCover: 0.6 },
-    canal: { minVertical: 15, minSite: 5, maxRun: 110, minCover: 0.3 },
     metro: { minVertical: 45, minSite: 5, maxRun: 120, minCover: 0.4 }
   }[id];
   ok(id + ' vertical depth', vertical >= gates.minVertical, 'vertical=' + vertical);

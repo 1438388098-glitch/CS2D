@@ -10,7 +10,8 @@ export function registerWeapon(id, stats) {
 
 export function registerMap(mapDef) {
   if (!mapDef || !mapDef.id) throw new Error('registerMap: invalid args');
-  maps.set(mapDef.id, mapDef);
+  const prev = maps.get(mapDef.id) || {};
+  maps.set(mapDef.id, Object.freeze({ ...prev, ...mapDef }));
   return mapDef.id;
 }
 

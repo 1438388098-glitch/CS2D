@@ -2,13 +2,13 @@
 import {BOT_AI, diffOf} from '../config.js';
 import {getMap, pathTo, followPath, nearestSite, inSite} from '../map.js';
 import {weaponDef} from '../entities.js';
-import {fireWeapon, finishReload, pickupWeapon} from '../combat.js';
+import {fireWeapon, finishReload, pickupWeapon, startReload} from '../combat.js';
 import {throwGrenade} from '../grenades.js';
 import {plantBomb, pickupBomb, defuseBomb} from '../bomb.js';
-import {angNorm, rand} from '../utils.js';
+import {angNorm, rand, viewCap} from '../utils.js';
 import {hearStep, hearWorldSound} from './senses.js';
 import {report, MSG} from '../info.js';
-import {emit, logAct, styleOf, hasPrefireIntel, canFinishDefuse, aliveCount, redistributeTLanes} from './shared.js';
+import {emit, logAct, styleOf, hasPrefireIntel, canFinishDefuse, aliveCount, redistributeTLanes, shouldSwitchPistol} from './shared.js';
 import {shouldAttemptDefuse} from './rules.js';
 import {chooseDefuser} from './decisions.js';
 import {hasLineOfSight} from '../fog.js';
@@ -268,6 +268,40 @@ export function botActions(e, game, dt) {
       if (site && (inSite(e.x, e.y, site) || Math.hypot(e.x - site.cx, e.y - site.cy) < 150)) plantBomb(e, game);
     }
   }
+  // 转角预瞄接线（candidate：obj.preaimX/preaimY 转角预瞄，来自 decisions.js nextClearPoint）：
+  // 目标为清点推进点且带 preaim 转角坐标时，接近目标（<260px）且到 preaim 点 LOS 被墙挡
+  // （转角）→ 先向 preaim 点偏转 0.4s（冻结进门移动）再进门；复用下方 prefire 块做提前枪
+  // （hasPrefireIntel 已放宽为记忆/队友情报）。
+  const preObj = e.objCache && Number.isFinite(e.objCache.preaimX) && Number.isFinite(e.objCache.preaimY) ? e.objCache : null;
+  if (preObj && e.aimTarget === null && !e.reloading) {
+    const pdC = Math.hypot(preObj.x - e.x, preObj.y - e.y);
+    const cornerBlocked = pdC < 260 && !hasLineOfSight(game, e, { x: preObj.preaimX, y: preObj.preaimY }, viewCap(game));
+    if (cornerBlocked) {
+      if (e.cornerAimT === undefined) {
+        e.cornerAimT = 0.4;
+        e.prefireX = preObj.preaimX + (rand() - 0.5) * 50;
+        e.prefireY = preObj.preaimY + (rand() - 0.5) * 50;
+        if (e.prefireCount <= 0) e.prefireCount = 1;
+      }
+    } else if (e.cornerAimT !== undefined) {
+      e.cornerAimT = undefined;
+    }
+  } else if (e.cornerAimT !== undefined) {
+    e.cornerAimT = undefined;
+  }
+  if (e.cornerAimT !== undefined) {
+    if (e.aimTarget === null) {
+      e.cornerAimT -= dt;
+      if (e.cornerAimT <= 0) {
+        e.cornerAimT = undefined;
+      } else {
+        // 偏转期间冻结进门移动（先瞄准转角再进）
+        e.vx = 0; e.vy = 0;
+      }
+    } else {
+      e.cornerAimT = undefined;
+    }
+  }
   if (e.team === 'ct' && !(game.bomb && game.bomb.planted) && getMap().penPoints && getMap().penPoints.length && e.weapons.primary && !e.reloading) {
     e.prefireT -= dt;
     if (e.prefireT <= 0) {
@@ -388,7 +422,30 @@ export function botActions(e, game, dt) {
   }
   if (e.reloading) {
     e.reloadT -= dt;
-    if (e.reloadT <= 0) finishReload(e);
+    if (e.reloadT <= 0) {
+      // 手枪应急切换切回：步枪换弹完成后自动切回主武器（不打断正常换弹流程）
+      if (e.pistolReload && e.weapons && e.weapons.primary) e.slot = 'primary';
+      e.pistolReload = false;
+      finishReload(e);
+    }
+  }
+  // 手枪应急切换接线（shouldSwitchPistol）：步枪弹匣耗尽(<=2)且近敌(<200px)时切手枪，
+  // 同时触发步枪换弹（换弹期间手枪持续输出，绝不打断换弹）；步枪换弹完成后由上方切回。
+  // 注：直接读 ammoMap 避免 ammoFor() 惰性初始化导致"未开枪弹匣被当作空/测试计数漂移"。
+  if (e.weapons && e.weapons.primary && e.weapons.secondary && e.slot === 'primary' && !e.reloading && (e.switchT || 0) <= 0) {
+    const pAmmo = e.ammoMap[e.weapons.primary];
+    if (pAmmo !== undefined) {
+      let ndP = 1e9;
+      for (const o of game.entities) if (o !== e && !o.dead && o.team !== e.team) ndP = Math.min(ndP, Math.hypot(o.x - e.x, o.y - e.y));
+      if (shouldSwitchPistol(pAmmo, ndP < 200)) {
+        e.pistolReload = true;
+        e.slot = 'primary';
+        startReload(e, game); // 步枪换弹（weaponDef 按 primary 取枪）
+        e.slot = 'secondary';
+        e.switchT = 0.4;
+        e.fireCd = Math.max(e.fireCd || 0, 0.25);
+      }
+    }
   }
   if (e.fireCd > 0) e.fireCd -= dt;
   // 设计意图：bot 后坐力恢复比玩家慢（1.2 vs 玩家 RECOIL_RECOVER 2.2），克制 AI 火力
@@ -430,7 +487,7 @@ export function botActions(e, game, dt) {
       pathTo(e, e.x + (e.x - threat.x) * 2.5, e.y + (e.y - threat.y) * 2.5);
     }
   }
-  if (e.trigger && e.fireCd <= 0) {
+  if (e.trigger && e.fireCd <= 0 && !e.reloading) {
     e.trigger = false;
     const wB = weaponDef(e);
     const distB = e.aimTarget ? Math.hypot(e.aimTarget.x - e.x, e.aimTarget.y - e.y) : 999;

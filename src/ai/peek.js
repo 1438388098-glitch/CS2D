@@ -25,6 +25,19 @@ const PEEK_STEP_MIN = 18;
 const PEEK_STEP_MAX = 72;
 const PEEK_STEP_INC = 9;
 
+// 探出身位档位（身位幅度，纯函数）：低技能 → jiggle 小身位（安全保守），
+// 高技能 → wide 大身位（快速拉出打信息差）。dist 调制技能阈值：远距离（>600）
+// 更倾向大身位（拉开后小身位看不到人），近距离（<240）更倾向小身位（贴身拼抢不暴露）。
+// 档位只依赖 (skill, dist)，确定性，不含随机；offset 恒为 jiggle 12 / standard 32 / wide 64。
+// 返回 { offset, tier }；offset 为垂直锚线偏移像素。
+export function peekStance(skill, dist = 0) {
+  const dAdj = dist > 600 ? 0.08 : (dist < 240 ? -0.1 : 0);
+  const eff = skill + dAdj;
+  if (eff < 0.45) return { offset: 12, tier: 'jiggle' };
+  if (eff >= 0.75) return { offset: 64, tier: 'wide' };
+  return { offset: 32, tier: 'standard' };
+}
+
 // 像素坐标 → grid 字符；越界/无地图视为实墙 '#'
 export function gridCharAt(map, x, y) {
   if (!map || !map.grid || !map.grid.length) return '#';
@@ -84,9 +97,22 @@ export function gridLos(map, ax, ay, bx, by, optH = 0) {
 
 // 在锚点四周找"探出点"：可走格 + 能看到敌人，且离锚点尽量近（步进扫描两侧）。
 // 返回 { peekX, peekY, dir }；找不到返回 null。
-function findPeekPoint(map, e, enemy, ax, ay, h) {
+// off（可选身位档 px）：指定时优先尝试该档位（jiggle 12 / standard 32 / wide 64），
+// 该档被墙挡/不可走时按 ±30% 微调尝试，仍不通视则回退到从小到大步进扫描兜底。
+function findPeekPoint(map, e, enemy, ax, ay, h, off) {
   const toEn = Math.atan2(enemy.y - ay, enemy.x - ax);
+  const offsets = (off !== undefined && off !== null) ? [off, off * 1.3, off * 0.7] : null;
   for (const side of [1, -1]) {
+    if (offsets) {
+      for (const o of offsets) {
+        const x = ax + Math.cos(toEn + Math.PI / 2 * side) * o;
+        const y = ay + Math.sin(toEn + Math.PI / 2 * side) * o;
+        if (!walkableAt(map, x, y)) break; // 撞墙则此档不可用
+        if (gridLos(map, x, y, enemy.x, enemy.y, h)) {
+          return { peekX: x, peekY: y, dir: side };
+        }
+      }
+    }
     for (let step = PEEK_STEP_MIN; step <= PEEK_STEP_MAX; step += PEEK_STEP_INC) {
       const x = ax + Math.cos(toEn + Math.PI / 2 * side) * step;
       const y = ay + Math.sin(toEn + Math.PI / 2 * side) * step;
@@ -101,7 +127,8 @@ function findPeekPoint(map, e, enemy, ax, ay, h) {
 
 // 掩体探测：在 bot 朝向敌人反方向的扇区内找"能躲人的掩体锚点 + 探出点"。
 // 返回 { anchorX, anchorY, peekX, peekY, dir, dist }；附近无可利用掩体返回 null。
-export function coverBehind(e, enemy, map) {
+// stance（可选）：身位档偏移 px（来自 peekStance），控制探出幅度；缺省为自动档。
+export function coverBehind(e, enemy, map, stance) {
   if (!e || !enemy || Number.isNaN(e.x) || Number.isNaN(enemy.x) || Number.isNaN(e.y) || Number.isNaN(enemy.y)) return null;
   const h = e.height || 0;
   const baseAng = Math.atan2(e.y - enemy.y, e.x - enemy.x);
@@ -112,7 +139,7 @@ export function coverBehind(e, enemy, map) {
       const y = e.y + Math.sin(ang) * d;
       if (!walkableAt(map, x, y)) continue;
       if (gridLos(map, x, y, enemy.x, enemy.y, h)) continue; // 可见 → 不是掩体
-      const pk = findPeekPoint(map, e, enemy, x, y, h);
+      const pk = findPeekPoint(map, e, enemy, x, y, h, stance);
       if (!pk) continue;
       return { anchorX: x, anchorY: y, peekX: pk.peekX, peekY: pk.peekY, dir: pk.dir, dist: d };
     }
@@ -156,10 +183,14 @@ export function peekPhase(e, t) {
 
 // 掩体后对枪相位规划（纯函数、确定性）
 // 输入：e（bot，含 anchorIdx/laneIdx/height）、enemy（敌方 {x,y}）、t（当前时刻 s）、map（含 grid/tile）
+// 可选 stance：身位档偏移 px（peekStance().offset）或 {offset}；缺省按 peekSkill 自动选档。
 // 输出：null（无掩体/无法 peek）或 { action, dir, duration, anchorX, anchorY, peekX, peekY }
 //   duration：当前相位剩余时长（s），供上层做切换协调
-export function peekPlan(e, enemy, t, map) {
-  const cover = coverBehind(e, enemy, map);
+export function peekPlan(e, enemy, t, map, stance) {
+  const off = (stance === undefined || stance === null)
+    ? peekStance(peekSkillOf(e), Math.hypot(enemy.x - e.x, enemy.y - e.y)).offset
+    : (typeof stance === 'number' ? stance : stance.offset);
+  const cover = coverBehind(e, enemy, map, off);
   if (!cover) return null;
   const ph = peekPhase(e, t);
   return {

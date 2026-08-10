@@ -1,6 +1,7 @@
 // AI 共享工具：事件发射 / 决策日志 / 人格乘子
 import { ctx } from '../ctx.js';
 import { ARCHETYPES } from '../persona.js';
+import { query } from '../info.js';
 
 export const emit = (evt, p) => ctx.bus.emit(evt, p);
 
@@ -25,6 +26,11 @@ export function styleOf(e) {
 export function hasPrefireIntel(e, game) {
   if (e.lastKnown && e.lastKnownT < 3) return true;
   if (e.memory && game && e.memory.some((m) => game.time - m.t < 2)) return true;
+  // 队友情报（放宽预瞄依据）：黑板上有 <4s 的枪声/目击/受击/击杀消息也算，支持转角预瞄/穿点提前枪
+  if (game && game.info && e.team) {
+    const info = query(game, e);
+    if (info && info.age < 4) return true;
+  }
   return false;
 }
 export function canFinishDefuse(game, e) {
@@ -73,12 +79,14 @@ export function shouldSwitchPistol(ammo, closeEnemy) {
 }
 
 // ===== 警报置信度与目标缓存覆盖（candidate-151）=====
-// 感知警报统一置信度标度：目击 > 清晰枪声 > 呼叫/受击 > 模糊枪声/脚步 > 击杀
+// 感知警报统一置信度标度：目击(1) > 击杀/尸体精确位置(0.7) > 清晰枪声(0.55) > 呼叫/受击(0.5) > 脚步(0.45)
 // 显式 conf 字段优先；lastKnown/lastHear 均按此归一，供缓存覆盖决策比较
 export function alertConf(a) {
   if (!a) return 0;
   if (a.conf !== undefined && a.conf !== null) return a.conf;
   switch (a.type) {
+    case 'kill':
+      return 0.7; // 击杀=队友报告的尸体精确位置，置信度最高（原 0.35 排最末不合理）
     case 'sight':
     case 'focus':
       return 1;
@@ -89,8 +97,6 @@ export function alertConf(a) {
       return 0.5;
     case 'step':
       return 0.45;
-    case 'kill':
-      return 0.35;
     default:
       return 0.5;
   }

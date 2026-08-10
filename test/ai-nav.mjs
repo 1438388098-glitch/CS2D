@@ -11,7 +11,7 @@ function ok(name, cond, detail = '') {
   if (!cond) failed = true;
 }
 
-const maps = ['dust2', 'canal', 'metro', 'duel-pit', 'duel-alley', 'duel-forge'];
+const maps = ['dust2', 'metro', 'forge', 'duel-pit', 'duel-alley', 'duel-forge'];
 for (const mapId of maps) {
   for (const seed of [1, 2, 3]) {
     const bots = mapId.startsWith('duel') ? 1 : 2;

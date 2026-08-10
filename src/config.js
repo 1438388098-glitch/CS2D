@@ -73,7 +73,7 @@ const CHAMP_PARAMS = {
 function lerp(a, b, t) { return a + (b - a) * t; }
 
 // 能力插值：t=0 退化点(hard) → t=1 冠军
-function degParams(t) {
+export function degParams(t) {
   const h = { react: 0.12, spreadMult: 0.75, view: 1120, strafe: 0.4, aimSpeed: 40, idealMin: 200, idealMax: 550, rushChance: 0.4, rotateChance: 0.6, saveChance: 0.7 };
   const c = CHAMP_PARAMS;
   return {
@@ -104,9 +104,10 @@ export const DIFF = {
 
 export const MAP_CT_REACT = {
   dust2: 0.6,
-  canal: 0.4,
+  arctic: 0.5,
   metro: 0.55,
   forge: 0.5,
+  atrium: 0.52,
   'foundry-port': 0.5,
   'foundry-ridge': 0.5,
   'foundry-ruin': 0.5,
@@ -152,6 +153,27 @@ export function resolveDiff(diff, hellLevel) {
   return DIFF.hell.ladder[lvl];
 }
 
+// 难度自适应：连续档位插值（升/降档平滑，复用 degParams 的 [hard→champ] 插值思路）。
+// t = 连续档位（如 10.5 = H10 与 H11 之间）；整数档返回原 ladder 条目（含 DQN 网络），
+// 小数档只做数值参数线性插值（丢弃 netWeights，避免跨风格混网）。
+export function hellParamsAt(t) {
+  t = Math.max(1, Math.min(12, t));
+  const lvl = Math.floor(t);
+  const frac = t - lvl;
+  if (frac < 0.001) return DIFF.hell.ladder[lvl];
+  const lo = DIFF.hell.ladder[lvl];
+  const hi = DIFF.hell.ladder[Math.min(12, lvl + 1)];
+  if (!lo || !hi) return lo || DIFF.hell.ladder[10];
+  const out = {};
+  for (const k in lo) {
+    if (typeof lo[k] === 'number' && typeof hi[k] === 'number') out[k] = lo[k] + (hi[k] - lo[k]) * frac;
+    else if (typeof lo[k] === 'number') out[k] = lo[k];
+    else if (k === 'trained') out.trained = true;
+  }
+  out.note = 'H' + lvl + '→H' + Math.min(12, lvl + 1) + '@' + frac.toFixed(2);
+  return out;
+}
+
 // 运行时取难度参数（优先 startMatch 注入的 diffParams，兼容无注入场景）
 export function diffOf(game) {
   if (game && game.opts && game.opts.diffParams) return game.opts.diffParams;
@@ -165,6 +187,7 @@ export const DROP_COL = { rifle: '#ff8a2a', smg: '#ffd75e', shotgun: '#e07a2a', 
 
 // Map registry: high-resolution official radar rebuilds
 for (const [id, def] of Object.entries(OFFICIAL_MAPS)) {
+  if (id === 'canal' || id === 'blast') continue;
   registerMap({
     id,
     name: def.name,
@@ -172,14 +195,14 @@ for (const [id, def] of Object.entries(OFFICIAL_MAPS)) {
     tile: def.tile,
     rows: def.rows,
     penPoints: def.penPoints || [],
-    highPoints: def.highPoints || []
+    highPoints: def.highPoints || [],
+    category: 'bomb5v5'
   });
 }
 
 // 同布局换主题的变体地图（视觉资源扩展：新色板/装饰/贴图，布局复用已验证的原版）
 const VARIANT_MAPS = {
-  arctic: { base: 'canal', name: '冰封港湾', accent: '#8fd8ff' },
-  blast: { base: 'metro', name: '钢铁仓库', accent: '#ffb066' }
+  arctic: { base: 'metro', name: '冰封港湾', accent: '#8fd8ff' }
 };
 for (const [id, v] of Object.entries(VARIANT_MAPS)) {
   const base = OFFICIAL_MAPS[v.base];
@@ -191,7 +214,8 @@ for (const [id, v] of Object.entries(VARIANT_MAPS)) {
     tile: base.tile,
     rows: base.rows,
     penPoints: base.penPoints || [],
-    highPoints: base.highPoints || []
+    highPoints: base.highPoints || [],
+    category: 'bomb5v5'
   });
 }
 

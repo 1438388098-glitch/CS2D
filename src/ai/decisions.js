@@ -6,7 +6,7 @@ import {rand, clamp} from '../utils.js';
 import {logAct, styleOf, canFinishDefuse, aliveCount, hasGoodGun, redistributeTLanes, alertConf, shouldRefreshObjective} from './shared.js';
 import {dqnFromJSON} from '../dqn.js';
 import {oppAimPoint} from './oppmodel.js';
-import {shouldRetakeBomb, shouldRushDefuser, shouldRetreatWithoutBomb, pickPlantSite, shouldEscortCarrier, shouldPushLatePlant, shouldRushPlant} from './rules.js';
+import {shouldRetakeBomb, shouldRushDefuser, shouldRetreatWithoutBomb, pickPlantSite, shouldEscortCarrier, shouldPushLatePlant, shouldRushPlant, shouldRotateToHot, shouldThrowUtility} from './rules.js';
 import {retakeRoute} from '../retake-route.js';
 ;
 const CT_HOLD_RADIUS = 380;
@@ -64,13 +64,15 @@ export function ctHotSite(game) {
       const age = game.time - msg.t;
       if (age > 6) continue;
       const d = Math.hypot(msg.x - s.cx, msg.y - s.cy);
-      if (d < 420) score += (1.6 - d / 420) * (msg.type === 'sight' ? 1.2 : 1);
+      if (d < 420) score += (1.6 - d / 420) * (msg.type === 'sight' ? 1.5 : 1);
       if (d < 600 && (msg.type === 'shot' || msg.type === 'dmg')) score += 0.8;
       if (d < 420 && (msg.type === 'sight' || msg.type === 'focus')) hasSight = true;
     }
     if (score > best) { best = score; hot = k; shotOnly = !hasSight; }
   }
-  const site = best >= 2.0 ? hot : null;
+  // 阈值 1.3（原 2.0 偏高，单次目击只值 ~1.3-2.4）：单次目击也能触发热区告警，
+  // 但回防配额（每站点仅 1 名轮转者）把轮转限制住，避免误报抽空站点。
+  const site = best >= 1.3 ? hot : null;
   game.hotSiteCache = { tick, site };
   game.hotSiteShotOnly = site ? shotOnly : false;
   return site;
@@ -621,7 +623,9 @@ export function botObjectiveRaw(e, game) {
         logAct(game, e, 'urgent', 'rush bomb');
         return { x: game.bomb.x, y: game.bomb.y };
       }
-      const retakeTime = (game.roundDur || 115) - (game.roundTime || 0);
+      // 残局时钟：安弹后真正倒计时是 game.bomb.timer（BOMB_FUSE=40），不用冻结的回合时钟。
+      // 否则 T 107s 才安弹 → roundDur-roundTime 只剩 8s → 误判 retakeTime 不足 → 白保枪。
+      const retakeTime = game.bomb && Number.isFinite(game.bomb.timer) ? game.bomb.timer : (game.roundDur || 115) - (game.roundTime || 0);
       const retakeDist = Math.hypot(e.x - game.bomb.x, e.y - game.bomb.y);
       if (!shouldRetakeBomb(e, true, retakeDist, retakeTime, myAlive0, enAlive0)) {
         logAct(game, e, 'retreat', 'skip retake');
@@ -684,7 +688,11 @@ export function botObjectiveRaw(e, game) {
     // 残局劣势保枪（风险偏好：莽的 bot 不保；经济维度：有好枪更值得保，手枪局拼枪）
     const dSv = e.aiParams || diffOf(game);
     const goodGun = hasGoodGun(e);
-    if (ctAlive === 0 && tAlive >= 3 && rand() < dSv.saveChance * (goodGun ? 1.2 : 0.55) * (1 - st.p.riskT * 0.5)) {
+    // 残局劣势保枪改为确定性规则（同一 bot 同一回合结果一致，不再依赖 rand()）：
+    // saveScore 由难度/人格/装备决定，经 (spreadIdx, round) 哈希采样，避免随机横跳
+    const saveScore = dSv.saveChance * (goodGun ? 1.2 : 0.55) * (1 - st.p.riskT * 0.5);
+    const detSeed = ((((e.spreadIdx !== undefined ? e.spreadIdx : (e.anchorIdx || 0)) * 2654435761) ^ ((game.round || 0) * 40503)) >>> 0) % 1000 / 1000;
+    if (ctAlive === 0 && tAlive >= 3 && detSeed < saveScore) {
       logAct(game, e, 'retreat', '1v' + tAlive + ' 保枪');
       return retreatPoint(e, game);
     }
@@ -695,11 +703,29 @@ export function botObjectiveRaw(e, game) {
     const shotOnlyHot = game.hotSiteShotOnly === true;
     if (hotSite && hotSite !== myKey && (!shotOnlyHot || ctIsRoamer(e))) {
       const hot = getMap().sites[hotSite];
-      const defendersHere = game.entities.filter((o) => o.team === 'ct' && !o.dead && o !== e && o.role === (myKey ? myKey.toLowerCase() : 'x')).length;
-      if (ctIsRoamer(e) || defendersHere >= 1) {
-        logAct(game, e, 'rotate', 'hot ' + hotSite);
-        return spreadPoint(e, hot.cx, hot.cy, 70, 160);
+      const hotDist = hot ? Math.hypot(e.x - hot.cx, e.y - hot.cy) : 1e9;
+      const rotTimeLeft = (game.roundDur || 115) - (game.roundTime || 0);
+      // shouldRotateToHot 接线（原死代码）：热区情报 + 剩余时间充足 + 未已在点附近才轮转
+      if (shouldRotateToHot(e, hotSite, hotDist, rotTimeLeft, planted, 8, 260)) {
+        const defendersHere = game.entities.filter((o) => o.team === 'ct' && !o.dead && o !== e && o.role === (myKey ? myKey.toLowerCase() : 'x')).length;
+        // 回防配额（防站点被抽空）：每站点每轮热区只放行 1 名轮转者（anchorIdx===0），其余强制架点
+        const designatedRotator = ctIsRoamer(e) || ((e.anchorIdx || 0) === 0);
+        const rotKey = game.round + ':' + hotSite;
+        if (game.ctRotateClaim !== rotKey && designatedRotator && (ctIsRoamer(e) || defendersHere >= 1)) {
+          game.ctRotateClaim = rotKey;
+          logAct(game, e, 'rotate', 'hot ' + hotSite);
+          // shouldThrowUtility 接线：热区告警回防进点前向 m.entries[site] 丢 flash/HE
+          // （返回 nade 标记，core.js:357 翻译成丢闪）
+          const hotEntry = getMap().entries && getMap().entries[hotSite];
+          const entryDist = hotEntry ? Math.hypot(e.x - hotEntry.x, e.y - hotEntry.y) : hotDist;
+          const nades = e.weapons && e.weapons.nades ? e.weapons.nades : null;
+          const nadeKind = nades && nades.flash > 0 ? 'flash' : (nades && nades.he > 0 ? 'he' : '');
+          const tAliveHot = aliveCount(game, 't');
+          const useNade = nadeKind && shouldThrowUtility(e, nadeKind, 1, entryDist, game.roundTime || 0, tAliveHot, game.roundDur || 115);
+          return { ...spreadPoint(e, hot.cx, hot.cy, 70, 160), nade: !!useNade };
+        }
       }
+      // 非配额轮转者：强制架点（继续守点/探点逻辑，不抽空本站点）
     }
     if (!e.lastKnown && !e.aimTarget && !planted && game.roundTime > 40 && rand() < 0.25) {
       const tsp = getMap().spawns.t[0];
@@ -832,8 +858,12 @@ export function botObjectiveRaw(e, game) {
   if (planted) {
     if (game.bomb && game.bomb.defusing) {
       const distToBomb = Math.hypot(e.x - game.bomb.x, e.y - game.bomb.y);
-      const defuseTime = (game.roundDur || 115) - (game.roundTime || 0);
-      if (shouldRushDefuser(e, true, distToBomb, defuseTime)) {
+      // 残局时钟：拆弹倒计时用 bomb.timer（不再用冻结的回合时钟）。
+      // 冲刺条件 = bomb.timer - 抵达ETA <= defuseTime + 2（ETA = dist/移动速度）。
+      const bombT = game.bomb.timer || 40;
+      const wRush = weaponDef(e);
+      const spdRush = (wRush && wRush.speed ? wRush.speed : 1) * 235;
+      if (shouldRushDefuser(e, true, distToBomb, bombT, 5, 700, spdRush)) {
         const defuser = game.entities.find((o) => o.team === 'ct' && !o.dead && o.defuseT > 0);
         const target = defuser || { x: game.bomb.x, y: game.bomb.y };
         logAct(game, e, 'defuse-stop', 'rush defuser');
@@ -894,7 +924,8 @@ export function botObjectiveRaw(e, game) {
       return { x: game.tFocus.x + rand(-40, 40), y: game.tFocus.y + rand(-40, 40), peek: true };
     }
   }
-  if (shouldRetreatWithoutBomb(e, game.roundTime || 0, enAlive0, myAlive0, game.roundDur || 115) && e.netLane === undefined) {
+  if (shouldRetreatWithoutBomb(e, game.roundTime || 0, enAlive0, myAlive0, game.roundDur || 115, 18, 420,
+    (game.bomb && game.bomb.dropped && Number.isFinite(game.bomb.x)) ? Math.hypot(e.x - game.bomb.x, e.y - game.bomb.y) : null) && e.netLane === undefined) {
     logAct(game, e, 'save', 'late no bomb');
     return retreatPoint(e, game);
   }
@@ -918,7 +949,9 @@ export function botObjectiveRaw(e, game) {
       logAct(game, e, 'push', 'late plant');
       return { x: cs.cx, y: cs.cy };
     }
-    if (shouldRushPlant(e, Math.hypot(e.x - cs.cx, e.y - cs.cy), game.roundTime, game.roundDur || 115)) {
+    const wSpd = weaponDef(e);
+    const spdPlant = (wSpd && wSpd.speed ? wSpd.speed : 1) * 235;
+    if (shouldRushPlant(e, Math.hypot(e.x - cs.cx, e.y - cs.cy), game.roundTime, game.roundDur || 115, 12, 650, spdPlant)) {
       logAct(game, e, 'clutch', 'rush plant');
       return { x: cs.cx, y: cs.cy };
     }
@@ -927,10 +960,17 @@ export function botObjectiveRaw(e, game) {
       logAct(game, e, 'clutch', 'nearest plant ' + clutchCs.label);
       cs = clutchCs;
     }
-    // 残局时间管理：回合末期距点过远则保枪放弃安弹
-    if (game.roundTime > (game.roundDur || 115) - 12 && Math.hypot(e.x - cs.cx, e.y - cs.cy) > 650) {
-      logAct(game, e, 'clutch', 'rush plant');
-      return { x: cs.cx, y: cs.cy };
+    // 残局持包时间管理：回合末期距点过远 → ETA 校验（dist/移动速度 < 剩余时间）。
+    // 时间不够则改选最近安弹点（clutchPlantSite 已换）或保枪，避免 12s 走 650px 白送。
+    const distToPlant = Math.hypot(e.x - cs.cx, e.y - cs.cy);
+    const timeLeftPlant = (game.roundDur || 115) - (game.roundTime || 0);
+    if (game.roundTime > (game.roundDur || 115) - 12 && distToPlant > 650) {
+      if (distToPlant / Math.max(1, spdPlant) < timeLeftPlant - 1.5) {
+        logAct(game, e, 'clutch', 'rush plant');
+        return { x: cs.cx, y: cs.cy };
+      }
+      logAct(game, e, 'save', 'no plant time, save');
+      return retreatPoint(e, game);
     }
     // 已在点附近则直接进点安弹；否则在入口等队友清点（不在交火中冲点送死）
     if (inSite(e.x, e.y, cs) || Math.hypot(e.x - cs.cx, e.y - cs.cy) < 300 || e.rushMode) return e.hasBomb ? { x: cs.cx, y: cs.cy } : tSitePoint(e, cs);
@@ -988,12 +1028,31 @@ export function botObjectiveRaw(e, game) {
   }
   const tPlanNow = game.roundPlan;
   if (tPlanNow && tPlanNow.fake && e.role !== game.tAttackSite && e.role !== 'mid' && !(game.bomb && game.bomb.planted) && e.netLane === undefined) {
+    // 假打确认闭环（原开环）：每 2s 查 ctHotSite，若热区指向假点且持续 >3s → CT 已被吸走，
+    // 主攻执行提前/触发 contact；否则假攻组从丢道具升级为 peek 探身开枪施压。
+    if (game.time - (game.tFakeCheckAt || 0) >= 2) {
+      game.tFakeCheckAt = game.time;
+      if (ctHotSite(game) === e.role) {
+        if (game.tFakeHotSince === undefined) game.tFakeHotSince = game.time;
+      } else {
+        game.tFakeHotSince = undefined;
+      }
+    }
+    const ctDrawn = game.tFakeHotSince !== undefined && (game.time - game.tFakeHotSince) > 3;
+    if (ctDrawn) {
+      // CT 被吸走 → 主攻执行提前（压低 executeAt）并转主攻点发起 contact 级施压
+      if (tPlanNow.executeAt !== undefined && tPlanNow.executeAt > game.roundTime + 1) tPlanNow.executeAt = game.roundTime + 1;
+      game.tFakeCommitAt = game.time;
+      logAct(game, e, 'contact', 'fake drew CT -> commit ' + game.tAttackSite);
+      return { ...spreadPoint(e, cs.cx, cs.cy, 90, 200), peek: true };
+    }
     if (game.roundTime < 16) {
       const otherSite = getMap().sites[e.role];
       const otherEntry = getMap().entries && getMap().entries[e.role];
       logAct(game, e, 'fake', 'fake ' + e.role);
       const fakeTarget = otherEntry ? otherEntry : otherSite;
-      return { ...spreadPoint(e, fakeTarget.x, fakeTarget.y, 80, 180), nade: true };
+      // 未确认诱导 → 假攻组升级：丢道具 + peek 探身开枪施压（roundTime>6 后开火探身）
+      return { ...spreadPoint(e, fakeTarget.x, fakeTarget.y, 80, 180), nade: true, peek: game.roundTime > 6 };
     }
     logAct(game, e, 'fake', 'rotate ' + game.tAttackSite);
     return entryPoint(cs, game, e);

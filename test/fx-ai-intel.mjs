@@ -16,7 +16,7 @@ ok('shot conf 0.55', alertConf({ type: 'shot' }) === 0.55);
 ok('call conf 0.5', alertConf({ type: 'call' }) === 0.5);
 ok('dmg conf 0.5', alertConf({ type: 'dmg' }) === 0.5);
 ok('step conf 0.45', alertConf({ type: 'step' }) === 0.45);
-ok('kill conf 0.35', alertConf({ type: 'kill' }) === 0.35);
+ok('kill conf 0.7', alertConf({ type: 'kill' }) === 0.7);
 ok('generic default 0.5', alertConf({}) === 0.5);
 ok('explicit conf wins', alertConf({ type: 'shot', conf: 0.35 }) === 0.35);
 ok('muffled gunshot explicit', alertConf({ conf: 0.35 }) === 0.35);

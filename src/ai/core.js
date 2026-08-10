@@ -7,12 +7,13 @@ import { updateShotStreak } from '../ballistic.js';
 import { throwGrenade } from '../grenades.js';
 import { report, query, MSG } from '../info.js';
 import { clamp, rand, angDiff, angNorm, viewCap } from '../utils.js';
-import { styleOf } from './shared.js';
+import { styleOf, shouldTradePush } from './shared.js';
 import { findVisibleEnemy } from './perception.js';
 import { shouldSaveForEco } from './rules.js';
 import { botObjective, ctReactsTo } from './decisions.js';
 import { botActions } from './actions.js';
-import { peekPlan, peekPhase } from './peek.js';
+import { peekPlan, peekPhase, peekStance, peekSkillOf } from './peek.js';
+import { hearGunshot } from './senses.js';
 import { hasLineOfSight } from '../fog.js';
 
 export function applyTeammateSeparation(e, game) {
@@ -69,7 +70,9 @@ function shouldPeekFight(e, game, enemy) {
 
 // 执行掩体后对枪相位：探出（移向探出点+开火）/ 缩回 / 隐蔽
 function runPeek(e, game, dt, enemy, pk, weapon) {
-  const spd = weapon.speed * 235;
+  // 身位档调制：wide 大身位快速拉出（主动），jiggle 小身位慢速谨慎（低 peekSkill 更安全）
+  const stTier = peekStance(peekSkillOf(e), Math.hypot(enemy.x - e.x, enemy.y - e.y)).tier;
+  const spd = weapon.speed * 235 * (stTier === 'wide' ? 1.08 : (stTier === 'jiggle' ? 0.6 : 1));
   // 朝向敌人（轻微扫动模拟人类架枪）
   e.angle = angNorm(Math.atan2(enemy.y - e.y, enemy.x - e.x) + Math.sin(game.time * 3 + (e.anchorIdx || 0)) * 0.05);
   if (pk.action === 'peek') {
@@ -102,6 +105,12 @@ function runPeek(e, game, dt, enemy, pk, weapon) {
       const speedF = pk.action === 'recover' ? 0.7 : 0.45;
       e.vx = nx * spd * speedF;
       e.vy = ny * spd * speedF;
+    } else if (dd > 1) {
+      // 贴入掩体：减速滑到锚点本体（锚点是通视死角的隐蔽格），
+      // 避免停在与锚点相距数 px 的"看着已回掩体、实际仍露头"的可见点
+      const nx = dx / dd, ny = dy / dd;
+      e.vx = nx * spd * 0.3;
+      e.vy = ny * spd * 0.3;
     } else {
       e.vx = 0; e.vy = 0;
     }
@@ -118,6 +127,8 @@ function botThink(e, game, dt) {
   }
   const d = e.aiParams || diffOf(game);
   if (e.dead) return;
+  // 静步标记每帧复位：仅当本帧目标执行（obj.sneak）/ 近情报探查显式置 true（sneak 接线）
+  e.walking = false;
   if (game.freezeT > 0) {
     e.vx = 0; e.vy = 0;
     return;
@@ -145,13 +156,17 @@ function botThink(e, game, dt) {
       }
     }
   }
-  // 枪声感知：敌人开火 → 队内报告枪声源（与 HEAR 逻辑一致）
+  // 枪声感知：敌人开火 → 带距离/角度/遮挡门控的听觉判定（hearGunshot），命中才队内报告枪声源
+  // （原实现无门控：出生点 bot 能精确听到全图枪声；现在按武器半径/墙后 ×0.55/方向误差模型衰减）
   if (!e.lastHearT) e.lastHearT = {};
   for (const o of game.entities) {
     if (o === e || o.dead || o.team === e.team) continue;
     if (o.lastShot > 0 && o.lastShot > (e.lastHearT[o.name] || 0)) {
+      // 无论听没听到都记录 lastShot 去重，避免每帧对同一枪声重复射线检测
       e.lastHearT[o.name] = o.lastShot;
-      report(game, e, MSG.SHOT, o.x, o.y);
+      if (hearGunshot(e, o, game, weaponDef(o))) {
+        report(game, e, MSG.SHOT, o.x, o.y);
+      }
     }
   }
   const vis = findVisibleEnemy(e, game);
@@ -222,7 +237,9 @@ function botThink(e, game, dt) {
       Math.hypot(pkTarget.x - e.peekCache.enemyX, pkTarget.y - e.peekCache.enemyY) > 140 ||
       !los(game, e.peekCache.peekX, e.peekCache.peekY, pkTarget.x, pkTarget.y);
     if (replan) {
-      const cover = peekPlan(e, pkTarget, game.time, getMap());
+      // 按身位档（peekSkill/距离）规划探出幅度：低技能小身位更安全，高技能大身位快速拉出
+      const pkSt = peekStance(peekSkillOf(e), Math.hypot(pkTarget.x - e.x, pkTarget.y - e.y));
+      const cover = peekPlan(e, pkTarget, game.time, getMap(), pkSt.offset);
       e.peekCache = cover ? {
         anchorX: cover.anchorX, anchorY: cover.anchorY,
         peekX: cover.peekX, peekY: cover.peekY,
@@ -303,6 +320,14 @@ function botThink(e, game, dt) {
       e.strafeDir = rand() < 0.5 ? -1 : 1;
       if (rand() < 0.25) e.strafeDir = 0;
     }
+    // 下蹲与假动作（candidate-229）：长距离对枪概率下蹲（crouch 因子降低散布、降低暴露），
+    // 近距离立即起身恢复 strafe；下蹲频率用人格调制（谨慎型 riskT 低 → 更爱蹲压）
+    const stC = styleOf(e);
+    if (td > 420 && rand() < dt * 2.5 * (1.4 - stC.p.riskT * 0.8)) {
+      e.crouched = true;
+    } else if (td < 240 || (e.crouched && rand() < dt * 1.6)) {
+      e.crouched = false;
+    }
     const arch2 = styleOf(e).arch;
     const ideal = td > (d.idealMax || 550) * arch2.idealMul ? 1 : (td < (d.idealMin || 220) * arch2.idealMul ? -1 : 0);
     const sway = Math.sin(game.time * 1000 / 450) * 0.5;
@@ -314,12 +339,30 @@ function botThink(e, game, dt) {
       e.vx = Math.cos(e.angle + Math.PI / 2 * e.strafeDir) * spd * 0.4 + Math.cos(e.angle) * ideal * spd * 0.3;
       e.vy = Math.sin(e.angle + Math.PI / 2 * e.strafeDir) * spd * 0.4 + Math.sin(e.angle) * ideal * spd * 0.3;
     }
+    // 下蹲时大幅减速（贴近蹲压 spray：静止散布最优），换取 crouch 精度因子（ballistic moveFactor）
+    if (e.crouched) { e.vx *= 0.25; e.vy *= 0.25; }
     if (rand() < 0.015 * (d.nadeUse || 1) && e.weapons.nades.flash > 0 && td < 700) {
       e.slot = 'nade:flash';
       throwGrenade(e, game);
       e.slot = 'primary';
     }
     return;
+  }
+  // 离开战斗：起身恢复正常姿态（下蹲只在交战 strafe 段内维持）
+  e.crouched = false;
+  // 补枪推进接线（shouldTradePush）：队友 2.5s 内阵亡且有击杀点情报时，
+  // 激进 bot 优先冲向击杀点补枪（复仇压迫敌方残局）；非激进/持包/拆弹中不触发
+  if (!e.aimTarget && (e.tradeBoost || 0) <= 0) {
+    const kInfo = query(game, e);
+    if (shouldTradePush(e, kInfo)) {
+      if (e.path === null || e.tradePushAt === undefined || game.time - e.tradePushAt > 0.9) {
+        pathTo(e, kInfo.x, kInfo.y);
+        e.tradePushAt = game.time;
+      }
+      e.angle = angNorm(Math.atan2(kInfo.y - e.y, kInfo.x - e.x));
+      followPath(e, dt, weapon.speed * 235 * 1.08);
+      return;
+    }
   }
   if (e.team === 't' && shouldSaveForEco(e, e.money || 0, (e.weapons && (e.weapons.primary === 'ak' || e.weapons.primary === 'm4' || e.weapons.primary === 'famas' || e.weapons.primary === 'awp')) ? 2 : 0, game.roundTime || 0, game.roundDur || 115)) {
     e.trigger = false;
@@ -342,6 +385,11 @@ function botThink(e, game, dt) {
   }
   const obj = botObjective(e, game);
   if (obj) {
+    // sneak 静步接线（最高价值修复）：保枪/绕后/静步摸点目标（obj.sneak）→ 0.55 速 + 脚步半径减半；
+    // 接近目标（<200）或进入交战（aimTarget）时恢复满速，避免永远满速跑暴露脚步
+    e.walking = !!obj.sneak;
+    const objD = Math.hypot(obj.x - e.x, obj.y - e.y);
+    if (objD < 200 || (e.aimTarget && !e.aimTarget.dead)) e.walking = false;
     // H11 战术协同（intel 模式）：进点末段（<420px）全员同步封烟+闪光强打
     if (e.aiParams && e.aiParams.intel && e.weapons && e.weapons.nades && obj.nade) {
       const smokeNow = e.weapons.nades.smoke > 0 && rand() < dt * 3;

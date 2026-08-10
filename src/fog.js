@@ -45,6 +45,35 @@ export function hasLineOfSight(game, viewer, target, radius = FOG_RADIUS) {
   return canSeeInFog(game, viewer, target, radius);
 }
 
+// 半身目击采样：沿视线垂直方向采「头顶/中心/脚」三点（模拟身体轮廓宽度）。
+// 中心被墙挡住但侧缘/头部露出 → 人眼能看到半身，故仍算部分可见。
+// 蹲下时有效点向中心收紧（受弹面积变小，更难探出掩体）。
+const BODY_HALF = 14;
+const BODY_HALF_CROUCH = 6;
+
+export function hasPartialLineOfSight(game, viewer, target, radius = FOG_RADIUS) {
+  if (!viewer || !target) return { visible: false, visiblePoints: 0 };
+  const dx = target.x - viewer.x, dy = target.y - viewer.y;
+  const d = Math.hypot(dx, dy);
+  const ux = d > 1e-3 ? -dy / d : 1;
+  const uy = d > 1e-3 ? dx / d : 0;
+  const half = target.crouched ? BODY_HALF_CROUCH : BODY_HALF;
+  const pts = [
+    { x: target.x + ux * half, y: target.y + uy * half },
+    { x: target.x, y: target.y },
+    { x: target.x - ux * half, y: target.y - uy * half }
+  ];
+  const optH = viewer.height || 0;
+  const tH = target.height || 0;
+  let visiblePoints = 0;
+  for (const p of pts) {
+    if (!los(game, viewer.x, viewer.y, p.x, p.y, optH)) continue;
+    if (!canSeeInFog(game, viewer, { x: p.x, y: p.y, height: tH }, radius)) continue;
+    visiblePoints++;
+  }
+  return { visible: visiblePoints > 0, visiblePoints };
+}
+
 export function castVisionPolygon(game, x, y, radius = FOG_RADIUS, rays = 72) {
   const points = [];
   for (let i = 0; i < rays; i++) {

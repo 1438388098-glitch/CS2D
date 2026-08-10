@@ -8,6 +8,20 @@ import {rand} from './utils.js';
 
 export const MSG = { SIGHT: 'sight', DMG: 'dmg', SHOT: 'shot', KILL: 'kill', FOCUS: 'focus' };
 
+// 消息置信标定（info.js 内定义）：
+// 击杀=尸体精确位置（最强情报）→ 0.7；目击=直接全身看到 → 1.0；
+// 枪声受遮挡/音源模糊影响 → 0.55；受击大致方向 → 0.5；脚步只能大致定位 → 0.4（最低档）
+// 类型区分：脚步（'step'）与枪声（MSG.SHOT）分开标定，脚步不会被当作枪声的高置信情报。
+// 注：MSG 导出常量保持不变（兼容既有测试），'step' 类型按字符串处理，供上报方按需报告。
+const MSG_CONF = {
+  sight: 1.0,
+  focus: 1.0,
+  kill: 0.7,
+  shot: 0.55,
+  dmg: 0.5,
+  step: 0.4
+};
+
 const MAX_MSG = 24;
 const REPORT_COOLDOWN = 1.0;
 const MAX_AGE = 6.0;
@@ -32,19 +46,22 @@ function push(game, team, msg) {
 
 // 报告感知事件（带每 bot 每类冷却，防刷屏）
 // intel 模式（H11 信息优势）：消息全图共享（无通信半径）+ 位置精确（无模糊）+ 更长有效期
-export function report(game, e, type, x, y) {
+// conf 可选（第 6 参）：显式置信；缺省时 query 按消息类型回退到 MSG_CONF 标定
+export function report(game, e, type, x, y, conf) {
   if (!game.info || !e.bot) return;
   if (!e.lastReport) e.lastReport = {};
   if (game.time - (e.lastReport[type] || -9) < REPORT_COOLDOWN) return;
   e.lastReport[type] = game.time;
   const intel = !!(e.aiParams && e.aiParams.intel);
-  push(game, e.team, {
+  const msg = {
     type, x, y,
     t: game.time,
     srcX: e.x, srcY: e.y,
     intel,
     igl: !!e.igl
-  });
+  };
+  if (Number.isFinite(conf)) msg.conf = conf;
+  push(game, e.team, msg);
 }
 
 // 查询黑板：返回该 bot 当前"最有价值"的可信消息，模糊化后返回
@@ -69,9 +86,17 @@ export function query(game, e) {
         if (faceDot < -0.3) continue;
       }
     }
-    // 价值分：越新越高，目击 > 枪声 > 受击 > 击杀（对防守方 kill 优先级高）
-    const prio = m.type === MSG.FOCUS ? 6 : (m.type === MSG.SIGHT ? 4 : (m.type === MSG.SHOT ? 3 : (m.type === MSG.DMG ? 2 : 1)));
-    const score = prio * 10 - age;
+    // 价值分 = 置信度 × 类型优先级 − 年龄：
+    // 击杀（尸体=精确位置，高置信）> 目击 > 枪声 > 受击 > 脚步；
+    // 置信加权防止低置信大龄消息压过新鲜的强情报（对防守方 kill 优先级高）
+    const conf = (m.conf !== undefined && m.conf !== null) ? m.conf : (MSG_CONF[m.type] || 0.5);
+    const prio = m.type === MSG.FOCUS ? 6
+      : (m.type === MSG.SIGHT ? 4
+        : (m.type === MSG.KILL ? 4
+          : (m.type === MSG.SHOT ? 3
+            : (m.type === MSG.DMG ? 2
+              : (m.type === 'step' ? 2 : 1)))));
+    const score = conf * prio * 10 - age;
     if (!best || score > best.score) best = { m, score };
   }
   if (!best) return null;
