@@ -3,10 +3,11 @@ import { weaponDef, ammoFor, reserveFor } from './entities.js';
 import { effectiveSpread } from './ballistic.js';
 import { los, getMap } from './map.js';
 import { clamp, angDiff } from './utils.js';
-import { crosshairSpreadPx, shouldDrawFpsSpreadCrosshair } from './crosshair.js';
+import { crosshairSpreadPx, shouldDrawFpsSpreadCrosshair, crosshairHitFeedback, MISS_FEEDBACK_DUR } from './crosshair.js';
 import { getBindLabel } from './keymap.js';
 import { fogEnabled } from './fog.js';
 import { castAimRay } from './fps-laser.js';
+import { lowHpVignette, drawLowHpVignette } from './screen-fx.js';
 
 let ctx = null;
 let layers = null;
@@ -134,6 +135,39 @@ export function recoilControlInfo(p, wd) {
   if (!p || !wd || wd.kind === 'knife') return { visible: false, ratio: 0, hot: false };
   const ratio = clamp((p.recoil || 0) / 2.4, 0, 1);
   return { visible: true, ratio, hot: ratio > 0.45 };
+}
+
+// 准星命中/开火反馈（渲染胶水，纯逻辑由 crosshairHitFeedback 承担）：
+// 命中优先（hitMarkT>0），未命中用 lastShot 反推剩余反馈时间；均无则不反馈。
+export function crosshairFeedbackFor(game, p) {
+  if (!game || !p || p.dead) return null;
+  if (game.hitMarkT > 0) return crosshairHitFeedback(true, game.hitMarkT, p.recoil || 0);
+  const lastShotAge = p.lastShot > 0 ? (game.time * 1000 - p.lastShot) / 1000 : MISS_FEEDBACK_DUR;
+  const fireT = MISS_FEEDBACK_DUR - lastShotAge;
+  if (fireT > 0) return crosshairHitFeedback(false, fireT, p.recoil || 0);
+  return null;
+}
+
+// HUD 弹药低量警示（candidate-291）：纯函数，输入弹匣弹量/弹容/时刻，输出警示状态。
+// 确定性：blink 仅由传入的 t（毫秒）推导，不读取 Date/performance。
+// 阈值可经 opts 覆盖以便测试边界：
+//   lowRatio(≤0.2 弹容触发 low) / criticalRatio(≤0.1 触发 critical) / criticalMin(≤2 发触发 critical)
+export function ammoWarning(ammo, mag, t = 0, opts = {}) {
+  const lowRatio = opts.lowRatio != null ? opts.lowRatio : 0.2;
+  const criticalRatio = opts.criticalRatio != null ? opts.criticalRatio : 0.1;
+  const criticalMin = opts.criticalMin != null ? opts.criticalMin : 2;
+  const lowPeriod = opts.lowPeriod != null ? opts.lowPeriod : 480;
+  const critPeriod = opts.critPeriod != null ? opts.critPeriod : 240;
+  if (!(mag > 0) || !(ammo >= 0)) return { warning: false, level: 'ok', blink: false };
+  const ratio = ammo / mag;
+  let level = 'ok';
+  if (ammo <= 0) level = 'critical';
+  else if (ammo <= criticalMin || ratio <= criticalRatio) level = 'critical';
+  else if (ratio <= lowRatio) level = 'low';
+  const warning = level !== 'ok';
+  const period = level === 'critical' ? critPeriod : lowPeriod;
+  const blink = warning && (Math.floor(Math.max(0, t) / period) % 2 === 0);
+  return { warning, level, blink };
 }
 
 function rr(mctx, x, y, w, h, r) {
@@ -638,6 +672,11 @@ export function renderHud(game) {
     ctx.fillText('后座', w2 / 2, by - 3);
     ctx.restore();
   }
+  // D6 低血量屏幕边缘红边脉冲警示：血量 <30% 时出现，越低越明显，死亡后消失
+  if (p && !p.dead) {
+    const fx = lowHpVignette(p.hp, p.maxHp || 100, game.time || 0, dpr);
+    drawLowHpVignette(ctx, w2, h2, fx);
+  }
   ctx.restore();
 }
 export function renderCrosshair(game) {
@@ -673,7 +712,9 @@ export function renderCrosshair(game) {
     let gap = baseGap + clamp(spreadPx, 0, 260) + (p.scoped ? 2 : 0);
     if (p.hp <= 25) gap = Math.max(3, gap - 2);
     if (game.dmgSpreadT > 0) gap += clamp(game.dmgSpreadT * 34, 0, 34);
-    if (game.hitMarkT > 0) gap += clamp(game.hitMarkT * 30, 0, 30);
+    // D4 命中/开火十字反馈：命中显著扩散+橙红变色，未命中轻微扩散颜色不变
+    const fb = crosshairFeedbackFor(game, p);
+    if (fb) gap *= fb.spreadMul;
     const len = wd && wd.kind === 'sniper' ? 4 : 7;
     const reloading = !!p.reloading;
     if (reloading) gap = baseGap;
@@ -688,7 +729,8 @@ export function renderCrosshair(game) {
     ctx.moveTo(mx, my - gap - len); ctx.lineTo(mx, my - gap);
     ctx.moveTo(mx, my + gap); ctx.lineTo(mx, my + gap + len);
     ctx.stroke();
-    ctx.strokeStyle = empty ? 'rgba(255,70,60,0.95)' : (p.aimTarget ? 'rgba(255,80,80,0.9)' : 'rgba(255,255,255,0.85)');
+    const fbColor = fb && fb.color ? fb.color : null;
+    ctx.strokeStyle = fbColor || (empty ? 'rgba(255,70,60,0.95)' : (p.aimTarget ? 'rgba(255,80,80,0.9)' : 'rgba(255,255,255,0.85)'));
     ctx.lineWidth = 1.5;
     ctx.beginPath();
     ctx.moveTo(mx - gap - len, my); ctx.lineTo(mx - gap, my);
