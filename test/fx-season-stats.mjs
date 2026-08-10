@@ -1,7 +1,7 @@
 import {
   resetCareer, setStorage, setRng, getState, settlePlayerMatch, nextSeason,
   save, loadCareer, __clearStateForTest,
-  seasonStats, seasonSeries, seasonStreaks, careerSummary
+  seasonStats, seasonSeries, seasonStreaks, careerSummary, matchDetail
 } from '../src/career.js';
 
 const ok = (name, cond) => {
@@ -72,6 +72,12 @@ ok('summary totals', ov.totalMoney === 5300 && ov.totalDmg === 4130 && ov.kills 
 ok('summary kd', ov.kd === Math.round(59 / 36 * 100) / 100);
 ok('summary avgDmg', ov.avgDmg === Math.round(4130 / 5));
 ok('summary empty', careerSummary([]).seasons === 0 && careerSummary([]).matches === 0);
+
+const detailWin = matchDetail({ win: true, kills: 20, deaths: 10, dmg: 1400, money: 1500, mvp: true, score: [16, 8], mapId: 'dust2', importance: '关键战' });
+ok('matchDetail win', detailWin.kd === 2 && detailWin.scoreText === '16:8' && detailWin.impact === 'MVP' && detailWin.mapId === 'dust2');
+const detailLose = matchDetail({ win: false, kills: 8, deaths: 12, dmg: 560, money: 300, mvp: false, score: null });
+ok('matchDetail lose', detailLose.kd === Math.round(8 / 12 * 100) / 100 && detailLose.scoreText === '未记录' && detailLose.impact === '失利');
+ok('matchDetail empty', matchDetail(null) === null);
 
 ok('seasonStats deterministic', JSON.stringify(seasonStats(h, 1)) === JSON.stringify(seasonStats(h, 1)));
 ok('seasonSeries deterministic', JSON.stringify(seasonSeries(h, 1)) === JSON.stringify(seasonSeries(h, 1)));

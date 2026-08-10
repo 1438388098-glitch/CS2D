@@ -1106,6 +1106,24 @@ export function seasonSeries(history, season) {
   }));
 }
 
+export function matchDetail(m) {
+  if (!m) return null;
+  const score = Array.isArray(m.score) ? m.score : null;
+  const kills = m.kills || 0;
+  const deaths = m.deaths || 0;
+  return {
+    ...m,
+    win: !!m.win,
+    kills,
+    deaths,
+    dmg: m.dmg || 0,
+    money: m.money || 0,
+    kd: deaths ? round2(kills / deaths) : kills,
+    scoreText: score ? score.join(':') : '未记录',
+    impact: m.mvp ? 'MVP' : (m.win ? '胜利' : '失利')
+  };
+}
+
 export function seasonStreaks(series) {
   const list = Array.isArray(series) ? series : [];
   let current = 0;
