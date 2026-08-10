@@ -321,6 +321,42 @@ export function financeTrend(s) {
   };
 }
 
+export function remainingPrizePreview(s) {
+  const list = sortedStandings(s);
+  const rank = list.findIndex((x) => x.teamId === 'player') + 1;
+  const currentRankPrize = PRIZE[rank] || 0;
+  const pace = seasonPace(s);
+  const projectedRank = pace.projectedRank;
+  const projectedRankPrize = projectedRank ? (PRIZE[projectedRank] || 0) : currentRankPrize;
+  const cash = cashflowForecast(s);
+  let expectedCup = 0;
+  let maxCup = 0;
+  if (s.season.cup && s.season.cup.phase === 'active') {
+    for (const m of s.season.cup.bracket || []) {
+      if (!m.played && (m.a === 'player' || m.b === 'player')) {
+        const oppId = m.a === 'player' ? m.b : m.a;
+        const chance = winChance(s, oppId, 'home') / 100;
+        const winPrize = m.round === 'F' ? 35000 : 5000;
+        expectedCup += chance * winPrize;
+        maxCup += winPrize;
+      }
+    }
+  }
+  const matchExpected = Math.max(0, cash.expectedPrize - Math.round(expectedCup));
+  const rankUpside = Math.max(0, projectedRankPrize - currentRankPrize);
+  return {
+    rank,
+    currentRankPrize,
+    projectedRank,
+    projectedRankPrize,
+    rankUpside,
+    matchExpected,
+    maxCup,
+    expectedCup: Math.round(expectedCup),
+    total: Math.round(matchExpected + expectedCup + rankUpside)
+  };
+}
+
 function currentWinStreak(s) {
   const list = Array.isArray(s.player.form) ? s.player.form : [];
   let n = 0;

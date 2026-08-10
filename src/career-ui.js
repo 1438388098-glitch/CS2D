@@ -3,7 +3,7 @@ import {
   train, sellPlayer, sellPreview, buyPlayer, renewPlayer, candidates, filterCandidates, candidateProfile, nextSeason, seasonReport, nextMatch, nextMatchInfo, matchImportance, teamRecentForm, matchReadiness,
   transferWindowOpen, transferWindowInfo, transferBudget, contractStatus, isStorageAvailable, cupMap, cupPrizeInfo, cupMapForRound, fixtureMapFor, fixtureMatchRecord, winChance, trainingTiers, trainingPreview, trainingSuggestion, rotationAdvice, trainingHistory, rosterStatus, xpNeeded,
   seasonStats, seasonAwards, seasonPerformanceSummary, seasonSeries, seasonStreaks, careerSummary, matchDetail, seasonTimeline, headToHead, importantMatches, seasonTrends, favoriteMatches, cupHistory, trophyCase, careerTimeline,
-  sponsorIncome, sponsorPreview, cashflowForecast, seasonBudget, financeTrend, formBonus, fatiguePenalty, careerMorale, restPlayer, seasonGoals, seasonPace, goalProgress, relegationProjection, rosterContribution,
+  sponsorIncome, sponsorPreview, cashflowForecast, seasonBudget, financeTrend, remainingPrizePreview, formBonus, fatiguePenalty, careerMorale, restPlayer, seasonGoals, seasonPace, goalProgress, relegationProjection, rosterContribution,
   positionBalance,
   achievementDefs, achievements, careerRecords
 } from './career.js';
@@ -493,6 +493,7 @@ function renderFinance(s) {
   const cash = cashflowForecast(s);
   const budget = seasonBudget(s);
   const trend = financeTrend(s);
+  const prize = remainingPrizePreview(s);
   const income = ledger.reduce((a, x) => a + Math.max(0, x.amount || 0), 0);
   const expense = ledger.reduce((a, x) => a + Math.min(0, x.amount || 0), 0);
   const rows = ledger.slice().reverse().slice(0, 60).map((x) => '<div class="career-row"><span>' + esc(x.label || '') + '</span><b style="color:' + (x.amount >= 0 ? '#58d68d' : '#ff5d5d') + '">' + (x.amount >= 0 ? '+' : '') + money(x.amount) + '</b></div>').join('') || '<div class="career-news">暂无资金流水</div>';
@@ -517,10 +518,17 @@ function renderFinance(s) {
     (budget.warnings.length ? budget.warnings.map((w) => '<div class="career-news warn">' + esc(w) + '</div>').join('') : '<div class="career-stats"><span>预算节奏健康，仍有充足操作空间</span></div>') + '</div>';
   const trendRows = trend.rows.map((r) => '<div class="career-row"><span>第 ' + r.round + ' 轮</span><div class="career-trend"><i style="width:' + Math.max(3, Math.round((r.income / trend.maxIncome) * 100)) + '%" class="in"></i><i style="width:' + Math.max(3, Math.round((r.expense / trend.maxExpense) * 100)) + '%" class="out"></i></div><b>+' + money(r.income) + ' / -' + money(r.expense) + ' · ' + (r.net >= 0 ? '+' : '') + money(r.net) + '</b></div>').join('') || '<div class="career-news">暂无流水</div>';
   const trendHtml = '<div class="career-card"><h4>财务趋势</h4><div class="career-stats"><span>累计净额 ' + (trend.totalNet >= 0 ? '+' : '') + money(trend.totalNet) + ' · 收入 ' + money(trend.totalIncome) + ' · 支出 ' + money(trend.totalExpense) + '</span></div>' + trendRows + '</div>';
+  const prizeHtml = '<div class="career-card"><h4>剩余奖金预览</h4><div class="career-kpis">' +
+    '<div class="career-kpi"><b>' + money(prize.matchExpected) + '</b><span>联赛奖金</span></div>' +
+    '<div class="career-kpi"><b>' + money(prize.expectedCup) + '</b><span>杯赛期望</span></div>' +
+    '<div class="career-kpi"><b>' + money(prize.rankUpside) + '</b><span>排名提升空间</span></div>' +
+    '<div class="career-kpi"><b>' + money(prize.total) + '</b><span>剩余可争取</span></div></div>' +
+    '<div class="career-stats"><span>当前第 ' + prize.rank + ' 名奖金 ' + money(prize.currentRankPrize) + (prize.projectedRank ? ' · 预测第 ' + prize.projectedRank + ' 名 ' + money(prize.projectedRankPrize) : '') + (prize.maxCup ? ' · 杯赛全胜上限 ' + money(prize.maxCup) : '') + '</span></div></div>';
   return '<div class="career-card"><h4>财务概览</h4><div class="career-kpis"><div class="career-kpi"><b>' + money(s.team.bank) + '</b><span>当前资金</span></div><div class="career-kpi"><b>' + money(income) + '</b><span>累计收入</span></div><div class="career-kpi"><b>' + money(expense) + '</b><span>累计支出</span></div><div class="career-kpi"><b>' + money(sponsor) + '</b><span>每场赞助预估</span></div></div></div>' +
     cashHtml +
     budgetHtml +
     trendHtml +
+    prizeHtml +
     sponsorHtml +
     '<div class="career-card"><h4>资金流水</h4>' + rows + '</div>';
 }

@@ -1,7 +1,7 @@
 import {
   resetCareer, setStorage, setRng, getState, settlePlayerMatch, train, trainTeammate, sellPlayer, sellPreview, buyPlayer, candidates, filterCandidates,
   nextSeason, save, loadCareer, __clearStateForTest, candidateProfile,
-  sponsorIncome, sponsorPreview, cashflowForecast, seasonBudget, financeTrend, formBonus, fatiguePenalty, careerMorale, restPlayer, seasonGoals, goalProgress, trainingPreview, trainingSuggestion, rotationAdvice, trainingHistory, rosterStatus, transferBudget, contractStatus, renewPlayer, rosterContribution, positionBalance,
+  sponsorIncome, sponsorPreview, cashflowForecast, seasonBudget, financeTrend, remainingPrizePreview, formBonus, fatiguePenalty, careerMorale, restPlayer, seasonGoals, goalProgress, trainingPreview, trainingSuggestion, rotationAdvice, trainingHistory, rosterStatus, transferBudget, contractStatus, renewPlayer, rosterContribution, positionBalance,
   achievementDefs, achievements, careerRecords, migrateCareerState, matchReadiness
 } from '../src/career.js';
 
@@ -59,6 +59,10 @@ s.team.bank = 5000;
 train('aim', 'basic');
 const trend = financeTrend(s);
 ok('finance trend', trend && trend.rows.length === 1 && trend.rows[0].round === 1 && trend.rows[0].expense === 500 && trend.totalExpense === 500 && trend.totalNet === -500);
+
+s = resetCareer();
+const prize = remainingPrizePreview(s);
+ok('remaining prize preview', prize && prize.currentRankPrize >= 0 && prize.matchExpected > 0 && prize.expectedCup >= 0 && prize.maxCup >= 0 && prize.total >= prize.matchExpected);
 
 s = resetCareer();
 s.team.bank = 5000;
