@@ -145,26 +145,84 @@ function drawBombSiteMarks(game) {
   ctx.strokeRect(map.sites.B.x0, map.sites.B.y0, map.sites.B.x1 - map.sites.B.x0, map.sites.B.y1 - map.sites.B.y0);
 }
 
+export function crateRenderSpec(x, y, hp, tile = mapTile()) {
+  const px = x - tile / 2;
+  const py = y - tile / 2;
+  const hash = (n) => {
+    let h = (Math.floor(x) * 374761393 ^ Math.floor(y) * 668265263 ^ n * 1274126177) >>> 0;
+    h = Math.imul(h ^ (h >>> 13), 1274126177) >>> 0;
+    return (h ^ (h >>> 16)) / 4294967296;
+  };
+  const planks = [];
+  const bolts = [];
+  const cracks = [];
+  for (let i = 0; i < 3; i++) {
+    const yPos = py + tile * (0.22 + i * 0.28);
+    const offset = (hash(i) - 0.5) * tile * 0.12;
+    planks.push({ y: yPos, x1: px + 3, x2: px + tile - 3, offset });
+  }
+  const boltPos = [[4, 4], [tile - 4, 4], [4, tile - 4], [tile - 4, tile - 4]];
+  for (let i = 0; i < boltPos.length; i++) {
+    bolts.push({ x: px + boltPos[i][0], y: py + boltPos[i][1], r: 2 + hash(i + 10) * 0.5 });
+  }
+  if (hp <= 1) {
+    cracks.push({ x1: px + tile * 0.18, y1: py + tile * 0.2, x2: px + tile * 0.52, y2: py + tile * 0.58, x3: px + tile * 0.34, y3: py + tile * 0.82 });
+    cracks.push({ x1: px + tile * 0.62, y1: py + tile * 0.18, x2: px + tile * 0.84, y2: py + tile * 0.48 });
+  }
+  return {
+    px,
+    py,
+    tile,
+    base: hp > 1 ? 'rgba(118,88,54,0.96)' : 'rgba(104,76,48,0.96)',
+    planks,
+    bolts,
+    cracks
+  };
+}
+
 function drawCrates(game) {
   if (!game.crates || !game.crates.length) return;
   for (const c of game.crates) {
-    const px = c.x - mapTile() / 2, py = c.y - mapTile() / 2;
+    const s = crateRenderSpec(c.x, c.y, c.hp);
     ctx.fillStyle = 'rgba(0,0,0,0.42)';
-    ctx.fillRect(px + 3, py + mapTile() - 4, mapTile(), 4);
-    ctx.fillStyle = c.hp > 1 ? 'rgba(118,88,54,0.96)' : 'rgba(104,76,48,0.96)';
-    ctx.fillRect(px, py, mapTile(), mapTile());
+    ctx.fillRect(s.px + 3, s.py + s.tile - 4, s.tile, 4);
+    ctx.fillStyle = s.base;
+    ctx.fillRect(s.px, s.py, s.tile, s.tile);
     ctx.fillStyle = 'rgba(255,255,255,0.12)';
-    ctx.fillRect(px, py, mapTile(), 3);
+    ctx.fillRect(s.px, s.py, s.tile, 3);
     ctx.strokeStyle = 'rgba(56,40,24,0.9)';
     ctx.lineWidth = 2;
-    ctx.strokeRect(px + 1, py + 1, mapTile() - 2, mapTile() - 2);
+    ctx.strokeRect(s.px + 1, s.py + 1, s.tile - 2, s.tile - 2);
+    ctx.strokeStyle = 'rgba(44,31,18,0.48)';
+    ctx.lineWidth = 1.25;
+    for (const pl of s.planks) {
+      ctx.beginPath();
+      ctx.moveTo(pl.x1, pl.y);
+      ctx.lineTo(pl.x2, pl.y);
+      ctx.stroke();
+    }
+    ctx.strokeStyle = 'rgba(255,255,255,0.08)';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(s.px + s.tile * 0.5, s.py + 2);
+    ctx.lineTo(s.px + s.tile * 0.5, s.py + s.tile - 2);
+    ctx.stroke();
+    ctx.fillStyle = 'rgba(26,18,10,0.82)';
+    for (const bolt of s.bolts) {
+      ctx.beginPath();
+      ctx.arc(bolt.x, bolt.y, bolt.r, 0, Math.PI * 2);
+      ctx.fill();
+    }
     if (c.hp <= 1) {
       ctx.strokeStyle = 'rgba(34,24,14,0.9)';
       ctx.lineWidth = 1.5;
-      ctx.beginPath();
-      ctx.moveTo(px + 8, py + 10); ctx.lineTo(px + 30, py + 30);
-      ctx.moveTo(px + 30, py + 9); ctx.lineTo(px + 12, py + 27);
-      ctx.stroke();
+      for (const crack of s.cracks) {
+        ctx.beginPath();
+        ctx.moveTo(crack.x1, crack.y1);
+        ctx.lineTo(crack.x2, crack.y2);
+        if (crack.x3 !== undefined) ctx.lineTo(crack.x3, crack.y3);
+        ctx.stroke();
+      }
     }
   }
 }
