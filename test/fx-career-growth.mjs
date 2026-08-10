@@ -2,7 +2,7 @@ import {
   resetCareer, setStorage, setRng, getState, settlePlayerMatch, train, trainTeammate, sellPlayer, sellPreview, buyPlayer, candidates, filterCandidates,
   nextSeason, save, loadCareer, __clearStateForTest, candidateProfile,
   sponsorIncome, sponsorPreview, sponsorSeasonPreview, homeTicketIncome, ticketPreview, cashflowForecast, seasonBudget, financialRisk, financeTrend, seasonFinancialSummary, remainingPrizePreview, transferProfit, facilityStatus, upgradeFacility, formBonus, fatiguePenalty, careerMorale, restPlayer, seasonGoals, goalProgress, trainingPreview, trainingSuggestion, rotationAdvice, trainingHistory, rosterStatus, transferBudget, contractStatus, renewPlayer, rosterContribution, positionBalance,
-  achievementDefs, achievements, achievementProgress, careerRecords, honorTitle, migrateCareerState, matchReadiness, seasonGoalHistory, goalAdvice, lastRecordAlerts, seasonRecordAlerts, recordDetails, seasonHighlights
+  achievementDefs, achievements, achievementCatalog, achievementProgress, careerRecords, honorTitle, migrateCareerState, matchReadiness, seasonGoalHistory, goalAdvice, lastRecordAlerts, seasonRecordAlerts, recordDetails, seasonHighlights
 } from '../src/career.js';
 
 const ok = (name, cond) => {
@@ -30,6 +30,10 @@ const honorStart = honorTitle(s);
 ok('honor title start', honorStart.title && honorStart.reason && honorStart.badges.length === 0);
 const achProgressStart = achievementProgress(s);
 ok('achievement progress start', achProgressStart.total >= 6 && achProgressStart.unlockedCount === 0 && achProgressStart.lockedCount === achProgressStart.total && achProgressStart.pct === 0 && achProgressStart.next && achProgressStart.next.id === 'first_win');
+const catalogAll = achievementCatalog(s);
+const catalogUnlocked = achievementCatalog(s, { status: 'unlocked' });
+const catalogCup = achievementCatalog(s, { category: '杯赛' });
+ok('achievement catalog filters', catalogAll.length >= 6 && catalogUnlocked.every((a) => !a.unlocked) && catalogCup.every((a) => a.category === '杯赛') && catalogCup.some((a) => a.id === 'cup_champion'));
 
 const baseSponsor = sponsorIncome(s);
 ok('sponsor positive', baseSponsor > 0);

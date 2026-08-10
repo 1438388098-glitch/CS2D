@@ -714,6 +714,29 @@ export function achievementProgress(s) {
   };
 }
 
+export function achievementCatalog(s, opts = {}) {
+  const unlockedById = new Map((s.player && Array.isArray(s.player.achievements) ? s.player.achievements : [])
+    .map((a) => [a && a.id, a])
+    .filter((x) => x[0]));
+  const category = opts.category || 'all';
+  const status = opts.status || 'all';
+  return achievementDefs()
+    .filter((def) => category === 'all' || def.category === category)
+    .filter((def) => {
+      const unlocked = unlockedById.has(def.id);
+      return status === 'all' || (status === 'unlocked' ? unlocked : !unlocked);
+    })
+    .map((def) => {
+      const unlocked = unlockedById.get(def.id);
+      return {
+        ...def,
+        unlocked: !!unlocked,
+        unlockedAt: unlocked ? unlocked.unlockedAt : null,
+        seasonId: unlocked ? unlocked.seasonId : null
+      };
+    });
+}
+
 export function honorTitle(s) {
   const ach = new Set((s.player && Array.isArray(s.player.achievements) ? s.player.achievements : [])
     .map((a) => a && a.id)

@@ -6,7 +6,7 @@ import {
   sponsorIncome, sponsorPreview, sponsorSeasonPreview, homeTicketIncome, ticketPreview, cashflowForecast, seasonBudget, financialRisk, financeTrend, seasonFinancialSummary, remainingPrizePreview, formBonus, fatiguePenalty, careerMorale, restPlayer, seasonGoals, seasonPace, goalProgress, goalAdvice, relegationProjection, rosterContribution,
   seasonGoalHistory,
   positionBalance,
-  achievementDefs, achievements, achievementProgress, careerRecords, honorTitle, lastRecordAlerts, recordDetails, seasonHighlights
+  achievementDefs, achievementCatalog, achievementProgress, careerRecords, honorTitle, lastRecordAlerts, recordDetails, seasonHighlights
 } from './career.js';
 
 let doc = null;
@@ -19,6 +19,8 @@ let transferMinRating = 0;
 let transferMaxPrice = 30000;
 let transferSort = 'rating';
 let transferSortDir = 'desc';
+let achCategory = 'all';
+let achStatus = 'all';
 
 function el(id) { return doc ? doc.getElementById(id) : null; }
 function esc(s) {
@@ -90,6 +92,8 @@ function onChange(e) {
   else if (filter === 'max-price') transferMaxPrice = Math.max(0, Math.min(30000, Number(target.value) || 30000));
   else if (filter === 'sort') transferSort = target.value || 'rating';
   else if (filter === 'sort-dir') transferSortDir = target.value === 'asc' ? 'asc' : 'desc';
+  else if (filter === 'ach-category') achCategory = target.value || 'all';
+  else if (filter === 'ach-status') achStatus = target.value || 'all';
   render();
 }
 
@@ -651,8 +655,9 @@ function renderSeasonStats(s) {
   const streaks = seasonStreaks(series);
   const overview = careerSummary(mh);
   const rec = careerRecords(s);
-  const achList = achievements(s);
   const achProgress = achievementProgress(s);
+  const achCatalog = achievementCatalog(s, { category: achCategory, status: achStatus });
+  const achCategories = [...new Set(achievementDefs().map((a) => a.category))];
   const selBtns = seasons.map((sid) => '<button class="btn small' + (sid === sel ? ' sel' : '') + '" data-act="s-season" data-season="' + sid + '">第 ' + sid + ' 赛季</button>').join('');
   const kpis = [['场次', stats.matches], ['胜 / 负', stats.wins + ' / ' + stats.losses], ['胜率', stats.winRate + '%'], ['K/D', stats.kd], ['场均伤害', stats.avgDmg], ['总奖金', money(stats.totalMoney)], ['总击杀', stats.kills], ['最佳场次', stats.mvp]];
   const kpiHtml = kpis.map(([k, v]) => '<div class="career-kpi"><b>' + v + '</b><span>' + k + '</span></div>').join('');
@@ -710,13 +715,22 @@ function renderSeasonStats(s) {
   }).join('');
   const recordDetailHtml = '<div class="career-card"><h4>生涯纪录详情</h4><div class="career-row head"><span>纪录</span><b>当前值</b><b>达成赛季</b><b>历史最佳</b></div>' + recordDetailRows + '</div>';
   const goalHistoryRows = seasonGoalHistory(s).map((g) => '<div class="career-row' + (g.achieved ? ' win' : ' lose') + '"><span>第 ' + g.seasonId + ' 赛季 · ' + esc(g.league) + ' · 目标前 ' + g.rankGoal + ' · 杯赛至少' + (g.cupGoal ? '四强' : '八强') + '</span><b>第 ' + g.rank + ' 名 · 杯赛 ' + cupRoundLabel(g.cupRound) + ' · ' + (g.achieved ? '达成 +' + money(g.reward) : '未达成') + '</b></div>').join('') || '<div class="career-news">暂无赛季目标记录</div>';
-  const achHtml = '<div class="career-card"><h4>成就</h4><div class="career-kpis">' +
+  const achFilterHtml = '<div class="career-actions"><select data-filter="ach-category">' +
+    '<option value="all"' + (achCategory === 'all' ? ' selected' : '') + '>全部分类</option>' +
+    achCategories.map((c) => '<option value="' + esc(c) + '"' + (achCategory === c ? ' selected' : '') + '>' + esc(c) + '</option>').join('') +
+    '</select><select data-filter="ach-status">' +
+    '<option value="all"' + (achStatus === 'all' ? ' selected' : '') + '>全部状态</option>' +
+    '<option value="unlocked"' + (achStatus === 'unlocked' ? ' selected' : '') + '>已解锁</option>' +
+    '<option value="locked"' + (achStatus === 'locked' ? ' selected' : '') + '>未解锁</option>' +
+    '</select></div>';
+  const achRows = achCatalog.length ? achCatalog.map((a) => '<div class="career-row' + (a.unlocked ? ' win' : '') + '"><span>' + esc(a.category) + ' · ' + esc(a.title) + (a.unlocked ? '' : ' · ' + esc(a.hint)) + '</span><b>' + (a.unlocked ? '已解锁' : '未解锁') + '</b></div>').join('') : '<div class="career-news">无匹配成就</div>';
+  const achHtml = '<div class="career-card"><h4>成就筛选</h4><div class="career-kpis">' +
     '<div class="career-kpi"><b>' + achProgress.unlockedCount + ' / ' + achProgress.total + '</b><span>已解锁</span></div>' +
     '<div class="career-kpi"><b>' + achProgress.pct + '%</b><span>完成度</span></div>' +
     '<div class="career-kpi"><b>' + (achProgress.next ? esc(achProgress.next.title) : '全部完成') + '</b><span>下一枚</span></div></div>' +
     '<div class="career-bar"><i style="width:' + achProgress.pct + '%"></i></div>' +
     (achProgress.next ? '<div class="career-news">下一枚：' + esc(achProgress.next.desc) + ' · ' + esc(achProgress.next.hint) + (achProgress.next.rewardMoney ? ' · 奖励 ' + money(achProgress.next.rewardMoney) : '') + '</div>' : '') +
-    (achList.length ? achList.map((a) => '<div class="career-news award" style="border-left-color:#ffd75e">' + esc(a.title) + '</div>').join('') : '<div class="career-news">暂无成就</div>') + '</div>';
+    achFilterHtml + achRows + '</div>';
   const awardHtml = '<div class="career-card"><h4>赛季个人奖项</h4><div class="career-kpis">' +
     '<div class="career-kpi"><b>' + awards.mvpMatches.length + '</b><span>MVP场次</span></div>' +
     '<div class="career-kpi"><b>' + (awards.bestKills ? awards.bestKills.kills : '-') + '</b><span>最佳击杀</span></div>' +

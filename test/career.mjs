@@ -272,6 +272,7 @@ for (const key of ['dash', 'schedule', 'training', 'roster', 'standings', 'cup',
 const statsTabHtml = __renderTabForTest('stats');
 ok('career awards renders', statsTabHtml.includes('赛季个人奖项'));
 ok('career record detail renders', statsTabHtml.includes('生涯纪录详情') && statsTabHtml.includes('达成赛季') && statsTabHtml.includes('历史最佳'));
+ok('career achievement filter renders', statsTabHtml.includes('成就筛选') && statsTabHtml.includes('全部分类') && statsTabHtml.includes('未解锁'));
 const cupTabHtml = __renderTabForTest('cup');
 ok('career trophy case renders', cupTabHtml.includes('奖杯陈列'));
 const trainingHtml = __renderTabForTest('training');
