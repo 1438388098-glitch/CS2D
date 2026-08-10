@@ -119,9 +119,9 @@ export function initInput(game, canvasRef) {
     if (matches(e.code, 'weaponPrimary')) switchWeapon(game.player, 'primary');
     if (matches(e.code, 'weaponSecondary')) switchWeapon(game.player, 'secondary');
     if (matches(e.code, 'weaponKnife')) switchWeapon(game.player, 'knife');
-    if (matches(e.code, 'nadeHe')) quickThrow(game.player, 'he', game);
-    if (matches(e.code, 'nadeFlash')) quickThrow(game.player, 'flash', game);
-    if (matches(e.code, 'nadeSmoke')) quickThrow(game.player, 'smoke', game);
+    if (matches(e.code, 'nadeHe')) switchNade(game.player, 'he');
+    if (matches(e.code, 'nadeFlash')) switchNade(game.player, 'flash');
+    if (matches(e.code, 'nadeSmoke')) switchNade(game.player, 'smoke');
     if (matches(e.code, 'lastWeapon')) {
       const p = game.player;
       if (p && p.lastSlot) switchWeapon(p, p.lastSlot);

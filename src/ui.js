@@ -1328,7 +1328,7 @@ export function renderHelpBindings() {
     { actions: ['reload'], label: '换弹' },
     { actions: ['interact'], label: '互动（装/拆/拾取）' },
     { actions: ['weaponPrimary', 'weaponSecondary', 'weaponKnife'], label: '武器切换' },
-    { actions: ['nadeHe', 'nadeFlash', 'nadeSmoke'], label: '快速投掷' },
+    { actions: ['nadeHe', 'nadeFlash', 'nadeSmoke'], label: '投掷（装备后左键投出，松键切回）' },
     { actions: ['orderFollow', 'orderSiteA', 'orderSiteB', 'orderHold'], label: '指挥队友' },
     { actions: ['buy'], label: '购买菜单' },
     { actions: ['scoreboard'], label: '记分板' },

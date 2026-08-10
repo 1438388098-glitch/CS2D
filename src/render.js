@@ -8,6 +8,7 @@ import {ARCHETYPES} from './persona.js';
 import {fogEnabled, castVisionPolygon} from './fog.js';
 import {drawAmbientDust} from './ambient-fx.js';
 import {weaponSwitchPop, muzzleSmoke, drawMuzzleSmoke, drawWeaponPop, MUZZLE_SMOKE_LIFE} from './weapon-fx.js';
+import {nadeTrajectory, drawNadeTrajectory, NADE_SPEED, NADE_ORIGIN_DIST} from './nade-fx.js';
 
 let ctx = null;
 let layers = null;
@@ -49,6 +50,7 @@ export function render(game) {
   drawBomb(game);
   drawDrops(game);
   drawGrenades(game);
+  drawNadePreview(game);
   drawEntities(game);
   drawDeathFX(game);
   drawHitOutlines(game);
@@ -450,6 +452,22 @@ function drawGrenades(game) {
     ctx.fillRect(-1.5, -3, 3, 6);
     ctx.restore();
   }
+}
+
+// 手雷轨迹预览：仅玩家自己手持投掷物且存活时，从出手点到预计落点绘制虚线弧（辅助瞄准线）。
+// 纯预览装饰，不影响实际投掷判定；初速/出手偏移与 throwGrenade 完全一致。
+function drawNadePreview(game) {
+  const p = game.player;
+  if (!p || p.dead) return;
+  if (game.state !== 'BUY' && game.state !== 'LIVE') return;
+  if (!p.slot || p.slot.indexOf('nade:') !== 0) return;
+  const kind = p.slot.slice(5);
+  const speed = NADE_SPEED[kind];
+  if (!speed || !p.weapons || (p.weapons.nades[kind] || 0) <= 0) return;
+  const x0 = p.x + Math.cos(p.angle) * NADE_ORIGIN_DIST;
+  const y0 = p.y + Math.sin(p.angle) * NADE_ORIGIN_DIST;
+  const pts = nadeTrajectory(x0, y0, p.angle, speed, 40);
+  drawNadeTrajectory(ctx, pts);
 }
 
 
