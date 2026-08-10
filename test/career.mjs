@@ -257,5 +257,7 @@ const trainingHtml = __renderTabForTest('training');
 ok('career training radar renders', trainingHtml.includes('career-radar') && trainingHtml.includes('综合能力'));
 const financeHtml = __renderTabForTest('finance');
 ok('career finance renders', financeHtml.includes('财务概览') && financeHtml.includes('资金流水'));
+const standingsHtml = __renderTabForTest('standings');
+ok('career standings form column', standingsHtml.includes('近5') && standingsHtml.includes('预测最终'));
 
 console.log('career: all PASS');
