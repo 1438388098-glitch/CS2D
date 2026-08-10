@@ -178,7 +178,7 @@ export function positionBalance(s) {
 function clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); }
 function addLedger(s, type, amount, label) {
   if (!Array.isArray(s.team.ledger)) s.team.ledger = [];
-  s.team.ledger.push({ t: Date.now(), type, amount: Math.round(amount || 0), label });
+  s.team.ledger.push({ t: Date.now(), round: Number(s.season && s.season.round) || 1, type, amount: Math.round(amount || 0), label });
   if (s.team.ledger.length > 300) s.team.ledger.splice(0, s.team.ledger.length - 300);
 }
 
@@ -292,6 +292,32 @@ export function seasonBudget(s) {
     spendable,
     spentPct,
     warnings
+  };
+}
+
+export function financeTrend(s) {
+  const ledger = Array.isArray(s.team && s.team.ledger) ? s.team.ledger : [];
+  const maxRound = Math.max(1, Number(s.season && s.season.round) || 1);
+  const map = new Map();
+  for (let r = 1; r <= maxRound; r++) map.set(r, { round: r, income: 0, expense: 0, net: 0 });
+  for (const x of ledger) {
+    const round = Math.max(1, Math.min(maxRound, Number(x.round) || maxRound));
+    const row = map.get(round);
+    const amount = Number(x.amount) || 0;
+    if (amount >= 0) row.income += amount;
+    else row.expense += Math.abs(amount);
+    row.net += amount;
+  }
+  const rows = [...map.values()].map((r) => ({ ...r, income: Math.round(r.income), expense: Math.round(r.expense), net: Math.round(r.net) }));
+  const totalIncome = rows.reduce((a, r) => a + r.income, 0);
+  const totalExpense = rows.reduce((a, r) => a + r.expense, 0);
+  return {
+    rows,
+    maxIncome: Math.max(1, ...rows.map((r) => r.income)),
+    maxExpense: Math.max(1, ...rows.map((r) => r.expense)),
+    totalIncome,
+    totalExpense,
+    totalNet: totalIncome - totalExpense
   };
 }
 

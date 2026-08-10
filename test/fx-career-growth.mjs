@@ -1,7 +1,7 @@
 import {
   resetCareer, setStorage, setRng, getState, settlePlayerMatch, train, trainTeammate, sellPlayer, sellPreview, buyPlayer, candidates, filterCandidates,
   nextSeason, save, loadCareer, __clearStateForTest, candidateProfile,
-  sponsorIncome, sponsorPreview, cashflowForecast, seasonBudget, formBonus, fatiguePenalty, careerMorale, restPlayer, seasonGoals, goalProgress, trainingPreview, trainingSuggestion, rotationAdvice, trainingHistory, rosterStatus, transferBudget, contractStatus, renewPlayer, rosterContribution, positionBalance,
+  sponsorIncome, sponsorPreview, cashflowForecast, seasonBudget, financeTrend, formBonus, fatiguePenalty, careerMorale, restPlayer, seasonGoals, goalProgress, trainingPreview, trainingSuggestion, rotationAdvice, trainingHistory, rosterStatus, transferBudget, contractStatus, renewPlayer, rosterContribution, positionBalance,
   achievementDefs, achievements, careerRecords, migrateCareerState, matchReadiness
 } from '../src/career.js';
 
@@ -53,6 +53,12 @@ ok('season budget', budgetCtrl && budgetCtrl.budget > 20000 && budgetCtrl.spent 
 s.team.bank = 3000;
 const tightBudget = seasonBudget(s);
 ok('season budget warnings', tightBudget.warnings.length >= 1 && tightBudget.warnings.some((w) => w.includes('5000')));
+
+s = resetCareer();
+s.team.bank = 5000;
+train('aim', 'basic');
+const trend = financeTrend(s);
+ok('finance trend', trend && trend.rows.length === 1 && trend.rows[0].round === 1 && trend.rows[0].expense === 500 && trend.totalExpense === 500 && trend.totalNet === -500);
 
 s = resetCareer();
 s.team.bank = 5000;
