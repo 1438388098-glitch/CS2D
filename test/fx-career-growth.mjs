@@ -2,7 +2,7 @@ import {
   resetCareer, setStorage, setRng, getState, settlePlayerMatch, train, trainTeammate, sellPlayer, sellPreview, buyPlayer, candidates, filterCandidates,
   nextSeason, save, loadCareer, __clearStateForTest, candidateProfile,
   sponsorIncome, sponsorPreview, sponsorSeasonPreview, homeTicketIncome, ticketPreview, cashflowForecast, seasonBudget, financialRisk, financeTrend, seasonFinancialSummary, remainingPrizePreview, transferProfit, facilityStatus, upgradeFacility, formBonus, fatiguePenalty, careerMorale, restPlayer, seasonGoals, goalProgress, trainingPreview, trainingSuggestion, rotationAdvice, trainingHistory, rosterStatus, transferBudget, contractStatus, renewPlayer, rosterContribution, positionBalance,
-  achievementDefs, achievements, achievementProgress, careerRecords, honorTitle, migrateCareerState, matchReadiness
+  achievementDefs, achievements, achievementProgress, careerRecords, honorTitle, migrateCareerState, matchReadiness, seasonGoalHistory
 } from '../src/career.js';
 
 const ok = (name, cond) => {
@@ -91,6 +91,18 @@ ok('season financial summary', finSummary.totalIncome === 1500 && finSummary.tot
 s = resetCareer();
 const prize = remainingPrizePreview(s);
 ok('remaining prize preview', prize && prize.currentRankPrize >= 0 && prize.matchExpected > 0 && prize.expectedCup >= 0 && prize.maxCup >= 0 && prize.total >= prize.matchExpected);
+
+s = resetCareer();
+s.season.cup.phase = 'finished';
+s.season.cupResult = 1;
+s.season.standings.forEach((row, i) => {
+  row.played = 14;
+  row.pts = row.teamId === 'player' ? 30 : 30 - i;
+  row.w = row.teamId === 'player' ? 10 : 10 - i;
+});
+nextSeason();
+const goalHistory = seasonGoalHistory(s);
+ok('season goal history', goalHistory.length === 1 && goalHistory[0].seasonId === 1 && goalHistory[0].rankGoal === 2 && goalHistory[0].achieved === true && goalHistory[0].reward > 0);
 
 s = resetCareer();
 s.team.bank = 5000;

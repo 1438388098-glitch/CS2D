@@ -4,6 +4,7 @@ import {
   transferWindowOpen, transferWindowInfo, transferBudget, transferProfit, contractStatus, isStorageAvailable, cupMap, cupPrizeInfo, cupMapForRound, fixtureMapFor, fixtureMatchRecord, winChance, trainingTiers, trainingPreview, trainingSuggestion, rotationAdvice, trainingHistory, rosterStatus, facilityStatus, upgradeFacility, xpNeeded,
   seasonStats, seasonAwards, seasonPerformanceSummary, seasonSeries, seasonStreaks, careerSummary, matchDetail, seasonTimeline, headToHead, importantMatches, seasonTrends, favoriteMatches, cupHistory, trophyCase, careerTimeline,
   sponsorIncome, sponsorPreview, sponsorSeasonPreview, homeTicketIncome, ticketPreview, cashflowForecast, seasonBudget, financialRisk, financeTrend, seasonFinancialSummary, remainingPrizePreview, formBonus, fatiguePenalty, careerMorale, restPlayer, seasonGoals, seasonPace, goalProgress, relegationProjection, rosterContribution,
+  seasonGoalHistory,
   positionBalance,
   achievementDefs, achievements, achievementProgress, careerRecords, honorTitle
 } from './career.js';
@@ -688,6 +689,7 @@ function renderSeasonStats(s) {
   const ov = [['赛季数', overview.seasons], ['总场次', overview.matches], ['胜率', overview.winRate + '%'], ['K/D', overview.kd], ['场均伤害', overview.avgDmg], ['总奖金', money(overview.totalMoney)], ['总击杀', overview.kills]];
   const ovHtml = ov.map(([k, v]) => '<div class="career-kpi"><b>' + v + '</b><span>' + k + '</span></div>').join('');
   const recordHtml = '<div class="career-card"><h4>生涯纪录</h4><div class="career-kpis"><div class="career-kpi"><b>' + (rec.bestKills || 0) + '</b><span>单场最高击杀</span></div><div class="career-kpi"><b>' + (rec.longestWinStreak || 0) + '</b><span>最长连胜</span></div><div class="career-kpi"><b>' + money(rec.totalPrize || 0) + '</b><span>累计奖金</span></div><div class="career-kpi"><b>' + (rec.cupChampions || 0) + '</b><span>杯赛冠军</span></div><div class="career-kpi"><b>' + (rec.bestSeasonRank || '-') + '</b><span>最佳赛季排名</span></div></div></div>';
+  const goalHistoryRows = seasonGoalHistory(s).map((g) => '<div class="career-row' + (g.achieved ? ' win' : ' lose') + '"><span>第 ' + g.seasonId + ' 赛季 · ' + esc(g.league) + ' · 目标前 ' + g.rankGoal + ' · 杯赛至少' + (g.cupGoal ? '四强' : '八强') + '</span><b>第 ' + g.rank + ' 名 · 杯赛 ' + cupRoundLabel(g.cupRound) + ' · ' + (g.achieved ? '达成 +' + money(g.reward) : '未达成') + '</b></div>').join('') || '<div class="career-news">暂无赛季目标记录</div>';
   const achHtml = '<div class="career-card"><h4>成就</h4><div class="career-kpis">' +
     '<div class="career-kpi"><b>' + achProgress.unlockedCount + ' / ' + achProgress.total + '</b><span>已解锁</span></div>' +
     '<div class="career-kpi"><b>' + achProgress.pct + '%</b><span>完成度</span></div>' +
@@ -714,7 +716,8 @@ function renderSeasonStats(s) {
     '<div class="career-card"><h4>杯赛历届战绩</h4>' + cupRows + '</div>' +
     '<div class="career-card"><h4>生涯事件时间线</h4>' + lifeRows + '</div>' +
     '<div class="career-card"><h4>生涯总览</h4><div class="career-kpis">' + ovHtml + '</div></div>' +
-    recordHtml + achHtml;
+    recordHtml + achHtml +
+    '<div class="career-card"><h4>赛季目标历史</h4>' + goalHistoryRows + '</div>';
 }
 
 export function __setCareerTabForTest(key) { tab = key; }

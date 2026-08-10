@@ -681,6 +681,11 @@ export function seasonGoals(s) {
   };
 }
 
+export function seasonGoalHistory(s) {
+  const list = Array.isArray(s && s.goalHistory) ? s.goalHistory : [];
+  return list.slice().reverse().map((h) => ({ ...h, achieved: !!h.achieved }));
+}
+
 export function achievementDefs() {
   return ACHIEVEMENTS.map((a) => ({ ...a }));
 }
@@ -765,6 +770,7 @@ export function migrateCareerState(parsed) {
   if (!parsed.team) parsed.team = {};
   if (!parsed.season) parsed.season = {};
   parsed.version = VERSION;
+  parsed.goalHistory = Array.isArray(parsed.goalHistory) ? parsed.goalHistory : [];
   parsed.player.form = Array.isArray(parsed.player.form) ? parsed.player.form : [];
   parsed.player.fatigue = Number.isFinite(Number(parsed.player.fatigue)) ? Number(parsed.player.fatigue) : 0;
   parsed.player.achievements = Array.isArray(parsed.player.achievements) ? parsed.player.achievements : [];
@@ -1108,6 +1114,7 @@ export function newCareerState() {
       cup: { phase: 'idle', bracket: [] }
     },
     history: [],
+    goalHistory: [],
     matchHistory: [],
     news: []
   };
@@ -2672,6 +2679,17 @@ export function nextSeason() {
     addLedger(s, 'income', goals.reward, '赛季目标奖励');
     addNews(s, 'award', '赛季目标达成，奖励 ' + goals.reward);
   }
+  if (!Array.isArray(s.goalHistory)) s.goalHistory = [];
+  s.goalHistory.push({
+    seasonId: s.season.id,
+    league: report.league,
+    rankGoal: goals.rankGoal,
+    cupGoal: goals.cupGoal,
+    reward: goals.reward,
+    achieved: goals.achieved,
+    rank: report.rank,
+    cupRound: report.cupRound
+  });
   s.team.bank += report.rankPrize;
   addLedger(s, 'income', report.rankPrize, '排名奖金');
   addLedger(s, 'income', report.cupPrize, '杯赛奖金');
