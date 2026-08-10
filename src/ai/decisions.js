@@ -1,6 +1,6 @@
 // 战术目标层：CT 守点/回防/前压/保枪、T 进点/装弹/守弹/转点/绕后、玩家指令服从
 import {BOT_AI, diffOf} from '../config.js';
-import {getMap, nearestSite, inSite, los} from '../map.js';
+import {getMap, nearestSite, inSite, los, nearestWalkable, walkable} from '../map.js';
 import {weaponDef, ammoFor} from '../entities.js';
 import {rand, clamp} from '../utils.js';
 import {logAct, styleOf, canFinishDefuse, aliveCount, hasGoodGun, redistributeTLanes, alertConf, shouldRefreshObjective} from './shared.js';
@@ -353,6 +353,21 @@ function alertFrom(e, game) {
   return best;
 }
 
+// 目标点吸附：生成的目标若落在不可走格（墙内），就近吸附到最近可行走格中心。
+// 只修正明显落在实心墙内的点（距离偏移通常 <1 格），不影响可达目标的确定性。
+export function snapObjective(o, e, game) {
+  if (!o || !Number.isFinite(o.x) || !Number.isFinite(o.y)) return o;
+  const m = getMap();
+  if (!m) return o;
+  const T = m.tile || 16;
+  const tx = Math.floor(o.x / T), ty = Math.floor(o.y / T);
+  if (tx < 0 || ty < 0 || tx >= m.w || ty >= m.h) return o;
+  if (walkable(tx, ty)) return o;
+  const near = nearestWalkable(o.x, o.y);
+  if (near) return { ...o, x: near.x * T + T / 2, y: near.y * T + T / 2 };
+  return o;
+}
+
 export function botObjective(e, game) {
   const now = game.time * 1000;
   const bombState = game.bomb ? (game.bomb.planted ? (game.bomb.defusing ? 'pd' + game.bomb.site : 'p' + game.bomb.site) : (game.bomb.dropped ? 'd' : 'n')) : 'n';
@@ -370,10 +385,13 @@ export function botObjective(e, game) {
   if (e.objCache && keyHit && !alertHot && now - e.objAt < cacheTtl) return e.objCache;
   const o = botObjectiveRaw(e, game);
   if (o && (!Number.isFinite(o.x) || !Number.isFinite(o.y))) return null;
-  e.objCache = o;
-  e.objAt = now;
-  e.objKey = cacheKey;
-  return o;
+  const snapped = snapObjective(o, e, game);
+  if (snapped) {
+    e.objCache = snapped;
+    e.objAt = now;
+    e.objKey = cacheKey;
+  }
+  return snapped;
 }
 
 export function retreatPoint(e, game) {
