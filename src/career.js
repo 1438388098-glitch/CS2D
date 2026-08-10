@@ -842,6 +842,7 @@ export function applyPlayerResult(s, r) {
   if (sponsor) addLedger(s, 'income', sponsor, '赞助收入');
   s.team.trainingLeft = 2;
   if (!Array.isArray(s.matchHistory)) s.matchHistory = [];
+  const matchDmg = r.dmg != null ? Math.round(r.dmg) : Math.round((kills || 0) * 70);
   s.matchHistory.push({
     seasonId: s.season.id,
     round: isCup ? (match ? match.round : null) : s.season.round,
@@ -853,8 +854,9 @@ export function applyPlayerResult(s, r) {
     kills: kills || 0,
     deaths: deaths || 0,
     mvp: !!mvp,
-    dmg: r.dmg != null ? Math.round(r.dmg) : Math.round((kills || 0) * 70),
+    dmg: matchDmg,
     money: bankGain,
+    highlight: !!mvp || (kills || 0) >= 15 || matchDmg >= 1000,
     score: score || null,
     mapId: matchMapId || null,
     oppRating: oppTeam ? oppTeam.rating : null,
@@ -1125,6 +1127,7 @@ export function matchDetail(m) {
     deaths,
     dmg: m.dmg || 0,
     money: m.money || 0,
+    highlight: !!m.highlight || !!m.mvp || kills >= 15 || (m.dmg || 0) >= 1000,
     kd: deaths ? round2(kills / deaths) : kills,
     scoreText: score ? score.join(':') : '未记录',
     impact: m.mvp ? 'MVP' : (m.win ? '胜利' : '失利')
@@ -1172,6 +1175,11 @@ export function headToHead(history, oppId) {
 
 export function importantMatches(history, limit = 20) {
   const list = (Array.isArray(history) ? history : []).filter((m) => m && m.importance && /关键|争冠|保级|杯赛/.test(String(m.importance)));
+  return list.slice(-Math.max(0, limit)).reverse().map(matchDetail);
+}
+
+export function favoriteMatches(history, limit = 20) {
+  const list = (Array.isArray(history) ? history : []).filter((m) => m && matchDetail(m).highlight);
   return list.slice(-Math.max(0, limit)).reverse().map(matchDetail);
 }
 

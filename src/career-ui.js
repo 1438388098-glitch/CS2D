@@ -2,7 +2,7 @@ import {
   loadCareer, getState, titleFor, startCareerMatch, careerEndMatch, abandonPendingMatch, simulatePlayerMatch, resetCareer,
   train, sellPlayer, buyPlayer, candidates, nextSeason, seasonReport, nextMatch, nextMatchInfo, matchImportance, teamRecentForm,
   transferWindowOpen, transferWindowInfo, isStorageAvailable, cupMap, cupPrizeInfo, cupMapForRound, fixtureMapFor, fixtureMatchRecord, winChance, trainingTiers, xpNeeded,
-  seasonStats, seasonSeries, seasonStreaks, careerSummary, matchDetail, seasonTimeline, headToHead, importantMatches, seasonTrends,
+  seasonStats, seasonSeries, seasonStreaks, careerSummary, matchDetail, seasonTimeline, headToHead, importantMatches, seasonTrends, favoriteMatches,
   sponsorIncome, formBonus, fatiguePenalty, careerMorale, restPlayer, seasonGoals, seasonPace,
   achievementDefs, achievements, careerRecords
 } from './career.js';
@@ -442,6 +442,12 @@ function renderSeasonStats(s) {
   }).join('') || '<div class="career-news">暂无关键战记录</div>';
   const trendRows = seasonTrends(mh).map((t) => '<div class="career-row"><span>第 ' + t.seasonId + ' 赛季</span><div class="career-trend"><i style="width:' + Math.max(4, t.winRate) + '%"></i></div><b>' +
     t.matches + ' 场 · ' + t.winRate + '% 胜率 · K/D ' + t.kd + ' · 场均 ' + t.avgDmg + ' 伤 · ' + money(t.totalMoney) + '</b></div>').join('') || '<div class="career-news">暂无赛季趋势</div>';
+  const favRows = favoriteMatches(mh, 12).map((d) => {
+    const oppName = d.oppName || (d.oppId ? teamName(s, d.oppId) : '-');
+    return '<div class="career-row' + (d.win ? ' win' : ' lose') + '"><span>' +
+      (d.mvp ? 'MVP' : '精彩') + ' · 第 ' + d.seasonId + ' 赛季 · ' + esc(oppName) + ' · ' + esc(mapName(d.mapId || '')) +
+      ' · ' + esc(d.scoreText) + '</span><b>' + d.kills + 'K / ' + d.deaths + 'D · ' + d.dmg + ' 伤 · ' + money(d.money) + '</b></div>';
+  }).join('') || '<div class="career-news">暂无精彩场次</div>';
   const ov = [['赛季数', overview.seasons], ['总场次', overview.matches], ['胜率', overview.winRate + '%'], ['K/D', overview.kd], ['场均伤害', overview.avgDmg], ['总奖金', money(overview.totalMoney)], ['总击杀', overview.kills]];
   const ovHtml = ov.map(([k, v]) => '<div class="career-kpi"><b>' + v + '</b><span>' + k + '</span></div>').join('');
   const recordHtml = '<div class="career-card"><h4>生涯纪录</h4><div class="career-kpis"><div class="career-kpi"><b>' + (rec.bestKills || 0) + '</b><span>单场最高击杀</span></div><div class="career-kpi"><b>' + (rec.longestWinStreak || 0) + '</b><span>最长连胜</span></div><div class="career-kpi"><b>' + money(rec.totalPrize || 0) + '</b><span>累计奖金</span></div><div class="career-kpi"><b>' + (rec.cupChampions || 0) + '</b><span>杯赛冠军</span></div><div class="career-kpi"><b>' + (rec.bestSeasonRank || '-') + '</b><span>最佳赛季排名</span></div></div></div>';
@@ -453,6 +459,7 @@ function renderSeasonStats(s) {
     '<div class="career-card"><h4>对阵历史 H2H</h4>' + h2hRows + '</div>' +
     '<div class="career-card"><h4>关键战复盘</h4>' + impRows + '</div>' +
     '<div class="career-card"><h4>历史赛季趋势</h4>' + trendRows + '</div>' +
+    '<div class="career-card"><h4>精彩场次收藏</h4>' + favRows + '</div>' +
     '<div class="career-card"><h4>生涯总览</h4><div class="career-kpis">' + ovHtml + '</div></div>' +
     recordHtml + achHtml;
 }

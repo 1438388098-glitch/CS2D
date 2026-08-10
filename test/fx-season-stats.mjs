@@ -1,7 +1,7 @@
 import {
   resetCareer, setStorage, setRng, getState, settlePlayerMatch, nextSeason,
   save, loadCareer, __clearStateForTest,
-  seasonStats, seasonSeries, seasonStreaks, careerSummary, matchDetail, seasonTimeline, headToHead, importantMatches, seasonTrends
+  seasonStats, seasonSeries, seasonStreaks, careerSummary, matchDetail, seasonTimeline, headToHead, importantMatches, seasonTrends, favoriteMatches
 } from '../src/career.js';
 
 const ok = (name, cond) => {
@@ -99,6 +99,14 @@ const imp = importantMatches([
 ], 5);
 ok('importantMatches filters', imp.length === 2 && imp[0].importance === '杯赛' && imp[1].importance === '关键战');
 ok('importantMatches limit', importantMatches([{ importance: '关键战', win: true, kills: 1, deaths: 1, dmg: 70, money: 1500 }, { importance: '争冠战', win: true, kills: 2, deaths: 1, dmg: 140, money: 1500 }], 1).length === 1);
+
+const fav = favoriteMatches([
+  { win: true, kills: 8, deaths: 4, dmg: 560, money: 1500, mvp: true },
+  { win: true, kills: 16, deaths: 5, dmg: 1120, money: 1500, mvp: false },
+  { win: false, kills: 6, deaths: 8, dmg: 420, money: 300, mvp: false }
+]);
+ok('favoriteMatches criteria', fav.length === 2 && fav[0].kills === 16 && fav[1].mvp === true);
+ok('matchDetail highlight fallback', matchDetail({ win: true, kills: 15, deaths: 5, dmg: 1050, money: 1500 }).highlight === true);
 
 const trends = seasonTrends(h);
 ok('seasonTrends seasons', trends.length === 2 && trends[0].seasonId === 1 && trends[1].seasonId === 2);
