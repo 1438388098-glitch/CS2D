@@ -338,12 +338,20 @@ export function botActions(e, game, dt) {
           logAct(game, e, 'fakedefuse', '佯装拆弹骗枪');
         }
       }
-      // 假拆进行中：维持 defusing 假象，短窗口后取消并预瞄最近 T 方向
+      // 假拆进行中：维持 defusing 假象 + 拆弹声（听觉欺骗，诱导 T 听到拆弹声接近），
+      // 短窗口后取消并预瞄最近 T 方向
       if (e.fakeDefuseT !== undefined) {
         e.fakeDefuseT += dt;
+        // 每 0.5s 播一次拆弹进度声（与真实 defuseBomb 一致），让 T 无法区分真假
+        if (game.bomb && e.fakeDefuseT - (e.fakeDefuseSoundAt || 0) > 0.5) {
+          e.fakeDefuseSoundAt = e.fakeDefuseT;
+          game.lastSound = { x: game.bomb.x, y: game.bomb.y, t: game.time, radius: 600, conf: 0.5 };
+          emit('sfx', { name: 'plantTic', vol: 0.55, x: game.bomb.x, y: game.bomb.y, game });
+        }
         if (e.fakeDefuseT > 0.55 + rand() * 0.4) {
           e.defuseT = 0;
           e.fakeDefuseT = undefined;
+          e.fakeDefuseSoundAt = 0;
           if (game.bomb) game.bomb.defusing = false;
           const tClose = game.entities.filter((o) => o.team === 't' && !o.dead)
             .sort((a, b) => Math.hypot(a.x - e.x, a.y - e.y) - Math.hypot(b.x - e.x, b.y - e.y))[0];
