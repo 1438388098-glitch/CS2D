@@ -620,7 +620,7 @@ function renderScoreboard(gameRef) {
 import { setMuted, initAudio, uiSfx, setBusVolume, stopAmbient } from './audio.js';
 import { startMatch } from './game.js';
 import { buyItem } from './economy.js';
-import { MAJOR_TEAMS, majorAction, CYBER_ROSTER, CYBER_START_COINS, CYBER_BAILOUT_COINS, CYBER_BAILOUT_AT, cyberCoins, cyberStats, cyberHistory, cyberChance, cyberPayout } from './modes.js';
+import { MAJOR_TEAMS, majorAction, CYBER_ROSTER, CYBER_START_COINS, CYBER_BAILOUT_COINS, CYBER_BAILOUT_AT, cyberCoins, cyberStats, cyberHistory, cyberChance, cyberPayout, parseCustomGroupList } from './modes.js';
 import { OPPONENTS, getStats, resetDuel, pickDuelMap } from './duel.js';
 import { DUEL_MAPS } from './duel-maps.js';
 
@@ -659,12 +659,36 @@ function renderModeSettings() {
       html += '<option value="' + t.id + '"' + (game.opts.teamMajor === t.id ? ' selected' : '') + '>' + t.tag + ' · ' + t.name + ' · 强度 ' + t.rating + '</option>';
     }
     html += '</select>';
+    const mg = game.opts.majorGroup = game.opts.majorGroup || { rule: 'seed', groupCount: 4, customGroups: [] };
+    html += '<div class="mode-hint">预选赛自定义分组：</div><select id="majorGroupSel">'
+      + '<option value="seed"' + (mg.rule === 'seed' ? ' selected' : '') + '>按种子蛇形（默认）</option>'
+      + '<option value="region"' + (mg.rule === 'region' ? ' selected' : '') + '>按地区</option>'
+      + '<option value="custom"' + (mg.rule === 'custom' ? ' selected' : '') + '>自定义名单</option>'
+      + '</select>';
+    html += '<textarea id="majorGroupsCustom" rows="4" placeholder="自定义分组名单：每行一组，组内用逗号/空格分隔队伍 id，如：&#10;spirit,g2,navi&#10;vitality,faze,mouz" style="display:' + (mg.rule === 'custom' ? 'block' : 'none') + '"></textarea>';
     box.innerHTML = html;
     const sel = el('majorTeamSel');
     if (sel) {
       if (!game.opts.teamMajor) game.opts.teamMajor = MAJOR_TEAMS[0].id;
       sel.value = game.opts.teamMajor;
       sel.onchange = () => { game.opts.teamMajor = sel.value; };
+    }
+    const gsel = el('majorGroupSel');
+    const garea = el('majorGroupsCustom');
+    const syncGroup = () => {
+      const rule = gsel ? gsel.value : 'seed';
+      mg.rule = rule;
+      if (garea) garea.style.display = rule === 'custom' ? 'block' : 'none';
+      mg.customGroups = rule === 'custom' ? parseCustomGroupList(garea ? garea.value : '') : [];
+    };
+    if (gsel) {
+      gsel.value = mg.rule;
+      gsel.onchange = syncGroup;
+    }
+    if (garea) {
+      garea.value = Array.isArray(mg.customGroups) ? mg.customGroups.map((g) => g.join(',')).join('\n') : '';
+      garea.oninput = () => { mg.customGroups = parseCustomGroupList(garea.value); };
+      garea.style.display = mg.rule === 'custom' ? 'block' : 'none';
     }
   } else if (mode === 'lan') {
 box.innerHTML = '<div class="mode-hint">房主创建房间，另一台设备输入房间码加入；连接后由房主开赛。</div>';
