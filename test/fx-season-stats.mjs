@@ -164,7 +164,8 @@ ok('matchHistory persists across seasons', s2.matchHistory.length === 3);
 const r2 = settlePlayerMatch(true, 5, 3);
 ok('season2 settle', r2.ok);
 const st2 = seasonStats(s2.matchHistory, 2);
-ok('season2 stats isolated', st2.matches === 1 && st2.wins === 1 && st2.kills === 5 && st2.totalMoney === 1500 && st2.avgDmg === 350);
+const s2WinMoney = s2.team.league === '甲级' ? 2200 : 1500;
+ok('season2 stats isolated', st2.matches === 1 && st2.wins === 1 && st2.kills === 5 && st2.totalMoney === s2WinMoney && st2.avgDmg === 350);
 const all = careerSummary(s2.matchHistory);
 ok('summary two seasons', all.seasons === 2 && all.matches === 4 && all.kills === 23 && all.deaths === 15);
 

@@ -60,6 +60,62 @@ const PRIZE = { 1: 30000, 2: 20000, 3: 15000, 4: 8000, 5: 8000, 6: 8000, 7: 4000
 const LEAGUE_RATING = { '甲级': [80, 92], '乙级': [70, 85], '丙级': [60, 74] };
 const TITLES = ['新兵', '列兵', '下士', '中士', '上尉', '少校', '上校', '准将', '少将', '中将', '上将', '传奇'];
 const LEAGUE_SPONSOR = { '甲级': 5000, '乙级': 3200, '丙级': 2000 };
+const LEAGUE_RULES = {
+  '甲级': {
+    ratingRange: [80, 92],
+    sponsor: 5000,
+    ticketBase: 1200,
+    matchWin: 2200,
+    matchLose: 500,
+    mvpBonus: 250,
+    prizeScale: 1.45,
+    budgetBase: 28000,
+    cupRoundPrize: 6500,
+    cupFinalPrize: 42000,
+    goal: { rank: 6, cup: 1, reward: 12000 },
+    identity: '顶级豪门：强弱差距大，保级与争冠都极高压',
+    competition: '两极分化',
+    youthBias: 0,
+    tacticalBias: 1,
+    mediaPressure: 90
+  },
+  '乙级': {
+    ratingRange: [70, 85],
+    sponsor: 3200,
+    ticketBase: 800,
+    matchWin: 1500,
+    matchLose: 300,
+    mvpBonus: 200,
+    prizeScale: 1,
+    budgetBase: 20000,
+    cupRoundPrize: 5000,
+    cupFinalPrize: 30000,
+    goal: { rank: 2, cup: 1, reward: 10000 },
+    identity: '中游联赛：争升级和保级绞杀最密集',
+    competition: '中游绞杀',
+    youthBias: 0.4,
+    tacticalBias: 0,
+    mediaPressure: 55
+  },
+  '丙级': {
+    ratingRange: [60, 74],
+    sponsor: 2000,
+    ticketBase: 500,
+    matchWin: 1000,
+    matchLose: 200,
+    mvpBonus: 150,
+    prizeScale: 0.72,
+    budgetBase: 15000,
+    cupRoundPrize: 3500,
+    cupFinalPrize: 18000,
+    goal: { rank: 4, cup: 0, reward: 7000 },
+    identity: '新秀联赛：年轻阵容多，比赛节奏快但稳定性差',
+    competition: '青春冲击',
+    youthBias: 0.8,
+    tacticalBias: -0.4,
+    mediaPressure: 25
+  }
+};
 const SEASON_GOALS = {
   '甲级': { rank: 6, cup: 1, reward: 12000 },
   '乙级': { rank: 2, cup: 1, reward: 10000 },
@@ -181,6 +237,23 @@ export function positionBalance(s) {
 }
 
 function clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); }
+export function leagueRules(league) {
+  const key = LEAGUE_RULES[league] ? league : '乙级';
+  return { key, ...LEAGUE_RULES[key] };
+}
+export function leagueInfo() {
+  return Object.keys(LEAGUE_RULES).map((league) => ({
+    league,
+    ...leagueRules(league)
+  }));
+}
+function rankPrizeFor(league, rank) {
+  return Math.round((PRIZE[rank] || 0) * leagueRules(league).prizeScale);
+}
+function cupPrizeFor(league, round) {
+  const rules = leagueRules(league);
+  return round === 'F' ? rules.cupRoundPrize + rules.cupFinalPrize : rules.cupRoundPrize;
+}
 function addLedger(s, type, amount, label) {
   if (!Array.isArray(s.team.ledger)) s.team.ledger = [];
   s.team.ledger.push({
@@ -200,7 +273,7 @@ function ensureTransferLog(s) {
 
 export function sponsorIncome(s) {
   const league = s && s.team && s.team.league ? s.team.league : '乙级';
-  const base = LEAGUE_SPONSOR[league] || LEAGUE_SPONSOR['乙级'];
+  const base = leagueRules(league).sponsor;
   const morale = Number(s && s.team && s.team.morale) || 65;
   const rating = Number((s && s.season && s.season.teams && s.season.teams.find((t) => t.id === 'player') || {}).rating) || 65;
   return Math.round(base * (0.7 + morale / 200) * (0.8 + rating / 500));
@@ -208,7 +281,7 @@ export function sponsorIncome(s) {
 
 export function sponsorPreview(s) {
   const league = s.team.league;
-  const base = LEAGUE_SPONSOR[league] || LEAGUE_SPONSOR['乙级'];
+  const base = leagueRules(league).sponsor;
   const morale = Number(s.team.morale) || 65;
   const rating = Number((s.season.teams.find((t) => t.id === 'player') || {}).rating) || 65;
   const totalRounds = Number(s.season.totalRounds) || 14;
@@ -253,8 +326,8 @@ export function sponsorSeasonPreview(s) {
   const likelyLeague = promoteLeague(currentLeague, projectedRank);
   const morale = careerMorale(s);
   const rating = Number((s.season.teams.find((t) => t.id === 'player') || {}).rating) || 65;
-  const rows = Object.keys(LEAGUE_SPONSOR).map((league) => {
-    const base = LEAGUE_SPONSOR[league] || 0;
+  const rows = Object.keys(LEAGUE_RULES).map((league) => {
+    const base = leagueRules(league).sponsor;
     return {
       league,
       base,
@@ -281,7 +354,7 @@ export function sponsorSeasonPreview(s) {
 }
 
 export function homeTicketIncome(s, win) {
-  const base = { '甲级': 1200, '乙级': 800, '丙级': 500 }[s.team.league] || 500;
+  const base = leagueRules(s.team.league).ticketBase;
   const rating = Number((s.season.teams.find((t) => t.id === 'player') || {}).rating) || 65;
   const morale = careerMorale(s);
   const multiplier = (0.8 + rating / 250) * (0.8 + morale / 150) * (win ? 1.35 : 0.8);
@@ -301,6 +374,7 @@ export function ticketPreview(s) {
 }
 
 export function cashflowForecast(s) {
+  const rules = leagueRules(s.team.league);
   const current = Number(s.team && s.team.bank) || 0;
   const totalRounds = Number(s.season && s.season.totalRounds) || 14;
   const playerStanding = (s.season.standings || []).find((x) => x.teamId === 'player') || { played: 0 };
@@ -313,15 +387,15 @@ export function cashflowForecast(s) {
     const oppId = f.home === 'player' ? f.away : f.home;
     const venue = f.home === 'player' ? 'home' : 'away';
     const chance = winChance(s, oppId, venue) / 100;
-    expectedPrize += (chance * 1500 + (1 - chance) * 300 + chance * 0.2 * 200);
+    expectedPrize += (chance * rules.matchWin + (1 - chance) * rules.matchLose + chance * 0.2 * rules.mvpBonus);
   }
   if (s.season.cup && s.season.cup.phase === 'active') {
     for (const m of s.season.cup.bracket || []) {
       if (!m.played && (m.a === 'player' || m.b === 'player')) {
         const oppId = m.a === 'player' ? m.b : m.a;
         const chance = winChance(s, oppId, 'home') / 100;
-        expectedPrize += chance * 5000;
-        if (m.round === 'F') expectedPrize += chance * 30000;
+        expectedPrize += chance * rules.cupRoundPrize;
+        if (m.round === 'F') expectedPrize += chance * rules.cupFinalPrize;
       }
     }
   }
@@ -341,12 +415,13 @@ export function cashflowForecast(s) {
 }
 
 export function seasonBudget(s) {
+  const rules = leagueRules(s.team.league);
   const ledger = Array.isArray(s.team && s.team.ledger) ? s.team.ledger : [];
   const bank = Number(s.team && s.team.bank) || 0;
   const income = ledger.reduce((a, x) => a + Math.max(0, x.amount || 0), 0);
   const expense = ledger.reduce((a, x) => a + Math.min(0, x.amount || 0), 0);
   const flow = cashflowForecast(s);
-  const budget = 20000 + flow.expectedSponsor + flow.expectedPrize;
+  const budget = rules.budgetBase + flow.expectedSponsor + flow.expectedPrize;
   const spent = Math.abs(expense);
   const spendable = Math.max(0, budget - spent);
   const spentPct = budget > 0 ? Math.round((spent / budget) * 100) : 0;
@@ -507,12 +582,13 @@ function labelSource(label, type) {
 }
 
 export function remainingPrizePreview(s) {
+  const rules = leagueRules(s.team.league);
   const list = sortedStandings(s);
   const rank = list.findIndex((x) => x.teamId === 'player') + 1;
-  const currentRankPrize = PRIZE[rank] || 0;
+  const currentRankPrize = rankPrizeFor(s.team.league, rank);
   const pace = seasonPace(s);
   const projectedRank = pace.projectedRank;
-  const projectedRankPrize = projectedRank ? (PRIZE[projectedRank] || 0) : currentRankPrize;
+  const projectedRankPrize = projectedRank ? rankPrizeFor(s.team.league, projectedRank) : currentRankPrize;
   const cash = cashflowForecast(s);
   let expectedCup = 0;
   let maxCup = 0;
@@ -521,7 +597,7 @@ export function remainingPrizePreview(s) {
       if (!m.played && (m.a === 'player' || m.b === 'player')) {
         const oppId = m.a === 'player' ? m.b : m.a;
         const chance = winChance(s, oppId, 'home') / 100;
-        const winPrize = m.round === 'F' ? 35000 : 5000;
+        const winPrize = cupPrizeFor(s.team.league, m.round);
         expectedCup += chance * winPrize;
         maxCup += winPrize;
       }
@@ -587,7 +663,7 @@ export function careerMorale(s) {
 }
 
 export function seasonGoals(s) {
-  const def = SEASON_GOALS[s.team.league] || SEASON_GOALS['乙级'];
+  const def = leagueRules(s.team.league).goal;
   const list = sortedStandings(s);
   const rank = list.findIndex((x) => x.teamId === 'player') + 1;
   const cupRound = s.season.cup.phase === 'finished' ? Number(s.season.cupResult) : -1;
@@ -1511,19 +1587,24 @@ export function cupMapForRound(round) {
   return MAP_IDS[order[round] != null ? order[round] : 0];
 }
 
-export function cupPrizeInfo() {
+export function cupPrizeInfo(s) {
+  const rules = leagueRules(s && s.team && s.team.league);
+  const perRound = rules.cupRoundPrize;
+  const champion = rules.cupFinalPrize;
   return {
-    perRound: 5000,
-    champion: 30000,
+    perRound,
+    champion,
+    finalTotal: perRound + champion,
     rounds: [
-      { key: 'QF', label: '八强', prize: 5000, map: cupMapForRound('QF') },
-      { key: 'SF', label: '四强', prize: 5000, map: cupMapForRound('SF') },
-      { key: 'F', label: '决赛', prize: 35000, map: cupMapForRound('F') }
+      { key: 'QF', label: '八强', prize: perRound, map: cupMapForRound('QF') },
+      { key: 'SF', label: '四强', prize: perRound, map: cupMapForRound('SF') },
+      { key: 'F', label: '决赛', prize: perRound + champion, map: cupMapForRound('F') }
     ]
   };
 }
 
 export function cupPreview(s) {
+  const rules = leagueRules(s && s.team && s.team.league);
   const b = s.season && s.season.cup && Array.isArray(s.season.cup.bracket) ? s.season.cup.bracket : [];
   return b.map((m) => ({
     round: m.round,
@@ -1531,7 +1612,7 @@ export function cupPreview(s) {
     a: m.a,
     b: m.b,
     map: cupMapForRound(m.round),
-    prize: m.round === 'F' ? 35000 : 5000,
+    prize: cupPrizeFor(rules.key, m.round),
     played: !!m.played,
     winner: m.winner || null,
     score: m.score || null
@@ -1611,6 +1692,7 @@ function simulateRemainingCup(s) {
 }
 
 export function applyPlayerResult(s, r) {
+  const rules = leagueRules(s.team.league);
   const { win, kills, deaths, mvp, score, isCup, noReward } = r;
   const match = currentMatch(s, !!isCup);
   const opp = matchOpponent(match, !!isCup);
@@ -1633,7 +1715,7 @@ export function applyPlayerResult(s, r) {
   let bankGain = 0;
   let ticket = 0;
   if (!noReward) {
-    bankGain = (win ? 1500 : 300) + (mvp ? 200 : 0);
+    bankGain = (win ? rules.matchWin : rules.matchLose) + (mvp ? rules.mvpBonus : 0);
     gainXp(s, (win ? 300 : 50) + kills * 10 + (mvp ? 100 : 0));
   }
   if (isCup) {
@@ -1643,12 +1725,9 @@ export function applyPlayerResult(s, r) {
       markCupMatch(s, m, score, cupWin);
       simulateRemainingCup(s);
       if (cupWin && !noReward) {
-        bankGain += 5000;
-        s.season.cupPrizeEarned = (s.season.cupPrizeEarned || 0) + 5000;
-        if (m.round === 'F') {
-          bankGain += 30000;
-          s.season.cupPrizeEarned += 30000;
-        }
+        const roundPrize = cupPrizeFor(s.team.league, m.round);
+        bankGain += roundPrize;
+        s.season.cupPrizeEarned = (s.season.cupPrizeEarned || 0) + roundPrize;
       }
     }
   } else {
@@ -1949,7 +2028,7 @@ export function seasonReport() {
   const s = getState();
   const list = sortedStandings(s);
   const rank = list.findIndex((x) => x.teamId === 'player') + 1;
-  const rankPrize = PRIZE[rank] || 0;
+  const rankPrize = rankPrizeFor(s.team.league, rank);
   const cupPrize = s.season.cupPrizeEarned || 0;
   const cupRound = s.season.cupResult === undefined ? 0 : s.season.cupResult;
   return { league: s.team.league, rank, rankPrize, cupPrize, cupRound, prize: rankPrize + cupPrize, standings: list };

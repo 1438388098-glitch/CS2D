@@ -446,7 +446,7 @@ function renderStandings(s) {
 
 function renderCup(s) {
   const b = s.season.cup.bracket || [];
-  const prizes = cupPrizeInfo();
+  const prizes = cupPrizeInfo(s);
   const trophy = trophyCase(s.history);
   const trophyHtml = '<div class="career-card"><h4>奖杯陈列</h4><div class="career-kpis">' +
     '<div class="career-kpi"><b>' + trophy.championCount + '</b><span>冠军</span></div>' +
@@ -474,7 +474,7 @@ function renderCup(s) {
     }
     html += '</div>';
   }
-  return html + '</div><div class="career-card"><h4>奖金</h4><p>每轮晋级奖 ' + money(prizes.perRound) + ' · 冠军另奖 ' + money(prizes.champion) + ' · 决赛单场最高 ' + money(35000) + '</p></div>' + trophyHtml;
+  return html + '</div><div class="career-card"><h4>奖金</h4><p>每轮晋级奖 ' + money(prizes.perRound) + ' · 冠军另奖 ' + money(prizes.champion) + ' · 决赛单场最高 ' + money(prizes.finalTotal || prizes.perRound + prizes.champion) + '</p></div>' + trophyHtml;
 }
 
 function renderSettlement(s) {
