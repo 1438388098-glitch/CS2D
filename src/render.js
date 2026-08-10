@@ -12,12 +12,24 @@ import {nadeTrajectory, drawNadeTrajectory, NADE_SPEED, NADE_ORIGIN_DIST} from '
 import {drawRipple, rippleRing, RIPPLE_LIFE} from './water-fx.js';
 import {smokeDissolveTrail, drawSmokeTrail, SMOKE_DISSOLVE_LIFE} from './smoke-fx.js';
 import {stepCycle, stepDust, drawStepFx, DUST_PER_STEP} from './anim-fx.js';
+import {impactMarksAt, drawImpact} from './impact-fx.js';
+import {weatherKind, weatherParticles, drawWeather, MAX_PARTICLES as WEATHER_MAX_PARTICLES} from './weather-fx.js';
+import {enhancedBoomSpec, drawEnhancedBoom} from './boom-fx.js';
+import {visibleShadows, drawShadows} from './shadow-fx.js';
+import {killLabel, drawKillLabel, KILL_LABEL_DUR} from './killcam-fx.js';
+import {footprintsForPath, drawFootprint, FOOTPRINT_GAP, FOOTPRINT_LIFE, FOOTPRINT_TIME_LIFE} from './footprint-fx.js';
 
 let ctx = null;
 let layers = null;
 
 // 脚步动画渲染态：每实体累积移动距离 + 稳定 seed（渲染私有，不影响游戏逻辑）
 const stepFXState = new Map();
+// 脚印渲染态：每实体最近移动路径采样点（渲染私有，确定性，无 Math.random）
+const footprintPathState = new Map();
+// 脚印窗口长度：覆盖 FOOTPRINT_LIFE 移动距离所需的采样点数（含余量）
+const FOOTPRINT_MAX_PTS = Math.ceil(FOOTPRINT_LIFE / FOOTPRINT_GAP) + 2;
+// 掩体投影固定光源方向：右下角 45° 光照（纯装饰，固定值保证可复现）
+const SHADOW_LIGHT_DIR = Math.PI * 0.25;
 
 export function initRenderer(canvas, layersRef) {
   ctx = canvas.getContext('2d');
@@ -58,17 +70,116 @@ export function render(game) {
   drawDrops(game);
   drawGrenades(game);
   drawNadePreview(game);
+  drawShadowsLayer(game);
   drawEntities(game);
   drawDeathFX(game);
   drawHitOutlines(game);
   drawLaser(game);
   drawSmokes(game);
   drawParticles(game);
+  drawImpacts(game);
   drawTracers(game);
+  drawWeatherLayer(game);
   drawFog(game);
   drawAmbientDust(ctx, game);
   drawDmgPops2D(game);
   ctx.restore();
+  drawKillLabelFx(game);
+}
+
+// 子弹弹孔印记：按 game.time 从 game.impacts 生成存活弹孔并逐个绘制
+// （impactMarksAt 纯函数过滤年龄 + 计算淡出 alpha，不依赖 Math.random）
+function drawImpacts(game) {
+  const hits = game.impacts;
+  if (!hits || !hits.length) return;
+  const marks = impactMarksAt(hits, game.time);
+  for (const m of marks) drawImpact(ctx, m);
+}
+
+// 雨雪天气层：地图 id 匹配 rain/snow 才绘制，否则无副作用。
+// 粒子在相机视口（世界坐标）区域内生成并平移到相机原点，固定 seed 全确定性。
+function drawWeatherLayer(game) {
+  const map = getMap();
+  if (!map) return;
+  const kind = weatherKind(map.id);
+  if (!kind) return;
+  const z = game.zoom || 1;
+  const vw = game.canvasW / z;
+  const vh = game.canvasH / z;
+  if (!(vw > 0) || !(vh > 0)) return;
+  const parts = weatherParticles(kind, game.time, WEATHER_MAX_PARTICLES, vw, vh, weatherSeed(String(map.id)));
+  if (!parts.length) return;
+  const ox = (game.camX || 0) - vw / 2;
+  const oy = (game.camY || 0) - vh / 2;
+  ctx.save();
+  ctx.translate(ox, oy);
+  drawWeather(ctx, parts, kind);
+  ctx.restore();
+}
+
+// 地图 id -> 固定整数种子（FNV-1a，确定性）
+function weatherSeed(id) {
+  let h = 0x811c9dc5;
+  for (let i = 0; i < id.length; i++) {
+    h ^= id.charCodeAt(i);
+    h = Math.imul(h, 0x01000193) >>> 0;
+  }
+  return h || 1;
+}
+
+// 掩体投影层：只扫描可视范围(+边距)内的墙/箱/桶瓦片并投射固定方向的柔和投影条。
+function drawShadowsLayer(game) {
+  const grid = getGrid();
+  if (!grid || !grid.length) return;
+  const z = game.zoom || 1;
+  const vw = game.canvasW / z;
+  const vh = game.canvasH / z;
+  const shadows = visibleShadows(
+    { grid, tile: mapTile() },
+    { x: (game.camX || 0) - vw / 2, y: (game.camY || 0) - vh / 2, w: vw, h: vh },
+    SHADOW_LIGHT_DIR
+  );
+  if (shadows.length) drawShadows(ctx, shadows);
+}
+
+// 击杀标签（killcam-fx）：读取 killEntity 写入的玩家状态，屏幕中央三段式动画。
+// 在 render() 世界变换 restore 之后以画布像素坐标绘制（纯读状态，不修改逻辑）。
+function drawKillLabelFx(game) {
+  const p = game.player;
+  if (!p || p.dead || !(p.killStreakT > 0)) return;
+  const elapsed = KILL_LABEL_DUR - p.killStreakT;
+  if (elapsed < 0 || elapsed >= KILL_LABEL_DUR) return;
+  const streak = game.killStreak || 1;
+  const kind = streak >= 2 ? 'multikill' : (game.killLabelHead ? 'headshot' : 'normal');
+  drawKillLabel(ctx, killLabel(kind, streak, elapsed));
+}
+
+// 脚印渲染态 + 绘制：每实体按 FOOTPRINT_GAP 间距记录最近路径采样点（渲染私有），
+// 用 footprintsForPath + drawFootprint 在实体脚下绘制存活脚印（确定性，无 Math.random）。
+function drawEntityFootprints(game, e) {
+  let st = footprintPathState.get(e);
+  if (!st) {
+    st = { pts: [{ x: e.x, y: e.y, t: game.time }], acc: 0, seed: ((Math.floor(e.x) * 73856093 ^ Math.floor(e.y) * 19349663) >>> 0) || 1 };
+    footprintPathState.set(e, st);
+  }
+  const moving = Math.hypot(e.vx || 0, e.vy || 0) > 18;
+  if (moving) {
+    const last = st.pts[st.pts.length - 1];
+    st.acc += Math.hypot(e.x - last.x, e.y - last.y);
+    while (st.acc >= FOOTPRINT_GAP && st.pts.length < FOOTPRINT_MAX_PTS * 2) {
+      st.acc -= FOOTPRINT_GAP;
+      st.pts.push({ x: e.x, y: e.y, t: game.time });
+      if (st.pts.length > FOOTPRINT_MAX_PTS) st.pts.shift();
+    }
+  } else {
+    st.acc = 0;
+  }
+  const pts = st.pts;
+  if (pts.length < 2) return;
+  const t = Math.min(FOOTPRINT_TIME_LIFE, Math.max(0, game.time - (pts[0].t || game.time)));
+  const fps = footprintsForPath(pts, t, st.seed);
+  if (!fps.length) return;
+  for (const fp of fps) drawFootprint(ctx, fp);
 }
 
 // 2D 伤害数字：命中处上浮淡出（描黑边可读），与 3D 的 B3 反馈一致
@@ -516,6 +627,7 @@ function drawEntities(game) {
   for (const e of game.entities) {
     const stFx = getStepFX(e, tSec);
     if (e.dead) continue;
+    drawEntityFootprints(game, e);
     if (stFx) drawStepFx(ctx, e, stFx);
     const isP = e === game.player;
     const darkCol = e.team === 'ct' ? '#4d9bff' : '#ffa03d';
@@ -699,21 +811,7 @@ function drawParticles(game) {
       ctx.fill();
       ctx.globalAlpha = 1;
     } else if (p.kind === 'boom') {
-      const sw = boomShockwaveSpec(p);
-      ctx.fillStyle = 'rgba(255,150,50,' + (sw.flash * 0.24) + ')';
-      ctx.beginPath();
-      ctx.arc(p.x, p.y, p.size * (0.18 + 0.8 * sw.t), 0, Math.PI * 2);
-      ctx.fill();
-      ctx.strokeStyle = 'rgba(255,160,60,' + sw.alpha + ')';
-      ctx.lineWidth = 4 + 8 * (1 - sw.t);
-      ctx.beginPath();
-      ctx.arc(p.x, p.y, sw.outer, 0, Math.PI * 2);
-      ctx.stroke();
-      ctx.strokeStyle = 'rgba(255,220,140,' + (sw.alpha * 0.55) + ')';
-      ctx.lineWidth = 2 + 4 * (1 - sw.t);
-      ctx.beginPath();
-      ctx.arc(p.x, p.y, sw.inner, 0, Math.PI * 2);
-      ctx.stroke();
+      drawEnhancedBoom(ctx, enhancedBoomSpec(p));
     }
   }
 }

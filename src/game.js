@@ -19,6 +19,7 @@ import { shouldRerouteStuck } from './ai/rules.js';
 import { stuckObjective } from './ai/stability.js';
 import { castAimRay as castAimRayFps } from './fps-laser.js';
 import { addRipple, pruneRipples } from './water-fx.js';
+import { IMPACT_LIFE } from './impact-fx.js';
 
 const emit = (evt, p) => ctx.bus.emit(evt, p);
 
@@ -35,7 +36,7 @@ function fpsMoveScale(game) {
 export function createGame(opts = {}) {
   const game = {
     state: 'MENU',
-    entities: [], grenades: [], particles: [], tracers: [], smokes: [], decals: [], drops: [], barrels: [], crates: [], _particlePool: [], ripples: [],
+    entities: [], grenades: [], particles: [], tracers: [], smokes: [], decals: [], drops: [], barrels: [], crates: [], _particlePool: [], ripples: [], impacts: [],
     lastSplash: null,
     player: null,
     camX: 1200, camY: 900,
@@ -46,6 +47,7 @@ export function createGame(opts = {}) {
     over: false, spectateIdx: 0, lastPlantSite: null, dt: 0.016,
     lossStreakT: 0, lossStreakCT: 0,
     hitMarkT: 0, hitFlashT: 0, headshotT: 0, zoom: 0.75, hitPauseT: 0, dmgPops: [], hitOutlines: [], scopeT: 0, lastKiller: null,
+    killStreak: 0, killLabelHead: false,
     viewMode: 'top', fpsSens: 0.002, fpsSensY: 0.002, invertY: false, renderQuality: 1, dprLimit: 2, _mlookDx: 0, _mlookDy: 0, _specAngle: null, _specPitch: null, _specManual: null,
     stats: { hits: 0, shots: 0, headshots: 0 },
     time: 0,
@@ -265,6 +267,8 @@ function spawnRound(game) {
   game.drops.length = 0;
   game.lastPlantSite = null;
   game.decals.length = 0;
+  game.impacts.length = 0;
+  game.killStreak = 0;
   game.flashT = 0;
   game.tSwitchedAt = 0;
   game.tRush = false;
@@ -532,6 +536,13 @@ export function update(game, dt) {
     game.tracers[t2].life -= dt;
     if (game.tracers[t2].life <= 0) game.tracers.splice(t2, 1);
   }
+  // 子弹弹孔印记：按 IMPACT_LIFE 剪除过期弹孔（避免数组无限增长，绘制按年龄过滤）
+  if (game.impacts && game.impacts.length) {
+    const cut = game.time - IMPACT_LIFE;
+    for (let i = game.impacts.length - 1; i >= 0; i--) {
+      if ((game.impacts[i].t0 || 0) <= cut) game.impacts.splice(i, 1);
+    }
+  }
   // 涟漪环：逐帧按 game.time 剪除已过期的扩散环（纯函数相位，无需逐环递减）
   pruneRipples(game);
   // 尸体死亡特效倒计时：死亡实体 deathT 逐帧衰减，归零后死亡标记消失（由 render 的 deathMarkerSpec 驱动）
@@ -556,6 +567,7 @@ export function update(game, dt) {
   if (game.hitMarkT > 0) game.hitMarkT -= dt;
   if (game.hitFlashT > 0) game.hitFlashT -= dt;
   if (game.headshotT > 0) game.headshotT -= dt;
+  if (game.player && game.player.killStreakT > 0) game.player.killStreakT -= dt;
   if (game.player && game.player.hitFxT > 0) game.player.hitFxT -= dt;
   for (let i = game.hitOutlines.length - 1; i >= 0; i--) {
     const ho = game.hitOutlines[i];

@@ -8,6 +8,7 @@ import {report, MSG} from './info.js';
 
 import {endRound, spawnParticle} from './game.js';
 import {DEATH_MARKER_LIFE, TRACER_LIFE} from './render.js';
+import {KILL_LABEL_DUR} from './killcam-fx.js';
 import {HIT_ARC_DURATION} from './damage-fx.js';
 import {dropBomb} from './bomb.js';
 import {throwGrenade} from './grenades.js';
@@ -238,9 +239,11 @@ function fireRay(e, game, ang, w, dmg, isPellet) {
     spawnBlood(hx, hy, ang, head, game);
     game.tracers.push({ x1: ox, y1: oy, x2: hx, y2: hy, life: TRACER_LIFE, kind: w.kind, team: e.team });
     addDecal(game, hx, hy, 'hole', ang);
+    recordImpact(game, hx, hy);
   } else {
     game.tracers.push({ x1: ox, y1: oy, x2: tx, y2: ty, life: TRACER_LIFE, kind: w.kind, team: e.team });
     addDecal(game, tx, ty, 'spark', ang);
+    recordImpact(game, tx, ty);
     for (let sp = 0; sp < 6; sp++) {
       spawnParticle(game, { kind: 'spark', x: tx, y: ty, vx: Math.cos(ang + rand(-1, 1)) * rand(60, 260), vy: Math.sin(ang + rand(-1, 1)) * rand(60, 260), life: rand(0.1, 0.3), size: 1.5 });
     }
@@ -455,6 +458,9 @@ export function killEntity(v, killer, weapon, head, game) {
     game.killFlashT = 0.35;
     killer.streak = (killer.streak || 0) + 1;
     killer.wKills[weapon] = (killer.wKills[weapon] || 0) + 1;
+    game.killStreak = killer.streak;
+    game.killLabelHead = !!head;
+    game.player.killStreakT = KILL_LABEL_DUR;
     if (head) game.stats.headshots++;
     if (killer.streak >= 5) {
       emit('streak', { n: killer.streak });
@@ -466,6 +472,8 @@ export function killEntity(v, killer, weapon, head, game) {
   }
   if (v === game.player) {
     v.streak = 0;
+    game.player.killStreakT = 0;
+    game.killStreak = 0;
     game.lastKiller = killer;
     // 击杀镜头：死亡后短暂锁定击杀者视角（0.9s），随后切入队友观战
     game.killCamT = 0.9;
@@ -562,6 +570,19 @@ export function pickupWeapon(e, game) {
     game.drops.splice(i, 1);
     break;
   }
+}
+
+// 子弹弹着点印记（impact-fx 数据流）：命中墙体/掩体/敌人表面时记录确定性弹孔输入。
+// 位置/表面字符/seed/t0 全部由命中点与 game.time 派生，无 Math.random（同输入恒同复现）。
+export function recordImpact(game, x, y) {
+  if (!game.impacts) game.impacts = [];
+  game.impacts.push({
+    x,
+    y,
+    tileType: tileAt(x, y),
+    t0: game.time || 0,
+    seed: ((Math.floor(x) * 73856093 ^ Math.floor(y) * 19349663) >>> 0) || 1
+  });
 }
 
 export function addDecal(game, x, y, type, angle) {
