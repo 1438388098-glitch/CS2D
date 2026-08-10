@@ -1957,6 +1957,7 @@ function simulateLeagueRound(s) {
       league: s.team.league,
       homeId: f.home
     });
+    f.simRounds = r.rounds.length;
     markFixture(s, f, r.score, r.winner);
   }
   const left = s.season.fixtures.filter((f) => f.round === s.season.round && !f.played);
@@ -1996,6 +1997,7 @@ function simulateRemainingCup(s) {
     m.played = true;
     m.score = r.score;
     m.winner = r.winner;
+    m.simRounds = r.rounds.length;
     refreshCup(s);
   }
 }

@@ -122,6 +122,10 @@ while (s.season.cup.phase === 'active' && guard++ < 10) {
   ok('sim cup step', r.ok);
 }
 ok('cup finished', s.season.cup.phase === 'finished');
+const simFixtures = s.season.fixtures.filter((f) => f.played && f.home !== 'player' && f.away !== 'player');
+ok('non-player league uses engine', simFixtures.length > 0 && simFixtures.every((f) => f.simRounds === f.score[0] + f.score[1] && f.simRounds >= 5 && f.simRounds <= 9));
+const simCup = s.season.cup.bracket.filter((m) => m.played && m.a !== 'player' && m.b !== 'player');
+ok('non-player cup uses engine', simCup.length > 0 && simCup.every((m) => m.simRounds === m.score[0] + m.score[1] && m.simRounds >= 5 && m.simRounds <= 9));
 ok('standings complete', s.season.standings.every((x) => x.played === 14));
 ok('fixtures complete', s.season.fixtures.every((f) => f.played));
 
