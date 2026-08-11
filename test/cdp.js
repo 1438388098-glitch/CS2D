@@ -21,6 +21,7 @@ export function getFreePort() {
 
 export function launchBrowser(opts = {}) {
   const env = typeof process !== 'undefined' ? process.env : {};
+  const headless = env.CDP_HEADFUL !== '1';
   const envExe = env.CDP_BROWSER;
   const candidates = [
     'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe',
@@ -33,16 +34,19 @@ export function launchBrowser(opts = {}) {
   const port = opts.port || Number(env.CDP_PORT) || 9223;
   const profile = opts.profile || env.CDP_PROFILE || 'C:/Users/20579/AppData/Local/Temp/opencode/cdp-profile';
   const extraFlags = opts.flags || [];
-  const proc = spawn(exe, [
+  const flags = [
     `--remote-debugging-port=${port}`,
-    '--headless=new',
-    '--disable-gpu',
     '--no-first-run',
     '--window-size=1600,900',
     `--user-data-dir=${profile}`,
     ...extraFlags,
     'about:blank'
-  ], { stdio: 'ignore', detached: true });
+  ];
+  if (headless) {
+    flags.unshift('--headless=new');
+    flags.unshift('--disable-gpu');
+  }
+  const proc = spawn(exe, flags, { stdio: 'ignore', detached: true });
   return { proc, port };
 }
 
