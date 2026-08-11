@@ -902,6 +902,8 @@ td.money{color:var(--gold);font-family:var(--f-num)}
 .mc-desc { font-size: 11px; color: #77818f; margin-top: 2px; }
 .mc-check { position: absolute; top: 14px; right: 14px; width: 22px; height: 22px; border-radius: 50%; background: #ffb545; color: #12161d; font-size: 13px; font-weight: 800; display: none; align-items: center; justify-content: center; }
 .map-card.sel .mc-check { display: flex; }
+.mc-edit { position: absolute; top: 8px; left: 8px; z-index: 2; background: rgba(10,14,18,.72); border: 1px solid #34404e; color: #dce4ed; font-size: 10px; line-height: 1; padding: 5px 7px; border-radius: 5px; cursor: pointer; letter-spacing: .5px; }
+.mc-edit:hover { border-color: #ffb545; color: #fff; background: rgba(24,30,39,.9); }
 .menu-side { display: flex; flex-direction: column; }
 .menu-side .block { flex: 1; }
 .field { margin-bottom: 14px; }

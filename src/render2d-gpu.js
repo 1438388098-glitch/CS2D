@@ -3,20 +3,17 @@
 import { getGrid, getMap } from './map.js';
 import { visibleShadows, drawShadows } from './shadow-fx.js';
 import { TILE } from './config.js';
-import { fogEnabled, castVisionPolygon } from './fog.js';
+import { fogEnabled } from './fog.js';
+import { renderFogLayer } from './fog-layer.js';
 
 const SHADOW_LIGHT_DIR = Math.PI * 0.25;
-const FOG_UPDATE_MS = 80;
-const FOG_RAYS = 128;
 
 let gl = null;
 let hostCanvas = null;
 let gpuCanvas = null;
+let renderLayers = null;
 let program = null;
 let quadBuffer = null;
-let fogProgram = null;
-let fogBuffer = null;
-let fogFbo = null;
 let texStatic = null;
 let texDecal = null;
 let texShadow = null;
@@ -25,8 +22,10 @@ let texFog = null;
 let mapW = 0;
 let mapH = 0;
 let decalRev = -1;
+let shadowRev = -1;
 let fogKey = '';
 let fogUpdatedAt = 0;
+let softwareRenderer = null;
 
 const VS = `
 attribute vec2 aPos;
@@ -50,20 +49,6 @@ uniform sampler2D uTex;
 varying vec2 vUv;
 void main() {
   gl_FragColor = texture2D(uTex, vUv);
-}`;
-
-const FOG_VS = `
-attribute vec2 aPos;
-uniform vec2 uFogRes;
-void main() {
-  vec2 ndc = vec2(aPos.x / uFogRes.x * 2.0 - 1.0, aPos.y / uFogRes.y * 2.0 - 1.0);
-  gl_Position = vec4(ndc, 0.0, 1.0);
-}`;
-
-const FOG_FS = `
-precision mediump float;
-void main() {
-  gl_FragColor = vec4(1.0, 1.0, 1.0, 1.0);
 }`;
 
 function compile(glc, type, src) {
@@ -128,6 +113,23 @@ function buildShadowTexture(layers) {
   return c;
 }
 
+export function rebuildShadowLayer(game) {
+  const ref = (game && game.layers) || renderLayers;
+  if (!ref || !ref.staticLayer) return null;
+  const shadowCv = buildShadowTexture(ref);
+  if (!shadowCv) return null;
+  if (renderLayers) renderLayers.shadowLayer = shadowCv;
+  if (game && game.layers) game.layers.shadowLayer = shadowCv;
+  return shadowCv;
+}
+
+function refreshShadowTexture(game) {
+  const shadowCv = rebuildShadowLayer(game);
+  if (!shadowCv) return false;
+  if (!texShadow) texShadow = makeTexture(gl);
+  return uploadTexture(gl, texShadow, shadowCv);
+}
+
 function drawQuad(tex) {
   if (!tex) return;
   gl.useProgram(program);
@@ -142,47 +144,6 @@ function drawQuad(tex) {
   gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
 }
 
-function allocFogTexture() {
-  if (!mapW || !mapH) return null;
-  if (texFog) gl.deleteTexture(texFog);
-  texFog = makeTexture(gl);
-  gl.bindTexture(gl.TEXTURE_2D, texFog);
-  gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, mapW, mapH, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
-  if (!fogFbo) fogFbo = gl.createFramebuffer();
-  gl.bindFramebuffer(gl.FRAMEBUFFER, fogFbo);
-  gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, texFog, 0);
-  const status = gl.checkFramebufferStatus(gl.FRAMEBUFFER);
-  gl.bindFramebuffer(gl.FRAMEBUFFER, null);
-  if (status !== gl.FRAMEBUFFER_COMPLETE) throw new Error('fog FBO incomplete: ' + status);
-  return texFog;
-}
-
-function drawFogFan(game, v) {
-  const pts = castVisionPolygon(game, v.x, v.y, 560, FOG_RAYS);
-  if (!pts.length) return;
-  const verts = new Float32Array((pts.length + 1) * 2);
-  verts[0] = v.x;
-  verts[1] = v.y;
-  for (let i = 0; i < pts.length; i++) {
-    verts[(i + 1) * 2] = pts[i].x;
-    verts[(i + 1) * 2 + 1] = pts[i].y;
-  }
-  gl.useProgram(fogProgram);
-  gl.bindBuffer(gl.ARRAY_BUFFER, fogBuffer);
-  gl.bufferData(gl.ARRAY_BUFFER, verts, gl.DYNAMIC_DRAW);
-  const aPos = gl.getAttribLocation(fogProgram, 'aPos');
-  gl.enableVertexAttribArray(aPos);
-  gl.vertexAttribPointer(aPos, 2, gl.FLOAT, false, 0, 0);
-  gl.uniform2f(gl.getUniformLocation(fogProgram, 'uFogRes'), mapW, mapH);
-  gl.drawArrays(gl.TRIANGLE_FAN, 0, pts.length + 1);
-}
-
-function fogKeyFor(game, viewpoints) {
-  const smokeKey = (game.smokes || []).map((s) => Math.round(s.x / 32) + ',' + Math.round(s.y / 32)).join(';');
-  const posKey = viewpoints.map((v) => Math.round(v.x / 8) + ',' + Math.round(v.y / 8)).join('|');
-  return posKey + '#' + smokeKey;
-}
-
 export function updateFogGpu(game) {
   if (!render2dGpuReady() || !game) return false;
   if (!fogEnabled(game)) {
@@ -190,35 +151,14 @@ export function updateFogGpu(game) {
     fogUpdatedAt = 0;
     return false;
   }
-  const map = getMap();
-  if (!map || !map.W || !map.H) return false;
-  const p = game.player;
-  const viewpoints = [];
-  if (p && !p.dead) viewpoints.push(p);
-  if (p) {
-    for (const e of game.entities || []) {
-      if (e.bot && !e.dead && e.team === p.team) viewpoints.push(e);
-    }
-  }
-  if (!viewpoints.length) return false;
-  const now = performance.now();
-  const key = fogKeyFor(game, viewpoints);
-  if (key === fogKey && now - fogUpdatedAt < FOG_UPDATE_MS) return true;
-  const tex = allocFogTexture();
-  if (!tex) return false;
-  fogKey = key;
-  fogUpdatedAt = now;
-  gl.bindFramebuffer(gl.FRAMEBUFFER, fogFbo);
-  gl.viewport(0, 0, mapW, mapH);
-  gl.clearColor(2 / 255, 5 / 255, 9 / 255, 0.94);
-  gl.clear(gl.COLOR_BUFFER_BIT);
-  gl.enable(gl.BLEND);
-  gl.blendFunc(gl.ZERO, gl.ONE_MINUS_SRC_ALPHA);
-  for (const v of viewpoints) drawFogFan(game, v);
-  gl.bindFramebuffer(gl.FRAMEBUFFER, null);
-  gl.viewport(0, 0, gpuCanvas.width, gpuCanvas.height);
-  gl.clearColor(20 / 255, 22 / 255, 26 / 255, 1);
-  gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+  const fogCv = renderFogLayer(game);
+  if (!fogCv) return false;
+  if (game._fogKey === fogKey && game._fogUpdatedAt === fogUpdatedAt) return true;
+  if (texFog) gl.deleteTexture(texFog);
+  texFog = makeTexture(gl);
+  uploadTexture(gl, texFog, fogCv);
+  fogKey = game._fogKey || '';
+  fogUpdatedAt = game._fogUpdatedAt || 0;
   return true;
 }
 
@@ -246,13 +186,16 @@ export function render2dGpuReady() {
 
 export function render2dGpuIsSoftware() {
   if (!gl) return true;
+  if (softwareRenderer !== null) return softwareRenderer;
   try {
     const ext = gl.getExtension('WEBGL_debug_renderer_info');
     const renderer = ext
       ? String(gl.getParameter(ext.UNMASKED_RENDERER_WEBGL) || '')
       : String(gl.getParameter(gl.RENDERER) || '');
-    return /swiftshader|llvmpipe|software|basic render/i.test(renderer);
+    softwareRenderer = /swiftshader|llvmpipe|software|basic render/i.test(renderer);
+    return softwareRenderer;
   } catch (err) {
+    softwareRenderer = true;
     return true;
   }
 }
@@ -262,6 +205,7 @@ export function initRenderer2dGpu(canvas, layers) {
   if (!canvas || !layers || !layers.staticLayer || typeof document === 'undefined') return false;
   try {
     hostCanvas = canvas;
+    renderLayers = layers;
     gpuCanvas = document.createElement('canvas');
     gpuCanvas.width = canvas.width || 1;
     gpuCanvas.height = canvas.height || 1;
@@ -273,9 +217,7 @@ export function initRenderer2dGpu(canvas, layers) {
     gl.enable(gl.BLEND);
     gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
     program = makeProgram(gl);
-    fogProgram = makeProgram(gl, FOG_VS, FOG_FS);
     quadBuffer = gl.createBuffer();
-    fogBuffer = gl.createBuffer();
     const map = getMap();
     mapW = (map && map.W) || layers.staticLayer.width;
     mapH = (map && map.H) || layers.staticLayer.height;
@@ -296,8 +238,8 @@ export function initRenderer2dGpu(canvas, layers) {
     texShadow = makeTexture(gl);
     uploadTexture(gl, texShadow, shadowCv);
     texFog = null;
-    fogFbo = null;
     decalRev = -1;
+    shadowRev = -1;
     fogKey = '';
     fogUpdatedAt = 0;
     return true;
@@ -324,6 +266,11 @@ export function render2dGpuFrame(game, phase, entityCv) {
       uploadTexture(gl, texDecal, game.layers && game.layers.decalLayer);
       decalRev = rev;
     }
+    const srev = game._shadowRev || 0;
+    if (srev !== shadowRev) {
+      refreshShadowTexture(game);
+      shadowRev = srev;
+    }
     gl.clearColor(20 / 255, 22 / 255, 26 / 255, 1);
     gl.clear(gl.COLOR_BUFFER_BIT);
     drawQuad(texStatic);
@@ -334,6 +281,11 @@ export function render2dGpuFrame(game, phase, entityCv) {
     if (rev !== decalRev) {
       uploadTexture(gl, texDecal, game.layers && game.layers.decalLayer);
       decalRev = rev;
+    }
+    const srev = game._shadowRev || 0;
+    if (srev !== shadowRev) {
+      refreshShadowTexture(game);
+      shadowRev = srev;
     }
     gl.clearColor(20 / 255, 22 / 255, 26 / 255, 1);
     gl.clear(gl.COLOR_BUFFER_BIT);
@@ -364,18 +316,13 @@ export function disposeRenderer2dGpu() {
       if (tex) gl.deleteTexture(tex);
     }
     if (quadBuffer) gl.deleteBuffer(quadBuffer);
-    if (fogBuffer) gl.deleteBuffer(fogBuffer);
     if (program) gl.deleteProgram(program);
-    if (fogProgram) gl.deleteProgram(fogProgram);
-    if (fogFbo) gl.deleteFramebuffer(fogFbo);
   }
   gl = null;
   hostCanvas = null;
+  renderLayers = null;
   gpuCanvas = null;
   program = null;
-  fogProgram = null;
-  fogBuffer = null;
-  fogFbo = null;
   quadBuffer = null;
   texStatic = null;
   texDecal = null;
@@ -385,6 +332,8 @@ export function disposeRenderer2dGpu() {
   mapW = 0;
   mapH = 0;
   decalRev = -1;
+  shadowRev = -1;
   fogKey = '';
   fogUpdatedAt = 0;
+  softwareRenderer = null;
 }

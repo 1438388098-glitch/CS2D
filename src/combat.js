@@ -298,6 +298,7 @@ export function destroyCrate(game, c, shooter) {
   const grid = getGrid();
   grid[c.ty][c.tx] = '.';
   invalidatePathCache();
+  game._shadowRev = (game._shadowRev || 0) + 1;
   emit('sfx', { name: 'crateBreak', vol: 0.7, x: c.x, y: c.y, game });
   for (let i = 0; i < 10; i++) {
     spawnParticle(game, { kind: 'wood', x: c.x, y: c.y, vx: rand(-140, 140), vy: rand(-220, -20), life: rand(0.3, 0.6), size: rand(2, 5) });
@@ -325,6 +326,7 @@ export function explodeBarrel(game, b, shooter) {
   const grid = getGrid();
   grid[b.ty][b.tx] = '.';
   invalidatePathCache();
+  game._shadowRev = (game._shadowRev || 0) + 1;
   emit('sfx', { name: 'boom', vol: 1, x: b.x, y: b.y, game });
   game.shake = Math.max(game.shake, 8);
   for (const c of game.crates.slice()) {

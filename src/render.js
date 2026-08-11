@@ -5,7 +5,8 @@ import {gunLen} from './render-utils.js';
 import {clamp, rand} from './utils.js';
 const mapTile = () => getMap()?.tile || TILE;
 import {ARCHETYPES} from './persona.js';
-import {fogEnabled, castVisionPolygon} from './fog.js';
+import {fogEnabled} from './fog.js';
+import {renderFogLayer} from './fog-layer.js';
 import {drawAmbientDust} from './ambient-fx.js';
 import {weaponSwitchPop, muzzleSmoke, drawMuzzleSmoke, drawWeaponPop, MUZZLE_SMOKE_LIFE} from './weapon-fx.js';
 import {nadeTrajectory, drawNadeTrajectory, NADE_SPEED, NADE_ORIGIN_DIST} from './nade-fx.js';
@@ -18,13 +19,15 @@ import {enhancedBoomSpec, drawEnhancedBoom} from './boom-fx.js';
 import {visibleShadows, drawShadows} from './shadow-fx.js';
 import {killLabel, drawKillLabel, KILL_LABEL_DUR} from './killcam-fx.js';
 import {footprintsForPath, drawFootprint, FOOTPRINT_GAP, FOOTPRINT_LIFE, FOOTPRINT_TIME_LIFE} from './footprint-fx.js';
-import {initRenderer2dGpu, render2dGpuFrame, render2dGpuReady, render2dGpuIsSoftware, updateFogGpu} from './render2d-gpu.js';
+import {initRenderer2dGpu, render2dGpuFrame, render2dGpuReady, render2dGpuIsSoftware, updateFogGpu, rebuildShadowLayer} from './render2d-gpu.js';
+import {viewAngle, viewX, viewY} from './render-smooth.js';
 
 let ctx = null;
 let layers = null;
 let gpu2d = false;
 let baseLayer = null;
 let baseLayerRev = -1;
+let shadowLayerRev = -1;
 
 // 脚步动画渲染态：每实体累积移动距离 + 稳定 seed（渲染私有，不影响游戏逻辑）
 const stepFXState = new Map();
@@ -41,13 +44,19 @@ export function initRenderer(canvas, layersRef) {
   gpu2d = initRenderer2dGpu(canvas, layersRef);
   baseLayer = null;
   baseLayerRev = -1;
+  shadowLayerRev = -1;
 }
 
 // 静态底图合成：把不变的地图/贴花/阴影叠成一张画布，普通帧只画一次，
 // 避免软件 Canvas 每帧重复栅格化三张全图图层。
 function ensureBaseLayer(game) {
   if (!layers || !layers.staticLayer) return null;
-  const rev = game._decalRev || 0;
+  const srev = game._shadowRev || 0;
+  if (layers.shadowLayer && srev !== shadowLayerRev) {
+    rebuildShadowLayer(game);
+    shadowLayerRev = srev;
+  }
+  const rev = (game._decalRev || 0) + ':' + (game._shadowRev || 0);
   const W = layers.staticLayer.width;
   const H = layers.staticLayer.height;
   if (baseLayer && baseLayer.width === W && baseLayer.height === H && baseLayerRev === rev) {
@@ -66,6 +75,29 @@ function ensureBaseLayer(game) {
   if (layers.shadowLayer) bctx.drawImage(layers.shadowLayer, 0, 0);
   baseLayerRev = rev;
   return baseLayer;
+}
+
+// 软件渲染底图只贴相机可见切片；全图 drawImage 在 CPU Canvas 上会重复栅格化大量不可见像素。
+function drawWorldSlice(layer, game) {
+  if (!layer || !game) return;
+  const map = getMap();
+  if (!map || !map.W || !map.H) return;
+  const z = game.zoom || 1;
+  const w2 = (game.canvasW || 0) / z;
+  const h2 = (game.canvasH || 0) / z;
+  const camX = game.camX || 0;
+  const camY = game.camY || 0;
+  const shx = game._shx || 0;
+  const shy = game._shy || 0;
+  const margin = 64;
+  const sx0 = Math.max(0, camX - shx - w2 / 2 - margin);
+  const sy0 = Math.max(0, camY - shy - h2 / 2 - margin);
+  const sx1 = Math.min(map.W, camX - shx + w2 / 2 + margin);
+  const sy1 = Math.min(map.H, camY - shy + h2 / 2 + margin);
+  const sw = Math.max(0, sx1 - sx0);
+  const sh = Math.max(0, sy1 - sy0);
+  if (sw <= 0 || sh <= 0) return;
+  ctx.drawImage(layer, sx0, sy0, sw, sh, sx0, sy0, sw, sh);
 }
 
 export function render(game) {
@@ -103,10 +135,10 @@ export function render(game) {
   if (!useGpuBase) {
     const base = ensureBaseLayer(game);
     if (base) {
-      ctx.drawImage(base, 0, 0);
+      drawWorldSlice(base, game);
     } else {
-      ctx.drawImage(layers.staticLayer, 0, 0);
-      ctx.drawImage(layers.decalLayer, 0, 0);
+      drawWorldSlice(layers.staticLayer, game);
+      drawWorldSlice(layers.decalLayer, game);
     }
   }
   __marks.static = performance.now() - __t0;
@@ -125,7 +157,7 @@ export function render(game) {
     if (baseLayer && layers.shadowLayer) {
       // 阴影已包含在合成底图中。
     } else if (useGpu && layers.shadowLayer) {
-      ctx.drawImage(layers.shadowLayer, 0, 0);
+      drawWorldSlice(layers.shadowLayer, game);
     } else {
       drawShadowsLayer(game);
     }
@@ -720,7 +752,8 @@ function drawEntities(game) {
   let otherMs = 0;
   const stepCounts = { entities: 0, feet: 0, dust: 0 };
   for (const e of game.entities) {
-    if (e.x < vx0 || e.x > vx1 || e.y < vy0 || e.y > vy1) continue;
+    const ex = viewX(e), ey = viewY(e), ea = viewAngle(e);
+    if (ex < vx0 || ex > vx1 || ey < vy0 || ey > vy1) continue;
     const calcT = performance.now();
     const stFx = getStepFX(e, tSec);
     calcMs += performance.now() - calcT;
@@ -740,7 +773,7 @@ function drawEntities(game) {
     const darkCol = e.team === 'ct' ? '#4d9bff' : '#ffa03d';
     const bodyT = performance.now();
     ctx.save();
-    ctx.translate(e.x, e.y);
+    ctx.translate(ex, ey);
     ctx.fillStyle = 'rgba(0,0,0,0.35)';
     ctx.beginPath();
     ctx.ellipse(0, 5, 12, 7, 0, 0, Math.PI * 2);
@@ -752,7 +785,7 @@ function drawEntities(game) {
     ctx.stroke();
     const bob = isP && e.walking ? Math.sin(performance.now() / 160) * 2.5 : 0;
     ctx.translate(0, bob);
-    ctx.rotate(e.angle);
+    ctx.rotate(ea);
     ctx.fillStyle = darkCol;
     ctx.beginPath();
     ctx.ellipse(0, 0, 12, 15, 0, 0, Math.PI * 2);
@@ -777,7 +810,7 @@ function drawEntities(game) {
       drawWeaponPop(ctx, { scale: pop.scale, gl, recoilOff, kind: w.kind, muzzleT: e.muzzleT });
       // 开火枪口烟：由 lastShot 距游戏时间推得烟龄，确定性（无 Math.random）
       const elapsed = (game.time || 0) - (e.lastShot || 0) / 1000;
-      const smokePts = muzzleSmoke(elapsed >= 0 && elapsed < MUZZLE_SMOKE_LIFE, elapsed, (Math.floor(e.x) * 374761393 ^ Math.floor(e.y) * 668265263) >>> 0);
+      const smokePts = muzzleSmoke(elapsed >= 0 && elapsed < MUZZLE_SMOKE_LIFE, elapsed, (Math.floor(ex) * 374761393 ^ Math.floor(ey) * 668265263) >>> 0);
       if (smokePts.length) {
         const mz = 2 + (gl - recoilOff - 2) * pop.scale;
         drawMuzzleSmoke(ctx, mz, 0, 0, smokePts);
@@ -785,7 +818,7 @@ function drawEntities(game) {
     }
     ctx.restore();
     ctx.save();
-    ctx.translate(e.x, bob - 4);
+    ctx.translate(ex, ey + bob - 4);
     ctx.fillStyle = isP ? '#ffcf9e' : '#e8b98c';
     ctx.beginPath();
     ctx.arc(0, 0, isP ? 5.5 : 5, 0, Math.PI * 2);
@@ -802,28 +835,28 @@ function drawEntities(game) {
       ctx.textAlign = 'center';
       ctx.fillStyle = e.team === 'ct' ? '#7fb8ff' : '#ffcf8a';
       const arch = ARCHETYPES[e.archetype];
-      ctx.fillText(e.name + (arch ? ' ·' + arch.label : ''), e.x, e.y - 22);
+      ctx.fillText(e.name + (arch ? ' ·' + arch.label : ''), ex, ey - 22);
       ctx.restore();
     }
     if (e.defuseT > 0) {
       const pct = clamp(e.defuseT / (e.weapons.kit ? 2.5 : 5), 0, 1);
       ctx.fillStyle = 'rgba(0,0,0,0.55)';
-      ctx.fillRect(e.x - 16, e.y - 32, 32, 5);
+      ctx.fillRect(ex - 16, ey - 32, 32, 5);
       ctx.fillStyle = '#4dc3ff';
-      ctx.fillRect(e.x - 16, e.y - 32, 32 * pct, 5);
+      ctx.fillRect(ex - 16, ey - 32, 32 * pct, 5);
     }
     if (e.plantT > 0) {
       const pct2 = clamp(e.plantT / 3, 0, 1);
       ctx.fillStyle = 'rgba(0,0,0,0.55)';
-      ctx.fillRect(e.x - 16, e.y - 32, 32, 5);
+      ctx.fillRect(ex - 16, ey - 32, 32, 5);
       ctx.fillStyle = '#ff8a2a';
-      ctx.fillRect(e.x - 16, e.y - 32, 32 * pct2, 5);
+      ctx.fillRect(ex - 16, ey - 32, 32 * pct2, 5);
     }
     if (e.hasBomb && e.team === 't') {
       const blink = Math.sin(performance.now() / 200) > 0;
       ctx.fillStyle = blink ? '#ff3b30' : '#8a1a12';
       ctx.beginPath();
-      ctx.arc(e.x + 14, e.y - 12, 4, 0, Math.PI * 2);
+      ctx.arc(ex + 14, ey - 12, 4, 0, Math.PI * 2);
       ctx.fill();
     }
     otherMs += performance.now() - otherT;
@@ -933,70 +966,29 @@ function drawParticles(game) {
   }
 }
 function drawFog(game) {
-  if (!fogEnabled(game)) return;
-  if (typeof document === 'undefined') return;
   const map = getMap();
-  if (!map || !map.W || !map.H) return;
-  const SCALE = 0.5;
-  const fw = Math.max(1, Math.ceil(map.W * SCALE));
-  const fh = Math.max(1, Math.ceil(map.H * SCALE));
-  let cv = game._fogCv;
-  if (!cv || cv.width !== fw || cv.height !== fh) {
-    cv = document.createElement('canvas');
-    cv.width = fw;
-    cv.height = fh;
-    game._fogCv = cv;
-  }
-  const p = game.player;
-  const viewpoints = [];
-  if (p && !p.dead) viewpoints.push(p);
-  for (const e of game.entities) {
-    if (e.bot && !e.dead && p && e.team === p.team) viewpoints.push(e);
-  }
-  if (!viewpoints.length) {
-    ctx.save();
-    ctx.imageSmoothingEnabled = true;
-    ctx.drawImage(cv, 0, 0, map.W, map.H);
-    ctx.restore();
-    return;
-  }
-  const now = performance.now();
-  const smokeKey = (game.smokes || []).map((s) => Math.round(s.x / 32) + ',' + Math.round(s.y / 32)).join(';');
-  const posKey = viewpoints.map((v) => Math.round(v.x / 16) + ',' + Math.round(v.y / 16)).join('|');
-  const key = posKey + '#' + smokeKey;
-  if (game._fogKey === key && now - (game._fogUpdatedAt || 0) < 120) {
-    ctx.save();
-    ctx.imageSmoothingEnabled = true;
-    ctx.drawImage(cv, 0, 0, map.W, map.H);
-    ctx.restore();
-    return;
-  }
-  game._fogKey = key;
-  game._fogUpdatedAt = now;
-  const fctx = cv.getContext('2d');
-  fctx.setTransform(1, 0, 0, 1, 0, 0);
-  fctx.globalCompositeOperation = 'source-over';
-  fctx.clearRect(0, 0, fw, fh);
-  fctx.fillStyle = 'rgba(2,5,9,0.94)';
-  fctx.fillRect(0, 0, fw, fh);
-  fctx.globalCompositeOperation = 'destination-out';
-  for (const v of viewpoints) {
-    const pts = castVisionPolygon(game, v.x, v.y, 560, 96);
-    fctx.save();
-    fctx.shadowColor = 'rgba(0,0,0,1)';
-    fctx.shadowBlur = 10;
-    fctx.fillStyle = 'rgba(0,0,0,1)';
-    fctx.beginPath();
-    fctx.moveTo(pts[0].x * SCALE, pts[0].y * SCALE);
-    for (let i = 1; i < pts.length; i++) fctx.lineTo(pts[i].x * SCALE, pts[i].y * SCALE);
-    fctx.closePath();
-    fctx.fill();
-    fctx.restore();
-  }
-  fctx.globalCompositeOperation = 'source-over';
+  const cv = renderFogLayer(game);
+  if (!cv || !map || !map.W || !map.H) return;
+  const z = game.zoom || 1;
+  const w2 = (game.canvasW || 0) / z;
+  const h2 = (game.canvasH || 0) / z;
+  const camX = game.camX || 0;
+  const camY = game.camY || 0;
+  const shx = game._shx || 0;
+  const shy = game._shy || 0;
+  const margin = 64;
+  const sx0 = Math.max(0, camX - shx - w2 / 2 - margin);
+  const sy0 = Math.max(0, camY - shy - h2 / 2 - margin);
+  const sx1 = Math.min(map.W, camX - shx + w2 / 2 + margin);
+  const sy1 = Math.min(map.H, camY - shy + h2 / 2 + margin);
+  const sw = Math.max(0, sx1 - sx0);
+  const sh = Math.max(0, sy1 - sy0);
+  if (sw <= 0 || sh <= 0) return;
+  const fx = cv.width / map.W;
+  const fy = cv.height / map.H;
   ctx.save();
   ctx.imageSmoothingEnabled = true;
-  ctx.drawImage(cv, 0, 0, map.W, map.H);
+  ctx.drawImage(cv, sx0 * fx, sy0 * fy, sw * fx, sh * fy, sx0, sy0, sw, sh);
   ctx.restore();
 }
 

@@ -6,6 +6,9 @@ let game = null;
 let ed = null;
 let canvas = null;
 let ctx = null;
+const CUSTOM_MAPS_KEY = 'cs2d_editor_maps';
+const LEGACY_CUSTOM_KEY = 'cs2d_editor_map';
+let customMapsCache = null;
 
 function $(id) { return typeof document !== 'undefined' ? document.getElementById(id) : null; }
 
@@ -30,6 +33,65 @@ function defaultRows(w, h) {
   const rows = Array.from({ length: h }, () => Array(w).fill('#'));
   for (let y = 1; y < h - 1; y++) for (let x = 1; x < w - 1; x++) rows[y][x] = '.';
   return rows;
+}
+
+function storageGet(key) {
+  try { return typeof localStorage !== 'undefined' ? localStorage.getItem(key) : null; } catch (err) { return null; }
+}
+
+function storageSet(key, val) {
+  try { if (typeof localStorage !== 'undefined') localStorage.setItem(key, val); } catch (err) { /* no storage */ }
+}
+
+function normalizeCustomMap(obj, id) {
+  return {
+    id: id || obj.id || 'custom-map',
+    name: obj.name || '自定义地图',
+    accent: obj.accent || '#6ad1a8',
+    tile: obj.tile || 16,
+    rows: Array.isArray(obj.rows) ? obj.rows.map((r) => String(r)) : [],
+    penPoints: Array.isArray(obj.penPoints) ? obj.penPoints : [],
+    highPoints: Array.isArray(obj.highPoints) ? obj.highPoints : [],
+    category: 'custom'
+  };
+}
+
+function readCustomMaps() {
+  if (customMapsCache) return customMapsCache;
+  let list = [];
+  const raw = storageGet(CUSTOM_MAPS_KEY);
+  if (raw) {
+    try {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) list = parsed.filter((m) => m && Array.isArray(m.rows) && m.rows.length);
+    } catch (err) { /* fallback to legacy */ }
+  }
+  if (!list.length) {
+    const legacy = storageGet(LEGACY_CUSTOM_KEY);
+    if (legacy) {
+      try {
+        const obj = JSON.parse(legacy);
+        if (obj && Array.isArray(obj.rows) && obj.rows.length) list.push(normalizeCustomMap(obj, obj.id || 'custom-map'));
+      } catch (err) { /* ignore */ }
+    }
+  }
+  customMapsCache = list;
+  return list;
+}
+
+function writeCustomMaps(list) {
+  customMapsCache = list;
+  storageSet(CUSTOM_MAPS_KEY, JSON.stringify(list));
+}
+
+function nextCustomId(name) {
+  const slug = String(name || 'map').trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'map';
+  const base = 'custom-' + slug.slice(0, 20) + '-' + Date.now().toString(36);
+  const taken = new Set(readCustomMaps().map((m) => m.id));
+  let id = base;
+  let n = 2;
+  while (taken.has(id) || getMapDef(id)) id = base + '-' + n++;
+  return id;
 }
 
 function rowsToArr(rows) { return rows.map((r) => (typeof r === 'string' ? r.split('') : r.slice())); }
@@ -61,9 +123,20 @@ function toggleEditorHelp() {
 
 function templateOptions() {
   const maps = Array.from(getMaps().values())
-    .filter((m) => m && m.rows && Array.isArray(m.rows) && m.rows.length && m.id !== 'custom-map')
+    .filter((m) => m && m.rows && Array.isArray(m.rows) && m.rows.length)
     .sort((a, b) => String(a.name || a.id).localeCompare(String(b.name || b.id), 'zh-CN'));
-  return '<option value="">— 空白 —</option>' + maps.map((m) => '<option value="' + String(m.id).replace(/"/g, '&quot;') + '">' + String(m.name || m.id).replace(/</g, '&lt;') + '</option>').join('');
+  const label = (m) => {
+    const kind = m.category === 'duel' ? '[单挑] ' : m.category === 'custom' ? '[自定义] ' : '[5v5] ';
+    return kind + String(m.name || m.id).replace(/[<>&]/g, (c) => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;' }[c]));
+  };
+  return '<option value="">— 新建空白 —</option>' + maps.map((m) => '<option value="' + String(m.id).replace(/"/g, '&quot;') + '">' + label(m) + '</option>').join('');
+}
+
+function refreshTemplateOptions() {
+  const tpl = $('editorTemplate');
+  if (!tpl) return;
+  tpl.innerHTML = templateOptions();
+  tpl.value = ed && (ed.savedId || ed.sourceId || '');
 }
 
 function syncMetaInputs() {
@@ -140,51 +213,46 @@ export function computeMapMeta(rows) { return buildMapMeta(rows); }
 function exportObject() {
   const rows = ed.rows.slice();
   const meta = buildMapMeta(rows);
+  const id = ed.savedId || nextCustomId(ed.name);
   return {
-    id: 'custom-map',
+    id,
     name: ed.name || '自定义地图',
     accent: ed.accent || '#6ad1a8',
     tile: 16,
     rows,
     penPoints: meta.penPoints,
-    highPoints: (ed.highPoints || meta.highPoints).slice()
+    highPoints: (ed.highPoints || meta.highPoints).slice(),
+    category: 'custom'
   };
 }
 
 function saveRows() {
   const obj = exportObject();
-  registerMap({ id: 'custom-map', name: obj.name, accent: obj.accent, rows: obj.rows.slice(), tile: obj.tile || 16, penPoints: obj.penPoints || [], highPoints: obj.highPoints || [], category: 'custom' });
-  try { localStorage.setItem('cs2d_editor_map', JSON.stringify(obj)); } catch (err) { /* no storage */ }
+  const maps = readCustomMaps().filter((m) => m && m.id !== obj.id);
+  maps.push(obj);
+  writeCustomMaps(maps);
+  registerMap({ id: obj.id, name: obj.name, accent: obj.accent, rows: obj.rows.slice(), tile: obj.tile || 16, penPoints: obj.penPoints || [], highPoints: obj.highPoints || [], category: 'custom' });
+  ed.savedId = obj.id;
+  ed.sourceId = obj.id;
   const ta = $('editorJson');
   if (ta) ta.value = JSON.stringify(obj);
+  refreshTemplateOptions();
   if (window.__syncMapCards) window.__syncMapCards();
-  if (window.__addMenuMapPreview) window.__addMenuMapPreview('custom-map');
+  if (window.__addMenuMapPreview) window.__addMenuMapPreview(obj.id);
   if (window.__refreshMapPreviews) window.__refreshMapPreviews();
-  status('已保存，可在主菜单选择自定义地图');
+  status('已保存自定义地图：' + obj.name);
 }
 
 function loadRows() {
-  try {
-    const raw = localStorage.getItem('cs2d_editor_map');
-    if (raw) {
-      const obj = JSON.parse(raw);
-      if (obj && Array.isArray(obj.rows)) {
-        pushHistory();
-        ed.rows = obj.rows.map((r) => String(r));
-        ed.name = obj.name || '自定义地图';
-        ed.accent = obj.accent || '#6ad1a8';
-        ed.tile = obj.tile || 16;
-        ed.penPoints = Array.isArray(obj.penPoints) ? obj.penPoints : [];
-        ed.highPoints = Array.isArray(obj.highPoints) ? obj.highPoints : [];
-        const ta = $('editorJson');
-        if (ta) ta.value = raw;
-        syncMetaInputs();
-        drawEditor();
-        status('已读取上次保存的地图');
-        return;
-      }
-    }
-  } catch (err) { /* fallback */ }
+  const maps = readCustomMaps();
+  const target = ed && ed.savedId
+    ? maps.find((m) => m.id === ed.savedId)
+    : maps[maps.length - 1];
+  if (target) {
+    loadMapData(target, target.id, target.id);
+    status('已读取地图：' + target.name);
+    return;
+  }
   status('暂无本地存档', true);
 }
 
@@ -352,7 +420,7 @@ function paintAt(state, ev, commit) {
   drawEditor();
 }
 
-export function openMapEditor(gameRef) {
+export function openMapEditor(gameRef, mapId) {
   game = gameRef;
   game.state = 'EDITOR';
   game.over = false;
@@ -362,10 +430,15 @@ export function openMapEditor(gameRef) {
   const menu = $('menu');
   if (menu) menu.classList.remove('show');
   ed = game.editor = game.editor || { rows: null, sel: '#', name: '自定义地图', accent: '#6ad1a8', tool: 'paint', brush: 1, history: [], historyIdx: -1, drawing: false, anchor: null };
-  if (!ed.rows) {
+  if (!ed.rows || !ed.rows.length) {
     ed.rows = defaultRows(40, 30);
     pushHistory();
-    loadRows();
+  }
+  const customDef = mapId ? readCustomMaps().find((m) => m.id === mapId) : null;
+  const target = customDef || (mapId ? getMapDef(mapId) : null);
+  if (target) {
+    if (customDef) registerMap({ ...customDef, rows: customDef.rows.slice() });
+    loadMapData(target, target.category === 'custom' ? target.id : null, mapId);
   }
   canvas = $('editorCanvas');
   ctx = canvas ? canvas.getContext('2d') : null;
@@ -373,6 +446,7 @@ export function openMapEditor(gameRef) {
   bindCanvas();
   bindButtons();
   syncMetaInputs();
+  refreshTemplateOptions();
 }
 
 function bindCanvas() {
@@ -424,6 +498,8 @@ function bindCanvas() {
 }
 
 function bindButtons() {
+  const nameEl = $('editorName');
+  if (nameEl) nameEl.oninput = () => { ed.name = nameEl.value.trim() || '自定义地图'; };
   const paletteEl = $('editorPalette');
   if (paletteEl && !paletteEl.dataset.bound) {
     paletteEl.dataset.bound = '1';
@@ -457,8 +533,7 @@ function bindButtons() {
   const brushSel = $('editorBrush'); if (brushSel) { brushSel.value = String(ed.brush || 1); brushSel.onchange = () => { ed.brush = Math.max(1, Math.min(4, parseInt(brushSel.value, 10) || 1)); }; }
   const tpl = $('editorTemplate');
   if (tpl) {
-    tpl.innerHTML = templateOptions();
-    tpl.value = '';
+    refreshTemplateOptions();
     tpl.onchange = () => loadTemplate(tpl.value);
   }
   const tools = {
@@ -474,21 +549,32 @@ function bindButtons() {
   const close = $('editorClose'); if (close) close.onclick = () => closeEditor();
 }
 
-// 载入现有地图作为编辑模板（网格/出生点/爆破点/高台全部带入）
-function loadTemplate(id) {
-  if (!id) return;
-  const def = getMapDef(id);
-  if (!def || !def.rows) { status('模板不存在'); return; }
+function loadMapData(def, savedId, sourceId) {
+  if (!def || !def.rows || !Array.isArray(def.rows) || !def.rows.length) return false;
   pushHistory();
   ed.rows = def.rows.slice();
-  ed.name = def.name || id;
+  ed.name = def.name || def.id || sourceId || '自定义地图';
   ed.accent = def.accent || '#6ad1a8';
   ed.tile = def.tile || 16;
   ed.penPoints = Array.isArray(def.penPoints) ? def.penPoints.slice() : [];
   ed.highPoints = Array.isArray(def.highPoints) ? def.highPoints.slice() : [];
-  if (canvas) canvas.style.aspectRatio = def.rows[0].length + ' / ' + def.rows.length;
+  ed.savedId = savedId || null;
+  ed.sourceId = sourceId || savedId || null;
+  if (canvas) canvas.style.aspectRatio = String(def.rows[0].length) + ' / ' + String(def.rows.length);
   syncMetaInputs();
   drawEditor();
+  return true;
+}
+
+// 载入现有地图作为编辑模板（网格/出生点/爆破点/高台全部带入）
+function loadTemplate(id) {
+  if (!id) return;
+  const customDef = readCustomMaps().find((m) => m.id === id);
+  const def = customDef || getMapDef(id);
+  if (!def || !def.rows || !Array.isArray(def.rows) || !def.rows.length) { status('模板不存在'); return; }
+  const savedId = def.category === 'custom' ? def.id : null;
+  loadMapData(def, savedId, id);
+  refreshTemplateOptions();
   status('已载入模板：' + (def.name || id));
 }
 
@@ -593,7 +679,7 @@ function playEditorMap() {
     return;
   }
   saveRows();
-  game.opts.mapId = 'custom-map';
+  game.opts.mapId = ed.savedId || 'custom-map';
   game.opts.mode = 'classic';
   const ov = $('editorOverlay');
   if (ov) ov.style.display = 'none';
@@ -611,13 +697,9 @@ export function saveEditorMap() { saveRows(); }
 export function playEditorMapNow() { playEditorMap(); }
 
 export function installSavedEditorMap() {
-  try {
-    const raw = localStorage.getItem('cs2d_editor_map');
-    if (!raw) return null;
-    const obj = JSON.parse(raw);
-    if (!obj || !Array.isArray(obj.rows)) return null;
-    // 与 saveRows/exportObject 保持一致：编辑器保存 tile=16，重启后按同尺寸加载
-    registerMap({ id: 'custom-map', name: obj.name || '自定义地图', accent: obj.accent || '#6ad1a8', tile: obj.tile || 16, rows: obj.rows.slice(), category: 'custom' });
-    return obj;
-  } catch (err) { return null; }
+  const list = readCustomMaps();
+  for (const m of list) {
+    registerMap({ id: m.id, name: m.name, accent: m.accent, tile: m.tile || 16, rows: m.rows.slice(), penPoints: m.penPoints || [], highPoints: m.highPoints || [], category: 'custom' });
+  }
+  return list.length ? list : null;
 }

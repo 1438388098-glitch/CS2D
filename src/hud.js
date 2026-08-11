@@ -267,13 +267,16 @@ export function renderMinimap(game) {
   if (canSee) lastMiniUpdate = now;
 
   if (p && !p.dead) {
-    // 视野圈：迷雾开启时对应真实可见半径，否则 300px 战术圈
-    const vRadius = fogEnabled(game) ? 560 : 300;
+    // 视野圈：迷雾开启时可见范围覆盖整图，否则 300px 战术圈
     mctx.strokeStyle = 'rgba(255,255,255,0.12)';
     mctx.lineWidth = 1;
-    mctx.beginPath();
-    mctx.arc(ox + p.x * s, oy + p.y * s, vRadius * s, 0, Math.PI * 2);
-    mctx.stroke();
+    if (fogEnabled(game)) {
+      mctx.strokeRect(ox, oy, mw, mh);
+    } else {
+      mctx.beginPath();
+      mctx.arc(ox + p.x * s, oy + p.y * s, 300 * s, 0, Math.PI * 2);
+      mctx.stroke();
+    }
   }
 
   for (const e of game.entities) {

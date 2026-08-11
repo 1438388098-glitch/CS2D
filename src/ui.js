@@ -1534,11 +1534,22 @@ export function syncMapCards() {
       const check = doc.createElement('span');
       check.className = 'mc-check';
       check.textContent = '✓';
+      const edit = doc.createElement('span');
+      edit.className = 'mc-edit';
+      edit.textContent = '编辑';
+      edit.title = '在编辑器中修改此地图';
+      edit.setAttribute('role', 'button');
+      edit.tabIndex = 0;
+      edit.onclick = (e) => {
+        e.stopPropagation();
+        if (window.__openMapEditor) window.__openMapEditor(game, m.id);
+      };
       btn.appendChild(accent);
       btn.appendChild(prev);
       btn.appendChild(name);
       btn.appendChild(desc);
       btn.appendChild(check);
+      btn.appendChild(edit);
       btn.onclick = (e) => {
         if (game) game.opts.mapId = m.id;
         for (const cc of mapSel.querySelectorAll('.map-card')) cc.classList.remove('sel');

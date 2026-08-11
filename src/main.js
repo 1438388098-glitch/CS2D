@@ -20,6 +20,7 @@ import {initRankedUi} from './ranked-ui.js';
 import {majorAction} from './modes.js';
 import {initLan, hostStartMatchNow, smoothRemote} from './lan.js';
 import {openMapEditor, closeMapEditor, saveEditorMap, playEditorMapNow, installSavedEditorMap} from './map-editor.js';
+import {smoothRenderEntities} from './render-smooth.js';
 
 const canvas = document.getElementById('game');
 const game = createGame();
@@ -203,6 +204,7 @@ function startLoop() {
       }
       const tR0 = performance.now();
       smoothRemote(game, FIXED);
+      smoothRenderEntities(game, frame);
       syncSpatialAudio(game);
       if (game.viewMode === 'fps' && fpsCameraEntity(game)) {
         const now3d = performance.now();
@@ -360,7 +362,7 @@ window.GAME = {
 
 window.__game = game;
 window.__majorAction = (a) => majorAction(game, a);
-window.__openMapEditor = (g) => openMapEditor(g);
+window.__openMapEditor = (g, mapId) => openMapEditor(g, mapId);
 window.__closeMapEditor = closeMapEditor;
 window.__saveEditorMap = saveEditorMap;
 window.__playEditorMap = playEditorMapNow;

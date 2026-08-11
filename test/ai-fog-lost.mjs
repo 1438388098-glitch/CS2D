@@ -58,9 +58,9 @@ function ok(name, cond) {
   const { game, viewer, enemy } = setup();
   updateBots(game, 1 / 30);
   viewer.aimLostT = 2;
-  enemy.x = 1200;
+  enemy.x = 650;
   updateBots(game, 1 / 30);
-  ok('bot loses target outside fog radius', viewer.aimTarget === null);
+  ok('bot keeps target beyond old 540px fog radius', viewer.aimTarget === enemy);
 }
 
 {

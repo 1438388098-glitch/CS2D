@@ -16,12 +16,15 @@ loadMap({ id: 'fog-stability', name: 'fog-stability', rows, tile: 32 });
 
 const viewer = { x: 80, y: 80, height: 0 };
 const open = { x: 80, y: 96, height: 0 };
-const wallBlocked = { x: 700, y: 80, height: 0 };
+const wallBlocked = { x: 140, y: 80, height: 0 };
+const farViewer = { x: 560, y: 96, height: 0 };
+const farOpen = { x: 1240, y: 96, height: 0 };
 
 assert.equal(canSeeInFog({ smokes: [], opts: { fog: true } }, viewer, open), true, 'fog should keep open-lane visibility');
 assert.equal(canSeeInFog({ smokes: [], opts: { fog: true } }, viewer, wallBlocked), false, 'fog should agree with wall LOS');
 assert.equal(canSeeInFog({ smokes: [{ x: 200, y: 80, r: 50 }], opts: { fog: true } }, viewer, { x: 400, y: 80, height: 0 }), false, 'fog should agree with smoke LOS');
-assert.equal(canSeeInFog({ smokes: [], opts: { fog: true } }, viewer, { x: 80, y: 1200, height: 0 }), false, 'fog should enforce vision radius');
+assert.equal(canSeeInFog({ smokes: [], opts: { fog: true } }, farViewer, farOpen), true, 'fog should not impose old 540px vision radius');
+assert.equal(canSeeInFog({ smokes: [], opts: { fog: true } }, viewer, { x: 80, y: 1200, height: 0 }), false, 'fog should stop outside map bounds');
 assert.equal(canSeeInFog({ smokes: [], opts: {} }, viewer, wallBlocked), true, 'fog disabled should not restrict vision');
 
 loadMap(findMapById('dust2'));

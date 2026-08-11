@@ -382,7 +382,9 @@ export function botObjective(e, game) {
   // 警报覆盖缓存：新强警报（枪声/目击/呼叫）更新 lastKnown/lastHear 后立即失效旧目标缓存，
   // 而非等 3s TTL 到期 —— 让 CT 转点/T 执行即时响应（旧实现 now-lastKnownT 单位混用导致恒不触发）
   const alert = alertFrom(e, game);
-  const oldKnown = e.objCache ? { ...e.objCache, t: e.objAt ? e.objAt / 1000 : 0 } : null;
+  const oldKnown = e.objCache
+    ? { ...e.objCache, t: e.objAt ? e.objAt / 1000 : 0, conf: Number.isFinite(e.objConf) ? e.objConf : alertConf(e.objCache) }
+    : null;
   const alertHot = alert ? shouldRefreshObjective(oldKnown, alert, game.time) : false;
   if (e.objCache && keyHit && !alertHot && now - e.objAt < cacheTtl) return e.objCache;
   const o = botObjectiveRaw(e, game);
@@ -392,6 +394,7 @@ export function botObjective(e, game) {
     e.objCache = snapped;
     e.objAt = now;
     e.objKey = cacheKey;
+    e.objConf = alert ? alertConf(alert) : undefined;
   }
   return snapped;
 }

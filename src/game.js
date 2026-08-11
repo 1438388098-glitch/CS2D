@@ -110,7 +110,7 @@ export function createGame(opts = {}) {
     freezeT: 0, endedT: 0,
     score: { T: 0, CT: 0 },
     bomb: null, flashT: 0, dmgT: 0, shake: 0, dmgSpreadT: 0, killRingT: 0, killFlashT: 0,
-    over: false, spectateIdx: 0, lastPlantSite: null, dt: 0.016,
+    over: false, spectateIdx: 0, spectate: { speed: 1 }, lastPlantSite: null, dt: 0.016,
     lossStreakT: 0, lossStreakCT: 0,
     hitMarkT: 0, hitFlashT: 0, headshotT: 0, zoom: 0.75, hitPauseT: 0, dmgPops: [], hitOutlines: [], scopeT: 0, lastKiller: null,
     killStreak: 0, killLabelHead: false,

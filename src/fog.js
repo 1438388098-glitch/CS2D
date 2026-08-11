@@ -15,8 +15,9 @@ function fogBlocked(game, x, y, map) {
   return false;
 }
 
-export function castRayEndpoint(game, x, y, angle, radius, step = 8) {
+export function castRayEndpoint(game, x, y, angle, radius = fogVisionRadius(game), step = 12) {
   const map = getMap();
+  if (!Number.isFinite(radius) || radius <= 0) radius = fogVisionRadius(game);
   const cos = Math.cos(angle), sin = Math.sin(angle);
   let px = x, py = y;
   for (let d = step; d <= radius; d += step) {
@@ -29,9 +30,17 @@ export function castRayEndpoint(game, x, y, angle, radius, step = 8) {
 
 const FOG_RADIUS = 540;
 
-export function canSeeInFog(game, viewer, target, radius = FOG_RADIUS) {
+export function fogVisionRadius(game) {
+  const map = getMap();
+  if (map && map.W && map.H) {
+    return Math.hypot(map.W, map.H) + Math.max(1, map.tile || 1);
+  }
+  return FOG_RADIUS;
+}
+
+export function canSeeInFog(game, viewer, target, radius = fogVisionRadius(game)) {
   if (!fogEnabled(game)) return true;
-  radius = Math.min(radius, FOG_RADIUS);
+  radius = Math.min(radius, fogVisionRadius(game));
   const d = Math.hypot(target.x - viewer.x, target.y - viewer.y);
   if (d > radius) return false;
   // 兼容历史距离辅助：viewer 落在墙内时保留距离判断，实际对局中玩家/bot 始终在可行走格。
@@ -39,7 +48,7 @@ export function canSeeInFog(game, viewer, target, radius = FOG_RADIUS) {
   return los(game, viewer.x, viewer.y, target.x, target.y, viewer.height || 0);
 }
 
-export function hasLineOfSight(game, viewer, target, radius = FOG_RADIUS) {
+export function hasLineOfSight(game, viewer, target, radius = fogVisionRadius(game)) {
   if (!viewer || !target) return false;
   if (!los(game, viewer.x, viewer.y, target.x, target.y, viewer.height || 0)) return false;
   return canSeeInFog(game, viewer, target, radius);
@@ -51,7 +60,7 @@ export function hasLineOfSight(game, viewer, target, radius = FOG_RADIUS) {
 const BODY_HALF = 14;
 const BODY_HALF_CROUCH = 6;
 
-export function hasPartialLineOfSight(game, viewer, target, radius = FOG_RADIUS) {
+export function hasPartialLineOfSight(game, viewer, target, radius = fogVisionRadius(game)) {
   if (!viewer || !target) return { visible: false, visiblePoints: 0 };
   const dx = target.x - viewer.x, dy = target.y - viewer.y;
   const d = Math.hypot(dx, dy);
@@ -74,7 +83,7 @@ export function hasPartialLineOfSight(game, viewer, target, radius = FOG_RADIUS)
   return { visible: visiblePoints > 0, visiblePoints };
 }
 
-export function castVisionPolygon(game, x, y, radius = FOG_RADIUS, rays = 72) {
+export function castVisionPolygon(game, x, y, radius = fogVisionRadius(game), rays = 72) {
   const points = [];
   for (let i = 0; i < rays; i++) {
     const a = (i / rays) * Math.PI * 2;

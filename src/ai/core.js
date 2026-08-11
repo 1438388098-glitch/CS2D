@@ -15,6 +15,10 @@ import { botActions } from './actions.js';
 import { peekPlan, peekPhase, peekStance, peekSkillOf } from './peek.js';
 import { hearGunshot } from './senses.js';
 import { hasLineOfSight } from '../fog.js';
+import { smoothBotLogic } from './smooth.js';
+
+const OBJECTIVE_STOP_RADIUS = 24;
+const OBJECTIVE_RESUME_RADIUS = 48;
 
 export function applyTeammateSeparation(e, game) {
   for (const o of game.entities) {
@@ -42,8 +46,43 @@ export function updateBots(game, dt) {
     if (!e.bot || e.dead || e.netControlled) continue;
     if (e.repathT > 0) e.repathT -= dt;
     updateShotStreak(e, dt);
+    const prevAngle = e.angle;
+    const prevVx = e.vx;
+    const prevVy = e.vy;
+    const diag = game.diagMotion ? { prevVx, prevVy, prevAngle, x: e.x, y: e.y } : null;
     botThink(e, game, dt);
+    if (diag) {
+      diag.thinkVx = e.vx;
+      diag.thinkVy = e.vy;
+      diag.thinkAngle = e.angle;
+      diag.pathLen = e.path ? e.path.length : 0;
+      diag.pathI = e.pathI;
+      diag.objCache = !!e.objCache;
+      diag.objX = e.objCache && e.objCache.x;
+      diag.objY = e.objCache && e.objCache.y;
+      diag.objKey = e.objKey;
+      diag.nearObjKey = e._nearObjKey;
+      diag.aimTarget = !!e.aimTarget;
+      diag.cornerAimT = e.cornerAimT;
+      diag.walking = !!e.walking;
+      diag.repathT = e.repathT;
+      diag.trigger = !!e.trigger;
+    }
     botActions(e, game, dt);
+    if (diag) {
+      diag.actVx = e.vx;
+      diag.actVy = e.vy;
+      diag.actAngle = e.angle;
+      diag.aimAfter = !!e.aimTarget;
+    }
+    if (!(game.freezeT > 0)) smoothBotLogic(e, dt, prevAngle, prevVx, prevVy);
+    if (diag) {
+      diag.smoothVx = e.vx;
+      diag.smoothVy = e.vy;
+      diag.smoothAngle = e.angle;
+      if (!e._motionDiag) e._motionDiag = [];
+      if (e._motionDiag.length < 900) e._motionDiag.push(diag);
+    }
     applyTeammateSeparation(e, game);
   }
   for (const e of game.entities) {
@@ -408,11 +447,17 @@ function botThink(e, game, dt) {
       e.slot = 'primary';
       e.lastNadeT = game.roundTime;
     }
-    if (Math.hypot(obj.x - e.x, obj.y - e.y) < 24) {
+    const arriveD = Math.hypot(obj.x - e.x, obj.y - e.y);
+    const objKey = e.objKey;
+    const holdObjective = arriveD < OBJECTIVE_STOP_RADIUS ||
+      (e._nearObjKey === objKey && arriveD < OBJECTIVE_RESUME_RADIUS);
+    if (holdObjective) {
       e.vx = 0; e.vy = 0;
       e.path = null; e.repathT = 0;
+      e._nearObjKey = objKey;
       if (obj.face !== undefined) e.angle = angNorm(obj.face);
     } else {
+      e._nearObjKey = null;
       // 小身位探点（net peek 动作 / peekChance 基因）：接近目标边缘时快速垂直摆动探视
       const pkNear = Math.hypot(obj.x - e.x, obj.y - e.y) < 260;
       const pkTrigger = obj.peek || (d.peekChance !== undefined && pkNear && rand() < d.peekChance * dt * 4);
@@ -421,8 +466,9 @@ function botThink(e, game, dt) {
         const pkDir = Math.sin(game.time * 2.4 + e.anchorIdx * 1.9) > 0 ? 1 : -1;
         e.vx = Math.cos(e.angle + Math.PI / 2 * pkDir) * weapon.speed * 235 * 0.6;
         e.vy = Math.sin(e.angle + Math.PI / 2 * pkDir) * weapon.speed * 235 * 0.6;
-        e.path = null;
-        if (e.repathT > 0.9) e.repathT = 0.5;
+        // 探点只是短暂侧移：保留已有路径让下一帧可直接续走，不再清空后滑行到停。
+        // 若本来没有路径，则清掉旧寻路冷却，避免继续等待 0.8s 后才重新规划。
+        if (e.path === null) e.repathT = 0;
       } else {
         // S3 预瞄提前枪（H11 专用）：接近目标（转角/门口）时概率朝目标方向提前开火
         if (d.prefireChance !== undefined && pkNear && !e.reloading && rand() < d.prefireChance * dt * 3) {
@@ -434,7 +480,8 @@ function botThink(e, game, dt) {
             pathTo(e, obj.x, obj.y);
             e.repathT = 0.8;
           }
-        } else {
+        }
+        if (e.path) {
           const done = followPath(e, dt, weapon.speed * 235);
           if (!done) { e.path = null; e.repathT = 0; }
         }

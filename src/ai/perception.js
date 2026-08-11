@@ -1,7 +1,7 @@
 // 感知层：视野判定（公平约束：感知距离 ≤ 玩家屏幕最远可视距离）
 import {BOT_AI, diffOf} from '../config.js';
 import {angDiff, viewCap} from '../utils.js';
-import {fogEnabled, hasPartialLineOfSight} from '../fog.js';
+import {hasPartialLineOfSight} from '../fog.js';
 import {recordOppPos} from './oppmodel.js';
 
 const SPATIAL_CELL = 240;
@@ -37,7 +37,6 @@ function nearbySpatial(e, game, radius) {
 export function findVisibleEnemy(e, game) {
   let best = null;
   let bestD = Math.min((e.aiParams || diffOf(game)).view, viewCap(game), BOT_AI.MAX_VIEW || Infinity, AI_VIEW_CAP);
-  if (fogEnabled(game)) bestD = Math.min(bestD, 540);
   let bestScore = -Infinity;
   const tick = Math.floor(game.time * 30);
   if (!game.spatial || game.spatial.tick !== tick) buildSpatial(game, tick);
