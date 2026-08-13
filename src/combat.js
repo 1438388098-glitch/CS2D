@@ -234,6 +234,11 @@ function fireRay(e, game, ang, w, dmg, isPellet) {
     const dd = best.t;
     finalDmg *= distanceFalloff(w, dd);
     applyDamage(hit, Math.max(1, finalDmg), { killer: e, weapon: wkey(e), head }, game);
+    // 联机：命中远端玩家实体时把伤害事件发给对方，由对方对"自己"权威结算，
+    // 避免只在本端扣血随后被对方快照覆盖（双方同 seed 确定性模拟，结算结果一致）。
+    if (hit.netRole === 'remote' && e === game.player && game.lan && typeof game.lan.send === 'function') {
+      game.lan.send({ type: 'hit', dmg: Math.max(1, finalDmg), head: !!head, weapon: wkey(e) });
+    }
     const hitLen = Math.max(4, best.t - Math.sqrt(Math.max(0, hit.rad * hit.rad - best.perp * best.perp)));
     const hx = ox + cos * hitLen, hy = oy + sin * hitLen;
     spawnBlood(hx, hy, ang, head, game);

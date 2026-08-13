@@ -1,4 +1,5 @@
 ﻿import { startMatch } from './game.js';
+import { applyDamage } from './combat.js';
 
 let ws = null;
 let game = null;
@@ -58,7 +59,7 @@ function connect(gameRef, role, room, name, isReconnect = false) {
     try { msg = JSON.parse(ev.data); } catch (err) { return; }
     if (msg.type === 'welcome') {
       game.lan = game.lan || {};
-      Object.assign(game.lan, { role, room, ws, connected: true, peerCount: msg.count || 1 });
+      Object.assign(game.lan, { role, room, ws, connected: true, peerCount: msg.count || 1, send });
       setStatus(role === 'host' ? '房间 ' + room + ' 已创建，等待玩家加入…' : '已加入房间 ' + room + '，等待房主开赛…');
       setConn('wait');
       if (role === 'host') {
@@ -102,6 +103,8 @@ function connect(gameRef, role, room, name, isReconnect = false) {
       const panel = $('lanPanel');
       if (panel) panel.style.display = 'none';
       startMatch(game);
+    } else if (msg.type === 'hit') {
+      applyRemoteHit(msg);
     } else if (msg.type === 'input' || msg.type === 'snapshot') {
       applyRemote(msg);
     }
@@ -147,6 +150,14 @@ function showHostLeftRecovery() {
   btn.style.display = 'inline-block';
 }
 
+// 联机伤害结算：对方命中了我（我在对方视角是 remote 实体），
+// 这里对自己 player 权威应用伤害（killer 用本地的 remote 实体，即对方玩家）。
+function applyRemoteHit(msg) {
+  if (!game || !game.player || game.player.dead) return;
+  const remote = game.entities && game.entities.find((x) => x.netRole === 'remote');
+  applyDamage(game.player, msg.dmg, { killer: remote || null, weapon: msg.weapon, head: !!msg.head }, game);
+}
+
 function applyRemote(msg) {
   if (!game || !game.entities) return;
   const e = game.entities.find((x) => x.netRole === 'remote');
@@ -183,8 +194,22 @@ export function smoothRemote(gameRef, dt) {
   e.y = e._netPy + (e._netTy - e._netPy) * t;
 }
 
+// 6 位强随机房间码（去易混淆字符），优先用 Web Crypto，避免 Math.random 短码被撞房/抢房
+function randomRoom() {
+  const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  const bytes = new Uint8Array(6);
+  if (typeof crypto !== 'undefined' && crypto.getRandomValues) {
+    crypto.getRandomValues(bytes);
+  } else {
+    for (let i = 0; i < bytes.length; i++) bytes[i] = Math.floor(Math.random() * 256);
+  }
+  let out = '';
+  for (let i = 0; i < bytes.length; i++) out += alphabet[bytes[i] % alphabet.length];
+  return out;
+}
+
 function startHost() {
-  const room = (Math.random().toString(36).slice(2, 6) + Math.random().toString(36).slice(2, 5)).toUpperCase();
+  const room = randomRoom();
   const name = $('lanName') && $('lanName').value ? $('lanName').value : '房主';
   game.opts.team = 'ct';
   game.opts.remoteTeam = 't';
@@ -231,7 +256,8 @@ export function initLan(gameRef) {
   heartbeat = setInterval(() => {
     if (!game || !game.lan || !game.lan.connected || !ws || ws.readyState !== WebSocket.OPEN) return;
     const p = game.player;
-    if (!p) return;
+    // 等待开赛期间发保活心跳，避免服务端 90s 空闲清理误拆房间
+    if (!p) { send({ type: 'ping' }); return; }
     send({ type: 'input', team: p.team, x: p.x, y: p.y, vx: p.vx, vy: p.vy, angle: p.angle, hp: p.hp, dead: p.dead, weapon: p.weapons.primary, ammo: p.ammoMap[p.weapons.primary || p.weapons.secondary || 'glock'] });
   }, 33);
   // 页面卸载时清理心跳与连接

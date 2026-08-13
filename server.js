@@ -60,7 +60,9 @@ const SECURITY_HEADERS = {
   'Permissions-Policy': 'camera=(), microphone=(), geolocation=(), payment=()'
 };
 
-const BLOCKED_PREFIXES = ['/.git', '/.autopilot', '/node_modules'];
+const BLOCKED_PREFIXES = ['/.git', '/.autopilot', '/.superpowers', '/.worktrees', '/.github', '/node_modules'];
+// 静态服务只允许下发已知扩展名；.bak/.log/.gitignore 等无扩展名或备份/日志一律 404，避免仓库内部文件暴露
+const ALLOWED_EXT = new Set(Object.keys(MIME));
 
 const COMPRESSIBLE_EXT = new Set(['.html', '.js', '.mjs', '.css', '.json', '.svg', '.txt', '.map']);
 const NO_CACHE_EXT = new Set(['.html', '.js', '.mjs', '.css']);
@@ -117,6 +119,11 @@ const server = http.createServer((req, res) => {
   const rel = path.relative(ROOT, filePath);
   if (rel.startsWith('..') || path.isAbsolute(rel)) {
     sendStatus(res, 403, 'Forbidden');
+    return;
+  }
+  // 扩展名白名单：非服务文件（备份/日志/无扩展名）一律不下发
+  if (!ALLOWED_EXT.has(path.extname(filePath).toLowerCase())) {
+    sendStatus(res, 404, 'Not Found');
     return;
   }
   fs.readFile(filePath, (err, data) => {
@@ -187,16 +194,33 @@ function broadcast(room, payload, except) {
   }
 }
 
+// 每连接限频：正常快照 ~30Hz + 事件，远低于 200 msg/s；超限判定为异常/攻击，直接断开
+function throttle(ws) {
+  const now = Date.now();
+  if (!ws._rateWindow || now - ws._rateWindow >= 1000) {
+    ws._rateWindow = now;
+    ws._rateCount = 0;
+  }
+  if (++ws._rateCount > 200) {
+    try { ws.socket.destroy(); } catch (err) { /* closed */ }
+    return false;
+  }
+  return true;
+}
+
 function handleFrame(ws, payload) {
   let msg;
   try { msg = JSON.parse(payload.toString('utf8')); } catch (err) { return; }
   if (!msg || !msg.type) return;
+  if (!throttle(ws)) return;
+  // 等待期保活心跳：仅刷新 lastActive，不回包、不广播
+  if (msg.type === 'ping') return;
   if (msg.type === 'hello') {
     const room = String(msg.room || '').trim();
     if (!room) return;
     ws.room = room;
     ws.role = msg.role === 'host' ? 'host' : 'guest';
-    ws.name = String(msg.name || 'LAN Player');
+    ws.name = String(msg.name || 'LAN Player').slice(0, 16);
     let r = rooms.get(room);
     if (!r) { r = { clients: new Set(), host: null }; rooms.set(room, r); }
     r.clients.add(ws);
@@ -206,7 +230,7 @@ function handleFrame(ws, payload) {
     return;
   }
   if (!ws.room) return;
-  if (msg.type === 'relay' || msg.type === 'input' || msg.type === 'start') {
+  if (msg.type === 'relay' || msg.type === 'input' || msg.type === 'start' || msg.type === 'hit') {
     broadcast(ws.room, msg, ws);
     return;
   }
@@ -275,6 +299,18 @@ server.on('upgrade', (req, socket) => {
   if (path !== '/ws') { socket.destroy(); return; }
   const key = req.headers['sec-websocket-key'];
   if (!key) { socket.destroy(); return; }
+  // Origin 校验：浏览器必发 Origin，非同源且不在白名单则拒绝，防跨站发起 WS 连接
+  const origin = req.headers['origin'];
+  if (origin) {
+    const host = req.headers['host'] || '';
+    const sameOrigin = origin === 'http://' + host || origin === 'https://' + host;
+    const allowed = (process.env.CS2D_ALLOWED_ORIGIN || '').split(',').map((s) => s.trim()).filter(Boolean);
+    if (!sameOrigin && !allowed.includes(origin)) {
+      socket.write('HTTP/1.1 403 Forbidden\r\nConnection: close\r\n\r\n');
+      socket.destroy();
+      return;
+    }
+  }
   const accept = crypto.createHash('sha1').update(key + '258EAFA5-E914-47DA-95CA-C5AB0DC85B11').digest('base64');
   socket.write('HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Accept: ' + accept + '\r\n\r\n');
   const ws = { socket, room: null, role: null, name: null, buf: Buffer.alloc(0), lastActive: Date.now() };
@@ -288,6 +324,8 @@ setInterval(() => {
   const now = Date.now();
   for (const r of rooms.values()) {
     for (const c of [...r.clients]) {
+      // host 还在等队友（房内 <2 人）时不清理，避免长时间空等被误拆房
+      if (r.host === c && r.clients.size < 2) continue;
       if (now - (c.lastActive || now) > 90000) { try { c.socket.destroy(); } catch (err) { /* closed */ } }
     }
   }
