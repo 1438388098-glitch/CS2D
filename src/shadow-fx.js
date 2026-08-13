@@ -28,6 +28,16 @@ export const MAX_SHADOW_LEN = 1.6;
 
 const MARGIN_TILES = Math.ceil(MAX_SHADOW_LEN + 0.5); // 3
 
+// 软影烘焙参数：先画核心影，再画两层更宽更长的羽化影，最后由
+// softenShadowLayer 对整层做一次低强度模糊，抹掉瓦片接缝和投影末端硬边。
+// 这些值只在 shadowLayer 重建时使用，不会进入每帧渲染。
+export const SOFT_SHADOW_BLUR_RADIUS = 3;
+const SOFT_PASSES = [
+  { alpha: 1.0, w: 0.62, len: 0.78, fade: 0.58 },
+  { alpha: 0.42, w: 0.98, len: 0.94, fade: 0.78 },
+  { alpha: 0.18, w: 1.34, len: 1.12, fade: 0.88 }
+];
+
 // 瓦片字符 -> 阴影类别（未知字符一律视为普通地面，不投影）。
 // 同时接受显式类别名（'wall'/'crate'/'vehicle'/'ground'），供车辆等
 // 尚无地图字符的类别直接调用；VEHICLE_CHARS 为将来地图字符的扩展点。
@@ -113,9 +123,39 @@ export function visibleShadows(tiles, viewport, lightDirRad) {
   return out;
 }
 
-// 绘制投影条：每个阴影画一个自掩体背面沿投影方向渐隐的半透明四边形（软投影）。
+// 绘制单层投影条：自掩体背面沿投影方向渐隐的半透明四边形。
 // 优先使用沿投影方向的线性渐变（根部实、末端透明）；ctx 无 createLinearGradient
-// 时回退为等透明度四边形。alpha/len 非正或 ctx 缺失时为空操作。
+// 时回退为等透明度四边形。
+function drawShadowPass(ctx, s, alphaScale, wScale, lenScale, fadeStop) {
+  const T = s.tile > 0 ? s.tile : DEFAULT_TILE;
+  const cx = Math.floor(s.tx) * T + T / 2;
+  const cy = Math.floor(s.ty) * T + T / 2;
+  const dx = s.dx, dy = s.dy;
+  const px = -dy, py = dx; // 投影方向垂直单位向量
+  const ox = cx + dx * T * 0.5, oy = cy + dy * T * 0.5; // 掩体背面边缘（根部）
+  const tx = ox + dx * s.len * lenScale * T, ty = oy + dy * s.len * lenScale * T; // 投影末端
+  const hw = s.w * wScale * T * 0.5;
+  const alpha = Math.max(0, Math.min(1, s.alpha * alphaScale));
+  ctx.beginPath();
+  ctx.moveTo(ox + px * hw, oy + py * hw);
+  ctx.lineTo(ox - px * hw, oy - py * hw);
+  ctx.lineTo(tx - px * hw, ty - py * hw);
+  ctx.lineTo(tx + px * hw, ty + py * hw);
+  ctx.closePath();
+  if (typeof ctx.createLinearGradient === 'function') {
+    const g = ctx.createLinearGradient(ox, oy, tx, ty);
+    g.addColorStop(0, 'rgba(8,10,14,' + alpha.toFixed(3) + ')');
+    g.addColorStop(fadeStop, 'rgba(8,10,14,' + (alpha * 0.35).toFixed(3) + ')');
+    g.addColorStop(1, 'rgba(8,10,14,0)');
+    ctx.fillStyle = g;
+  } else {
+    ctx.fillStyle = 'rgba(8,10,14,' + alpha.toFixed(3) + ')';
+  }
+  ctx.fill();
+}
+
+// 绘制投影条：每块掩体由核心影 + 两层羽化影叠加，形成比单四边形更柔的轮廓。
+// alpha/len 非正或 ctx 缺失时为空操作。
 export function drawShadows(ctx, shadows) {
   if (!ctx || !shadows || !shadows.length) return;
   let has = false;
@@ -126,29 +166,28 @@ export function drawShadows(ctx, shadows) {
   ctx.save();
   for (const s of shadows) {
     if (!s || !(s.alpha > 0) || !(s.len > 0) || !Number.isFinite(s.len) || !Number.isFinite(s.alpha)) continue;
-    const T = s.tile > 0 ? s.tile : DEFAULT_TILE;
-    const cx = Math.floor(s.tx) * T + T / 2;
-    const cy = Math.floor(s.ty) * T + T / 2;
-    const dx = s.dx, dy = s.dy;
-    const px = -dy, py = dx; // 投影方向垂直单位向量
-    const ox = cx + dx * T * 0.5, oy = cy + dy * T * 0.5; // 掩体背面边缘（根部）
-    const tx = ox + dx * s.len * T, ty = oy + dy * s.len * T; // 投影末端
-    const hw = s.w * T * 0.5;
-    ctx.beginPath();
-    ctx.moveTo(ox + px * hw, oy + py * hw);
-    ctx.lineTo(ox - px * hw, oy - py * hw);
-    ctx.lineTo(tx - px * hw, ty - py * hw);
-    ctx.lineTo(tx + px * hw, ty + py * hw);
-    ctx.closePath();
-    if (typeof ctx.createLinearGradient === 'function') {
-      const g = ctx.createLinearGradient(ox, oy, tx, ty);
-      g.addColorStop(0, 'rgba(8,10,14,' + s.alpha.toFixed(3) + ')');
-      g.addColorStop(1, 'rgba(8,10,14,0)');
-      ctx.fillStyle = g;
-    } else {
-      ctx.fillStyle = 'rgba(8,10,14,' + s.alpha.toFixed(3) + ')';
+    for (const pass of SOFT_PASSES) {
+      drawShadowPass(ctx, s, pass.alpha, pass.w, pass.len, pass.fade);
     }
-    ctx.fill();
   }
   ctx.restore();
+}
+
+// 对整张阴影层做一次低强度模糊，抹掉投影边缘和相邻瓦片间的硬接缝。
+// 不支持 Canvas filter 的环境原样复制，仍保留多层羽化效果。
+export function softenShadowLayer(src, radius = SOFT_SHADOW_BLUR_RADIUS) {
+  if (!src || !src.width || !src.height || typeof document === 'undefined') return src;
+  const out = document.createElement('canvas');
+  out.width = src.width;
+  out.height = src.height;
+  const octx = out.getContext('2d');
+  if (!octx) return src;
+  if (typeof octx.filter === 'string') {
+    octx.filter = 'blur(' + radius + 'px)';
+    octx.drawImage(src, 0, 0);
+    octx.filter = 'none';
+  } else {
+    octx.drawImage(src, 0, 0);
+  }
+  return out;
 }

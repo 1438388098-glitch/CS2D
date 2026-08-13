@@ -18,7 +18,6 @@ import {weatherKind, weatherParticles, drawWeather, MAX_PARTICLES as WEATHER_MAX
 import {enhancedBoomSpec, drawEnhancedBoom} from './boom-fx.js';
 import {visibleShadows, drawShadows} from './shadow-fx.js';
 import {killLabel, drawKillLabel, KILL_LABEL_DUR} from './killcam-fx.js';
-import {footprintsForPath, drawFootprint, FOOTPRINT_GAP, FOOTPRINT_LIFE, FOOTPRINT_TIME_LIFE} from './footprint-fx.js';
 import {initRenderer2dGpu, render2dGpuFrame, render2dGpuReady, render2dGpuIsSoftware, updateFogGpu, rebuildShadowLayer} from './render2d-gpu.js';
 import {viewAngle, viewX, viewY} from './render-smooth.js';
 
@@ -31,10 +30,6 @@ let shadowLayerRev = -1;
 
 // 脚步动画渲染态：每实体累积移动距离 + 稳定 seed（渲染私有，不影响游戏逻辑）
 const stepFXState = new Map();
-// 脚印渲染态：每实体最近移动路径采样点（渲染私有，确定性，无 Math.random）
-const footprintPathState = new Map();
-// 脚印窗口长度：覆盖 FOOTPRINT_LIFE 移动距离所需的采样点数（含余量）
-const FOOTPRINT_MAX_PTS = Math.ceil(FOOTPRINT_LIFE / FOOTPRINT_GAP) + 2;
 // 掩体投影固定光源方向：右下角 45° 光照（纯装饰，固定值保证可复现）
 const SHADOW_LIGHT_DIR = Math.PI * 0.25;
 
@@ -264,35 +259,6 @@ function drawKillLabelFx(game) {
   const streak = game.killStreak || 1;
   const kind = streak >= 2 ? 'multikill' : (game.killLabelHead ? 'headshot' : 'normal');
   drawKillLabel(ctx, killLabel(kind, streak, elapsed));
-}
-
-// 脚印渲染态 + 绘制：每实体按 FOOTPRINT_GAP 间距记录最近路径采样点（渲染私有），
-// 用 footprintsForPath + drawFootprint 在实体脚下绘制存活脚印（确定性，无 Math.random）。
-function drawEntityFootprints(game, e) {
-  if (e !== game.player) return;
-  let st = footprintPathState.get(e);
-  if (!st) {
-    st = { pts: [{ x: e.x, y: e.y, t: game.time }], acc: 0, seed: ((Math.floor(e.x) * 73856093 ^ Math.floor(e.y) * 19349663) >>> 0) || 1 };
-    footprintPathState.set(e, st);
-  }
-  const moving = Math.hypot(e.vx || 0, e.vy || 0) > 18;
-  if (moving) {
-    const last = st.pts[st.pts.length - 1];
-    st.acc += Math.hypot(e.x - last.x, e.y - last.y);
-    while (st.acc >= FOOTPRINT_GAP && st.pts.length < FOOTPRINT_MAX_PTS * 2) {
-      st.acc -= FOOTPRINT_GAP;
-      st.pts.push({ x: e.x, y: e.y, t: game.time });
-      if (st.pts.length > FOOTPRINT_MAX_PTS) st.pts.shift();
-    }
-  } else {
-    st.acc = 0;
-  }
-  const pts = st.pts;
-  if (pts.length < 2) return;
-  const t = Math.min(FOOTPRINT_TIME_LIFE, Math.max(0, game.time - (pts[0].t || game.time)));
-  const fps = footprintsForPath(pts, t, st.seed);
-  if (!fps.length) return;
-  for (const fp of fps) drawFootprint(ctx, fp);
 }
 
 // 2D 伤害数字：命中处上浮淡出（描黑边可读），与 3D 的 B3 反馈一致
@@ -745,7 +711,6 @@ function drawEntities(game) {
   const vy0 = (game.camY || 0) - (game._shy || 0) - vh / 2 - margin;
   const vx1 = (game.camX || 0) - (game._shx || 0) + vw / 2 + margin;
   const vy1 = (game.camY || 0) - (game._shy || 0) + vh / 2 + margin;
-  let fpMs = 0;
   let calcMs = 0;
   let stepMs = 0;
   let bodyMs = 0;
@@ -758,9 +723,6 @@ function drawEntities(game) {
     const stFx = getStepFX(e, tSec);
     calcMs += performance.now() - calcT;
     if (e.dead) continue;
-    const fpT = performance.now();
-    drawEntityFootprints(game, e);
-    fpMs += performance.now() - fpT;
     const stepT = performance.now();
     if (stFx) {
       stepCounts.entities++;
@@ -861,7 +823,6 @@ function drawEntities(game) {
     }
     otherMs += performance.now() - otherT;
   }
-  game._renderStageMs.footprints = fpMs;
   game._renderStageMs.stepCalc = calcMs;
   game._renderStageMs.stepFx = stepMs;
   game._renderStageMs.stepCounts = stepCounts;

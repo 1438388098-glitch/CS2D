@@ -1,7 +1,7 @@
 // Top-down 2D WebGL backend: static map, decals, shadows and fog are uploaded
 // as textures and composited by the GPU instead of redrawn with Canvas 2D calls.
 import { getGrid, getMap } from './map.js';
-import { visibleShadows, drawShadows } from './shadow-fx.js';
+import { visibleShadows, drawShadows, softenShadowLayer } from './shadow-fx.js';
 import { TILE } from './config.js';
 import { fogEnabled } from './fog.js';
 import { renderFogLayer } from './fog-layer.js';
@@ -110,7 +110,7 @@ function buildShadowTexture(layers) {
     SHADOW_LIGHT_DIR
   );
   drawShadows(t, shadows);
-  return c;
+  return softenShadowLayer(c);
 }
 
 export function rebuildShadowLayer(game) {

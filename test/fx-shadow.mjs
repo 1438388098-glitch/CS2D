@@ -5,12 +5,13 @@
 //     投影方向 (dx,dy) 为光源反方向（单位向量）。
 //   visibleShadows(tiles, viewport, lightDirRad) 只返回可视范围(+边距)内能投影的瓦片，
 //     不含普通地面，网格/描述符两种形态等价。
-//   drawShadows(ctx, shadows) 对有效阴影各画一个四边形（渐变优先、flat 兜底），
+//   drawShadows(ctx, shadows) 对有效阴影各画核心影+两层羽化影（渐变优先、flat 兜底），
 //     alpha/len 非正或 ctx 缺失为空操作；save/restore 成对平衡。
 import {
   shadowFor,
   visibleShadows,
   drawShadows,
+  softenShadowLayer,
   categoryFor,
   WALL_CHARS,
   CRATE_CHARS,
@@ -117,7 +118,7 @@ function near(a, b, tol) { return Math.abs(a - b) <= (tol || 1e-6); }
   ok('null tiles no-op', visibleShadows(null, { x: 0, y: 0, w: 40, h: 40 }, 0).length === 0);
 }
 
-// ---- drawShadows：四边形 + 渐变 + save/restore 平衡 ----
+// ---- drawShadows：多层羽化 + 渐变 + save/restore 平衡 ----
 {
   const mkCtx = (withGrad) => {
     const calls = [];
@@ -141,8 +142,8 @@ function near(a, b, tol) { return Math.abs(a - b) <= (tol || 1e-6); }
   ];
   const c1 = mkCtx(true);
   drawShadows(c1, shadows);
-  ok('draws one quad per shadow', c1.calls.filter((c) => c === 'fill').length === 2);
-  ok('uses gradient when available', c1.calls.filter((c) => c === 'grad').length === 2);
+  ok('draws three soft passes per shadow', c1.calls.filter((c) => c === 'fill').length === 6);
+  ok('uses gradient when available', c1.calls.filter((c) => c === 'grad').length === 6);
   ok('one save/restore pair', c1.calls.filter((c) => c === 'save').length === 1 && c1.calls.filter((c) => c === 'restore').length === 1);
   const c2 = mkCtx(false);
   drawShadows(c2, shadows);
@@ -159,7 +160,9 @@ function near(a, b, tol) { return Math.abs(a - b) <= (tol || 1e-6); }
   ok('null ctx no-op', c3.calls.length === 0);
   const c4 = mkCtx(true);
   drawShadows(c4, shadows.concat([{ ...shadows[0], alpha: 0 }]));
-  ok('mixed valid/invalid draws only valid', c4.calls.filter((c) => c === 'fill').length === 2);
+  ok('mixed valid/invalid draws only valid', c4.calls.filter((c) => c === 'fill').length === 6);
+  const domless = { width: 4, height: 4 };
+  ok('soften returns source without DOM', softenShadowLayer(domless) === domless);
 }
 
 console.log('fx-shadow: all PASS');
