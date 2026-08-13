@@ -226,7 +226,11 @@ export function netAct(e, game) {
   if (w && !w.input && !Array.isArray(w)) {
     weights = w[game.opts && game.opts.mapId] || w.__default || w;
   }
-  const net = (d._net = d._net || dqnFromJSON(weights));
+  // 按图缓存推理网络：d._net 挂在 aiParams 上若只存一份，跨图切换时会静默复用上一张图的权重，
+  // 因此以 mapId 为 key 分桶缓存，避免热更/跨图场景用错权重。
+  const mapKey = (game.opts && game.opts.mapId) || '__default';
+  const cache = (d._netMap = d._netMap || {});
+  const net = cache[mapKey] || (cache[mapKey] = dqnFromJSON(weights));
   const obs = net.input >= 18 ? netObsTeam(e, game) : netObs(e, game);
   if (!obs || !Array.isArray(obs)) return e.netAct;
   const q = net.forward(obs);
