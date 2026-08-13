@@ -413,7 +413,7 @@ function botThink(e, game, dt) {
       const sy = tSpawn.y + (anchor % 2 ? 55 : -55);
       if (e.path === null && e.repathT <= 0) {
         pathTo(e, sx, sy);
-        e.repathT = 1.2;
+        if (!e.path) e.repathT = 1.2;
       }
       if (e.path) {
         e.angle = angNorm(Math.atan2(sy - e.y, sx - e.x));
@@ -423,6 +423,7 @@ function botThink(e, game, dt) {
     }
   }
   const obj = botObjective(e, game);
+  let holdingObjective = false;
   if (obj) {
     // sneak 静步接线（最高价值修复）：保枪/绕后/静步摸点目标（obj.sneak）→ 0.55 速 + 脚步半径减半；
     // 接近目标（<200）或进入交战（aimTarget）时恢复满速，避免永远满速跑暴露脚步
@@ -450,7 +451,8 @@ function botThink(e, game, dt) {
     const arriveD = Math.hypot(obj.x - e.x, obj.y - e.y);
     const objKey = e.objKey;
     const holdObjective = arriveD < OBJECTIVE_STOP_RADIUS ||
-      (e._nearObjKey === objKey && arriveD < OBJECTIVE_RESUME_RADIUS);
+      (e._nearObjKey != null && arriveD < OBJECTIVE_RESUME_RADIUS);
+    holdingObjective = holdObjective;
     if (holdObjective) {
       e.vx = 0; e.vy = 0;
       e.path = null; e.repathT = 0;
@@ -478,7 +480,7 @@ function botThink(e, game, dt) {
         if (e.path === null) {
           if (e.repathT <= 0) {
             pathTo(e, obj.x, obj.y);
-            e.repathT = 0.8;
+            if (!e.path) e.repathT = 0.8;
           }
         }
         if (e.path) {
@@ -493,26 +495,29 @@ function botThink(e, game, dt) {
         (freshMem ? 0 : Math.sin(game.time * 3.2 + e.anchorIdx * 1.3) * 0.95));
     }
   }
-  if (e.lastKnown && !e.aimTarget && !e.hasBomb && (e.team !== 'ct' || ctReactsTo(e, game, e.lastKnown.x, e.lastKnown.y))) {
+  if (!holdingObjective && e.lastKnown && !e.aimTarget && !e.hasBomb && (e.team !== 'ct' || ctReactsTo(e, game, e.lastKnown.x, e.lastKnown.y))) {
     const lk = e.lastKnown;
     const lkd = Math.hypot(e.x - lk.x, e.y - lk.y);
     e.walking = lkd < 400;
     if (e.lastKnownT < 3 && lkd > 70 && lkd < 700) {
       if (e.path === null && e.repathT <= 0) {
         pathTo(e, lk.x, lk.y);
-        e.repathT = 1.2;
+        if (!e.path) e.repathT = 1.2;
       }
       e.angle = angNorm(Math.atan2(lk.y - e.y, lk.x - e.x));
       followPath(e, dt, weapon.speed * 235);
     }
   }
   // 队内情报探查（共享黑板）：队友目击/枪声/受击/击杀 → 前往模糊位置侦察（信息衰减）
-  if (!e.lastKnown && !e.aimTarget && !e.hasBomb && (e.team === 'ct' || game.roundTime > 12)) {
+  if (!holdingObjective && !e.lastKnown && !e.aimTarget && !e.hasBomb && (e.team === 'ct' || game.roundTime > 12)) {
     const info = query(game, e);
     if (info && info.age < 4 && (e.team !== 'ct' || ctReactsTo(e, game, info.x, info.y))) {
       const d2 = Math.hypot(info.x - e.x, info.y - e.y);
       if (d2 > 60 && d2 < 800) {
-        if (e.path === null && e.repathT <= 0) { pathTo(e, info.x, info.y); e.repathT = 1.0; }
+        if (e.path === null && e.repathT <= 0) {
+          pathTo(e, info.x, info.y);
+          if (!e.path) e.repathT = 1.0;
+        }
         e.angle = angNorm(Math.atan2(info.y - e.y, info.x - e.x));
         followPath(e, dt, weapon.speed * 235);
       }

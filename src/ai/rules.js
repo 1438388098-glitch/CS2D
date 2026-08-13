@@ -90,6 +90,7 @@ export function shouldKeepPath(e, startX, startY, x, y, minProgress = 30, loopWi
         e._loopWatch = null;
         e.path = null;
         e.pathI = 0;
+        e.repathT = 0;
         return false;
       }
     }
