@@ -1,5 +1,6 @@
 // Editor regression: saving two different templates must keep two custom maps.
 import { spawn } from 'child_process';
+import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { launchBrowser, waitForDebug, newTab, CDP, getFreePort } from './cdp.js';
@@ -23,7 +24,7 @@ if (srv.exitCode !== null) {
 
 const { proc, port } = launchBrowser({
   port: dbgPort,
-  profile: `C:/Users/20579/AppData/Local/Temp/opencode/cdp-profile-map-editor-${process.pid}`
+  profile: path.join(os.tmpdir(), `cdp-profile-map-editor-${process.pid}`)
 });
 let cdp = null;
 let ok = true;

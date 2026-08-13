@@ -23,16 +23,26 @@ export function launchBrowser(opts = {}) {
   const env = typeof process !== 'undefined' ? process.env : {};
   const headless = env.CDP_HEADFUL !== '1';
   const envExe = env.CDP_BROWSER;
+  const osTmp = require('os').tmpdir();
   const candidates = [
+    // Windows
     'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe',
     'C:/Program Files/Microsoft/Edge/Application/msedge.exe',
     'C:/Program Files/Google/Chrome/Application/chrome.exe',
-    'C:/Program Files (x86)/Google/Chrome/Application/chrome.exe'
+    'C:/Program Files (x86)/Google/Chrome/Application/chrome.exe',
+    // Linux（CI / 容器）
+    '/usr/bin/google-chrome',
+    '/usr/bin/google-chrome-stable',
+    '/usr/bin/chromium',
+    '/usr/bin/chromium-browser',
+    // macOS
+    '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
+    '/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge'
   ];
   const exe = envExe && require('fs').existsSync(envExe) ? envExe : candidates.find((p) => require('fs').existsSync(p));
   if (!exe) throw new Error('no edge/chrome found (set CDP_BROWSER)');
   const port = opts.port || Number(env.CDP_PORT) || 9223;
-  const profile = opts.profile || env.CDP_PROFILE || 'C:/Users/20579/AppData/Local/Temp/opencode/cdp-profile';
+  const profile = opts.profile || env.CDP_PROFILE || require('path').join(osTmp, 'cdp-profile');
   const extraFlags = opts.flags || [];
   const flags = [
     `--remote-debugging-port=${port}`,

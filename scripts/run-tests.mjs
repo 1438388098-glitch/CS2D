@@ -12,6 +12,7 @@ const skipFiles = new Set([
   'map-fixture.js',
   'map-stats.mjs',
   'mapswitch-test.mjs',
+  'simulate.js',
   'stubdom.js',
   'verify-awp.mjs'
 ]);
