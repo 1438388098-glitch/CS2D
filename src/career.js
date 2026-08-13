@@ -1,12 +1,12 @@
 import { ROUND } from './config.js';
-import {registerMode} from './registry.js';
+import {registerMode, MODE_MAPS} from './registry.js';
 import {setupMatchEntities, startRound, startMatch} from './game.js';
 import {teamDiffParams, simScore} from './modes.js';
 
 const SAVE_KEY = 'cs2d_career';
 const BACKUP_KEY = 'cs2d_career_backup';
 const VERSION = 3;
-const MAP_IDS = ['dust2', 'metro', 'forge', 'atrium', 'arctic'];
+const MAP_IDS = MODE_MAPS;
 const ROLES = ['突破', '补枪', '指挥', '自由人'];
 const PLAYER_TEAM = { name: 'Team Spirit', tag: 'SPIRIT' };
 const PLAYER_LINEUP = ['sh1ro', 'chopper', 'magixx', 'zont1x']; // 玩家扮演 donk
