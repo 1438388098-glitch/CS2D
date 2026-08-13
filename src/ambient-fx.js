@@ -7,17 +7,10 @@ export const DUST_CELL = 256;
 export const DUST_PER_CELL = 2;
 export const DUST_COLOR = '210,214,220';
 
-// 确定性哈希：任意数量数值 → [0,1)，同输入恒同输出
-export function hash01(...nums) {
-  let h = 0x811c9dc5;
-  for (const n of nums) {
-    const x = Math.floor(Math.abs(n)) >>> 0;
-    h ^= x + 0x9e3779b9 + (h << 6) + (h >>> 2);
-    h = Math.imul(h ^ (h >>> 16), 0x7feb352d) >>> 0;
-    h ^= h >>> 15;
-  }
-  return (h >>> 0) / 4294967296;
-}
+// 确定性哈希收敛到 utils.js（单一实现，避免多处副本漂移破坏确定性回放）；
+// 此处保留 re-export 以兼容旧 import 路径（boom/impact/shadow/smoke/weapon-fx 均从本模块引入）。
+import { hash01 } from './utils.js';
+export { hash01 };
 
 // 纯逻辑核心：返回 [{x,y,r,alpha}]，count 个漂浮微尘分布在 [0,w)×[0,h)。
 // t 为秒（相位漂移），drift 幅度 < 12px 保证永远留在区域内。

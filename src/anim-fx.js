@@ -3,22 +3,13 @@
 // 核心逻辑纯函数、确定性：脚步相位 / 尘埃粒子全部由累积移动距离 dist、时间 t、
 // 固定 seed 的确定性哈希导出，不使用 Math.random —— 同输入同输出，可独立单测。
 
+import { hash01 } from './utils.js';
+export { hash01 };
+
 export const STEP_LEN = 34;        // 一个完整步态周期（左右脚各落地一次）覆盖的移动像素
 export const DUST_LIFE_DIST = 22;  // 尘埃自落脚后按移动距离计的存活长度（px）
 export const DUST_PER_STEP = 2;    // 每次落脚生成的最大尘埃粒子数
 export const DUST_COLOR = '186,170,138';
-
-// 确定性哈希：任意数量数值 → [0,1)，同输入恒同输出
-export function hash01(...nums) {
-  let h = 0x811c9dc5;
-  for (const n of nums) {
-    const x = Math.floor(Math.abs(n)) >>> 0;
-    h ^= x + 0x9e3779b9 + (h << 6) + (h >>> 2);
-    h = Math.imul(h ^ (h >>> 16), 0x7feb352d) >>> 0;
-    h ^= h >>> 15;
-  }
-  return (h >>> 0) / 4294967296;
-}
 
 // 脚步相位（纯计算）：
 //   dist  累积移动距离(px)；调用方在实体站立时应传入 0（渲染层移动累计归零）

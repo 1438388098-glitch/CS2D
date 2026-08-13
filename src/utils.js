@@ -2,6 +2,17 @@ import { ctx } from './ctx.js';
 
 export function clamp(v, a, b) { return v < a ? a : (v > b ? b : v); }
 export function lerp(a, b, t) { return a + (b - a) * t; }
+// 确定性哈希（FNV-1a 混合）：输入若干整数种子 → [0,1) 可复现伪随机，供特效 spec 播种（无 Math.random）
+export function hash01(...nums) {
+  let h = 0x811c9dc5;
+  for (const n of nums) {
+    const x = Math.floor(Math.abs(n)) >>> 0;
+    h ^= x + 0x9e3779b9 + (h << 6) + (h >>> 2);
+    h = Math.imul(h ^ (h >>> 16), 0x7feb352d) >>> 0;
+    h ^= h >>> 15;
+  }
+  return (h >>> 0) / 4294967296;
+}
 // 世界随机：走 ctx.rand（对局 seed 后全游戏可复现）；无参调用等价 Math.random()（0..1）
 export function rand(a = 0, b = 1) { return a + ctx.rand() * (b - a); }
 export function angNorm(a) {

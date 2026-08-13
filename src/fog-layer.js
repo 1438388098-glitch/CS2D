@@ -4,7 +4,7 @@ import { fogEnabled, castVisionPolygon, fogVisionRadius } from './fog.js';
 const FOG_SCALE = 0.1;
 const FOG_RAYS = 96;
 const FOG_BLUR = 12;
-const FOG_CACHE_MS = 150;
+const FOG_CACHE_MS = 250;   // 缓存刷新周期：放宽后视点小幅移动不触发重算（雾重算是 2D 帧耗大头）
 
 function viewpointsFor(game) {
   const p = game.player;
@@ -32,10 +32,10 @@ function viewpointsFor(game) {
 
 function layerKey(game, views) {
   const smokeKey = (game.smokes || [])
-    .map((s) => Math.round(s.x / 32) + ',' + Math.round(s.y / 32))
+    .map((s) => Math.round(s.x / 48) + ',' + Math.round(s.y / 48))
     .join(';');
   const posKey = views
-    .map((v) => Math.round(v.x / 16) + ',' + Math.round(v.y / 16))
+    .map((v) => Math.round(v.x / 32) + ',' + Math.round(v.y / 32))
     .join('|');
   return posKey + '#' + smokeKey;
 }

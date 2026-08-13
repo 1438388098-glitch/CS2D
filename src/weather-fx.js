@@ -4,7 +4,8 @@
 // 全部粒子位置 / 长度 / 角度 / 速度 / 透明度由固定 seed 的确定性哈希导出，
 // 不使用 Math.random —— 同 seed 同 t 画面完全可复现（回放 / 测试友好）。
 // 轻量：粒子数封顶 MAX_PARTICLES（200），绘制为单段线段或圆形，不影响性能。
-import { clamp } from './utils.js';
+import { clamp, hash01 } from './utils.js';
+export { hash01 };
 
 export const MAX_PARTICLES = 200;
 export const RAIN_COLOR = '168,190,240';
@@ -13,18 +14,6 @@ export const SNOW_COLOR = '245,248,255';
 // 雪系 / 雨系地图关键词（weatherKind 简单规则，小写匹配）
 const SNOW_IDS = ['arctic', 'snow', 'frost', 'glacier', 'winter', 'ice'];
 const RAIN_IDS = ['rain', 'storm', 'monsoon', 'drizzle', 'typhoon'];
-
-// 确定性哈希：任意数量数值 → [0,1)，同输入恒同输出
-export function hash01(...nums) {
-  let h = 0x811c9dc5;
-  for (const n of nums) {
-    const x = Math.floor(Math.abs(n)) >>> 0;
-    h ^= x + 0x9e3779b9 + (h << 6) + (h >>> 2);
-    h = Math.imul(h ^ (h >>> 16), 0x7feb352d) >>> 0;
-    h ^= h >>> 15;
-  }
-  return (h >>> 0) / 4294967296;
-}
 
 // 地图天气判定：按地图 id 简单规则 —— 名字含雪系关键词 → 'snow'，
 // 含雨系关键词 → 'rain'，否则 null（无雨雪特效）。大小写不敏感。
