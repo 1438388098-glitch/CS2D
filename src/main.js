@@ -14,6 +14,7 @@ import { installChosenFourthMap } from './4th-map-candidates.js';
 import {MAPS} from './config.js';
 import {isMuted, setAudioContext, startAmbient, initAudio, getBusVolume, setBusVolume, syncSpatialAudio} from './audio.js';
 import './modes.js';
+import './retake-mode.js';
 import {nextRenderScale} from './render-scale.js';
 import {initCareerUi} from './career-ui.js';
 import {initRankedUi} from './ranked-ui.js';
