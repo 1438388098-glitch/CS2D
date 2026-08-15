@@ -10,10 +10,10 @@ export const ROLE_ARCHE = { 突破: 'breacher', 狙击: 'sniper', 指挥: 'suppo
 export const ROLE_WEIGHTS = {
   突破: { aim: 0.30, react: 0.25, movement: 0.14, clutch: 0.06, nade: 0.05, gameIQ: 0.05, leadership: 0.02, composure: 0.05, aggression: 0.06, discipline: 0.02 },
   狙击: { aim: 0.35, react: 0.25, movement: 0.08, clutch: 0.08, nade: 0.03, gameIQ: 0.06, leadership: 0.03, composure: 0.08, aggression: 0.02, discipline: 0.02 },
-  指挥: { aim: 0.08, react: 0.08, movement: 0.06, clutch: 0.08, nade: 0.10, gameIQ: 0.25, leadership: 0.30, composure: 0.07, aggression: 0.03, discipline: 0.05 },
+  指挥: { aim: 0.08, react: 0.08, movement: 0.06, clutch: 0.08, nade: 0.10, gameIQ: 0.15, leadership: 0.30, composure: 0.07, aggression: 0.03, discipline: 0.05 },
   步枪: { aim: 0.25, react: 0.18, movement: 0.18, clutch: 0.08, nade: 0.06, gameIQ: 0.06, leadership: 0.02, composure: 0.06, aggression: 0.05, discipline: 0.06 },
-  自由人: { aim: 0.12, react: 0.12, movement: 0.12, clutch: 0.32, nade: 0.06, gameIQ: 0.22, leadership: 0.02, composure: 0.06, aggression: 0.02, discipline: 0.04 },
-  补枪: { aim: 0.28, react: 0.14, movement: 0.10, clutch: 0.08, nade: 0.08, gameIQ: 0.22, leadership: 0.02, composure: 0.04, aggression: 0.03, discipline: 0.06 }
+  自由人: { aim: 0.12, react: 0.12, movement: 0.12, clutch: 0.28, nade: 0.06, gameIQ: 0.16, leadership: 0.02, composure: 0.06, aggression: 0.02, discipline: 0.04 },
+  补枪: { aim: 0.28, react: 0.14, movement: 0.10, clutch: 0.08, nade: 0.08, gameIQ: 0.17, leadership: 0.02, composure: 0.04, aggression: 0.03, discipline: 0.06 }
 };
 
 export const LEAGUE_RULES = {
@@ -33,8 +33,6 @@ export function isStorageAvailable() { return !!storage; }
 function clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); }
 function randInt(a, b) { return a + Math.floor(rng() * (b - a + 1)); }
 function pick(arr) { return arr[Math.floor(rng() * arr.length)]; }
-
-function blankRoster() { return []; }
 
 function baseManager() {
   return {
@@ -147,13 +145,18 @@ export function teamIdFromName(name) {
 }
 
 let uidCounter = 0;
-function newPlayerId() { return 'm' + (++uidCounter); }
+function newPlayerId(p) {
+  const origin = p.teamOfOrigin || 'fa';
+  const seed = String(origin) + ':' + String(p.name) + ':' + String(p.role);
+  let h = 0;
+  for (let i = 0; i < seed.length; i++) { h = (h * 31 + seed.charCodeAt(i)) | 0; }
+  return 'm' + (h >>> 0).toString(36);
+}
 
 export function makePlayerFromMajor(p) {
   const attrs = deriveAttrs(p);
   const role = p.role && ROLE_WEIGHTS[p.role] ? p.role : '步枪';
-  return {
-    id: newPlayerId(),
+  const pl = {
     name: p.name,
     role,
     teamOfOrigin: teamIdFromName(p.name),
@@ -172,6 +175,8 @@ export function makePlayerFromMajor(p) {
     form: [],
     stats: { kills: 0, deaths: 0, mvp: 0, games: 0, firstKills: 0, clutchWins: 0, adr: 0, rating: 0 }
   };
+  pl.id = newPlayerId(pl);
+  return pl;
 }
 
 export function playerPrice(p, league) {
@@ -286,10 +291,11 @@ export function buildManagerTeams(league, playerRoster) {
 
 function refreshCup(s) {
   const b = s.season.cup.bracket;
+  if (!b || b.length < 7) return;
   if (b[4] && !b[4].played && b[0].played && b[1].played) { b[4].a = b[0].winner; b[4].b = b[1].winner; }
   if (b[5] && !b[5].played && b[2].played && b[3].played) { b[5].a = b[2].winner; b[5].b = b[3].winner; }
   if (b[6] && !b[6].played && b[4].played && b[5].played) { b[6].a = b[4].winner; b[6].b = b[5].winner; }
-  if (b[6].played) { s.season.cup.phase = 'finished'; s.season.cup.champion = b[6].winner; }
+  if (b[6] && b[6].played) { s.season.cup.phase = 'finished'; s.season.cup.champion = b[6].winner; }
 }
 
 export function assignFixtureMaps(s) {
@@ -344,7 +350,6 @@ function simDuelWin(aRating, dRating, aPower, dPower) {
 }
 
 function simulateManagerRound(index, home, away, s, stats) {
-  const need = 5;
   const attacker = index % 2 === 0 ? home : away;
   const defender = attacker === home ? away : home;
   const aPower = teamPower(s, attacker.id, 'attack');
@@ -448,7 +453,7 @@ export function candidates(s) {
 }
 
 export function scoutedView(p, noise) {
-  const v = { ...p, rating: Math.round(p.rating + (rng() * 2 - 1) * noise), potentialStars: Math.round(clamp(p.potential / 20, 1, 5)) };
+  const v = { ...p, rating: Math.round(p.rating + (rng() * 2 - 1) * noise), potentialStars: clamp(Math.round(p.potential / 18), 1, 5) };
   return v;
 }
 
@@ -470,8 +475,11 @@ function pushNews(s, type, text) {
   s.news.unshift({ t: Date.now(), type, text });
   if (s.news.length > 30) s.news.length = 30;
 }
+function teamAvg(roster) {
+  return Math.round(roster.reduce((a, p) => a + p.rating, 0) / Math.max(1, roster.length));
+}
 function refreshTeamRating(s) {
-  const avg = Math.round(s.team.roster.reduce((a, p) => a + p.rating, 0) / Math.max(1, s.team.roster.length));
+  const avg = teamAvg(s.team.roster);
   const t = s.season.teams.find((x) => x.id === 'player');
   if (t) t.rating = avg;
   return avg;
@@ -495,7 +503,7 @@ export function buyPlayer(s, candId) {
   s.team.transfersLeft--;
   s.team.pool = s.team.pool.filter((c) => c.id !== candId);
   s.team.morale = clamp(s.team.morale + 2, 20, 100);
-  addLedger(s, 'expense', -p.price, '买入：' + p.name);
+  addLedger(s, 'expense', p.price, '买入：' + p.name);
   if (refund) addLedger(s, 'income', refund, '卖出：' + sameRole.name);
   pushNews(s, 'info', '签下 ' + p.name + '（' + p.role + '，' + p.rating + ' 评）');
   refreshTeamRating(s);
@@ -524,8 +532,8 @@ export function sellPlayer(s, id) {
 export function sellPreview(s, id) {
   const p = s.team.roster.find((x) => x.id === id);
   if (!p) return null;
-  const restAvg = s.team.roster.filter((x) => x.id !== id).reduce((a, x) => a + x.rating, 0) / Math.max(1, s.team.roster.length - 1);
-  return { refund: Math.floor(p.price * (LEAGUE_RULES[s.team.league].refundScale || 0.5)), ratingImpact: refreshTeamRating(s) - Math.round(restAvg), roleGap: !s.team.roster.some((x) => x.id !== id && x.role === p.role) };
+  const restAvg = Math.round(s.team.roster.filter((x) => x.id !== id).reduce((a, x) => a + x.rating, 0) / Math.max(1, s.team.roster.length - 1));
+  return { refund: Math.floor(p.price * (LEAGUE_RULES[s.team.league].refundScale || 0.5)), ratingImpact: teamAvg(s.team.roster) - restAvg, roleGap: !s.team.roster.some((x) => x.id !== id && x.role === p.role) };
 }
 
 export function renewPlayer(s, id) {
@@ -537,7 +545,7 @@ export function renewPlayer(s, id) {
   p.contractYears = 3;
   p.renewalCost = Math.round(p.price * 0.12);
   s.team.morale = clamp(s.team.morale + 1, 20, 100);
-  addLedger(s, 'expense', -p.renewalCost, '续约：' + p.name);
+  addLedger(s, 'expense', p.renewalCost, '续约：' + p.name);
   pushNews(s, 'info', p.name + ' 续约 3 年');
   save();
   return { ok: true };

@@ -22,8 +22,7 @@ ok('roster empty', Array.isArray(s.team.roster) && s.team.roster.length === 0);
 ok('league 乙级', s.team.league === '乙级');
 ok('board trust 70', s.board.trust === 70);
 ok('6 roles weighted', Object.keys(ROLE_WEIGHTS).length === 6);
-const wSum = Object.values(ROLE_WEIGHTS['突破']).reduce((a, b) => a + b, 0);
-ok('role weights sum to 1', Math.abs(wSum - 1) < 0.001);
+ok('role weights sum to 1', Object.values(ROLE_WEIGHTS).every((w) => Math.abs(Object.values(w).reduce((a, b) => a + b, 0) - 1) < 0.001));
 
 store.map.set(SAVE_KEY, '{corrupt');
 s = loadManager();
