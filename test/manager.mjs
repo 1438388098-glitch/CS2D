@@ -1,4 +1,4 @@
-import { resetManager, loadManager, setStorage, setRng, getState, SAVE_KEY, BACKUP_KEY, VERSION, ROLE_WEIGHTS } from '../src/manager.js';
+import { resetManager, loadManager, setStorage, setRng, getState, SAVE_KEY, BACKUP_KEY, VERSION, ROLE_WEIGHTS, buildManagerRoster, deriveAttrs, ratingFromAttrs, playerPrice } from '../src/manager.js';
 
 const ok = (name, cond) => {
   if (!cond) throw new Error('manager: ' + name + ' FAIL');
@@ -29,5 +29,17 @@ store.map.set(SAVE_KEY, '{corrupt');
 s = loadManager();
 ok('corrupt save backed up', store.map.has(BACKUP_KEY));
 ok('corrupt save rebuilt', s.version === VERSION && s.team.bank === 12000);
+
+s = resetManager();
+s.team.roster = buildManagerRoster('乙级');
+ok('roster 5', s.team.roster.length === 5);
+ok('roster roles distinct', new Set(s.team.roster.map((p) => p.role)).size >= 4);
+ok('roster has attrs 10 dims', s.team.roster.every((p) => p.attrs && Object.keys(p.attrs).length === 10));
+ok('roster rating in range', s.team.roster.every((p) => p.rating >= 60 && p.rating <= 93));
+ok('derived attrs clamp', deriveAttrs({ aim: 30, movement: 30, clutch: 30, nade: 30 }).aim === 40);
+const full99 = { aim: 99, react: 99, movement: 99, clutch: 99, nade: 99, gameIQ: 99, leadership: 99, composure: 99, aggression: 99, discipline: 99 };
+ok('rating full 99', ratingFromAttrs('狙击', full99) === 99);
+ok('rating snip aim heavy', ratingFromAttrs('狙击', { ...full99, aim: 99, react: 99 }) > ratingFromAttrs('狙击', { ...full99, aim: 50, react: 50 }));
+ok('price capped', playerPrice({ rating: 99 }, '甲级') <= 30000);
 
 console.log('manager: all PASS');

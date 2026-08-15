@@ -1,3 +1,5 @@
+import { MAJOR_TEAMS } from './modes.js';
+
 export const SAVE_KEY = 'cs2d_manager';
 export const BACKUP_KEY = 'cs2d_manager_backup';
 export const VERSION = 1;
@@ -110,3 +112,101 @@ export function loadManager() {
 
 export function getState() { return state || loadManager(); }
 export function __clearManagerStateForTest() { state = null; }
+
+export const ATTRS = ['aim', 'react', 'movement', 'clutch', 'nade', 'gameIQ', 'leadership', 'composure', 'aggression', 'discipline'];
+export const TRAIT_WEIGHTS = ROLE_WEIGHTS;
+
+export function deriveAttrs(base) {
+  const aim = base.aim || 75, movement = base.movement || 75, clutch = base.clutch || 75, nade = base.nade || 75;
+  return {
+    aim: clamp(aim, 40, 99),
+    react: clamp(Math.round((aim + movement) / 2), 40, 99),
+    movement: clamp(movement, 40, 99),
+    clutch: clamp(clutch, 40, 99),
+    nade: clamp(nade, 40, 99),
+    gameIQ: clamp(Math.round((nade + clutch) / 2), 40, 99),
+    leadership: 70,
+    composure: clamp(clutch, 40, 99),
+    aggression: clamp(Math.round((aim + movement) / 2), 40, 99),
+    discipline: clamp(nade, 40, 99)
+  };
+}
+
+export function ratingFromAttrs(role, attrs) {
+  const w = ROLE_WEIGHTS[role] || ROLE_WEIGHTS['步枪'];
+  let sum = 0;
+  for (const k of ATTRS) sum += (attrs[k] || 50) * (w[k] || 0);
+  return clamp(Math.round(sum), 40, 99);
+}
+
+export function teamIdFromName(name) {
+  for (const t of MAJOR_TEAMS) {
+    if (t.players.some((p) => p.name === name)) return t.id;
+  }
+  return null;
+}
+
+let uidCounter = 0;
+function newPlayerId() { return 'm' + (++uidCounter); }
+
+export function makePlayerFromMajor(p) {
+  const attrs = deriveAttrs(p);
+  const role = p.role && ROLE_WEIGHTS[p.role] ? p.role : '步枪';
+  return {
+    id: newPlayerId(),
+    name: p.name,
+    role,
+    teamOfOrigin: teamIdFromName(p.name),
+    age: randInt(18, 27),
+    attrs,
+    rating: ratingFromAttrs(role, attrs),
+    potential: clamp(ratingFromAttrs(role, attrs) + randInt(3, 10), 40, 99),
+    personality: pick(['hyperAggressive', 'disciplined', 'clutchGod', 'mercurial', 'leader', 'quiet', 'confident', 'fragile']),
+    morale: randInt(55, 85),
+    fatigue: randInt(0, 25),
+    stress: randInt(0, 25),
+    chemistry: {},
+    contractYears: randInt(2, 4),
+    renewalCost: 0,
+    price: 0,
+    form: [],
+    stats: { kills: 0, deaths: 0, mvp: 0, games: 0, firstKills: 0, clutchWins: 0, adr: 0, rating: 0 }
+  };
+}
+
+export function playerPrice(p, league) {
+  const rules = LEAGUE_RULES[league] || LEAGUE_RULES['乙级'];
+  return Math.min(Math.round(p.rating * 300 * rules.costScale), rules.priceCap);
+}
+
+export function buildManagerRoster(league) {
+  const rules = LEAGUE_RULES[league] || LEAGUE_RULES['乙级'];
+  const [lo, hi] = rules.ratingRange;
+  const all = [];
+  for (const team of MAJOR_TEAMS) for (const p of team.players) all.push(p);
+  const needRoles = ['突破', '狙击', '指挥', '自由人', '补枪'];
+  const chosen = [];
+  for (const role of needRoles) {
+    const cands = all.filter((p) => p.role === role || (role === '补枪' && p.role === '步枪'));
+    const picked = cands[Math.floor(rng() * cands.length)];
+    if (picked) chosen.push(picked);
+  }
+  if (chosen.length < 5) {
+    for (const p of all) { if (chosen.length >= 5) break; if (!chosen.includes(p)) chosen.push(p); }
+  }
+  const roster = chosen.slice(0, 5).map((p) => {
+    const pl = makePlayerFromMajor(p);
+    pl.price = playerPrice(pl, league);
+    pl.renewalCost = Math.round(pl.price * 0.12);
+    pl.form = ['W', 'W', 'L'];
+    return pl;
+  });
+  const avg = Math.round(roster.reduce((a, p) => a + p.rating, 0) / Math.max(1, roster.length));
+  const target = randInt(lo, hi);
+  const offset = clamp(target - avg, -6, 6);
+  for (const p of roster) {
+    p.rating = clamp(p.rating + offset, lo, hi + 8);
+    p.price = playerPrice(p, league);
+  }
+  return roster;
+}
