@@ -627,3 +627,56 @@ export function upgradeFacility(s, key) {
   save();
   return { ok: true };
 }
+
+export function sponsorIncome(s) {
+  const rules = LEAGUE_RULES[s.team.league] || LEAGUE_RULES['乙级'];
+  const rating = teamAvg(s.team.roster);
+  const morale = s.team.morale || 50;
+  return Math.round(rules.sponsor * (0.7 + morale / 200) * (0.8 + rating / 500));
+}
+
+export function homeTicketIncome(s, win) {
+  const rules = LEAGUE_RULES[s.team.league] || LEAGUE_RULES['乙级'];
+  const rating = teamAvg(s.team.roster);
+  const morale = s.team.morale || 50;
+  return Math.round(rules.ticketBase * (0.8 + rating / 250) * (0.8 + morale / 150) * (win ? 1.35 : 0.8));
+}
+
+export function cashflowForecast(s) {
+  const rules = LEAGUE_RULES[s.team.league] || LEAGUE_RULES['乙级'];
+  const fixturesLeft = s.season.fixtures.filter((f) => !f.played && (f.home === 'player' || f.away === 'player')).length;
+  const expectWin = 0.5;
+  const matchIncome = Math.round(fixturesLeft * (rules.matchWin * expectWin + rules.matchLose * (1 - expectWin)));
+  const sponsor = sponsorIncome(s);
+  const projected = s.team.bank + matchIncome + sponsor;
+  return { projected, cushion: Math.max(0, projected - 6000), matchIncome, sponsor, fixturesLeft };
+}
+
+export function seasonBudget(s) {
+  const rules = LEAGUE_RULES[s.team.league] || LEAGUE_RULES['乙级'];
+  const budget = rules.budgetBase + sponsorIncome(s) * 0.5;
+  const spendable = Math.max(0, budget - Math.max(0, -s.team.bank));
+  return { budget, spendable };
+}
+
+export function financialRisk(s) {
+  let score = 0;
+  const reasons = [];
+  if (s.team.bank < 5000) { score += 35; reasons.push('资金低于 5000'); }
+  const cf = cashflowForecast(s);
+  if (cf.projected < 6000) { score += 25; reasons.push('预测资金低于安全垫'); }
+  if (transferWindowOpen(s) && s.team.bank < 10000) { score += 20; reasons.push('转会期资金偏低'); }
+  const level = score >= 60 ? '高风险' : score >= 35 ? '紧张' : score >= 15 ? '谨慎' : '安全';
+  return { score, level, reasons, mode: score >= 60 ? '低资金模式' : score >= 35 ? '稳健运营' : '可投入' };
+}
+
+export function ledgerRecent(s, n = 60) {
+  return (s.team.ledger || []).slice(-n).reverse();
+}
+
+export function transferProfit(s) {
+  const ledger = (s && s.team ? s.team.ledger : s && s.ledger ? s.ledger : []) || [];
+  const sells = ledger.filter((l) => l.type === 'income' && l.label.startsWith('卖出'));
+  const buys = ledger.filter((l) => l.type === 'expense' && l.label.startsWith('买入'));
+  return { sellTotal: sells.reduce((a, l) => a + l.amount, 0), buyTotal: buys.reduce((a, l) => a + l.amount, 0) };
+}

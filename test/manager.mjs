@@ -1,4 +1,4 @@
-import { resetManager, loadManager, setStorage, setRng, getState, SAVE_KEY, BACKUP_KEY, VERSION, ROLE_WEIGHTS, buildManagerRoster, deriveAttrs, ratingFromAttrs, playerPrice, newManagerCareer, buildNewSeason, nextFixture, simulateManagerMatch, candidates, buyPlayer, sellPlayer, renewPlayer, transferWindowOpen, scoutingNoise, scoutedView, filterCandidates, trainPlayer, restPlayer, facilityStatus, upgradeFacility, trainingPreview } from '../src/manager.js';
+import { resetManager, loadManager, setStorage, setRng, getState, SAVE_KEY, BACKUP_KEY, VERSION, ROLE_WEIGHTS, buildManagerRoster, deriveAttrs, ratingFromAttrs, playerPrice, newManagerCareer, buildNewSeason, nextFixture, simulateManagerMatch, candidates, buyPlayer, sellPlayer, renewPlayer, transferWindowOpen, scoutingNoise, scoutedView, filterCandidates, trainPlayer, restPlayer, facilityStatus, upgradeFacility, trainingPreview, sponsorIncome, homeTicketIncome, cashflowForecast, seasonBudget, financialRisk, ledgerRecent, transferProfit } from '../src/manager.js';
 
 const ok = (name, cond) => {
   if (!cond) throw new Error('manager: ' + name + ' FAIL');
@@ -111,6 +111,31 @@ ok('nextFixture exists round1', nextFixture(s) && nextFixture(s).round === 1);
   const up = upgradeFacility(s, 'scouting');
   ok('upgrade ok', up.ok && s.team.facilities.scouting === 1);
   ok('scouting reduces noise', scoutingNoise(s) === 4);
+}
+
+{
+  s.team.morale = 65;
+  const sp = sponsorIncome(s);
+  ok('sponsor positive', sp > 0);
+  const ti = homeTicketIncome(s, true);
+  ok('ticket win > lose', ti > homeTicketIncome(s, false));
+  const cf = cashflowForecast(s);
+  ok('forecast projected', cf.projected > 0);
+  const sb = seasonBudget(s);
+  ok('budget base', sb.budget >= 15000);
+  const fr = financialRisk(s);
+  ok('risk level valid', ['安全', '谨慎', '紧张', '高风险'].includes(fr.level));
+  s.team.bank = 100;
+  ok('risk tense when broke', financialRisk(s).level === '紧张');
+  s.team.bank = 100;
+  s.season.round = 14;
+  s.season.fixtures.forEach((f) => { if (f.round < 14 && (f.home === 'player' || f.away === 'player')) f.played = true; });
+  ok('risk high late season broke', financialRisk(s).level === '高风险');
+  s.team.bank = 20000;
+  const cleanLedger = { ledger: [{ type: 'income', amount: 100, label: '卖出：x' }, { type: 'expense', amount: 50, label: '买入：y' }] };
+  ok('transfer profit', transferProfit(cleanLedger).sellTotal === 100 && transferProfit(cleanLedger).buyTotal === 50);
+  const stateLike = { team: { ledger: [{ amount: 100, label: 'a' }, { amount: 50, label: 'b' }] } };
+  ok('ledger recent reversed', ledgerRecent(stateLike)[0].amount === 50);
 }
 
 console.log('manager: all PASS');
