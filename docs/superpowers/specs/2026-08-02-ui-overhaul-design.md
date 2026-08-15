@@ -430,13 +430,13 @@ src/audio/
 
 | 文件 | 用途 | 图 |
 |---|---|---|
-| Ground054.jpg | dust2 地板（沙砾） | dust2 |
-| Rock064.jpg | dust2 墙（岩石） | dust2 |
-| PavingStones151.jpg | canal 地板（石板） | canal |
-| Bricks097.jpg | canal 墙（红砖） | canal |
-| Concrete034.jpg | metro 地板（混凝土板缝） | metro |
-| Metal063.jpg | metro 墙（金属铆钉板） | metro |
-| Wood095.jpg | 薄墙（木板） | 全部 |
+| Ground054.webp | dust2 地板（沙砾） | dust2 |
+| Rock064.webp | dust2 墙（岩石） | dust2 |
+| PavingStones151.webp | canal 地板（石板） | canal |
+| Bricks097.webp | canal 墙（红砖） | canal |
+| Concrete034.webp | metro 地板（混凝土板缝） | metro |
+| Metal063.webp | metro 墙（金属铆钉板） | metro |
+| Wood095.webp | 薄墙（木板） | 全部 |
 
 - 水：程序化（动态波纹动画）
 - 加载：浏览器 `Image` 预加载（启动时 `preloadTextures()` 返回 Promise，成功后才 initTextures；失败降级为现有程序化纹理生成器）

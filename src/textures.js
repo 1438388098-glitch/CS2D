@@ -4,10 +4,10 @@ const mapTile = () => getMap()?.tile || TILE;
 
 // ===== 真实纹理素材（ambientCG CC0）=====
 const TEX_SRC = {
-  dust2: { floor: 'assets/textures/Ground054.jpg', wall: 'assets/textures/Rock064.jpg' },
-  canal: { floor: 'assets/textures/PavingStones151.jpg', wall: 'assets/textures/Bricks097.jpg' },
-  metro: { floor: 'assets/textures/Concrete034.jpg', wall: 'assets/textures/Metal063.jpg' },
-  thin: 'assets/textures/Wood095.jpg'
+  dust2: { floor: 'assets/textures/Ground054.webp', wall: 'assets/textures/Rock064.webp' },
+  canal: { floor: 'assets/textures/PavingStones151.webp', wall: 'assets/textures/Bricks097.webp' },
+  metro: { floor: 'assets/textures/Concrete034.webp', wall: 'assets/textures/Metal063.webp' },
+  thin: 'assets/textures/Wood095.webp'
 };
 
 const texCache = {};
