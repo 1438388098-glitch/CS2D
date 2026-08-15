@@ -204,7 +204,7 @@ export function renderMinimap(game) {
   mctx.save();
   // 玻璃底
   rr(mctx, ox - 2, oy - 2, mw + 4, mh + 4, 8);
-  mctx.fillStyle = 'rgba(10,13,17,.8)';
+  mctx.fillStyle = 'rgba(10,13,17,.72)';
   mctx.fill();
   mctx.strokeStyle = 'rgba(255,255,255,.16)';
   mctx.lineWidth = 1;
@@ -602,7 +602,7 @@ export function renderHud(game) {
       ctx.beginPath();
       ctx.rect(0, 0, w2, h2);
       ctx.arc(cx, cy, r, 0, Math.PI * 2, true);
-      ctx.fillStyle = 'rgba(4,8,12,0.52)';
+      ctx.fillStyle = 'rgba(10,13,17,.72)';
       ctx.fill();
       const lens = ctx.createRadialGradient(cx, cy, r * 0.55, cx, cy, r);
       lens.addColorStop(0, 'rgba(120,210,255,0.10)');
@@ -678,7 +678,7 @@ export function renderHud(game) {
     const bx = w2 / 2 - bw / 2;
     const by = h2 - 34;
     ctx.save();
-    ctx.fillStyle = 'rgba(4,8,12,0.55)';
+    ctx.fillStyle = 'rgba(10,13,17,.72)';
     rr(ctx, bx - 2, by - 2, bw + 4, bh + 4, 4);
     ctx.fill();
     ctx.fillStyle = 'rgba(255,255,255,0.10)';

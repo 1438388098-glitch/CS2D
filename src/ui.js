@@ -1457,18 +1457,24 @@ function startMenuBgRotate() {
 }
 
 function drawMapPreview(mapId) {
-  const cv = doc && doc.querySelector('.map-card[data-map="' + mapId + '"] .map-prev');
+  const cv = doc && doc.getElementById('mapPreview');
   const src = menuBgLayerCache[mapId];
   if (!cv || !src) return;
   try {
     const c2d = cv.getContext('2d');
     c2d.clearRect(0, 0, cv.width, cv.height);
     c2d.drawImage(src.layer, 0, 0, src.w, src.h, 0, 0, cv.width, cv.height);
+    const nameEl = doc.getElementById('mapPreviewName');
+    if (nameEl) {
+      const m = MAPS.find((x) => x && x.id === mapId);
+      nameEl.textContent = (m && m.name ? m.name : mapId) + ' · ' + mapCardDescription(m);
+    }
   } catch (err) { /* 忽略 */ }
 }
 
 export function refreshMapPreviews() {
-  for (const id of Object.keys(menuBgLayerCache)) drawMapPreview(id);
+  const sel = game && game.opts && game.opts.mapId;
+  if (sel) drawMapPreview(sel);
 }
 
 function mapCardDescription(m) {
@@ -1478,10 +1484,6 @@ function mapCardDescription(m) {
   if (m.id === 'forge') return '熔炉中枢 · 三路交汇 · 快节奏';
   if (m.id === 'arctic') return '雪地主题变体 · 低能见度';
   return '经典爆破 · 5v5 战术地图';
-}
-
-function safeAccent(color) {
-  return typeof color === 'string' && /^#[0-9a-fA-F]{3,8}$/.test(color) ? color : '#ffb545';
 }
 
 export function syncMapCards() {
@@ -1505,51 +1507,31 @@ export function syncMapCards() {
   for (const group of groups) {
     const groupMaps = maps.filter(group.test);
     if (!groupMaps.length) continue;
-    const wrap = doc.createElement('div');
-    wrap.className = 'map-group';
     const title = doc.createElement('div');
     title.className = 'map-group-title';
     title.textContent = group.label;
-    const sub = doc.createElement('div');
-    sub.className = 'map-subgrid';
-    wrap.appendChild(title);
-    wrap.appendChild(sub);
+    mapSel.appendChild(title);
     for (const m of groupMaps) {
       const btn = doc.createElement('button');
       btn.className = 'map-card' + (m.id === selected ? ' sel' : '');
       btn.setAttribute('data-map', m.id);
-      const accent = doc.createElement('i');
-      accent.className = 'mc-accent';
-      accent.style.background = safeAccent(m.accent);
-      const prev = doc.createElement('canvas');
-      prev.className = 'map-prev';
-      prev.width = 280;
-      prev.height = 180;
-      const name = doc.createElement('div');
+      const name = doc.createElement('span');
       name.className = 'mc-name';
       name.textContent = m.name || m.id;
-      const desc = doc.createElement('div');
-      desc.className = 'mc-desc';
-      desc.textContent = mapCardDescription(m);
-      const check = doc.createElement('span');
-      check.className = 'mc-check';
-      check.textContent = '✓';
-      const edit = doc.createElement('span');
-      edit.className = 'mc-edit';
-      edit.textContent = '编辑';
-      edit.title = '在编辑器中修改此地图';
-      edit.setAttribute('role', 'button');
-      edit.tabIndex = 0;
-      edit.onclick = (e) => {
-        e.stopPropagation();
-        if (window.__openMapEditor) window.__openMapEditor(game, m.id);
-      };
-      btn.appendChild(accent);
-      btn.appendChild(prev);
       btn.appendChild(name);
-      btn.appendChild(desc);
-      btn.appendChild(check);
-      btn.appendChild(edit);
+      if (m.category === 'custom' || m.id === 'custom-map') {
+        const edit = doc.createElement('span');
+        edit.className = 'mc-edit';
+        edit.textContent = '编辑';
+        edit.title = '在编辑器中修改此地图';
+        edit.setAttribute('role', 'button');
+        edit.tabIndex = 0;
+        edit.onclick = (e) => {
+          e.stopPropagation();
+          if (window.__openMapEditor) window.__openMapEditor(game, m.id);
+        };
+        btn.appendChild(edit);
+      }
       btn.onclick = (e) => {
         if (game) game.opts.mapId = m.id;
         for (const cc of mapSel.querySelectorAll('.map-card')) cc.classList.remove('sel');
@@ -1558,9 +1540,8 @@ export function syncMapCards() {
         refreshMapPreviews();
         if (btn.blur) btn.blur();
       };
-      sub.appendChild(btn);
+      mapSel.appendChild(btn);
     }
-    mapSel.appendChild(wrap);
   }
   if (game && game.opts && game.opts.mapId !== selected) game.opts.mapId = selected;
   refreshMapPreviews();
