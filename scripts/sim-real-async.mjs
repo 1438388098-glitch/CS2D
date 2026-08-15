@@ -251,9 +251,9 @@ for (let i = 0; i < N; i++) {
 }
 await pool.close();
 
-writeFileSync(root + 'major-real-results.json', JSON.stringify(results, null, 1));
+writeFileSync(root + 'docs/artifacts/major-real-results.json', JSON.stringify(results, null, 1));
 console.log(`\n完成！${N} 届真实引擎 Major（MR${MR}，${PAR} 并行轮内分发）总用时 ${((Date.now() - t0) / 1000).toFixed(0)}s`);
 const champCount = {};
 for (const r of results) if (r.champion) champCount[r.champion.tag] = (champCount[r.champion.tag] || 0) + 1;
 console.log('冠军分布:', Object.entries(champCount).sort((a, b) => b[1] - a[1]).map(([k, v]) => `${k} ${v}`).join(', '));
-console.log('完整赛果: major-real-results.json');
+console.log('完整赛果: docs/artifacts/major-real-results.json');

@@ -138,9 +138,11 @@ for (const d of dataset) {
 console.log(`[imitation] 专家一致率 ${(agree / dataset.length * 100).toFixed(1)}%`);
 
 import fs from 'fs';
-fs.writeFileSync('net-imitation-pretrain.json', JSON.stringify({
+import { fileURLToPath } from 'node:url';
+const outPath = fileURLToPath(new URL('../train/output/net-imitation-pretrain.json', import.meta.url));
+fs.writeFileSync(outPath, JSON.stringify({
   map: MAP, rounds, samples: dataset.length,
   input: 33, hidden: 32, output: 18,
   iw: net.iw, ow: net.ow
 }));
-console.log('[imitation] 预训练权重 → net-imitation-pretrain.json');
+console.log('[imitation] 预训练权重 → ' + outPath);

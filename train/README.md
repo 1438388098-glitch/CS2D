@@ -19,6 +19,7 @@ train/
   deploy-h11.mjs      部署从零进化冠军到 H11
   deploy-multi.mjs    部署多图 DQN 权重到 H8-H10（netWeights 按地图索引）
   checkpoints/        每代最优存档（best_gen_N.json，可断点续训）
+  output/             已发布权重（net-imitation-pretrain.json / net-weights-trained.json）
   smoke-test.mjs      单个体评估冒烟验证
   run-evolve.mjs      单图单轮训练入口
   run-batch.mjs       多图多代批量训练入口（推荐）

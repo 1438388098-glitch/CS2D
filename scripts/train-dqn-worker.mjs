@@ -22,6 +22,7 @@ const m = getMap();
 // ---- 对手池（自对弈）：CT 50% 规则 AI / 50% 池中 checkpoint ----
 import fs from 'fs';
 import path from 'path';
+import { fileURLToPath } from 'node:url';
 let poolFile = null;
 let poolNet = null;
 function refreshPool() {
@@ -40,7 +41,7 @@ function refreshPool() {
 const FAIR_PARAMS = resolveDiff('normal');
 
 // ---- 训练网络：模仿学习预训练权重 warm start ----
-const pretrainPath = path.join(process.cwd(), 'net-imitation-pretrain.json');
+const pretrainPath = fileURLToPath(new URL('../train/output/net-imitation-pretrain.json', import.meta.url));
 let net = new DQN({ input: 33, hidden: 32, output: 18 });
 if (fs.existsSync(pretrainPath)) {
   const j = JSON.parse(fs.readFileSync(pretrainPath, 'utf8'));

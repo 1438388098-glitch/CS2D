@@ -114,7 +114,7 @@ function finish() {
   console.log('='.repeat(100));
   console.log(`不同冠军: ${unique.size} | 历届冠军: ${champList.join(' ')}`);
   // 完整赛果落盘
-  const out = 'major-real-results.json';
+  const out = root + 'docs/artifacts/major-real-results.json';
   writeFileSync(out, JSON.stringify(results, null, 1));
   console.log(`\n完整赛果已保存: ${out}（${results.length} 届 × 全场比赛比分）`);
   // 打印第一届时序

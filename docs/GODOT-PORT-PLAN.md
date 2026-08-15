@@ -258,7 +258,7 @@
 ### 工具脚本清理（8h）
 - 保留：check-syntax/run-tests/import-official-maps（改造加 --emit-json）/build-map-preview/generate-random-maps + 全部 test/（行为规格）。
 - 丢弃：patch-major（含 server.js 自检链）/全部 fix-\*/migrate-\*/mm-upgrade/tune-first/gen-bracket-html 等一次性脚本。
-- 根目录清理：`*.tmp.mjs`(8)/config.js.bak/`*.log`/major-bracket.\*/render3d-next-shot.jpg → 删或移 docs/；net-\*.json → 移 train/checkpoints/。
+- 根目录清理（已完成 2026-08-15）：`*.tmp.mjs`/config.js.bak/`*.log` 已删；major-bracket.\*/major-real-results.json/render3d-next-shot.jpg → docs/artifacts/；net-\*.json → train/output/。
 
 ---
 

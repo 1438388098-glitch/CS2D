@@ -1,8 +1,9 @@
 // 生成世界杯风格 Major 赛程播报页 v2（极简高级风）
 import { readFileSync, writeFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 
-const root = 'D:/Claudeworkspace/CS2D/';
-const r = JSON.parse(readFileSync(root + 'major-real-results.json', 'utf8'))[0];
+const root = fileURLToPath(new URL('..', import.meta.url));
+const r = JSON.parse(readFileSync(root + 'docs/artifacts/major-real-results.json', 'utf8'))[0];
 
 const TAGS = {
   spirit: 'Spirit', falcons: 'FLC', vitality: 'VIT', furia: 'FURIA', mouz: 'MOUZ', navi: 'NAVI',
@@ -239,5 +240,5 @@ const html = `<!DOCTYPE html>
 </body>
 </html>`;
 
-writeFileSync(root + 'major-bracket.html', html, 'utf8');
+writeFileSync(root + 'docs/artifacts/major-bracket.html', html, 'utf8');
 console.log('HTML saved v2 (' + (html.length / 1024).toFixed(0) + ' KB)');

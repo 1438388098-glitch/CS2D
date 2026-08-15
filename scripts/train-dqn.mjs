@@ -3,6 +3,7 @@
 import { Worker } from 'worker_threads';
 import fs from 'fs';
 import path from 'path';
+import { fileURLToPath } from 'node:url';
 
 const STEPS = parseInt(process.argv[2] || '250000', 10);
 const WORKERS = parseInt(process.argv[3] || '8', 10);
@@ -211,7 +212,7 @@ for (const cand of candidates) {
 
 // 导出最佳权重
 if (best && best.ev.winRate >= base.winRate) {
-  const outPath = path.join(process.cwd(), 'net-weights-trained.json');
+  const outPath = fileURLToPath(new URL('../train/output/net-weights-trained.json', import.meta.url));
   fs.writeFileSync(outPath, JSON.stringify({
     trainedAt: new Date().toISOString(),
     map: MAP, roundDur: ROUND_DUR,
