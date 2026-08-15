@@ -35,6 +35,15 @@
   --ease:cubic-bezier(.22,.61,.36,1);
   --ease-in:cubic-bezier(.55,.06,.68,.19);
   --dur-s:.12s; --dur-m:.22s; --dur-l:.35s;
+
+  /* 毛玻璃 + 扁平 */
+  --glass:rgba(255,255,255,.09);
+  --glass-hi:rgba(255,255,255,.14);
+  --glass-border:rgba(255,255,255,.16);
+  --glass-border-hi:rgba(255,255,255,.28);
+  --glass-blur:18px;
+  --glass-r:14px;
+  --glass-inset:0 2px 0 rgba(255,255,255,.03) inset;
 }
 
 *{margin:0;padding:0;box-sizing:border-box}
@@ -938,3 +947,19 @@ td.money{color:var(--gold);font-family:var(--f-num)}
   .mode-grid, .mode-more-grid { grid-template-columns: repeat(2, 1fr); }
   .map-grid { grid-template-columns: 1fr; }
 }
+
+/* ===== 毛玻璃 + 扁平 基类 ===== */
+.glass{background:var(--glass);border:1px solid var(--glass-border);border-radius:var(--glass-r);backdrop-filter:blur(var(--glass-blur)) saturate(150%);-webkit-backdrop-filter:blur(var(--glass-blur)) saturate(150%);box-shadow:var(--glass-inset)}
+@supports not (backdrop-filter:blur(1px)){.glass{background:rgba(20,26,34,.92)}}
+/* 所有 .panel 统一玻璃化（购买/记分板/结算/设置/帮助/暂停/生涯/排位/Major/LAN/编辑共用） */
+.panel{background:var(--glass);border:1px solid var(--glass-border);border-radius:var(--glass-r);backdrop-filter:blur(var(--glass-blur)) saturate(150%);-webkit-backdrop-filter:blur(var(--glass-blur)) saturate(150%);box-shadow:var(--glass-inset)}
+@supports not (backdrop-filter:blur(1px)){.panel{background:rgba(20,26,34,.94)}}
+/* 扁平按钮：去掉渐变与重投影 */
+.btn{background:rgba(255,255,255,.06);background-image:none;border:1px solid var(--glass-border);box-shadow:none}
+.btn:hover{background:var(--glass-hi);border-color:var(--glass-border-hi)}
+.btn.primary{background:var(--accent);background-image:none;border:1px solid var(--accent-hi);color:#fff;box-shadow:none}
+.btn.primary:hover{background:var(--accent-hi);filter:none}
+.btn.sel{border-color:var(--accent);color:#ffb066}
+/* 阵营/难度扁平纯色（去渐变） */
+.btn.team-wide.ct,.btn.team.ct{background:#2a5ba0;background-image:none;border-color:#3e7fd4}
+.btn.team-wide.t,.btn.team.t{background:#a86a1e;background-image:none;border-color:#c97a2e}
