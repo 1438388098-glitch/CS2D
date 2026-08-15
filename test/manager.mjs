@@ -1,4 +1,4 @@
-import { resetManager, loadManager, setStorage, setRng, getState, SAVE_KEY, BACKUP_KEY, VERSION, ROLE_WEIGHTS, buildManagerRoster, deriveAttrs, ratingFromAttrs, playerPrice, newManagerCareer, buildNewSeason, nextFixture, simulateManagerMatch, candidates, buyPlayer, sellPlayer, renewPlayer, transferWindowOpen, scoutingNoise, scoutedView, filterCandidates, trainPlayer, restPlayer, facilityStatus, upgradeFacility, trainingPreview, sponsorIncome, homeTicketIncome, cashflowForecast, seasonBudget, financialRisk, ledgerRecent, transferProfit, boardGoalFor, settleBoard, teamHealth, computeChemistry, sameTeamBonus, accumulateStress, pendingEvents, respondEvent, settlePlayerMatch, seasonReport, nextSeason } from '../src/manager.js';
+import { resetManager, loadManager, setStorage, setRng, getState, __clearManagerStateForTest, save, SAVE_KEY, BACKUP_KEY, VERSION, ROLE_WEIGHTS, buildManagerRoster, deriveAttrs, ratingFromAttrs, playerPrice, newManagerCareer, buildNewSeason, nextFixture, simulateManagerMatch, candidates, buyPlayer, sellPlayer, renewPlayer, transferWindowOpen, scoutingNoise, scoutedView, filterCandidates, trainPlayer, restPlayer, facilityStatus, upgradeFacility, trainingPreview, sponsorIncome, homeTicketIncome, cashflowForecast, seasonBudget, financialRisk, ledgerRecent, transferProfit, boardGoalFor, settleBoard, teamHealth, computeChemistry, sameTeamBonus, accumulateStress, pendingEvents, respondEvent, settlePlayerMatch, seasonReport, nextSeason } from '../src/manager.js';
 
 const ok = (name, cond) => {
   if (!cond) throw new Error('manager: ' + name + ' FAIL');
@@ -211,6 +211,13 @@ ok('nextFixture exists round1', nextFixture(s) && nextFixture(s).round === 1);
   ok('cup finished from b slot', s.season.cup.phase === 'finished');
 }
 
+{
+  __clearManagerStateForTest();
+  const fresh = getState();
+  ok('fresh getState builds full career', fresh.team.roster.length === 5 && fresh.season.fixtures.length === 56 && fresh.season.standings.length === 8);
+  __clearManagerStateForTest();
+}
+
 import { installStubs, registerDomIds } from './stubdom.js';
 import { initManagerUi, openManager } from '../src/manager-ui.js';
 import '../src/manager-match.js';
@@ -222,5 +229,20 @@ openManager();
 ok('manager panel shown', globalThis.document.getElementById('managerPanel').style.display === 'block');
 ok('manager panel has content', globalThis.document.getElementById('managerPanel').innerHTML.includes('电竞经理'));
 ok('manager panel has health', globalThis.document.getElementById('managerPanel').innerHTML.includes('战队体检'));
+
+{
+  const lateStore = fakeStorage();
+  setStorage(lateStore);
+  const late = newManagerCareer();
+  late.season.fixtures.forEach((f) => { f.played = true; f.winner = f.home; });
+  late.season.standings.forEach((st) => { st.played = 14; st.w = 7; st.l = 7; st.pts = 21; });
+  late.season.cup = { phase: 'finished', bracket: [{ round: 'F', a: 't1', b: 't2', score: [3, 5], played: true, winner: 't2' }], champion: 't2' };
+  late.season.cupResult = 0;
+  save();
+  __clearManagerStateForTest();
+  openManager();
+  ok('late-season panel shows settle', globalThis.document.getElementById('managerPanel').innerHTML.includes('结算并进入下赛季'));
+  __clearManagerStateForTest();
+}
 
 console.log('manager: all PASS');

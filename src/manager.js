@@ -113,7 +113,7 @@ export function loadManager() {
   }
 }
 
-export function getState() { return state || loadManager(); }
+export function getState() { return state || initManagerIfNeeded(); }
 export function __clearManagerStateForTest() { state = null; }
 
 export const ATTRS = ['aim', 'react', 'movement', 'clutch', 'nade', 'gameIQ', 'leadership', 'composure', 'aggression', 'discipline'];

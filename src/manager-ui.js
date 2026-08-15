@@ -90,6 +90,11 @@ function renderDash(s) {
       '<div class="career-actions"><button data-act="play">开始比赛（实机观战）</button><button data-act="sim">模拟本场</button></div></div>';
   } else if (s.season.cup.phase === 'active') {
     html += '<div class="career-card"><h4>杯赛进行中</h4><div class="career-actions"><button data-act="play-cup">打杯赛</button></div></div>';
+  } else if (s.season.cup.phase === 'finished') {
+    const rep = seasonReport(s);
+    html += '<div class="career-card"><h4>赛季结束 · 第 ' + rep.rank + ' 名</h4>' +
+      '<div class="career-stats"><span>排名奖金 ¥' + money(rep.rankPrize) + ' · 杯赛奖金 ¥' + money(rep.cupPrize) + ' · 下赛季 ' + esc(rep.nextLeague) + (rep.promoted ? '（升级）' : rep.relegated ? '（降级）' : '') + '</span></div>' +
+      '<div class="career-actions"><button data-act="next-season">结算并进入下赛季</button></div></div>';
   }
   html += '<div class="career-card"><h4>赛季目标 · 董事会信任 ' + s.board.trust + '</h4>' +
     '<div class="career-stats"><span>排名目标 前 ' + goal.rank + ' · 杯赛目标 ' + (goal.cupRound >= 1 ? '进淘汰赛' : '无') + ' · 奖励 ' + money(goal.reward) + '</span></div>' +
@@ -100,10 +105,16 @@ function renderDash(s) {
     for (const ev of pe) {
       html += '<div class="career-stats"><span>' + esc(ev.text) + '</span></div>';
       if (ev.playerId) {
-        html += '<div class="career-actions">' +
-          '<button data-act="evt" data-evt="unhappy" data-pid="' + ev.playerId + '" data-choice="soothe">安抚</button>' +
-          '<button data-act="evt" data-evt="unhappy" data-pid="' + ev.playerId + '" data-choice="promise">承诺上场</button>' +
-          '<button data-act="evt" data-evt="unhappy" data-pid="' + ev.playerId + '" data-choice="ignore">放任</button></div>';
+        if (ev.type === 'conflict') {
+          html += '<div class="career-actions">' +
+            '<button data-act="evt" data-evt="conflict" data-pid="' + ev.playerId + '" data-choice="mediate">调解</button>' +
+            '<button data-act="evt" data-evt="conflict" data-pid="' + ev.playerId + '" data-choice="bench">下放替补</button></div>';
+        } else {
+          html += '<div class="career-actions">' +
+            '<button data-act="evt" data-evt="unhappy" data-pid="' + ev.playerId + '" data-choice="soothe">安抚</button>' +
+            '<button data-act="evt" data-evt="unhappy" data-pid="' + ev.playerId + '" data-choice="promise">承诺上场</button>' +
+            '<button data-act="evt" data-evt="unhappy" data-pid="' + ev.playerId + '" data-choice="ignore">放任</button></div>';
+        }
       }
     }
     html += '</div>';
@@ -271,6 +282,10 @@ function onClick(e) {
   } else if (act === 'play-cup') {
     el('managerPanel').style.display = 'none';
     startManagerMatch(game, null, null, true);
+  } else if (act === 'next-season') {
+    nextSeason();
+    toast('新赛季开始');
+    render();
   } else if (act === 'buy') {
     const r = buyPlayer(s, t.getAttribute('data-cid'));
     toast(r.ok ? '买入成功' : (r.msg || '买入失败'));
