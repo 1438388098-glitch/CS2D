@@ -32,6 +32,7 @@ export function initUi(documentRef, canvasRef, gameRef) {
   bindSettings();
   setBusVolumeHook(setBusVolume);
   bindUiSfx();
+  window.__openDuelPanel = openDuelPanel;
   return game.ui;
 }
 
@@ -639,7 +640,7 @@ function uiHover() {
 }
 
 function hideModePanels() {
-  for (const id of ['majorPanel', 'lanPanel', 'editorOverlay', 'cyberPanel', 'careerPanel']) {
+  for (const id of ['majorPanel', 'lanPanel', 'editorOverlay', 'cyberPanel', 'careerPanel', 'duelPanel']) {
     const p = el(id);
     if (p) p.style.display = 'none';
   }
@@ -748,51 +749,92 @@ box.innerHTML = '<div class="mode-hint">点击“开始”进入地图编辑器�
     if (sideSel) sideSel.onchange = () => { opts.side = sideSel.value; resetCyberConfirm(); renderOdds(); };
     renderOdds();
   } else if (mode === 'duel') {
-    const stats = getStats();
-    const mapName = (id) => {
-      const m = DUEL_MAPS.find((x) => x.id === id);
-      return m ? m.name : (id === 'auto' ? '自动轮换' : (id || ''));
-    };
-    const hist = stats.history.slice(0, 5).map((h) => '<div class="mode-hint">' + (h.win ? '胜 ' : '负 ') + h.kills + ' 杀 / ' + h.deaths + ' 死' + (h.opp ? ' · vs ' + h.opp : '') + (h.map ? ' · ' + mapName(h.map) : '') + '</div>').join('');
-    // 每对手战绩速览：列出交手过的对手及其胜率
-    const vsHtml = Object.keys(stats.vs || {}).map((k) => {
-      const v = stats.vs[k];
-      return '<div class="mode-hint">vs ' + k + '：' + v.w + '胜 ' + v.l + '负' + (v.w + v.l > 0 ? ' · ' + Math.round(v.w / (v.w + v.l) * 100) + '%' : '') + '</div>';
-    }).join('');
-    if (!game.opts.duelOpponent) game.opts.duelOpponent = OPPONENTS[0].name;
-    const oppHtml = OPPONENTS.map((o) => '<option value="' + o.name + '"' + (game.opts.duelOpponent === o.name ? ' selected' : '') + '>' + o.name + ' · ' + o.tag + ' · ' + o.rating + '</option>').join('');
-    if (!game.opts.duelMap || !DUEL_MAPS.some((m) => m.id === game.opts.duelMap)) game.opts.duelMap = 'auto';
-    const nextAutoId = pickDuelMap('auto', stats.played);
-    const mapHtml = '<option value="auto"' + (game.opts.duelMap === 'auto' ? ' selected' : '') + '>自动轮换 · 每场换图</option>' + DUEL_MAPS.map((m) => '<option value="' + m.id + '"' + (game.opts.duelMap === m.id ? ' selected' : '') + '>' + m.name + ' · ' + m.tagline + '</option>').join('');
-    if (!game.opts.duelDiff) game.opts.duelDiff = 'hard';
-    const diffHtml = [['easy', '简单'], ['normal', '普通'], ['hard', '困难'], ['hell', '地狱']].map(([v, l]) => '<option value="' + v + '"' + (game.opts.duelDiff === v ? ' selected' : '') + '>' + l + '</option>').join('');
-    box.innerHTML = '<div class="mode-hint">单挑模式：1v1 九局五胜（BO9）。地图可选自动轮换或指定专用小图。</div><div class="duel-pick"><label>地图</label><select id="duelMapSel">' + mapHtml + '</select></div><div class="duel-pick"><label>对手</label><select id="duelOppSel">' + oppHtml + '</select></div><div class="duel-pick"><label>难度</label><select id="duelDiffSel">' + diffHtml + '</select></div><div id="duelMapHint" class="mode-hint">' + (game.opts.duelMap === 'auto' ? '自动轮换：下一场 ' + mapName(nextAutoId) : '已固定：' + mapName(game.opts.duelMap)) + '</div><div class="duel-stats">总战绩 ' + stats.played + ' 场 · ' + stats.w + '胜 ' + stats.l + '负 · 连胜 ' + stats.streak + ' · 最佳 ' + stats.bestStreak + '</div>' + (vsHtml ? '<div class="mode-hint">对阵记录</div>' + vsHtml : '') + '<div class="mode-hint">最近 5 场</div>' + hist + '<button class="btn small" id="duelResetBtn">重置战绩</button>';
-    const mapSel2 = el('duelMapSel');
-    if (mapSel2) {
-      mapSel2.value = game.opts.duelMap;
-      mapSel2.onchange = () => {
-        game.opts.duelMap = mapSel2.value;
-        const hintEl = el('duelMapHint');
-        if (hintEl) hintEl.textContent = game.opts.duelMap === 'auto' ? '自动轮换：下一场 ' + mapName(pickDuelMap('auto', stats.played)) : '已固定：' + mapName(game.opts.duelMap);
-      };
-    }
-    const sel = el('duelOppSel');
-    if (sel) {
-      sel.value = game.opts.duelOpponent;
-      sel.onchange = () => { game.opts.duelOpponent = sel.value; };
-    }
-    const diffSel = el('duelDiffSel');
-    if (diffSel) {
-      diffSel.value = game.opts.duelDiff;
-      diffSel.onchange = () => { game.opts.duelDiff = diffSel.value; };
-    }
-    const resetBtn = el('duelResetBtn');
-    if (resetBtn) resetBtn.onclick = () => { if (window.confirm('确定重置单挑战绩？')) { resetDuel(); renderModeSettings(); } };
+    box.innerHTML = '<div class="mode-hint">单挑模式：1v1 ' + ROUND.MATCH_WIN + ' 胜（BO' + (ROUND.MATCH_WIN * 2 - 1) + '），对手各有专属风格，可打专用小图或官方竞技图。点「开始比赛」进入配置面板。</div>';
   } else if (mode === 'career') {
 box.innerHTML = '<div class="mode-hint">生涯模式：个人+战队，进入生涯总部管理赛季、训练与阵容。</div>';
   } else {
     box.innerHTML = '';
   }
+}
+
+// 单挑配置面板（全屏）：对手卡片 / 地图 / 难度 / 战绩 / 历史
+function renderDuelPanel() {
+  const body = el('duelBody');
+  if (!body) return;
+  const stats = getStats();
+  const mapTitle = (id) => {
+    if (id === 'auto') return '自动轮换';
+    if (id === 'arena') return '官方竞技图';
+    const dm = DUEL_MAPS.find((x) => x.id === id);
+    if (dm) return dm.name;
+    const m = MAPS.find((x) => x && x.id === id);
+    return m ? (m.name || id) : (id || '');
+  };
+  const curOpp = game.opts.duelOpponent || OPPONENTS[0].name;
+  if (!game.opts.duelOpponent) game.opts.duelOpponent = curOpp;
+  if (!game.opts.duelMap) game.opts.duelMap = 'auto';
+  if (!game.opts.duelDiff) game.opts.duelDiff = 'hard';
+  const winRate = stats.played > 0 ? Math.round(stats.w / stats.played * 100) : 0;
+  const oppCards = OPPONENTS.map((o) => {
+    const v = stats.vs && stats.vs[o.name];
+    const sel = curOpp === o.name ? ' sel' : '';
+    const rec = v ? v.w + '胜 ' + v.l + '负' + (v.w + v.l > 0 ? ' · ' + Math.round(v.w / (v.w + v.l) * 100) + '%' : '') : '未交手';
+    return '<button class="duel-opp-card' + sel + '" data-opp="' + o.name + '">' +
+      '<span class="duel-opp-head"><b>' + o.name + '</b><i>' + o.tag + '</i></span>' +
+      '<span class="duel-rating"><i style="width:' + o.rating + '%"></i></span>' +
+      '<span class="duel-opp-foot"><em>' + o.style + '</em><small>' + rec + '</small></span></button>';
+  }).join('');
+  const mapChips = [['auto', '自动轮换'], ['arena', '官方竞技图']].concat(DUEL_MAPS.map((m) => [m.id, m.name])).map(([id, label]) => {
+    return '<button class="duel-map-chip' + (game.opts.duelMap === id ? ' sel' : '') + '" data-map="' + id + '">' + label + '</button>';
+  }).join('');
+  const diffSeg = [['easy', '简单'], ['normal', '普通'], ['hard', '困难'], ['hell', '地狱']].map(([v, l]) => {
+    return '<button class="duel-diff-btn' + (game.opts.duelDiff === v ? ' sel' : '') + '" data-diff="' + v + '">' + l + '</button>';
+  }).join('');
+  const nextId = pickDuelMap(game.opts.duelMap, stats.played);
+  const mapHint = game.opts.duelMap === 'auto' ? '自动轮换：下一场 ' + mapTitle(nextId)
+    : (game.opts.duelMap === 'arena' ? '官方竞技图：下一场 ' + mapTitle(nextId) : '已固定：' + mapTitle(game.opts.duelMap));
+  const vsRows = Object.keys(stats.vs || {}).map((k) => {
+    const v = stats.vs[k];
+    const pct = v.w + v.l > 0 ? Math.round(v.w / (v.w + v.l) * 100) : 0;
+    return '<div class="duel-vs-row"><span>' + k + '</span><span class="duel-winbar"><i style="width:' + pct + '%"></i></span><b>' + v.w + '胜 ' + v.l + '负 ' + pct + '%</b></div>';
+  }).join('');
+  const hist = stats.history.slice(0, 10).map((h) => '<div class="duel-hist-row"><span class="' + (h.win ? 'w' : 'l') + '">' + (h.win ? '胜' : '负') + '</span><span>' + h.kills + '杀 / ' + h.deaths + '死</span>' + (h.opp ? '<span>vs ' + h.opp + '</span>' : '') + '<span>' + mapTitle(h.map) + '</span></div>').join('') || '<div class="mode-hint">暂无比赛记录</div>';
+  body.innerHTML =
+    '<div class="duel-top"><h3>单挑模式</h3><span class="duel-sub">1v1 · ' + ROUND.MATCH_WIN + ' 胜（BO' + (ROUND.MATCH_WIN * 2 - 1) + '）· 第 ' + (Math.floor(ROUND.MATCH_WIN / 2) + 1) + ' 回合换边</span><button class="btn small" id="duelBackBtn">← 主菜单</button></div>' +
+    '<div class="duel-body">' +
+      '<div class="duel-section"><h5>选择对手</h5><div class="duel-opp-grid">' + oppCards + '</div></div>' +
+      '<div class="duel-section"><h5>地图</h5><div class="duel-map-chips">' + mapChips + '</div><div class="mode-hint" id="duelMapHint">' + mapHint + '</div></div>' +
+      '<div class="duel-section"><h5>难度</h5><div class="duel-diff-seg">' + diffSeg + '</div></div>' +
+      '<div class="duel-section"><h5>战绩</h5><div class="duel-stat-panel"><div class="duel-stat-main"><b>' + stats.w + '</b><span>胜</span><em>' + stats.l + '</em><span>负</span></div><div class="duel-winbar"><i style="width:' + winRate + '%"></i></div><div class="duel-stat-sub">总场次 ' + stats.played + ' · 胜率 ' + winRate + '% · 连胜 ' + stats.streak + ' · 最佳 ' + stats.bestStreak + '</div></div></div>' +
+      (vsRows ? '<div class="duel-section"><h5>对阵记录</h5>' + vsRows + '</div>' : '') +
+      '<div class="duel-section"><h5>最近比赛</h5>' + hist + '</div>' +
+    '</div>' +
+    '<div class="duel-actions"><button class="btn small" id="duelResetBtn">重置战绩</button><button class="btn primary" id="duelStartBtn">开始比赛</button></div>';
+  for (const c of body.querySelectorAll('.duel-opp-card')) c.onclick = () => { game.opts.duelOpponent = c.getAttribute('data-opp'); renderDuelPanel(); };
+  for (const c of body.querySelectorAll('.duel-map-chip')) c.onclick = () => { game.opts.duelMap = c.getAttribute('data-map'); renderDuelPanel(); };
+  for (const c of body.querySelectorAll('.duel-diff-btn')) c.onclick = () => { game.opts.duelDiff = c.getAttribute('data-diff'); renderDuelPanel(); };
+  const back = body.querySelector('#duelBackBtn');
+  if (back) back.onclick = () => closeDuelPanel();
+  const reset = body.querySelector('#duelResetBtn');
+  if (reset) reset.onclick = () => { if (window.confirm('确定重置单挑战绩？')) { resetDuel(); renderDuelPanel(); } };
+  const start = body.querySelector('#duelStartBtn');
+  if (start) start.onclick = () => {
+    closeDuelPanel();
+    initAudio();
+    startMatch(game);
+  };
+}
+function openDuelPanel() {
+  const ov = el('duelPanel');
+  const menu = el('menu');
+  if (menu) menu.classList.remove('show');
+  if (ov) ov.style.display = 'flex';
+  renderDuelPanel();
+}
+function closeDuelPanel() {
+  const ov = el('duelPanel');
+  if (ov) ov.style.display = 'none';
+  if (game.ui) game.ui.showMenu();
 }
 
 function bindModeMenu() {
@@ -889,6 +931,11 @@ function bindMenu() {
   }
   if (startBtn) startBtn.onclick = (e) => {
     initAudio();
+    if (game.opts.mode === 'duel') {
+      if (window.__openDuelPanel) window.__openDuelPanel();
+      e.currentTarget.blur();
+      return;
+    }
     if (game.opts.mode === 'career') {
       if (window.__openCareer) window.__openCareer();
       e.currentTarget.blur();

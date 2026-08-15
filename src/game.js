@@ -362,9 +362,10 @@ export function skipSpectatedRound(game) {
 
 export function startRound(game) {
   game.round++;
-  // 换边：常规第 ROUND.SIDE_SWAP_AFTER+1 回合；加时每 3 回合再换
-  const swapRound = game.round === ROUND.SIDE_SWAP_AFTER + 1 ||
-    (game.ot && (game.round - (ROUND.SIDE_SWAP_AFTER + 1)) % ROUND.OT_SWAP_EVERY === 0 && game.round > ROUND.SIDE_SWAP_AFTER + 1);
+  // 换边：常规第 ROUND.SIDE_SWAP_AFTER+1 回合；加时每 3 回合再换。模式可用 game.opts.sideSwapAfter 覆盖（单挑等短局）
+  const swapAfter = (game.opts && game.opts.sideSwapAfter) || ROUND.SIDE_SWAP_AFTER;
+  const swapRound = game.round === swapAfter + 1 ||
+    (game.ot && (game.round - (swapAfter + 1)) % ROUND.OT_SWAP_EVERY === 0 && game.round > swapAfter + 1);
   if (swapRound) {
     for (const e of game.entities) {
       e.team = e.team === 'ct' ? 't' : 'ct';

@@ -1,5 +1,5 @@
 import { ROUND } from './config.js';
-import { registerMode, registerMap } from './registry.js';
+import { registerMode, registerMap, getMapDef, getBombMapIds } from './registry.js';
 import { DUEL_MAPS } from './duel-maps.js';
 import { setupMatchEntities, startRound } from './game.js';
 import { teamDiffParams } from './modes.js';
@@ -9,18 +9,18 @@ const BACKUP_KEY = 'cs2d_duel_backup';
 const VERSION = 1;
 
 export const OPPONENTS = [
-  { name: 'ZywOo', tag: 'VIT', rating: 90 },
-  { name: 'donk', tag: 'SPIRIT', rating: 92 },
-  { name: 'm0NESY', tag: 'G2', rating: 89 },
-  { name: 'NiKo', tag: 'FALCONS', rating: 88 },
-  { name: 'sh1ro', tag: 'SPIRIT', rating: 87 },
-  { name: 'b1t', tag: 'NAVI', rating: 86 },
-  { name: 'ropz', tag: 'FAZE', rating: 85 },
-  { name: 'XANTARES', tag: 'EF', rating: 85 },
-  { name: 'flameZ', tag: 'VIT', rating: 84 },
-  { name: 'dev1ce', tag: 'AST', rating: 84 },
-  { name: 'Twistzz', tag: 'TL', rating: 83 },
-  { name: 'EliGE', tag: 'COL', rating: 82 }
+  { name: 'ZywOo', tag: 'VIT', rating: 90, style: '狙击手', arch: 'sniper', p: { aimSpeed: 135, idealMin: 480, idealMax: 980, peekChance: 0.42, nadeUse: 0.35, strafe: 0.45, react: 0.10 } },
+  { name: 'donk', tag: 'SPIRIT', rating: 92, style: '突破手', arch: 'breacher', p: { strafe: 0.8, riskT: 1.4, rushChance: 0.5, idealMin: 260, idealMax: 620, react: 0.11, peekChance: 0.4 } },
+  { name: 'm0NESY', tag: 'G2', rating: 89, style: '狙击手', arch: 'sniper', p: { aimSpeed: 132, idealMin: 460, idealMax: 960, peekChance: 0.45, nadeUse: 0.3, strafe: 0.5, react: 0.11 } },
+  { name: 'NiKo', tag: 'FALCONS', rating: 88, style: '突破手', arch: 'breacher', p: { strafe: 0.75, riskT: 1.3, rushChance: 0.45, idealMin: 280, idealMax: 640, aimSpeed: 125, react: 0.12 } },
+  { name: 'sh1ro', tag: 'SPIRIT', rating: 87, style: '残局大师', arch: 'rifler', p: { nadeUse: 0.65, riskT: 1.25, peekChance: 0.4, aimSpeed: 120, saveChance: 0.15, react: 0.11 } },
+  { name: 'b1t', tag: 'NAVI', rating: 86, style: '突破手', arch: 'breacher', p: { strafe: 0.7, riskT: 1.2, idealMin: 260, idealMax: 600, aimSpeed: 118, react: 0.12 } },
+  { name: 'ropz', tag: 'FAZE', rating: 85, style: '自由人', arch: 'lurk', p: { rotateChance: 0.7, saveChance: 0.35, riskT: 0.8, nadeUse: 0.5, peekChance: 0.35, aimSpeed: 115 } },
+  { name: 'XANTARES', tag: 'EF', rating: 85, style: '残局大师', arch: 'rifler', p: { nadeUse: 0.6, riskT: 1.35, peekChance: 0.45, aimSpeed: 122, saveChance: 0.1, react: 0.11 } },
+  { name: 'flameZ', tag: 'VIT', rating: 84, style: '残局大师', arch: 'rifler', p: { nadeUse: 0.55, riskT: 1.2, peekChance: 0.42, aimSpeed: 118, react: 0.12 } },
+  { name: 'dev1ce', tag: 'AST', rating: 84, style: '狙击手', arch: 'sniper', p: { aimSpeed: 130, idealMin: 500, idealMax: 1000, peekChance: 0.4, nadeUse: 0.4, strafe: 0.42, react: 0.11 } },
+  { name: 'Twistzz', tag: 'TL', rating: 83, style: '自由人', arch: 'lurk', p: { rotateChance: 0.65, saveChance: 0.3, riskT: 0.85, nadeUse: 0.5, peekChance: 0.38, aimSpeed: 112 } },
+  { name: 'EliGE', tag: 'COL', rating: 82, style: '突破手', arch: 'breacher', p: { strafe: 0.72, riskT: 1.25, idealMin: 270, idealMax: 620, aimSpeed: 115, react: 0.12 } }
 ];
 
 for (const m of DUEL_MAPS) registerMap({ id: m.id, name: m.name, accent: m.accent, rows: m.rows, mode: 'duel', category: 'duel' });
@@ -85,7 +85,11 @@ export function getOpponents() { return OPPONENTS.map((o) => ({ ...o })); }
 export function getStats() { const s = loadDuel(); return { ...s.stats, history: s.history.slice(), vs: s.vs || {} }; }
 
 export function pickDuelMap(selected, played) {
-  if (selected && selected !== 'auto' && DUEL_MAPS.some((m) => m.id === selected)) return selected;
+  if (selected === 'arena') {
+    const ids = getBombMapIds();
+    return ids.length ? ids[Math.max(0, played || 0) % ids.length] : DUEL_MAPS[0].id;
+  }
+  if (selected && selected !== 'auto' && getMapDef(selected)) return selected;
   return DUEL_MAPS[Math.max(0, played || 0) % DUEL_MAPS.length].id;
 }
 
@@ -113,7 +117,7 @@ export function recordResult(s, win, kills, deaths, oppName, mapId) {
 
 function duelStart(game) {
   const mapId = pickDuelMap(game.opts.duelMap, getState().stats.played);
-  const map = DUEL_MAPS.find((m) => m.id === mapId) || DUEL_MAPS[0];
+  const map = getMapDef(mapId) || DUEL_MAPS[0];
   game.opts.mapId = map.id;
   const opp = pickOpponent(game.opts.duelOpponent);
   game.duelMatch = { settled: false, opp, mapId: map.id };
@@ -123,14 +127,19 @@ function duelStart(game) {
   const mult = diffMult[game.opts.duelDiff] || 1.0;
   const effRating = Math.round(Math.min(99, Math.max(55, opp.rating * mult)));
   game.opts.diff = game.opts.duelDiff === 'hell' ? 'hell' : 'hard';
-  game.opts.diffParams = teamDiffParams({ rating: effRating });
+  // 对手人格：rating 基线 + 个人风格覆盖（狙击手远距/突破手贴脸/自由人绕后/残局大师稳）
+  const base = teamDiffParams({ rating: effRating });
+  const personality = opp.p || {};
+  game.opts.diffParams = { ...base, ...personality };
+  game.opts.sideSwapAfter = Math.max(1, Math.floor(ROUND.MATCH_WIN / 2));
   game.noRoundEnd = false;
   setupMatchEntities(game);
   game.entities = game.entities.filter((e) => !(e.bot && e.team === game.opts.team));
   const enemy = game.entities.find((e) => e.bot && e.team !== game.opts.team);
   if (enemy) {
     enemy.name = opp.name;
-    enemy.aiParams = { ...teamDiffParams({ rating: effRating }) };
+    enemy.archetype = opp.arch || 'rifler';
+    enemy.aiParams = { ...base, ...personality };
   }
   startRound(game);
 }
