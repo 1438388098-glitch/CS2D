@@ -1,4 +1,4 @@
-import { resetManager, loadManager, setStorage, setRng, getState, SAVE_KEY, BACKUP_KEY, VERSION, ROLE_WEIGHTS, buildManagerRoster, deriveAttrs, ratingFromAttrs, playerPrice, newManagerCareer, buildNewSeason, nextFixture, simulateManagerMatch, candidates, buyPlayer, sellPlayer, renewPlayer, transferWindowOpen, scoutingNoise, scoutedView, filterCandidates, trainPlayer, restPlayer, facilityStatus, upgradeFacility, trainingPreview, sponsorIncome, homeTicketIncome, cashflowForecast, seasonBudget, financialRisk, ledgerRecent, transferProfit } from '../src/manager.js';
+import { resetManager, loadManager, setStorage, setRng, getState, SAVE_KEY, BACKUP_KEY, VERSION, ROLE_WEIGHTS, buildManagerRoster, deriveAttrs, ratingFromAttrs, playerPrice, newManagerCareer, buildNewSeason, nextFixture, simulateManagerMatch, candidates, buyPlayer, sellPlayer, renewPlayer, transferWindowOpen, scoutingNoise, scoutedView, filterCandidates, trainPlayer, restPlayer, facilityStatus, upgradeFacility, trainingPreview, sponsorIncome, homeTicketIncome, cashflowForecast, seasonBudget, financialRisk, ledgerRecent, transferProfit, boardGoalFor, settleBoard, teamHealth, computeChemistry, sameTeamBonus, accumulateStress, pendingEvents, respondEvent } from '../src/manager.js';
 
 const ok = (name, cond) => {
   if (!cond) throw new Error('manager: ' + name + ' FAIL');
@@ -136,6 +136,31 @@ ok('nextFixture exists round1', nextFixture(s) && nextFixture(s).round === 1);
   ok('transfer profit', transferProfit(cleanLedger).sellTotal === 100 && transferProfit(cleanLedger).buyTotal === 50);
   const stateLike = { team: { ledger: [{ amount: 100, label: 'a' }, { amount: 50, label: 'b' }] } };
   ok('ledger recent reversed', ledgerRecent(stateLike)[0].amount === 50);
+}
+
+{
+  s = newManagerCareer();
+  ok('board goal 乙级', boardGoalFor('乙级').rank === 2);
+  s.board.trust = 70;
+  settleBoard(s, 2, 1);
+  ok('goal met trust up', s.board.trust === 85);
+  ok('goal reward banked', s.team.bank > 12000);
+  s.board.trust = 30;
+  settleBoard(s, 8, 0);
+  ok('goal fail trust down', s.board.trust === 15);
+  ok('fired when trust low', s.board.fired === true);
+  s = newManagerCareer();
+  const h = teamHealth(s);
+  ok('health has 5 keys', ['money', 'morale', 'fatigue', 'roster', 'stress'].every((k) => k in h));
+  ok('health levels valid', ['green', 'yellow', 'red'].includes(h.money));
+  const ch = computeChemistry(s);
+  ok('chemistry 30-95', ch >= 30 && ch <= 95);
+  const bonus = sameTeamBonus(s);
+  ok('same team bonus type', bonus === null || (bonus.react < 0 && bonus.spreadMult < 0));
+  accumulateStress(s);
+  ok('stress sum number', typeof s.team.stressSum === 'number');
+  const pe = pendingEvents(s);
+  ok('pending events array', Array.isArray(pe));
 }
 
 console.log('manager: all PASS');

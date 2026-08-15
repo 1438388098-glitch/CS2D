@@ -674,6 +674,131 @@ export function ledgerRecent(s, n = 60) {
   return (s.team.ledger || []).slice(-n).reverse();
 }
 
+export function boardGoalFor(league) {
+  if (league === '甲级') return { rank: 6, cup: 1, reward: 12000 };
+  if (league === '丙级') return { rank: 4, cup: 0, reward: 7000 };
+  return { rank: 2, cup: 1, reward: 10000 };
+}
+
+export function boardTrust(s) { return s.board.trust; }
+
+export function seasonGoalProgress(s) {
+  const goal = s.board.goal;
+  const rank = s.season.standings.findIndex((x) => x.teamId === 'player') + 1;
+  const cupRound = s.season.cup.champion === 'player' ? 3 : (s.season.cup.phase === 'finished' ? 0 : (s.season.cupResult != null ? s.season.cupResult : null));
+  const rankOk = rank > 0 && rank <= goal.rank;
+  const cupOk = cupRound != null ? cupRound >= goal.cup : null;
+  return { rank, cupRound, rankOk, cupOk, reward: goal.reward };
+}
+
+export function settleBoard(s, finalRank, cupRound) {
+  const goal = s.board.goal;
+  const rankOk = finalRank <= goal.rank;
+  const cupOk = cupRound >= goal.cup;
+  if (rankOk && cupOk) {
+    s.board.trust = clamp(s.board.trust + 15, 0, 100);
+    s.team.bank += goal.reward;
+    addLedger(s, 'income', goal.reward, '赛季目标达成奖励');
+    pushNews(s, 'win', '董事会满意：达成赛季目标 +' + goal.reward);
+  } else {
+    s.board.trust = clamp(s.board.trust - 15, 0, 100);
+    pushNews(s, 'lose', '董事会失望：未达成赛季目标');
+  }
+  if (s.board.trust <= 20) { s.board.fired = true; pushNews(s, 'lose', '老板忍无可忍，解雇了你'); }
+  save();
+}
+
+export function teamHealth(s) {
+  const rules = LEAGUE_RULES[s.team.league] || LEAGUE_RULES['乙级'];
+  const bank = s.team.bank;
+  const budget = seasonBudget(s).budget;
+  const money = bank >= budget * 0.5 ? 'green' : bank >= budget * 0.2 ? 'yellow' : 'red';
+  const morale = s.team.morale >= 65 ? 'green' : s.team.morale >= 45 ? 'yellow' : 'red';
+  const avgFatigue = s.team.roster.reduce((a, p) => a + p.fatigue, 0) / Math.max(1, s.team.roster.length);
+  const fatigue = avgFatigue < 35 ? 'green' : avgFatigue < 60 ? 'yellow' : 'red';
+  const roles = ROLES.slice(0, 5);
+  const gaps = roles.filter((r) => !s.team.roster.some((p) => p.role === r));
+  const roster = gaps.length === 0 ? 'green' : 'yellow';
+  const stress = s.team.stressSum >= 60 ? 'red' : s.team.stressSum >= 30 ? 'yellow' : 'green';
+  const advice = [];
+  if (money === 'red') advice.push('资金低于安全垫，慎买人');
+  if (morale === 'red') advice.push('士气低迷，考虑赢球或休息');
+  if (fatigue === 'red') advice.push('疲劳过高，优先轮休');
+  if (gaps.length) advice.push('阵容缺：' + gaps.join('、'));
+  if (stress === 'red') advice.push('队内矛盾高，优先安抚');
+  return { money, morale, fatigue, roster, stress, gaps, advice };
+}
+
+export const PERSONALITY_CN = {
+  hyperAggressive: '好战', disciplined: '自律', clutchGod: '残局之王', mercurial: '情绪化', leader: '领袖', quiet: '安静', confident: '自信', fragile: '玻璃心'
+};
+
+const CHEM_RULES = { hyperAggressive: { good: ['clutchGod', 'confident'], bad: ['disciplined', 'fragile'] }, disciplined: { good: ['quiet', 'confident'], bad: ['hyperAggressive', 'mercurial'] }, clutchGod: { good: ['hyperAggressive', 'leader'], bad: ['mercurial'] }, mercurial: { good: ['clutchGod'], bad: ['disciplined', 'leader'] }, leader: { good: ['disciplined', 'confident'], bad: ['mercurial', 'fragile'] }, quiet: { good: ['disciplined', 'clutchGod'], bad: ['hyperAggressive'] }, confident: { good: ['leader', 'hyperAggressive'], bad: ['fragile'] }, fragile: { good: ['quiet', 'leader'], bad: ['confident', 'hyperAggressive'] } };
+
+function chemistryPair(a, b) {
+  const rule = CHEM_RULES[a] || { good: [], bad: [] };
+  if (rule.good.includes(b)) return 10;
+  if (rule.bad.includes(b)) return -12;
+  return 0;
+}
+
+export function computeChemistry(s) {
+  s.team.chemistry = 60;
+  const roster = s.team.roster;
+  for (let i = 0; i < roster.length; i++) {
+    for (let j = i + 1; j < roster.length; j++) {
+      s.team.chemistry += chemistryPair(roster[i].personality, roster[j].personality);
+    }
+  }
+  s.team.chemistry = clamp(s.team.chemistry, 30, 95);
+  return s.team.chemistry;
+}
+
+export function sameTeamBonus(s) {
+  const counts = {};
+  for (const p of s.team.roster) {
+    if (p.teamOfOrigin) counts[p.teamOfOrigin] = (counts[p.teamOfOrigin] || 0) + 1;
+  }
+  const max = Math.max(0, ...Object.values(counts));
+  return max >= 3 ? { react: -0.05, spreadMult: -0.03, label: '同队羁绊' } : null;
+}
+
+export function accumulateStress(s) {
+  s.team.stressSum = 0;
+  for (const p of s.team.roster) {
+    p.stress = clamp((p.stress || 0) + (p.morale < 45 ? 3 : 0) + (p.fatigue > 60 ? 2 : 0), 0, 100);
+    s.team.stressSum += p.stress;
+  }
+  return s.team.stressSum;
+}
+
+export function pendingEvents(s) {
+  const evts = [];
+  if (transferWindowOpen(s)) {
+    if (rng() < 0.5) evts.push({ type: 'offer', text: '有战队对你队某选手感兴趣' });
+  }
+  const unhappy = s.team.roster.filter((p) => p.stress > 60 && p.role !== '指挥');
+  for (const p of unhappy) evts.push({ type: 'unhappy', playerId: p.id, text: p.name + ' 因出场少/压力大想转会' });
+  const conflict = s.team.roster.find((p) => p.stress > 70);
+  if (conflict) evts.push({ type: 'conflict', playerId: conflict.id, text: conflict.name + ' 与队友关系紧张' });
+  return evts;
+}
+
+export function respondEvent(s, type, playerId, choice) {
+  const p = s.team.roster.find((x) => x.id === playerId);
+  if (type === 'unhappy' && p) {
+    if (choice === 'soothe') { p.morale = clamp(p.morale + 8, 20, 100); p.stress = clamp(p.stress - 15, 0, 100); pushNews(s, 'info', '安抚了 ' + p.name); }
+    else if (choice === 'ignore') { p.morale = clamp(p.morale - 10, 20, 100); p.stress = clamp(p.stress + 10, 0, 100); pushNews(s, 'lose', p.name + ' 因被忽视而不满'); }
+    else if (choice === 'promise') { p.morale = clamp(p.morale + 5, 20, 100); p.stress = clamp(p.stress - 8, 0, 100); pushNews(s, 'info', '承诺给 ' + p.name + ' 更多上场机会'); }
+  }
+  if (type === 'conflict' && p) {
+    if (choice === 'mediate') { p.stress = clamp(p.stress - 20, 0, 100); s.team.stressSum = clamp(s.team.stressSum - 20, 0, 300); pushNews(s, 'info', '调解了队内矛盾'); }
+    else if (choice === 'bench') { p.morale = clamp(p.morale - 10, 20, 100); pushNews(s, 'lose', p.name + ' 被下放替补，心生不满'); }
+  }
+  save();
+  return { ok: true };
+}
+
 export function transferProfit(s) {
   const ledger = (s && s.team ? s.team.ledger : s && s.ledger ? s.ledger : []) || [];
   const sells = ledger.filter((l) => l.type === 'income' && l.label.startsWith('卖出'));
