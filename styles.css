@@ -1003,11 +1003,11 @@ td.money{color:var(--gold);font-family:var(--f-num)}
 .map-preview-box{position:relative;flex:none;height:min(58%,320px);min-height:180px;background:rgba(0,0,0,.24);border:1px solid rgba(255,255,255,.09);border-radius:11px;overflow:hidden}
 #mapPreview{position:absolute;inset:0;width:100%;height:100%}
 .map-preview-name{position:absolute;left:12px;bottom:10px;font-size:12px;letter-spacing:3px;color:rgba(242,245,248,.75);text-shadow:0 1px 8px rgba(0,0,0,.7);pointer-events:none}
-.map-chips{flex:1;display:flex;flex-wrap:wrap;align-content:flex-start;gap:6px;align-items:center;min-height:0;overflow-y:auto;padding-bottom:4px}
+.map-chips{flex:1;display:grid;grid-template-columns:repeat(3,1fr);gap:6px;align-content:start;min-height:0;overflow-y:auto;padding-bottom:4px}
 .map-group-title{width:100%;font-size:10px;color:rgba(242,245,248,.4);letter-spacing:2px;margin-top:4px}
 /* 覆盖旧 .map-subgrid 的 grid≥210px 排版，改回弹性名签行 */
 .map-subgrid{display:flex;flex-wrap:wrap;gap:6px}
-.map-chips .map-card{flex:none;display:inline-flex;align-items:center;gap:6px;background:rgba(255,255,255,.05);border:1px solid transparent;border-radius:7px;padding:5px 12px;font-size:12px;letter-spacing:1px;color:rgba(242,245,248,.55);cursor:pointer;font-family:var(--f-cn);transition:all var(--dur-s) var(--ease)}
+.map-chips .map-card{width:100%;display:flex;align-items:center;justify-content:center;gap:6px;background:rgba(255,255,255,.05);border:1px solid transparent;border-radius:7px;padding:5px 10px;font-size:12px;letter-spacing:1px;color:rgba(242,245,248,.55);cursor:pointer;font-family:var(--f-cn);transition:all var(--dur-s) var(--ease)}
 .map-chips .map-card:hover{border-color:var(--glass-border-hi);color:var(--txt-1)}
 .map-chips .map-card.sel{color:#ffb066;background:rgba(255,138,42,.14);border-color:var(--accent)}
 .map-chips .map-card .mc-name{font-weight:500}
@@ -1072,8 +1072,8 @@ table.sb tr.mvp td{background:rgba(255,210,122,.07)}
 .career-tab.sel,.ranked-tab.sel{background:rgba(255,138,42,.14);border-color:var(--accent);color:#ffb066}
 .career-player-card{background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);border-radius:10px}
 
-/* ===== 地图名签：宽度内自然换行（紧凑，不纵向堆叠也不拖长条） ===== */
-.map-group-title{flex:none;width:auto;white-space:nowrap;margin:0 6px 0 2px}
+/* ===== 地图名签：3 列网格（一行三个），分组标签独占整行 ===== */
+.map-group-title{grid-column:1/-1;font-size:10px;color:rgba(242,245,248,.4);letter-spacing:2px;margin-top:4px}
 
 /* ===== 遗漏容器玻璃化（career-tabs / Major 表格 / 娱乐折叠） ===== */
 .career-tabs{background:rgba(255,255,255,.04);backdrop-filter:blur(8px) saturate(140%);-webkit-backdrop-filter:blur(8px) saturate(140%);border-bottom:1px solid rgba(255,255,255,.09)}
