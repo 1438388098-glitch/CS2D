@@ -77,6 +77,44 @@ git commit -m "style(ui): 新增玻璃/扁平设计令牌与 .panel/.btn 基础�
 
 ---
 
+## Task 0b: 玻璃动效基类
+
+> 用户明确要求：玻璃化相关动效必须做好。本任务提供全局动效层，后续所有界面继承。
+
+**Files:**
+- Modify: `styles.css`（文件末尾追加）
+
+- [ ] **Step 1: 追加玻璃动效层**
+
+```css
+/* ===== 玻璃动效 ===== */
+/* 面板入场：用独立 scale/opacity 动画，不覆盖 .panel 的 translate(-50%,-50%) 居中 */
+@keyframes glass-in{from{opacity:0;scale:.965}to{opacity:1;scale:1}}
+.panel{animation:glass-in .3s var(--ease) both}
+/* 玻璃/面板状态过渡（hover/开关时背景与描边平滑） */
+.glass,.panel{transition:background-color .2s var(--ease),border-color .2s var(--ease),box-shadow .2s var(--ease)}
+/* 可交互玻璃卡的 hover 微交互（上浮 + 描边亮起） */
+.mode-card,.map-chips .map-card,.career-card,.ranked-card,.eg-cell,.bi,.kf{transition:background-color .18s var(--ease),border-color .18s var(--ease),transform .18s var(--ease),box-shadow .18s var(--ease)}
+.mode-card:hover,.map-chips .map-card:hover,.career-card:hover,.ranked-card:hover,.eg-cell:hover,.bi:hover{transform:translateY(-2px)}
+/* 按钮按下反馈 */
+.btn:active{transform:scale(.98)}
+```
+
+- [ ] **Step 2: 验证**
+
+Run: `node scripts/check-syntax.mjs; node scripts/check-cycles.mjs`
+Expected: PASS。浏览器打开确认：打开任意面板（购买/设置/记分板）有淡入上浮入场；玻璃卡 hover 上浮；按钮按下有缩放反馈。
+Expected: 全部 PASS。
+
+- [ ] **Step 3: Commit**
+
+```bash
+git add styles.css
+git commit -m "style(ui): 玻璃动效基类 - 面板入场/玻璃卡 hover/按钮按压反馈"
+```
+
+---
+
 ## Task 1: 主菜单 HTML 重排（全屏横三区）
 
 **Files:**
@@ -626,8 +664,8 @@ Expected: 语法 PASS、循环依赖无新增、`npm test` 全部 PASS、train �
 
 - [ ] **Step 2: 全界面手动走查**
 
-Run: `node server.js` → 主菜单选图开赛 → 三视角 HUD → B 购买 → Tab 记分板 → 结算 → 设置（搜索/重绑/滑杆）→ 帮助/暂停 → 排位/生涯/Major/LAN/编辑器面板。
-Expected: 全部界面玻璃扁平一致、可操作、无破版、无控制台报错。
+Run: `node server.js` → 主菜单选图开赛 → 三视角 HUD → B 购买 → Tab 记分板 → 结算 → 设置（搜索/重绑/滑杆）→ 帮助/暂停 → 排位/生涯/Major/LAN/编辑器面板。同时逐界面确认动效：面板打开有玻璃淡入上浮、玻璃卡 hover 上浮描边亮起、按钮按下缩放反馈、菜单背景切换模糊过渡平滑。
+Expected: 全部界面玻璃扁平一致、可操作、无破版、无控制台报错、动效流畅不卡顿。
 
 - [ ] **Step 3: 提交剩余改动（若有）**
 
@@ -641,6 +679,6 @@ git commit -m "chore(ui): 全局玻璃扁平化收尾"
 
 ## 自查
 
-- **Spec 覆盖**：spec §3.1 主菜单 → Task 1/2/3；§3.2 HUD → Task 4；§3.3 购买 → Task 5；§3.4 记分板 → Task 6；§3.5 结算 → Task 7；§3.6 设置 → Task 8；§3.7 辅助浮层 → Task 9；§3.8 模式面板 → Task 10；§4 验证 → Task 11。全部覆盖。
+- **Spec 覆盖**：spec §3.1 主菜单 → Task 1/2/3；§3.2 HUD → Task 4；§3.3 购买 → Task 5；§3.4 记分板 → Task 6；§3.5 结算 → Task 7；§3.6 设置 → Task 8；§3.7 辅助浮层 → Task 9；§3.8 模式面板 → Task 10；§4 验证 → Task 11。动效层 → Task 0b。
 - **占位符扫描**：无 TBD/TODO；每步含完整代码或精确行号替换。
 - **类型一致性**：`drawMapPreview`/`refreshMapPreviews`/`syncMapCards` 导出与 `main.js`/`map-editor.js` 引用保持同名；`#mapPreview`/`#mapPreviewName` id 在 index.html 与 ui.js 中一致；`.map-card`/`.mc-name`/`data-map` 保留以兼容 cdp 测试。
