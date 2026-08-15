@@ -89,77 +89,79 @@
   <div id="holdbar"><i id="holdbarfill"></i></div>
 
   <div class="ov" id="menu">
-    <div class="panel menu-panel">
-      <header class="menu-hero">
-        <h1>CS<span>2D</span></h1>
-        <p>平面反恐精英 · 5V5 战术竞技</p>
-        <div class="menu-badges"><span>MR9</span><span>3 图</span><span>5v5</span><span id="menuVersion" class="menu-ver">v2.0.0</span></div>
+    <div class="menu-stage">
+      <header class="menu-topbar">
+        <h1 class="menu-title">CS2D<span>.</span></h1>
+        <p class="menu-tag">平面反恐精英 · 5V5 战术竞技</p>
+        <span class="menu-ver" id="menuVersion">v2.0.0</span>
       </header>
-      <div class="menu-body">
-        <main class="menu-main">
-          <section class="block">
-            <div class="block-head"><h2>选择模式</h2><span>规则与目标</span></div>
-            <div id="modeSel" class="mode-grid">
-              <button class="mode-card sel" data-mode="classic"><b>经典爆破</b><small>5v5 拆包</small></button>
-              <button class="mode-card" data-mode="retake"><b>回防模式</b><small>CT 回防拆弹</small></button>
-              <button class="mode-card" data-mode="ranked"><b>排位赛</b><small>定级 + MMR 天梯</small></button>
-              <button class="mode-card" data-mode="career"><b>生涯模式</b><small>个人 + 战队</small></button>
-              <button class="mode-card" data-mode="cyber"><b>赛博斗蛐蛐</b><small>下注观战</small></button>
-              <details class="mode-more" id="modeMore">
-                <summary>娱乐模式</summary>
-                <div class="mode-more-grid">
-                  <button class="mode-card" data-mode="duel"><b>单挑模式</b><small>1v1 MR9</small></button>
-                  <button class="mode-card" data-mode="major"><b>Major 锦标赛</b><small>48 队冲冠</small></button>
-                  <button class="mode-card" data-mode="lan"><b>局域网对战</b><small>双人同图</small></button>
-                  <button class="mode-card" data-mode="editor"><b>地图编辑</b><small>绘制自定义图</small></button>
-                </div>
-              </details>
-            </div>
-            <div id="modeSettings" class="mode-settings"></div>
-          </section>
-          <section class="block">
-            <div class="block-head"><h2>选择地图</h2><span>地图池按注册表动态同步</span></div>
-            <div id="mapSel" class="map-grid"></div>
-          </section>
-        </main>
-        <aside class="menu-side">
-          <section class="block">
-            <div class="block-head"><h2>对战设置</h2><span>阵营 / 难度 / 机器人</span></div>
-            <div class="field"><label>你的阵营</label>
-              <div class="seg">
-                <button class="btn team-wide ct sel" id="teamCt">CT 反恐</button>
-                <button class="btn team-wide t" id="teamT">T 恐怖</button>
+      <div class="menu-row">
+        <section class="glass menu-col modes-col">
+          <h2 class="menu-sec">选 择 模 式</h2>
+          <div id="modeSel" class="mode-list">
+            <button class="mode-card sel" data-mode="classic"><b>经典爆破</b><small>5v5 拆包</small></button>
+            <button class="mode-card" data-mode="retake"><b>回防模式</b><small>CT 回防拆弹</small></button>
+            <button class="mode-card" data-mode="ranked"><b>排位赛</b><small>定级 + MMR 天梯</small></button>
+            <button class="mode-card" data-mode="career"><b>生涯模式</b><small>个人 + 战队</small></button>
+            <button class="mode-card" data-mode="cyber"><b>赛博斗蛐蛐</b><small>下注观战</small></button>
+            <details class="mode-more" id="modeMore">
+              <summary>娱乐模式</summary>
+              <div class="mode-more-grid">
+                <button class="mode-card" data-mode="duel"><b>单挑模式</b><small>1v1 MR9</small></button>
+                <button class="mode-card" data-mode="major"><b>Major 锦标赛</b><small>48 队冲冠</small></button>
+                <button class="mode-card" data-mode="lan"><b>局域网对战</b><small>双人同图</small></button>
+                <button class="mode-card" data-mode="editor"><b>地图编辑</b><small>绘制自定义图</small></button>
               </div>
+            </details>
+          </div>
+          <div id="modeSettings" class="mode-settings"></div>
+        </section>
+        <section class="menu-col center-col">
+          <div class="glass map-zone">
+            <h2 class="menu-sec">地 图 预 览</h2>
+            <div class="map-preview-box">
+              <canvas id="mapPreview" width="640" height="360"></canvas>
+              <span class="map-preview-name" id="mapPreviewName">DUST2 · 沙二</span>
             </div>
-            <div class="field"><label>AI 难度</label>
-              <div class="seg">
-                <button class="btn diff n sel" id="diffN">普通</button>
-                <button class="btn diff e" id="diffE">简单</button>
-                <button class="btn diff h" id="diffH">困难</button>
-                <button class="btn diff hell" id="diffHell">地狱</button>
-              </div>
+            <div id="mapSel" class="map-chips"></div>
+          </div>
+        </section>
+        <aside class="glass menu-col settings-col">
+          <h2 class="menu-sec">对 战 设 置</h2>
+          <div class="field"><label>你的阵营</label>
+            <div class="seg">
+              <button class="btn team-wide ct sel" id="teamCt">CT 反恐</button>
+              <button class="btn team-wide t" id="teamT">T 恐怖</button>
             </div>
-            <div class="field" id="hellRow" style="display:none"><label>地狱等级</label>
-              <div class="hell-slider">
-                <input type="range" id="hellSlider" min="1" max="12" value="3" step="1">
-                <span class="hell-val" id="hellVal">H3</span>
-              </div>
+          </div>
+          <div class="field"><label>AI 难度</label>
+            <div class="seg">
+              <button class="btn diff n sel" id="diffN">普通</button>
+              <button class="btn diff e" id="diffE">简单</button>
+              <button class="btn diff h" id="diffH">困难</button>
+              <button class="btn diff hell" id="diffHell">地狱</button>
             </div>
-            <div class="field"><label>每队机器人</label>
-              <div class="stepper">
-                <button class="step-btn" id="botMinus">−</button>
-                <span class="step-val" id="botVal">4</span>
-                <button class="step-btn" id="botPlus">＋</button>
-              </div>
+          </div>
+          <div class="field" id="hellRow" style="display:none"><label>地狱等级</label>
+            <div class="hell-slider">
+              <input type="range" id="hellSlider" min="1" max="12" value="3" step="1">
+              <span class="hell-val" id="hellVal">H3</span>
             </div>
-            <div class="menu-util-row">
-              <button class="btn small" id="muteBtn"><span id="muteLabel">声音开</span></button>
-              <button class="btn small" id="settingsBtn">设 置</button>
-              <label class="check-row"><input type="checkbox" id="tutCheck" checked> 新手提示</label>
-              <label class="check-row"><input type="checkbox" id="fogCheck"> 迷雾</label>
+          </div>
+          <div class="field"><label>每队机器人</label>
+            <div class="stepper">
+              <button class="step-btn" id="botMinus">−</button>
+              <span class="step-val" id="botVal">4</span>
+              <button class="step-btn" id="botPlus">＋</button>
             </div>
-            <button class="btn primary" id="startBtn">开 始 比 赛</button>
-          </section>
+          </div>
+          <div class="menu-util-row">
+            <button class="btn small" id="muteBtn"><span id="muteLabel">声音开</span></button>
+            <button class="btn small" id="settingsBtn">设 置</button>
+            <label class="check-row"><input type="checkbox" id="tutCheck" checked> 新手提示</label>
+            <label class="check-row"><input type="checkbox" id="fogCheck"> 迷雾</label>
+          </div>
+          <button class="btn primary" id="startBtn">开 始 比 赛</button>
         </aside>
       </div>
       <button class="help-btn" id="helpBtn" title="操作说明">?</button>
