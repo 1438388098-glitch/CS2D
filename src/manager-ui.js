@@ -92,7 +92,7 @@ function renderDash(s) {
     html += '<div class="career-card"><h4>杯赛进行中</h4><div class="career-actions"><button data-act="play-cup">打杯赛</button></div></div>';
   }
   html += '<div class="career-card"><h4>赛季目标 · 董事会信任 ' + s.board.trust + '</h4>' +
-    '<div class="career-stats"><span>排名目标 前 ' + goal.rank + ' · 杯赛目标 ' + (goal.cup >= 1 ? '进淘汰赛' : '无') + ' · 奖励 ' + money(goal.reward) + '</span></div>' +
+    '<div class="career-stats"><span>排名目标 前 ' + goal.rank + ' · 杯赛目标 ' + (goal.cupRound >= 1 ? '进淘汰赛' : '无') + ' · 奖励 ' + money(goal.reward) + '</span></div>' +
     '<div class="career-stats"><span>' + (s.board.fired ? '⚠ 你已被解雇' : '董事会信任 ' + s.board.trust + '/100') + '</span></div></div>';
   const pe = pendingEvents(s);
   if (pe.length) {
