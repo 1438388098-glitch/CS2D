@@ -1147,7 +1147,7 @@ function bindSettings() {
       const b = e.target.closest('.set-btn');
       if (!b) return;
       const mode = b.getAttribute('data-mode');
-      if (mode !== 'fps' && mode !== 'follow' && mode !== 'top') return;
+      if (mode !== 'fps' && mode !== 'top') return;
       setViewMode(game, mode);
       refreshViewSel();
       b.blur(); // 焦点落在按钮上：避免后续 Space/Enter 合成 click 意外切换视角
@@ -1185,23 +1185,6 @@ function bindSettings() {
       game.fpsSensY = parseFloat(sensYEl.value) / 1000;
       if (sensYVal) sensYVal.textContent = (game.fpsSensY * 1000).toFixed(1);
       try { localStorage.setItem('cs2d_fps_sens_y', String(game.fpsSensY)); } catch (err) { /* 无存储 */ }
-    });
-  }
-  // 跟随视角死区滑杆（20-160px，默认 70）
-  const fzEl = el('followDeadzone');
-  const fzVal = el('followDeadzoneVal');
-  if (fzEl) {
-    try {
-      const saved = parseInt(localStorage.getItem('cs2d_follow_deadzone'), 10);
-      if (isFinite(saved)) game.opts.followDeadzone = Math.min(160, Math.max(20, saved));
-    } catch (err) { /* 无存储环境 */ }
-    const dz = game.opts.followDeadzone || 70;
-    fzEl.value = dz;
-    if (fzVal) fzVal.textContent = dz;
-    fzEl.addEventListener('input', () => {
-      game.opts.followDeadzone = parseInt(fzEl.value, 10);
-      if (fzVal) fzVal.textContent = game.opts.followDeadzone;
-      try { localStorage.setItem('cs2d_follow_deadzone', String(game.opts.followDeadzone)); } catch (err) { /* 无存储 */ }
     });
   }
   // 反转 Y 轴

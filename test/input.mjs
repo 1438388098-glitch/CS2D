@@ -41,16 +41,12 @@ function makeEnt() {
 }
 
 const viewGame = makeGame();
-setViewMode(viewGame, 'follow');
-assert.equal(viewGame.viewMode, 'follow', 'setViewMode should accept valid mode');
 setViewMode(viewGame, 'invalid');
 assert.equal(viewGame.viewMode, 'top', 'setViewMode should fall back to top for unknown mode');
 
 viewGame.viewMode = 'top';
 toggleViewMode(viewGame);
-assert.equal(viewGame.viewMode, 'follow', 'toggleViewMode should move top -> follow');
-toggleViewMode(viewGame);
-assert.equal(viewGame.viewMode, 'fps', 'toggleViewMode should move follow -> fps');
+assert.equal(viewGame.viewMode, 'fps', 'toggleViewMode should move top -> fps');
 toggleViewMode(viewGame);
 assert.equal(viewGame.viewMode, 'top', 'toggleViewMode should wrap fps -> top');
 

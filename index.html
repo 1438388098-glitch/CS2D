@@ -100,13 +100,13 @@
           <h2 class="menu-sec">选 择 模 式</h2>
           <div id="modeSel" class="mode-list">
             <button class="mode-card sel" data-mode="classic"><b>经典爆破</b><small>5v5 拆包</small></button>
-            <button class="mode-card" data-mode="retake"><b>回防模式</b><small>CT 回防拆弹</small></button>
             <button class="mode-card" data-mode="ranked"><b>排位赛</b><small>定级 + MMR 天梯</small></button>
             <button class="mode-card" data-mode="career"><b>生涯模式</b><small>个人 + 战队</small></button>
             <button class="mode-card" data-mode="cyber"><b>赛博斗蛐蛐</b><small>下注观战</small></button>
             <details class="mode-more" id="modeMore">
               <summary>娱乐模式</summary>
               <div class="mode-more-grid">
+                <button class="mode-card" data-mode="retake"><b>回防模式</b><small>CT 回防拆弹</small></button>
                 <button class="mode-card" data-mode="duel"><b>单挑模式</b><small>1v1 MR9</small></button>
                 <button class="mode-card" data-mode="major"><b>Major 锦标赛</b><small>48 队冲冠</small></button>
                 <button class="mode-card" data-mode="lan"><b>局域网对战</b><small>双人同图</small></button>
@@ -261,7 +261,6 @@
           <label>视角</label>
           <div class="set-btns" id="viewModeSel">
             <button class="set-btn" data-mode="top">俯视</button>
-            <button class="set-btn" data-mode="follow">跟随</button>
             <button class="set-btn" data-mode="fps">第一人称</button>
           </div>
         </div>
@@ -274,11 +273,6 @@
           <label>垂直灵敏度</label>
           <input type="range" id="fpsSensY" min="0.5" max="5" step="0.25">
           <span id="fpsSensYVal"></span>
-        </div>
-        <div class="set-row">
-          <label>跟随视角死区</label>
-          <input type="range" id="followDeadzone" min="20" max="160" step="5">
-          <span id="followDeadzoneVal"></span>
         </div>
         <div class="set-row">
           <label>反转 Y 轴</label>

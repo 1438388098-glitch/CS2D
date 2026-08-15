@@ -1071,3 +1071,30 @@ table.sb tr.mvp td{background:rgba(255,210,122,.07)}
 .career-tab,.ranked-tab{background:rgba(255,255,255,.06);border:1px solid var(--glass-border);border-radius:8px}
 .career-tab.sel,.ranked-tab.sel{background:rgba(255,138,42,.14);border-color:var(--accent);color:#ffb066}
 .career-player-card{background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);border-radius:10px}
+
+/* ===== 地图名签：单行横向滚动（不纵向堆叠） ===== */
+.map-chips{flex-wrap:nowrap;max-height:none;overflow-x:auto;overflow-y:hidden;padding-bottom:4px}
+.map-group-title{flex:none;width:auto;white-space:nowrap;margin:0 6px 0 2px}
+
+/* ===== 遗漏容器玻璃化（career-tabs / Major 表格 / 娱乐折叠） ===== */
+.career-tabs{background:rgba(255,255,255,.04);backdrop-filter:blur(8px) saturate(140%);-webkit-backdrop-filter:blur(8px) saturate(140%);border-bottom:1px solid rgba(255,255,255,.09)}
+.mj-table{background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1)}
+.mode-more{border:1px solid rgba(255,255,255,.1);border-radius:10px;background:rgba(255,255,255,.04)}
+
+/* ===== 设置面板可读性 ===== */
+.settings-sec{background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.14)}
+.sec-head{color:var(--accent-hi);border-bottom:1px solid rgba(255,255,255,.12)}
+.set-row label,.kb-row label{color:var(--txt-1)}
+.set-row{color:var(--txt-1)}
+.set-hint{color:var(--txt-2)}
+.settings-search{background:rgba(10,13,17,.8);border:1px solid rgba(255,255,255,.18);color:var(--txt-0)}
+.settings-search::placeholder{color:var(--txt-3)}
+.set-btn.sel,.kb-btn.sel{background:rgba(255,138,42,.18);border-color:var(--accent);color:#ffb066}
+
+/* ===== 全局滚动条适配（毛玻璃风格） ===== */
+*{scrollbar-width:thin;scrollbar-color:rgba(255,255,255,.25) rgba(255,255,255,.04)}
+*::-webkit-scrollbar{width:8px;height:8px}
+*::-webkit-scrollbar-track{background:rgba(255,255,255,.04);border-radius:4px}
+*::-webkit-scrollbar-thumb{background:rgba(255,255,255,.18);border-radius:4px;border:1px solid rgba(255,255,255,.06)}
+*::-webkit-scrollbar-thumb:hover{background:rgba(255,255,255,.3)}
+*::-webkit-scrollbar-corner{background:transparent}
