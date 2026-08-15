@@ -1,4 +1,4 @@
-import { resetManager, loadManager, setStorage, setRng, getState, SAVE_KEY, BACKUP_KEY, VERSION, ROLE_WEIGHTS, buildManagerRoster, deriveAttrs, ratingFromAttrs, playerPrice, newManagerCareer, buildNewSeason, nextFixture, simulateManagerMatch, candidates, buyPlayer, sellPlayer, renewPlayer, transferWindowOpen, scoutingNoise, scoutedView, filterCandidates } from '../src/manager.js';
+import { resetManager, loadManager, setStorage, setRng, getState, SAVE_KEY, BACKUP_KEY, VERSION, ROLE_WEIGHTS, buildManagerRoster, deriveAttrs, ratingFromAttrs, playerPrice, newManagerCareer, buildNewSeason, nextFixture, simulateManagerMatch, candidates, buyPlayer, sellPlayer, renewPlayer, transferWindowOpen, scoutingNoise, scoutedView, filterCandidates, trainPlayer, restPlayer, facilityStatus, upgradeFacility, trainingPreview } from '../src/manager.js';
 
 const ok = (name, cond) => {
   if (!cond) throw new Error('manager: ' + name + ' FAIL');
@@ -92,6 +92,25 @@ ok('nextFixture exists round1', nextFixture(s) && nextFixture(s).round === 1);
   s.team.bank = 50000;
   const rn = renewPlayer(s, rp.id);
   ok('renew ok', rn.ok && rp.contractYears === 3);
+}
+
+{
+  const tp = s.team.roster[0];
+  const prev = trainingPreview(s, tp, 'basic');
+  ok('train preview cost', prev.cost > 0 && prev.gained >= 2);
+  s.team.bank = 99999;
+  const t1 = trainPlayer(s, tp.id, 'aim', 'basic');
+  ok('train gained', t1.ok && t1.gained > 0 && tp.attrs.aim >= prev.gained);
+  ok('train fatigue', tp.fatigue >= prev.fatigue);
+  ok('trainingLeft--', s.team.trainingLeft === 1);
+  const r1 = restPlayer(s, tp.id);
+  ok('rest clears fatigue', r1.ok && tp.fatigue === 0);
+  const fs = facilityStatus(s);
+  ok('facility 4 kinds', fs.length === 4 && fs.every((f) => f.max === 3));
+  s.team.bank = 99999;
+  const up = upgradeFacility(s, 'scouting');
+  ok('upgrade ok', up.ok && s.team.facilities.scouting === 1);
+  ok('scouting reduces noise', scoutingNoise(s) === 4);
 }
 
 console.log('manager: all PASS');

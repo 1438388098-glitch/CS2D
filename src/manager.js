@@ -550,3 +550,80 @@ export function renewPlayer(s, id) {
   save();
   return { ok: true };
 }
+
+export const TRAIN_TIERS = [
+  { key: 'basic', label: '基础', cost: 500, points: 2, fatigue: 3 },
+  { key: 'pro', label: '进阶', cost: 1200, points: 6, fatigue: 6 },
+  { key: 'elite', label: '精英', cost: 2500, points: 15, fatigue: 10 }
+];
+export const FACILITIES = {
+  academy: { label: '青训', desc: '训练点数 +1/级', baseCost: 4000, max: 3 },
+  medical: { label: '医疗', desc: '比赛疲劳 -2/级', baseCost: 3500, max: 3 },
+  scouting: { label: '球探', desc: '候选噪声 -1/级', baseCost: 3000, max: 3 },
+  analytics: { label: '数据分析', desc: '经理经验 +10%/级', baseCost: 4500, max: 3 }
+};
+
+export function trainingPreview(s, p, tierKey) {
+  const tier = TRAIN_TIERS.find((t) => t.key === tierKey) || TRAIN_TIERS[0];
+  const rules = LEAGUE_RULES[s.team.league] || LEAGUE_RULES['乙级'];
+  const cost = Math.round(tier.cost * rules.costScale);
+  const gained = Math.min(15, tier.points + (s.team.facilities.academy || 0));
+  return { cost, gained, fatigue: Math.max(1, tier.fatigue - (s.team.facilities.medical || 0)) };
+}
+
+export function trainPlayer(s, id, attr, tierKey) {
+  const p = s.team.roster.find((x) => x.id === id);
+  if (!p) return { ok: false, msg: '选手不存在' };
+  if (!ATTRS.includes(attr)) return { ok: false, msg: '未知属性' };
+  if (s.team.trainingLeft <= 0) return { ok: false, msg: '训练次数已用完' };
+  const prev = trainingPreview(s, p, tierKey);
+  if (s.team.bank < prev.cost) return { ok: false, msg: '资金不足' };
+  const maxGain = 100 - p.attrs[attr];
+  if (maxGain <= 0) return { ok: false, msg: '属性已满' };
+  const gained = Math.min(prev.gained, maxGain);
+  s.team.bank -= prev.cost;
+  p.attrs[attr] = clamp(p.attrs[attr] + gained, 0, 100);
+  p.rating = ratingFromAttrs(p.role, p.attrs);
+  p.fatigue = clamp(p.fatigue + prev.fatigue, 0, 100);
+  p.price = playerPrice(p, s.team.league);
+  s.team.trainingLeft--;
+  addLedger(s, 'expense', prev.cost, '训练：' + p.name + ' ' + attr);
+  refreshTeamRating(s);
+  save();
+  return { ok: true, gained };
+}
+
+export function restPlayer(s, id) {
+  const p = s.team.roster.find((x) => x.id === id);
+  if (!p) return { ok: false, msg: '选手不存在' };
+  p.fatigue = 0;
+  p.stress = clamp(p.stress - 15, 0, 100);
+  pushNews(s, 'info', p.name + ' 轮休，疲劳清零');
+  save();
+  return { ok: true };
+}
+
+export function facilityStatus(s) {
+  return Object.entries(FACILITIES).map(([key, cfg]) => {
+    const level = s.team.facilities[key] || 0;
+    const rules = LEAGUE_RULES[s.team.league] || LEAGUE_RULES['乙级'];
+    const cost = level >= cfg.max ? 0 : Math.round(cfg.baseCost * (1 + level * 0.8) * rules.costScale);
+    return { key, label: cfg.label, desc: cfg.desc, level, max: cfg.max, cost };
+  });
+}
+
+export function upgradeFacility(s, key) {
+  const cfg = FACILITIES[key];
+  if (!cfg) return { ok: false, msg: '未知设施' };
+  const level = s.team.facilities[key] || 0;
+  if (level >= cfg.max) return { ok: false, msg: '已满级' };
+  const rules = LEAGUE_RULES[s.team.league] || LEAGUE_RULES['乙级'];
+  const cost = Math.round(cfg.baseCost * (1 + level * 0.8) * rules.costScale);
+  if (s.team.bank < cost) return { ok: false, msg: '资金不足' };
+  s.team.bank -= cost;
+  s.team.facilities[key] = level + 1;
+  addLedger(s, 'expense', cost, '设施投资：' + cfg.label);
+  pushNews(s, 'info', cfg.label + '设施升级到 ' + (level + 1) + ' 级');
+  save();
+  return { ok: true };
+}
