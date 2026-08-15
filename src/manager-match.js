@@ -68,7 +68,7 @@ export function managerStart(game) {
   const isCup = s.season.cup.phase === 'active';
   let opp;
   if (isCup) {
-    const m = s.season.cup.bracket.find((x) => !x.played && x.a === 'player');
+    const m = s.season.cup.bracket.find((x) => !x.played && (x.a === 'player' || x.b === 'player'));
     if (!m) { emit('toast', { text: '杯赛已结束' }); return; }
     opp = s.season.teams.find((t) => t.id === (m.a === 'player' ? m.b : m.a));
     game.opts.mapId = f ? (f.mapId || 'dust2') : 'dust2';
@@ -98,17 +98,21 @@ export function managerStart(game) {
 
 function managerPanelHtml(game) {
   const g = game.manager;
-  const tBots = game.entities.filter((e) => e.bot && e.team === 't');
-  const cBots = game.entities.filter((e) => e.bot && e.team === 'ct');
-  const tKills = tBots.reduce((sum, e) => sum + (e.kills || 0), 0);
-  const cKills = cBots.reduce((sum, e) => sum + (e.kills || 0), 0);
+  const myTeam = g.isHome ? 't' : 'ct';
+  const oppTeam = g.isHome ? 'ct' : 't';
+  const myBots = game.entities.filter((e) => e.bot && e.team === myTeam);
+  const oppBots = game.entities.filter((e) => e.bot && e.team === oppTeam);
+  const myKills = myBots.reduce((sum, e) => sum + (e.kills || 0), 0);
+  const oppKills = oppBots.reduce((sum, e) => sum + (e.kills || 0), 0);
+  const myScore = game.score[myTeam === 't' ? 'T' : 'CT'];
+  const oppScore = game.score[oppTeam === 't' ? 'T' : 'CT'];
   const leader = game.entities.filter((e) => e.bot && !e.dead).sort((a, b) => b.kills - a.kills)[0];
   const mapId = game.opts.mapId || 'dust2';
   return '<div class="cyber-panel">' +
-    '<div class="cyber-card c-left"><b>我方</b><span>' + g.oppName + ' 对手</span><i>' + g.oppRating + '</i><em>' + game.score.T + ' · ' + tKills + ' 击杀</em></div>' +
-    '<div class="cyber-mid"><b>' + game.score.T + ' : ' + game.score.CT + '</b><span>R' + game.round + ' · ' + mapId + '</span>' +
+    '<div class="cyber-card c-left"><b>我方</b><span>我的战队</span><i>' + g.oppRating + '</i><em>' + myScore + ' · ' + myKills + ' 击杀</em></div>' +
+    '<div class="cyber-mid"><b>' + myScore + ' : ' + oppScore + '</b><span>R' + game.round + ' · ' + mapId + '</span>' +
     '<em>' + (game.manager.isHome ? '主场' : '客场') + ' · 比分</em></div>' +
-    '<div class="cyber-card c-right"><b>' + g.oppName + '</b><span>对手</span><i>' + g.oppRating + '</i><em>' + game.score.CT + ' · ' + cKills + ' 击杀</em></div>' +
+    '<div class="cyber-card c-right"><b>' + g.oppName + '</b><span>对手</span><i>' + g.oppRating + '</i><em>' + oppScore + ' · ' + oppKills + ' 击杀</em></div>' +
     '<div class="cyber-controls"><button data-m-speed="1" class="cyber-speed' + (g.speed === 1 ? ' on' : '') + '">1x</button><button data-m-speed="2" class="cyber-speed' + (g.speed === 2 ? ' on' : '') + '">2x</button><button data-m-speed="4" class="cyber-speed' + (g.speed === 4 ? ' on' : '') + '">4x</button><button data-m-speed="8" class="cyber-speed' + (g.speed === 8 ? ' on' : '') + '">8x</button><button data-m-skip="1" class="cyber-skip">跳过本回合</button></div>' +
     (leader ? '<div class="cyber-mvp">MVP ' + leader.name + ' · ' + leader.kills + ' 击杀</div>' : '') +
     '</div>';
@@ -157,6 +161,7 @@ export function managerUpdate(game, dt) {
     game.endedT = 0.05;
     return;
   }
+  if (game.spectate) game.spectate.speed = g.speed || 1;
   const now = typeof performance !== 'undefined' ? performance.now() : Date.now();
   if (now - (g._panelT || 0) > 150) {
     g._panelT = now;
@@ -177,7 +182,9 @@ export function managerOnFinish(game) {
   if (!g || g.settled) return;
   const s = getState();
   const winAt = game.ot ? (game.otWin || 8) : 5;
-  const myWon = (game.score.T >= winAt && game.player.team === 't') || (game.score.CT >= winAt && game.player.team === 'ct');
+  const tWon = game.score.T >= winAt;
+  const cWon = game.score.CT >= winAt;
+  const myWon = g.isHome ? tWon : cWon;
   g.settled = true;
   const result = settlePlayerMatch(s, myWon, 0, 0, { mvp: null });
   const el = typeof document !== 'undefined' ? document.getElementById('managerMatchPanel') : null;

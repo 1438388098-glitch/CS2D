@@ -836,7 +836,7 @@ export function settlePlayerMatch(s, win, kills, deaths, opts = {}) {
   let home = null;
   let away = null;
   if (s.season.cup.phase === 'active') {
-    const m = s.season.cup.bracket.find((x) => !x.played && x.a === 'player');
+    const m = s.season.cup.bracket.find((x) => !x.played && (x.a === 'player' || x.b === 'player'));
     if (!m) return { ok: false, msg: '杯赛已结束' };
     home = s.season.teams.find((x) => x.id === 'player');
     away = s.season.teams.find((x) => x.id === (m.a === 'player' ? m.b : m.a));
@@ -928,7 +928,7 @@ function simulateLeagueRound(s) {
 
 function advanceSeason(s) {
   if (s.season.cup.phase === 'active') {
-    const pendingCup = s.season.cup.bracket.find((m) => !m.played && m.a === 'player');
+    const pendingCup = s.season.cup.bracket.find((m) => !m.played && (m.a === 'player' || m.b === 'player'));
     if (pendingCup) return;
     simulateRemainingCup(s);
     if (s.season.cup.phase === 'finished') return;

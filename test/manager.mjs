@@ -169,12 +169,12 @@ ok('nextFixture exists round1', nextFixture(s) && nextFixture(s).round === 1);
   while (s.season.round <= s.season.totalRounds && guard++ < 200) {
     const f = nextFixture(s);
     if (!f) break;
-    settlePlayerMatch(s, Math.random() < 0.5, 15, 10);
+    settlePlayerMatch(s, guard % 2 === 0, 15, 10);
   }
   ok('league reached cup', s.season.cup.phase === 'active' || s.season.cup.phase === 'finished');
   guard = 0;
   while (s.season.cup.phase === 'active' && guard++ < 30) {
-    settlePlayerMatch(s, Math.random() < 0.5, 15, 10);
+    settlePlayerMatch(s, guard % 2 === 0, 15, 10);
   }
   ok('cup finished', s.season.cup.phase === 'finished');
   const rep = seasonReport(s);
@@ -185,6 +185,29 @@ ok('nextFixture exists round1', nextFixture(s) && nextFixture(s).round === 1);
   ok('season advanced', s.season.id === prevId + 1);
   ok('new season teams', s.season.teams.length === 8);
   ok('new fixtures', s.season.fixtures.length === 56);
+}
+
+{
+  s = newManagerCareer();
+  const ids = s.season.teams.map((t) => t.id);
+  const others = ids.filter((id) => id !== 'player').slice(0, 7);
+  const qf = [
+    { round: 'QF', a: others[0], b: others[5], score: null, played: false, winner: null },
+    { round: 'QF', a: others[1], b: others[6], score: null, played: false, winner: null },
+    { round: 'QF', a: others[2], b: 'player', score: null, played: false, winner: null },
+    { round: 'QF', a: others[3], b: others[4], score: null, played: false, winner: null }
+  ];
+  qf.push({ round: 'SF', a: null, b: null, score: null, played: false, winner: null });
+  qf.push({ round: 'SF', a: null, b: null, score: null, played: false, winner: null });
+  qf.push({ round: 'F', a: null, b: null, score: null, played: false, winner: null });
+  s.season.cup = { phase: 'active', bracket: qf };
+  const inB = s.season.cup.bracket.find((m) => m.b === 'player');
+  ok('player placed at b slot', !!inB);
+  let guard2 = 0;
+  while (s.season.cup.phase === 'active' && guard2++ < 30) {
+    settlePlayerMatch(s, guard2 % 2 === 0, 15, 10);
+  }
+  ok('cup finished from b slot', s.season.cup.phase === 'finished');
 }
 
 console.log('manager: all PASS');
