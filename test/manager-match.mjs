@@ -1,7 +1,7 @@
 import { setStorage, setRng, newManagerCareer, getState } from '../src/manager.js';
 import { getMode } from '../src/registry.js';
 import { createGame, startMatch } from '../src/game.js';
-import { mapManagerRosterToBots } from '../src/manager-match.js';
+import { mapManagerRosterToBots, startManagerMatch } from '../src/manager-match.js';
 import '../src/manager-match.js';
 
 const ok = (name, cond) => { if (!cond) throw new Error('manager-match: ' + name + ' FAIL'); console.log('manager-match: ' + name + ' PASS'); };
@@ -30,3 +30,12 @@ startMatch(game);
 ok('manager match started', game.manager && game.entities.filter((e) => e.bot).length === 10);
 ok('player is spectator', game.player && game.player.dead === true);
 ok('state BUY', game.state === 'BUY');
+
+{
+  s = newManagerCareer();
+  const g2 = createGame({ mode: 'manager', team: 'ct', bots: 5, mapId: 'dust2', diff: 'hard' });
+  g2.ui = null;
+  startManagerMatch(g2, null, 'home', false);
+  ok('startManagerMatch works', g2.manager && g2.entities.filter((e) => e.bot).length === 10 && g2.player.dead === true);
+  ok('startManagerMatch speed sync', g2.spectate && g2.spectate.speed >= 1);
+}

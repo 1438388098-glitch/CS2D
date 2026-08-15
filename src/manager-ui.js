@@ -97,7 +97,7 @@ function renderDash(s) {
       '<div class="career-actions"><button data-act="next-season">结算并进入下赛季</button></div></div>';
   }
   html += '<div class="career-card"><h4>赛季目标 · 董事会信任 ' + s.board.trust + '</h4>' +
-    '<div class="career-stats"><span>排名目标 前 ' + goal.rank + ' · 杯赛目标 ' + (goal.cupRound >= 1 ? '进淘汰赛' : '无') + ' · 奖励 ' + money(goal.reward) + '</span></div>' +
+    '<div class="career-stats"><span>排名目标 前 ' + goal.rank + ' · 杯赛目标 ' + (goal.cup >= 1 ? '进淘汰赛' : '进杯赛') + ' · 奖励 ' + money(goal.reward) + '</span></div>' +
     '<div class="career-stats"><span>' + (s.board.fired ? '⚠ 你已被解雇' : '董事会信任 ' + s.board.trust + '/100') + '</span></div></div>';
   const pe = pendingEvents(s);
   if (pe.length) {
@@ -187,13 +187,16 @@ function renderTransfer(s) {
 }
 
 function renderTraining(s) {
-  let html = '<div class="career-card"><h4>训练（剩余 ' + s.team.trainingLeft + ' 次）</h4><div class="career-stats"><span>提升选手单维属性</span></div></div>';
+  let html = '<div class="career-card"><h4>训练（剩余 ' + s.team.trainingLeft + ' 次）</h4><div class="career-stats"><span>选择属性与档位提升选手能力</span></div></div>';
   for (const p of s.team.roster) {
     html += '<div class="career-card"><h4>' + esc(p.name) + ' · ' + esc(p.role) + '</h4><div class="career-stats">' +
-      ATTRS.map((a) => '<span>' + (ATTR_CN[a] || a) + ' ' + p.attrs[a] + '</span>').join('') + '</div><div class="career-actions">';
+      ATTRS.map((a) => '<span>' + (ATTR_CN[a] || a) + ' ' + p.attrs[a] + '</span>').join('') + '</div>';
+    html += '<div class="career-stats"><select data-train-attr="' + p.id + '">' +
+      ATTRS.map((a) => '<option value="' + a + '">' + (ATTR_CN[a] || a) + '</option>').join('') + '</select></div>';
+    html += '<div class="career-actions">';
     for (const tier of TRAIN_TIERS) {
       const prev = trainingPreview(s, p, tier.key);
-      html += '<button data-act="train" data-pid="' + p.id + '" data-attr="aim" data-tier="' + tier.key + '">' + tier.label + ' 枪法 ¥' + money(prev.cost) + '</button>';
+      html += '<button data-act="train" data-pid="' + p.id + '" data-attr-select="' + p.id + '" data-tier="' + tier.key + '">' + tier.label + ' ¥' + money(prev.cost) + '（+' + prev.gained + '）</button>';
     }
     html += '</div></div>';
   }
@@ -229,7 +232,10 @@ function renderCup(s) {
     const label = m.played ? (ha ? ha.tag : '') + ' ' + (m.score ? m.score.join(':') : '') + ' ' + (hb ? hb.tag : '') : (ha ? ha.tag : '待定') + ' vs ' + (hb ? hb.tag : '待定');
     html += '<div class="career-cup-match' + (mine ? ' mine' : '') + '"><span>' + m.round + ' · ' + esc(label) + '</span>' + (mine && !m.played ? '<button data-act="play-cup">打</button>' : '') + '</div>';
   }
-  if (s.season.cup.champion) html += '<div class="career-stats"><b>冠军：' + esc(s.season.cup.champion) + '</b></div>';
+  if (s.season.cup.champion) {
+    const champ = s.season.teams.find((t) => t.id === s.season.cup.champion);
+    html += '<div class="career-stats"><b>冠军：' + esc(champ ? champ.name : s.season.cup.champion) + '</b></div>';
+  }
   html += '</div>';
   return html;
 }
@@ -303,8 +309,11 @@ function onClick(e) {
     toast(r.ok ? '已休息' : (r.msg || '失败'));
     render();
   } else if (act === 'train') {
-    const r = trainPlayer(s, t.getAttribute('data-pid'), t.getAttribute('data-attr'), t.getAttribute('data-tier'));
-    toast(r.ok ? '训练完成 +' + r.gained : (r.msg || '训练失败'));
+    const selId = t.getAttribute('data-attr-select');
+    const sel = selId && doc.querySelector ? doc.querySelector('[data-train-attr="' + selId + '"]') : null;
+    const attr = (sel && sel.value) || 'aim';
+    const r = trainPlayer(s, t.getAttribute('data-pid'), attr, t.getAttribute('data-tier'));
+    toast(r.ok ? '训练完成 ' + (ATTR_CN[attr] || attr) + ' +' + r.gained : (r.msg || '训练失败'));
     render();
   } else if (act === 'upgrade') {
     const r = upgradeFacility(s, t.getAttribute('data-fac'));

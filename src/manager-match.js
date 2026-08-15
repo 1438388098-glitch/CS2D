@@ -1,5 +1,5 @@
 import { registerMode } from './registry.js';
-import { setupMatchEntities, startRound, endRound } from './game.js';
+import { setupMatchEntities, startRound, endRound, startMatch } from './game.js';
 import { teamDiffParams } from './modes.js';
 import { ROLE_ARCHE, sameTeamBonus, getState, settlePlayerMatch, nextFixture, MATCH_WIN_LIMIT, MATCH_MAX_ROUNDS } from './manager.js';
 import { clamp } from './utils.js';
@@ -109,13 +109,14 @@ function managerPanelHtml(game) {
   const oppScore = game.score[oppTeam === 't' ? 'T' : 'CT'];
   const leader = game.entities.filter((e) => e.bot && !e.dead).sort((a, b) => b.kills - a.kills)[0];
   const mapId = game.opts.mapId || 'dust2';
+  const es = (v) => String(v).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   return '<div class="cyber-panel">' +
     '<div class="cyber-card c-left"><b>我方</b><span>我的战队</span><i>' + g.myRating + '</i><em>' + myScore + ' · ' + myKills + ' 击杀</em></div>' +
-    '<div class="cyber-mid"><b>' + myScore + ' : ' + oppScore + '</b><span>R' + game.round + ' · ' + mapId + '</span>' +
+    '<div class="cyber-mid"><b>' + myScore + ' : ' + oppScore + '</b><span>R' + game.round + ' · ' + es(mapId) + '</span>' +
     '<em>' + (game.manager.isHome ? '主场' : '客场') + ' · 比分</em></div>' +
-    '<div class="cyber-card c-right"><b>' + g.oppName + '</b><span>对手</span><i>' + g.oppRating + '</i><em>' + oppScore + ' · ' + oppKills + ' 击杀</em></div>' +
+    '<div class="cyber-card c-right"><b>' + es(g.oppName) + '</b><span>对手</span><i>' + g.oppRating + '</i><em>' + oppScore + ' · ' + oppKills + ' 击杀</em></div>' +
     '<div class="cyber-controls"><button data-m-speed="1" class="cyber-speed' + (g.speed === 1 ? ' on' : '') + '">1x</button><button data-m-speed="2" class="cyber-speed' + (g.speed === 2 ? ' on' : '') + '">2x</button><button data-m-speed="4" class="cyber-speed' + (g.speed === 4 ? ' on' : '') + '">4x</button><button data-m-speed="8" class="cyber-speed' + (g.speed === 8 ? ' on' : '') + '">8x</button><button data-m-skip="1" class="cyber-skip">跳过本回合</button></div>' +
-    (leader ? '<div class="cyber-mvp">MVP ' + leader.name + ' · ' + leader.kills + ' 击杀</div>' : '') +
+    (leader ? '<div class="cyber-mvp">MVP ' + es(leader.name) + ' · ' + leader.kills + ' 击杀</div>' : '') +
     '</div>';
 }
 

@@ -53,7 +53,7 @@ function baseManager() {
       sponsor: 3200, fans: 2000, ticketBase: 800
     },
     season: { id: 1, round: 1, totalRounds: 14, teams: [], fixtures: [], standings: [], cup: { phase: 'idle', bracket: [] }, matchHistory: [] },
-    board: { goal: { rank: 6, cup: 1, reward: 10000 }, trust: 70, fired: false },
+    board: { goal: { rank: 6, cup: 0, reward: 12000 }, trust: 70, fired: false },
     history: [], news: [], achievements: [], records: { bestSeasonRank: 99, totalPrize: 0, cupChampions: 0, bestWinStreak: 0 }
   };
 }
@@ -95,6 +95,8 @@ export function save() {
 
 export function resetManager() {
   state = migrateManagerState(baseManager());
+  state.team.roster = buildManagerRoster(state.team.league);
+  buildNewSeason(state);
   save();
   return state;
 }
@@ -326,11 +328,7 @@ export function nextFixture(s) {
 }
 
 export function newManagerCareer() {
-  state = migrateManagerState(baseManager());
-  state.team.roster = buildManagerRoster(state.team.league);
-  buildNewSeason(state);
-  save();
-  return state;
+  return resetManager();
 }
 
 export function initManagerIfNeeded() {
@@ -346,8 +344,7 @@ export function teamPower(s, teamId, attack) {
   const formScore = (t.form || []).reduce((a, f) => a + (f === 'W' ? 1 : -1), 0);
   const morale = (t.morale != null ? t.morale : 50) - 50;
   const homeBonus = teamId === 'player' ? 2 : 0;
-  const fatigue = 0;
-  return clamp(base * 0.65 + (formScore * 0.4) + morale * 0.12 + homeBonus - fatigue, 35, 112);
+  return clamp(base * 0.65 + (formScore * 0.4) + morale * 0.12 + homeBonus, 35, 112);
 }
 
 function simDuelWin(aRating, dRating, aPower, dPower) {
@@ -682,9 +679,9 @@ export function ledgerRecent(s, n = 60) {
 }
 
 export function boardGoalFor(league) {
-  if (league === '甲级') return { rank: 6, cup: 1, reward: 12000 };
+  if (league === '甲级') return { rank: 6, cup: 0, reward: 12000 };
   if (league === '丙级') return { rank: 4, cup: 0, reward: 7000 };
-  return { rank: 2, cup: 1, reward: 10000 };
+  return { rank: 2, cup: 0, reward: 10000 };
 }
 
 export function boardTrust(s) { return s.board.trust; }
@@ -998,7 +995,7 @@ export function nextSeason() {
 }
 
 export function transferProfit(s) {
-  const ledger = (s && s.team ? s.team.ledger : s && s.ledger ? s.ledger : []) || [];
+  const ledger = (s && s.team ? s.team.ledger : []) || [];
   const sells = ledger.filter((l) => l.type === 'income' && l.label.startsWith('卖出'));
   const buys = ledger.filter((l) => l.type === 'expense' && l.label.startsWith('买入'));
   return { sellTotal: sells.reduce((a, l) => a + l.amount, 0), buyTotal: buys.reduce((a, l) => a + l.amount, 0) };
