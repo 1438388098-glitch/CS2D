@@ -799,6 +799,195 @@ export function respondEvent(s, type, playerId, choice) {
   return { ok: true };
 }
 
+function updateTeamDynamics(s, homeId, awayId, winner) {
+  const rules = LEAGUE_RULES[s.team.league] || LEAGUE_RULES['乙级'];
+  const [lo, hi] = rules.ratingRange;
+  for (const teamId of [homeId, awayId]) {
+    const t = s.season.teams.find((x) => x.id === teamId);
+    if (!t) continue;
+    const won = winner === teamId;
+    const form = (t.form || []).slice();
+    form.push(won ? 'W' : 'L');
+    if (form.length > 5) form.splice(0, form.length - 5);
+    t.form = form;
+    t.morale = clamp(Number(t.morale || 50) + (won ? 2 : -2), 20, 100);
+    if (teamId !== 'player') {
+      const formScore = form.reduce((a, f) => a + (f === 'W' ? 1 : -1), 0);
+      t.rating = clamp(Math.round(Number(t.rating || 70) + (won ? 0.8 : -0.8) + formScore * 0.1), lo - 5, hi + 5);
+    }
+  }
+}
+
+export function markFixture(s, f, score, winner) {
+  f.played = true;
+  f.score = score;
+  f.winner = winner;
+  const home = s.season.standings.find((x) => x.teamId === f.home);
+  const away = s.season.standings.find((x) => x.teamId === f.away);
+  home.played++; away.played++;
+  if (winner === f.home) { home.w++; away.l++; home.pts += 3; }
+  else { away.w++; home.l++; away.pts += 3; }
+  updateTeamDynamics(s, f.home, f.away, winner);
+}
+
+export function settlePlayerMatch(s, win, kills, deaths, opts = {}) {
+  const rules = LEAGUE_RULES[s.team.league] || LEAGUE_RULES['乙级'];
+  let isHome = false;
+  let home = null;
+  let away = null;
+  if (s.season.cup.phase === 'active') {
+    const m = s.season.cup.bracket.find((x) => !x.played && x.a === 'player');
+    if (!m) return { ok: false, msg: '杯赛已结束' };
+    home = s.season.teams.find((x) => x.id === 'player');
+    away = s.season.teams.find((x) => x.id === (m.a === 'player' ? m.b : m.a));
+    const score = win ? [5, 0] : [0, 5];
+    markCupMatch(s, m, score, win);
+    if (!opts.noReward) {
+      const cupWinBonus = win ? (m.round === 'F' ? LEAGUE_RULES[s.team.league].cupFinalPrize : LEAGUE_RULES[s.team.league].cupRoundPrize) : 0;
+      s.team.bank += cupWinBonus;
+      if (cupWinBonus) addLedger(s, 'income', cupWinBonus, '杯赛' + m.round + '晋级奖');
+    }
+  } else {
+    const f = nextFixture(s);
+    if (!f) return { ok: false, msg: '没有待进行的比赛' };
+    home = s.season.teams.find((x) => x.id === f.home);
+    away = s.season.teams.find((x) => x.id === f.away);
+    isHome = f.home === 'player';
+    const score = win ? (isHome ? [5, 0] : [0, 5]) : (isHome ? [0, 5] : [5, 0]);
+    markFixture(s, f, score, win ? 'player' : (isHome ? f.away : f.home));
+    let bankGain = 0;
+    if (!opts.noReward) {
+      bankGain = (win ? rules.matchWin : rules.matchLose) + (opts.mvp ? 250 : 0);
+      s.team.bank += bankGain;
+      addLedger(s, 'income', bankGain, (win ? '比赛胜利奖金' : '比赛出场费') + '：' + home.name + ' vs ' + away.name);
+      if (isHome) {
+        const ticket = homeTicketIncome(s, win);
+        s.team.bank += ticket;
+        addLedger(s, 'income', ticket, '主场票房');
+      }
+      s.team.fans = Math.max(500, Math.round(s.team.fans * (win ? 1.05 : 0.98)));
+    }
+  }
+  s.team.morale = clamp(Number(s.team.morale) + (win ? 4 : -3), 20, 100);
+  const fatigueGain = Math.max(1, 6 + (win ? 0 : 2) - (s.team.facilities.medical || 0) * 2);
+  for (const p of s.team.roster) p.fatigue = clamp(p.fatigue + fatigueGain, 0, 100);
+  s.team.trainingLeft = 2;
+  s.manager.seasonStats.played++;
+  if (win) s.manager.seasonStats.w++; else s.manager.seasonStats.l++;
+  accumulateStress(s);
+  advanceSeason(s);
+  save();
+  return { ok: true };
+}
+
+function markCupMatch(s, m, score, win) {
+  m.played = true;
+  m.score = score;
+  m.winner = win ? 'player' : (m.a === 'player' ? m.b : m.a);
+  updateTeamDynamics(s, m.a, m.b, m.winner);
+  if (!win) s.season.cupResult = m.round === 'QF' ? 0 : (m.round === 'SF' ? 1 : 2);
+  refreshCup(s);
+  if (s.season.cup.champion === 'player') s.season.cupResult = 3;
+}
+
+function simulateRemainingCup(s) {
+  const b = s.season.cup.bracket;
+  for (let guard = 0; guard < 10; guard++) {
+    const m = b.find((x) => !x.played && x.a && x.b && x.a !== 'player' && x.b !== 'player');
+    if (!m) break;
+    const home = s.season.teams.find((x) => x.id === m.a);
+    const away = s.season.teams.find((x) => x.id === m.b);
+    const r = simulateManagerMatch(s, home, away, { league: s.team.league });
+    m.played = true;
+    m.score = r.score;
+    m.winner = r.winner;
+    m.simRounds = r.rounds.length;
+    updateTeamDynamics(s, m.a, m.b, m.winner);
+    refreshCup(s);
+  }
+}
+
+function simulateLeagueRound(s) {
+  const fixtures = s.season.fixtures.filter((f) => f.round === s.season.round && !f.played);
+  for (const f of fixtures) {
+    if (f.home === 'player' || f.away === 'player') continue;
+    const home = s.season.teams.find((t) => t.id === f.home);
+    const away = s.season.teams.find((t) => t.id === f.away);
+    const r = simulateManagerMatch(s, home, away, { mapId: f.mapId, league: s.team.league });
+    f.simRounds = r.rounds.length;
+    markFixture(s, f, r.score, r.winner);
+  }
+  if (!s.season.fixtures.some((f) => f.round === s.season.round && !f.played)) {
+    if (s.season.round < s.season.totalRounds) {
+      s.season.round++;
+    } else if (s.season.cup.phase === 'idle') {
+      s.season.cup = makeCup(s.season.standings);
+    }
+  }
+}
+
+function advanceSeason(s) {
+  if (s.season.cup.phase === 'active') {
+    const pendingCup = s.season.cup.bracket.find((m) => !m.played && m.a === 'player');
+    if (pendingCup) return;
+    simulateRemainingCup(s);
+    if (s.season.cup.phase === 'finished') return;
+  }
+  simulateLeagueRound(s);
+}
+
+function promoteLeague(league, rank) {
+  if (league === '甲级') return rank >= 7 ? '乙级' : '甲级';
+  if (league === '乙级') return rank <= 2 ? '甲级' : rank >= 7 ? '丙级' : '乙级';
+  return rank <= 2 ? '乙级' : '丙级';
+}
+
+export function seasonReport(s) {
+  const table = [...s.season.standings].sort((a, b) => b.pts - a.pts || b.w - a.w);
+  const rank = table.findIndex((x) => x.teamId === 'player') + 1;
+  const cupRound = s.season.cup.champion === 'player' ? 3 : (s.season.cupResult != null ? s.season.cupResult : 0);
+  const rules = LEAGUE_RULES[s.team.league] || LEAGUE_RULES['乙级'];
+  const rankPrize = { 1: 30000, 2: 20000, 3: 15000, 4: 8000, 5: 8000, 6: 8000, 7: 4000, 8: 4000 }[rank] || 0;
+  const cupPrize = cupRound === 3 ? rules.cupFinalPrize : (cupRound >= 1 ? rules.cupRoundPrize : 0);
+  const nextLeague = promoteLeague(s.team.league, rank);
+  return { rank, table, cupRound, rankPrize, cupPrize, nextLeague, promoted: nextLeague !== s.team.league, relegated: nextLeague !== s.team.league };
+}
+
+export function nextSeason() {
+  const s = getState();
+  const rep = seasonReport(s);
+  const rules = LEAGUE_RULES[s.team.league] || LEAGUE_RULES['乙级'];
+  s.team.bank += rep.rankPrize + rep.cupPrize;
+  addLedger(s, 'income', rep.rankPrize, '赛季排名奖金：第' + rep.rank + '名');
+  if (rep.cupPrize) addLedger(s, 'income', rep.cupPrize, '杯赛奖金');
+  settleBoard(s, rep.rank, rep.cupRound);
+  s.history.push({ seasonId: s.season.id, league: s.team.league, rank: rep.rank, cupRound: rep.cupRound, prize: rep.rankPrize + rep.cupPrize });
+  if (rep.rank < s.records.bestSeasonRank) s.records.bestSeasonRank = rep.rank;
+  s.records.totalPrize += rep.rankPrize + rep.cupPrize;
+  if (rep.cupRound === 3) s.records.cupChampions++;
+  for (const p of s.team.roster) {
+    if (p.age <= 24 && rng() < 0.35) {
+      const gain = Math.min(3, 100 - p.rating);
+      p.rating = clamp(p.rating + gain, 40, 99);
+      p.attrs.aim = clamp(p.attrs.aim + Math.min(3, 100 - p.attrs.aim), 0, 100);
+    }
+    p.contractYears--;
+    if (p.contractYears < 0) p.contractYears = 0;
+  }
+  s.team.league = rep.nextLeague;
+  s.team.bank = Math.max(3000, s.team.bank + (LEAGUE_RULES[s.team.league].budgetBase - rules.budgetBase));
+  s.manager.seasonStats = { played: 0, w: 0, l: 0, prizeEarned: 0 };
+  s.season.id++;
+  buildNewSeason(s);
+  s.team.transfersLeft = 2;
+  s.team.trainingLeft = 2;
+  s.team.pool = null;
+  s.team.stressSum = 0;
+  for (const p of s.team.roster) p.fatigue = 0;
+  save();
+  return s;
+}
+
 export function transferProfit(s) {
   const ledger = (s && s.team ? s.team.ledger : s && s.ledger ? s.ledger : []) || [];
   const sells = ledger.filter((l) => l.type === 'income' && l.label.startsWith('卖出'));

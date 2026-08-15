@@ -1,4 +1,4 @@
-import { resetManager, loadManager, setStorage, setRng, getState, SAVE_KEY, BACKUP_KEY, VERSION, ROLE_WEIGHTS, buildManagerRoster, deriveAttrs, ratingFromAttrs, playerPrice, newManagerCareer, buildNewSeason, nextFixture, simulateManagerMatch, candidates, buyPlayer, sellPlayer, renewPlayer, transferWindowOpen, scoutingNoise, scoutedView, filterCandidates, trainPlayer, restPlayer, facilityStatus, upgradeFacility, trainingPreview, sponsorIncome, homeTicketIncome, cashflowForecast, seasonBudget, financialRisk, ledgerRecent, transferProfit, boardGoalFor, settleBoard, teamHealth, computeChemistry, sameTeamBonus, accumulateStress, pendingEvents, respondEvent } from '../src/manager.js';
+import { resetManager, loadManager, setStorage, setRng, getState, SAVE_KEY, BACKUP_KEY, VERSION, ROLE_WEIGHTS, buildManagerRoster, deriveAttrs, ratingFromAttrs, playerPrice, newManagerCareer, buildNewSeason, nextFixture, simulateManagerMatch, candidates, buyPlayer, sellPlayer, renewPlayer, transferWindowOpen, scoutingNoise, scoutedView, filterCandidates, trainPlayer, restPlayer, facilityStatus, upgradeFacility, trainingPreview, sponsorIncome, homeTicketIncome, cashflowForecast, seasonBudget, financialRisk, ledgerRecent, transferProfit, boardGoalFor, settleBoard, teamHealth, computeChemistry, sameTeamBonus, accumulateStress, pendingEvents, respondEvent, settlePlayerMatch, seasonReport, nextSeason } from '../src/manager.js';
 
 const ok = (name, cond) => {
   if (!cond) throw new Error('manager: ' + name + ' FAIL');
@@ -161,6 +161,30 @@ ok('nextFixture exists round1', nextFixture(s) && nextFixture(s).round === 1);
   ok('stress sum number', typeof s.team.stressSum === 'number');
   const pe = pendingEvents(s);
   ok('pending events array', Array.isArray(pe));
+}
+
+{
+  s = newManagerCareer();
+  let guard = 0;
+  while (s.season.round <= s.season.totalRounds && guard++ < 200) {
+    const f = nextFixture(s);
+    if (!f) break;
+    settlePlayerMatch(s, Math.random() < 0.5, 15, 10);
+  }
+  ok('league reached cup', s.season.cup.phase === 'active' || s.season.cup.phase === 'finished');
+  guard = 0;
+  while (s.season.cup.phase === 'active' && guard++ < 30) {
+    settlePlayerMatch(s, Math.random() < 0.5, 15, 10);
+  }
+  ok('cup finished', s.season.cup.phase === 'finished');
+  const rep = seasonReport(s);
+  ok('report rank 1-8', rep.rank >= 1 && rep.rank <= 8);
+  ok('report has league', ['甲级', '乙级', '丙级'].includes(rep.nextLeague));
+  const prevId = s.season.id;
+  s = nextSeason();
+  ok('season advanced', s.season.id === prevId + 1);
+  ok('new season teams', s.season.teams.length === 8);
+  ok('new fixtures', s.season.fixtures.length === 56);
 }
 
 console.log('manager: all PASS');
