@@ -327,3 +327,86 @@ export function initManagerIfNeeded() {
   if (raw) return loadManager();
   return newManagerCareer();
 }
+
+export function teamPower(s, teamId, attack) {
+  const t = s.season.teams.find((x) => x.id === teamId);
+  if (!t) return 60;
+  const base = Number(t.rating) || 60;
+  const formScore = (t.form || []).reduce((a, f) => a + (f === 'W' ? 1 : -1), 0);
+  const morale = (t.morale != null ? t.morale : 50) - 50;
+  const homeBonus = teamId === 'player' ? 2 : 0;
+  const fatigue = 0;
+  return clamp(base * 0.65 + (formScore * 0.4) + morale * 0.12 + homeBonus - fatigue, 35, 112);
+}
+
+function simDuelWin(aRating, dRating, aPower, dPower) {
+  return clamp(0.5 + (aRating - dRating) * 0.006 + (aPower - dPower) * 0.01, 0.12, 0.92);
+}
+
+function simulateManagerRound(index, home, away, s, stats) {
+  const need = 5;
+  const attacker = index % 2 === 0 ? home : away;
+  const defender = attacker === home ? away : home;
+  const aPower = teamPower(s, attacker.id, 'attack');
+  const dPower = teamPower(s, defender.id, 'defense');
+  const events = [];
+  if (rng() < 0.4) events.push({ t: 'utility', side: attacker.id, text: attacker.name + ' 使用道具控制入口' });
+  const entry = (attacker.roster || [])[Math.floor(rng() * Math.max(1, (attacker.roster || []).length))] || { name: attacker.name, rating: attacker.rating, role: '步枪' };
+  const anchor = (defender.roster || []).find((p) => p.role === '指挥') || (defender.roster || [])[0] || { name: defender.name, rating: defender.rating, role: '步枪' };
+  const entryWin = rng() < simDuelWin(entry.rating, anchor.rating, aPower, dPower);
+  const duelWinner = entryWin ? attacker : defender;
+  const winnerPlayer = entryWin ? entry : anchor;
+  const loserPlayer = entryWin ? anchor : entry;
+  if (!stats[winnerPlayer.name]) stats[winnerPlayer.name] = { name: winnerPlayer.name, role: winnerPlayer.role, team: duelWinner.id, kills: 0, deaths: 0, dmg: 0, plants: 0, defuses: 0, clutches: 0 };
+  if (!stats[loserPlayer.name]) stats[loserPlayer.name] = { name: loserPlayer.name, role: loserPlayer.role, team: (entryWin ? defender : attacker).id, kills: 0, deaths: 0, dmg: 0, plants: 0, defuses: 0, clutches: 0 };
+  stats[winnerPlayer.name].kills++;
+  stats[loserPlayer.name].deaths++;
+  events.push({ t: 'duel', side: duelWinner.id, text: winnerPlayer.name + ' 对位击败 ' + loserPlayer.name });
+  const siteControl = rng() < clamp(0.5 + (aPower - dPower) * 0.01 + (entryWin ? 0.12 : 0), 0.22, 0.92);
+  let winner;
+  if (!siteControl) {
+    winner = rng() < clamp(0.5 + (aPower - dPower) * 0.01 - 0.12, 0.18, 0.88) ? attacker : defender;
+    events.push({ t: 'elimination', side: winner.id, text: winner.name + ' 在残局中清空点位' });
+  } else {
+    const planter = (attacker.roster || [])[Math.floor(rng() * Math.max(1, (attacker.roster || []).length))];
+    if (planter) { stats[planter.name] = stats[planter.name] || { name: planter.name, role: planter.role, team: attacker.id, kills: 0, deaths: 0, dmg: 0, plants: 0, defuses: 0, clutches: 0 }; stats[planter.name].plants++; }
+    events.push({ t: 'plant', side: attacker.id, text: (planter ? planter.name : attacker.name) + ' 安放 C4' });
+    const retake = rng() < clamp(0.42 + (dPower - aPower) * 0.012, 0.18, 0.88);
+    if (!retake) {
+      winner = attacker;
+      events.push({ t: 'post_plant', side: attacker.id, text: attacker.name + ' 守住点位' });
+    } else {
+      const defuser = (defender.roster || [])[Math.floor(rng() * Math.max(1, (defender.roster || []).length))];
+      const defused = rng() < clamp(0.5 + (dPower - aPower) * 0.01, 0.15, 0.92);
+      if (defused) {
+        if (defuser) { stats[defuser.name] = stats[defuser.name] || { name: defuser.name, role: defuser.role, team: defender.id, kills: 0, deaths: 0, dmg: 0, plants: 0, defuses: 0, clutches: 0 }; stats[defuser.name].defuses++; }
+        winner = defender;
+        events.push({ t: 'defuse', side: defender.id, text: (defuser ? defuser.name : defender.name) + ' 拆掉 C4' });
+      } else {
+        const clutchPlayer = (attacker.roster || []).find((p) => p.role === '自由人') || entry;
+        if (stats[clutchPlayer.name]) { stats[clutchPlayer.name].kills++; stats[clutchPlayer.name].clutches++; }
+        if (defuser && stats[defuser.name]) stats[defuser.name].deaths++;
+        winner = attacker;
+        events.push({ t: 'clutch', side: attacker.id, text: clutchPlayer.name + ' 完成残局' });
+      }
+    }
+  }
+  events.push({ t: 'round_end', side: winner.id, round: index + 1, text: winner.name + ' 赢下第 ' + (index + 1) + ' 回合' });
+  return { round: index + 1, attacker: attacker.id, defender: defender.id, winner: winner.id, events };
+}
+
+export function simulateManagerMatch(s, home, away, opts = {}) {
+  const stats = {};
+  const rounds = [];
+  let homeScore = 0, awayScore = 0;
+  const maxRounds = 9;
+  for (let i = 0; i < maxRounds && homeScore < 5 && awayScore < 5; i++) {
+    const r = simulateManagerRound(i, home, away, s, stats);
+    rounds.push(r);
+    if (r.winner === home.id) homeScore++; else awayScore++;
+  }
+  const players = Object.values(stats).map((p) => ({ ...p })).sort((a, b) => b.kills - a.kills || b.dmg - a.dmg);
+  const mvp = players.slice().sort((a, b) => (b.kills * 2 + b.dmg / 100 + b.plants + b.defuses + b.clutches * 2) - (a.kills * 2 + a.dmg / 100 + a.plants + a.defuses + a.clutches * 2))[0] || null;
+  const winner = homeScore >= awayScore ? home.id : away.id;
+  return { mapId: opts.mapId || home.homeMap || 'dust2', homeId: home.id, awayId: away.id, score: [homeScore, awayScore], winner, rounds, timeline: rounds.flatMap((r) => r.events.map((e) => ({ ...e, round: r.round }))), players, mvp, totalKills: players.reduce((a, p) => a + p.kills, 0) };
+}

@@ -1,4 +1,4 @@
-import { resetManager, loadManager, setStorage, setRng, getState, SAVE_KEY, BACKUP_KEY, VERSION, ROLE_WEIGHTS, buildManagerRoster, deriveAttrs, ratingFromAttrs, playerPrice, newManagerCareer, buildNewSeason, nextFixture } from '../src/manager.js';
+import { resetManager, loadManager, setStorage, setRng, getState, SAVE_KEY, BACKUP_KEY, VERSION, ROLE_WEIGHTS, buildManagerRoster, deriveAttrs, ratingFromAttrs, playerPrice, newManagerCareer, buildNewSeason, nextFixture, simulateManagerMatch } from '../src/manager.js';
 
 const ok = (name, cond) => {
   if (!cond) throw new Error('manager: ' + name + ' FAIL');
@@ -50,5 +50,16 @@ ok('player team present', s.season.teams.some((t) => t.id === 'player'));
 ok('round robin home+away', s.season.fixtures.filter((f) => f.home === 'player').length === 7 && s.season.fixtures.filter((f) => f.away === 'player').length === 7);
 ok('fixtures have map', s.season.fixtures.every((f) => f.mapId));
 ok('nextFixture exists round1', nextFixture(s) && nextFixture(s).round === 1);
+
+{
+  const me = s.season.teams.find((t) => t.id === 'player');
+  const opp = s.season.teams.find((t) => t.id !== 'player');
+  const r = simulateManagerMatch(s, me, opp, { league: '乙级' });
+  ok('sim rounds 5-9', r.rounds.length >= 5 && r.rounds.length <= 9);
+  ok('sim score sums to rounds', r.score[0] + r.score[1] === r.rounds.length);
+  ok('sim winner valid', r.winner === me.id || r.winner === opp.id);
+  ok('sim mvp present', r.mvp && r.mvp.name);
+  ok('sim players sorted', r.players[0] && r.players[0].kills >= r.players[r.players.length - 1].kills);
+}
 
 console.log('manager: all PASS');
