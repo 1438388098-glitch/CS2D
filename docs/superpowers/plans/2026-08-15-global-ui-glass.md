@@ -260,6 +260,8 @@ git commit -m "feat(menu): 主菜单 HTML 重排为全屏横三区（地图预�
 .map-preview-name{position:absolute;left:12px;bottom:10px;font-size:12px;letter-spacing:3px;color:rgba(242,245,248,.75);text-shadow:0 1px 8px rgba(0,0,0,.7);pointer-events:none}
 .map-chips{display:flex;flex-wrap:wrap;gap:6px;align-items:center;min-height:0;overflow-y:auto;max-height:92px}
 .map-group-title{width:100%;font-size:10px;color:rgba(242,245,248,.4);letter-spacing:2px;margin-top:4px}
+/* 覆盖旧 .map-subgrid 的 grid≥210px 排版，改回弹性名签行 */
+.map-subgrid{display:flex;flex-wrap:wrap;gap:6px}
 .map-chips .map-card{flex:none;display:inline-flex;align-items:center;gap:6px;background:rgba(255,255,255,.05);border:1px solid transparent;border-radius:7px;padding:5px 12px;font-size:12px;letter-spacing:1px;color:rgba(242,245,248,.55);cursor:pointer;font-family:var(--f-cn);transition:all var(--dur-s) var(--ease)}
 .map-chips .map-card:hover{border-color:var(--glass-border-hi);color:var(--txt-1)}
 .map-chips .map-card.sel{color:#ffb066;background:rgba(255,138,42,.14);border-color:var(--accent)}
