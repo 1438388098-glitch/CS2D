@@ -498,6 +498,10 @@ td.money{color:var(--gold);font-family:var(--f-num)}
   position: fixed; left: 50%; top: 46px; transform: translateX(-50%); z-index: 30; pointer-events: none;
   width: min(760px, 94vw);
 }
+#managerPanel {
+  position: absolute; inset: 0; z-index: 40; display: none; flex-direction: column;
+  background: rgba(6,8,12,.96); color: var(--txt-1); overflow: auto;
+}
 #managerMatchPanel .cyber-controls { pointer-events: auto; }
 .cyber-panel {
   position: relative; display: flex; align-items: stretch; gap: 10px;
