@@ -211,4 +211,16 @@ ok('nextFixture exists round1', nextFixture(s) && nextFixture(s).round === 1);
   ok('cup finished from b slot', s.season.cup.phase === 'finished');
 }
 
+import { installStubs, registerDomIds } from './stubdom.js';
+import { initManagerUi, openManager } from '../src/manager-ui.js';
+import '../src/manager-match.js';
+
+installStubs();
+registerDomIds('managerPanel');
+initManagerUi(globalThis.document, { ui: { showMenu() {}, showToast() {} } });
+openManager();
+ok('manager panel shown', globalThis.document.getElementById('managerPanel').style.display === 'block');
+ok('manager panel has content', globalThis.document.getElementById('managerPanel').innerHTML.includes('电竞经理'));
+ok('manager panel has health', globalThis.document.getElementById('managerPanel').innerHTML.includes('战队体检'));
+
 console.log('manager: all PASS');
