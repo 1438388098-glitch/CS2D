@@ -7,7 +7,7 @@ import {
   trainPlayer, restPlayer, trainingPreview, facilityStatus, upgradeFacility,
   sponsorIncome, cashflowForecast, seasonBudget, financialRisk,
   ledgerRecent, transferProfit, computeChemistry, pendingEvents, respondEvent,
-  TRAIN_TIERS, ATTRS, PERSONALITY_CN, NEED_ROLES
+  TRAIN_TIERS, ATTRS, PERSONALITY_CN, NEED_ROLES, ROLES
 } from './manager.js';
 import { startManagerMatch } from './manager-match.js';
 
@@ -16,6 +16,7 @@ let game = null;
 let tab = 'dash';
 let transferRole = '';
 let transferSort = 'rating';
+let trainAttr = {};
 
 function el(id) { return doc ? doc.getElementById(id) : null; }
 function esc(s) { return String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])); }
@@ -23,6 +24,7 @@ function toast(t) { if (game && game.ui) game.ui.showToast(t); }
 function money(n) { return Number(n || 0).toLocaleString('zh-CN'); }
 function healthColor(c) { return c === 'green' ? '#4ade80' : c === 'yellow' ? '#facc15' : '#f87171'; }
 const ATTR_CN = { aim: '枪法', react: '反应', movement: '身法', clutch: '残局', nade: '道具', gameIQ: '战术', leadership: '指挥', composure: '冷静', aggression: '冲击', discipline: '纪律' };
+const ROLE_CN = { 突破: '突', 狙击: '狙', 指挥: '指', 步枪: '步', 自由人: '自', 补枪: '补' };
 
 export function initManagerUi(documentRef, gameRef) {
   doc = documentRef;
@@ -49,98 +51,172 @@ export function openManager() {
 }
 
 const TABS = [
-  ['dash', '总览'], ['schedule', '赛程'], ['roster', '阵容'], ['transfer', '转会'],
-  ['training', '训练'], ['standings', '排名'], ['cup', '杯赛'], ['finance', '财务'], ['stats', '数据']
+  ['dash', '总览'], ['roster', '阵容/转会'], ['schedule', '赛程/积分'],
+  ['train', '训练/设施'], ['finance', '经营/数据']
 ];
 
 function render() {
   const s = getState();
   const panel = el('managerPanel');
   if (!panel) return;
+  const h = teamHealth(s);
+  const fr = financialRisk(s);
   let html = '<div class="career-top">' +
     '<span class="ct-mode">电竞经理</span>' +
-    '<span class="ct-season">第 ' + s.season.id + ' 赛季 · 第 ' + s.season.round + '/' + s.season.totalRounds + ' 轮 · ' + esc(s.team.league) + '联赛' + (s.season.cup.phase !== 'idle' ? ' · 杯赛' : '') + '</span>' +
-    '<span class="ct-bank">资金 ¥' + money(s.team.bank) + '</span>' +
+    '<span class="ct-season">S' + s.season.id + ' · R' + s.season.round + '/' + s.season.totalRounds + ' · ' + esc(s.team.league) + (s.season.cup.phase !== 'idle' ? ' · 杯赛' : '') + '</span>' +
+    '<span class="ct-bank">¥' + money(s.team.bank) + '</span>' +
+    '<span class="ct-bank" style="color:' + healthColor(h.morale) + '">士气' + s.team.morale + '</span>' +
+    '<span class="ct-bank" style="color:' + healthColor(fr.level === '高风险' ? 'red' : fr.level === '紧张' ? 'yellow' : 'green') + '">' + esc(fr.level) + '</span>' +
+    '<span class="ct-bank">信任' + s.board.trust + '</span>' +
     '<button data-act="menu">←主菜单</button></div>';
   html += '<div class="career-tabs">';
   for (const [id, label] of TABS) html += '<button class="career-tab' + (tab === id ? ' sel' : '') + '" data-act="tab" data-tab="' + id + '">' + label + '</button>';
   html += '</div><div class="career-body">';
-  const rr = { dash: renderDash, schedule: renderSchedule, roster: renderRoster, transfer: renderTransfer, training: renderTraining, standings: renderStandings, cup: renderCup, finance: renderFinance, stats: renderStats }[tab] || renderDash;
+  const rr = { dash: renderDash, roster: renderRoster, schedule: renderSchedule, train: renderTrain, finance: renderFinance }[tab] || renderDash;
   html += rr(s);
   html += '</div>';
   panel.innerHTML = html;
+}
+
+function healthDot(c, label, val) {
+  return '<span class="mng-dot" style="color:' + healthColor(c) + '">●</span><span class="mng-k">' + label + '</span><b>' + val + '</b>';
 }
 
 function renderDash(s) {
   const h = teamHealth(s);
   const f = nextFixture(s);
   const goal = seasonGoalProgress(s);
-  let html = '<div class="career-card"><h4>战队体检</h4><div class="career-kpis">' +
-    '<div class="career-kpi"><b style="color:' + healthColor(h.money) + '">' + (h.money === 'green' ? '资金健康' : h.money === 'yellow' ? '资金吃紧' : '资金告急') + '</b><span>' + money(s.team.bank) + '</span></div>' +
-    '<div class="career-kpi"><b style="color:' + healthColor(h.morale) + '">' + (h.morale === 'green' ? '士气高昂' : h.morale === 'yellow' ? '士气平平' : '士气低迷') + '</b><span>' + s.team.morale + '</span></div>' +
-    '<div class="career-kpi"><b style="color:' + healthColor(h.fatigue) + '">' + (h.fatigue === 'green' ? '体力充沛' : h.fatigue === 'yellow' ? '略有疲劳' : '疲劳过高') + '</b><span>团队疲劳</span></div>' +
-    '<div class="career-kpi"><b style="color:' + healthColor(h.roster) + '">' + (h.roster === 'green' ? '阵容完整' : '有位置空缺') + '</b><span>' + (h.gaps.length ? h.gaps.join('、') : '五位置齐备') + '</span></div>' +
-    '<div class="career-kpi"><b style="color:' + healthColor(h.stress) + '">' + (h.stress === 'green' ? '更衣室平静' : h.stress === 'yellow' ? '有小矛盾' : '更衣室紧张') + '</b><span>压力值 ' + s.team.stressSum + '</span></div>' +
-    '</div>' + (h.advice.length ? '<div class="career-stats"><span>建议：' + h.advice.map(esc).join('；') + '</span></div>' : '') + '</div>';
+  const fr = financialRisk(s);
+  let html = '<div class="career-card"><h4>战队体检</h4><div class="mng-health">' +
+    healthDot(h.money, '资金', money(s.team.bank)) +
+    healthDot(h.morale, '士气', s.team.morale) +
+    healthDot(h.fatigue, '疲劳', '') +
+    healthDot(h.roster, '阵容', h.gaps.length ? '缺' + h.gaps.join('') : '齐') +
+    healthDot(h.stress, '更衣室', s.team.stressSum) +
+    healthDot(fr.score >= 35 ? (fr.score >= 60 ? 'red' : 'yellow') : 'green', '风险', esc(fr.level)) +
+    '</div>' + (h.advice.length ? '<div class="mng-advice">' + h.advice.map(esc).join(' · ') + '</div>' : '') + '</div>';
   if (f) {
     const opp = s.season.teams.find((t) => t.id === (f.home === 'player' ? f.away : f.home));
     const isHome = f.home === 'player';
-    html += '<div class="career-card"><h4>下一场 · 第 ' + f.round + ' 轮</h4>' +
-      '<div class="career-stats"><b>' + esc(opp.name) + '</b> (' + opp.rating + ' 评 · ' + esc(opp.style || '未知') + ') · ' + (isHome ? '主场' : '客场') + ' · 地图 ' + esc(f.mapId) + '</div>' +
-      '<div class="career-actions"><button data-act="play">开始比赛（实机观战）</button><button data-act="sim">模拟本场</button></div></div>';
+    html += '<div class="career-card"><div class="mng-next"><div><b>下一场 R' + f.round + '</b> vs ' + esc(opp.name) + ' <small>(' + opp.rating + ' 评 · ' + esc(opp.style || '') + ' · ' + (isHome ? '主' : '客') + ' · ' + esc(f.mapId) + ')</small></div>' +
+      '<div class="career-actions"><button data-act="play">实机观战</button><button data-act="sim">模拟</button></div></div></div>';
   } else if (s.season.cup.phase === 'active') {
-    html += '<div class="career-card"><h4>杯赛进行中</h4><div class="career-actions"><button data-act="play-cup">打杯赛</button></div></div>';
+    html += '<div class="career-card"><div class="mng-next"><div><b>杯赛进行中</b></div><div class="career-actions"><button data-act="play-cup">打杯赛</button></div></div></div>';
   } else if (s.season.cup.phase === 'finished') {
     const rep = seasonReport(s);
-    html += '<div class="career-card"><h4>赛季结束 · 第 ' + rep.rank + ' 名</h4>' +
-      '<div class="career-stats"><span>排名奖金 ¥' + money(rep.rankPrize) + ' · 杯赛奖金 ¥' + money(rep.cupPrize) + ' · 下赛季 ' + esc(rep.nextLeague) + (rep.promoted ? '（升级）' : rep.relegated ? '（降级）' : '') + '</span></div>' +
-      '<div class="career-actions"><button data-act="next-season">结算并进入下赛季</button></div></div>';
+    html += '<div class="career-card"><div class="mng-next"><div><b>赛季结束 · 第 ' + rep.rank + ' 名</b> · 排名奖 ¥' + money(rep.rankPrize) + ' · 杯赛奖 ¥' + money(rep.cupPrize) + ' · 下季 ' + esc(rep.nextLeague) + (rep.promoted ? '（升）' : rep.relegated ? '（降）' : '') + '</div>' +
+      '<div class="career-actions"><button data-act="next-season">结算并进入下赛季</button></div></div></div>';
   }
-  html += '<div class="career-card"><h4>赛季目标 · 董事会信任 ' + s.board.trust + '</h4>' +
-    '<div class="career-stats"><span>排名目标 前 ' + goal.rank + ' · 杯赛目标 ' + (goal.cup >= 1 ? '进淘汰赛' : '进杯赛') + ' · 奖励 ' + money(goal.reward) + '</span></div>' +
-    '<div class="career-stats"><span>' + (s.board.fired ? '⚠ 你已被解雇' : '董事会信任 ' + s.board.trust + '/100') + '</span></div></div>';
+  const table = [...s.season.standings].sort((a, b) => b.pts - a.pts || b.w - a.w);
+  const myRow = table.findIndex((x) => x.teamId === 'player');
+  html += '<div class="career-grid2"><div class="career-card"><h4>积分榜</h4><div class="career-table"><table class="mng-table"><tr><th>#</th><th>队</th><th>赛</th><th>胜</th><th>负</th><th>分</th></tr>';
+  table.forEach((row, i) => {
+    const t = s.season.teams.find((x) => x.id === row.teamId);
+    html += '<tr' + (row.teamId === 'player' ? ' class="mine"' : '') + '><td>' + (i + 1) + '</td><td>' + esc(t ? t.tag : row.teamId) + '</td><td>' + row.played + '</td><td>' + row.w + '</td><td>' + row.l + '</td><td>' + row.pts + '</td></tr>';
+  });
+  html += '</table></div></div>';
+  html += '<div><div class="career-card"><h4>赛季目标 · 奖励 ¥' + money(goal.reward) + '</h4>' +
+    '<div class="mng-goal"><span>排名前 ' + goal.rank + '</span><span>杯赛' + (goal.cup >= 1 ? '进淘汰赛' : '参赛') + '</span><span>信任 ' + s.board.trust + '</span></div></div>';
   const pe = pendingEvents(s);
   if (pe.length) {
     html += '<div class="career-card"><h4>待处理事件</h4>';
     for (const ev of pe) {
-      html += '<div class="career-stats"><span>' + esc(ev.text) + '</span></div>';
+      html += '<div class="mng-ev"><span>' + esc(ev.text) + '</span>';
       if (ev.playerId) {
         if (ev.type === 'conflict') {
-          html += '<div class="career-actions">' +
-            '<button data-act="evt" data-evt="conflict" data-pid="' + ev.playerId + '" data-choice="mediate">调解</button>' +
-            '<button data-act="evt" data-evt="conflict" data-pid="' + ev.playerId + '" data-choice="bench">下放替补</button></div>';
+          html += '<span><button data-act="evt" data-evt="conflict" data-pid="' + ev.playerId + '" data-choice="mediate">调解</button><button data-act="evt" data-evt="conflict" data-pid="' + ev.playerId + '" data-choice="bench">下放</button></span>';
         } else {
-          html += '<div class="career-actions">' +
-            '<button data-act="evt" data-evt="unhappy" data-pid="' + ev.playerId + '" data-choice="soothe">安抚</button>' +
-            '<button data-act="evt" data-evt="unhappy" data-pid="' + ev.playerId + '" data-choice="promise">承诺上场</button>' +
-            '<button data-act="evt" data-evt="unhappy" data-pid="' + ev.playerId + '" data-choice="ignore">放任</button></div>';
+          html += '<span><button data-act="evt" data-evt="unhappy" data-pid="' + ev.playerId + '" data-choice="soothe">安抚</button><button data-act="evt" data-evt="unhappy" data-pid="' + ev.playerId + '" data-choice="promise">承诺</button><button data-act="evt" data-evt="unhappy" data-pid="' + ev.playerId + '" data-choice="ignore">放任</button></span>';
         }
       }
+      html += '</div>';
     }
     html += '</div>';
   }
-  html += '<div class="career-card"><h4>事件流</h4>' + (s.news || []).slice(0, 8).map((n) => '<div class="career-news ' + (n.type === 'win' ? 'win' : n.type === 'lose' ? 'lose' : '') + '">' + esc(n.text) + '</div>').join('') + '</div>';
+  html += '<div class="career-card"><h4>事件流</h4>' + (s.news || []).slice(0, 6).map((n) => '<div class="career-news ' + (n.type === 'win' ? 'win' : n.type === 'lose' ? 'lose' : '') + '">' + esc(n.text) + '</div>').join('') + '</div>';
+  html += '</div></div>';
+  return html;
+}
+
+function playerRow(p, s, actions) {
+  const stars = Math.max(1, Math.round(p.potential / 18));
+  return '<div class="mng-prow"><span class="mng-pname">' + esc(p.name) + '</span>' +
+    '<span class="mng-prole">' + (ROLE_CN[p.role] || p.role) + '</span>' +
+    '<span class="mng-prating">' + p.rating + '</span>' +
+    '<span class="mng-ppot">' + '★'.repeat(stars) + '</span>' +
+    '<span class="mng-pstate" style="color:' + healthColor(p.morale >= 65 ? 'green' : p.morale >= 45 ? 'yellow' : 'red') + '">气' + p.morale + '</span>' +
+    '<span class="mng-pstate" style="color:' + healthColor(p.fatigue < 35 ? 'green' : p.fatigue < 60 ? 'yellow' : 'red') + '">疲' + p.fatigue + '</span>' +
+    '<span class="mng-pprice">¥' + money(p.price) + '</span>' +
+    '<span class="mng-pcon">' + p.contractYears + 'y</span>' +
+    '<span class="mng-pact">' + actions(p) + '</span></div>';
+}
+
+function renderRoster(s) {
+  let html = '<div class="career-card"><h4>阵容（' + s.team.roster.length + '/6）· 化学 ' + s.team.chemistry + '</h4><div class="mng-roster">';
+  for (const p of s.team.roster) {
+    html += playerRow(p, s, (pp) =>
+      '<button data-act="rest" data-pid="' + pp.id + '">休</button>' +
+      (pp.contractYears <= 1 ? '<button data-act="renew" data-pid="' + pp.id + '">续</button>' : '') +
+      (transferWindowOpen(s) ? '<button data-act="sell" data-pid="' + pp.id + '">卖</button>' : ''));
+  }
+  html += '</div></div>';
+  const windowOpen = transferWindowOpen(s);
+  html += '<div class="career-card"><h4>转会窗' + (windowOpen ? ' · 剩余 ' + s.team.transfersLeft + ' 次 · 噪声±' + scoutingNoise(s) : ' · 第5-8轮开放') + '</h4>';
+  if (windowOpen) {
+    const pool = candidates(s);
+    const filtered = filterCandidates(pool, { role: transferRole, sort: transferSort });
+    html += '<div class="mng-filter"><select data-filter="role"><option value="">全位置</option>' + ROLES.map((r) => '<option value="' + r + '"' + (transferRole === r ? ' selected' : '') + '>' + r + '</option>').join('') + '</select>' +
+      '<select data-filter="sort"><option value="rating" ' + (transferSort === 'rating' ? 'selected' : '') + '>评</option><option value="price" ' + (transferSort === 'price' ? 'selected' : '') + '>价</option><option value="potential" ' + (transferSort === 'potential' ? 'selected' : '') + '>潜</option></select></div><div class="mng-roster">';
+    for (const c of filtered) {
+      const v = scoutedView(c, scoutingNoise(s));
+      html += '<div class="mng-prow"><span class="mng-pname">' + esc(c.name) + '</span>' +
+        '<span class="mng-prole">' + (ROLE_CN[c.role] || c.role) + '</span>' +
+        '<span class="mng-prating">' + v.rating + '±' + scoutingNoise(s) + '</span>' +
+        '<span class="mng-ppot">' + '★'.repeat(v.potentialStars) + '</span>' +
+        '<span class="mng-pstate">' + c.age + '岁</span>' +
+        '<span class="mng-pprice">¥' + money(c.price) + '</span>' +
+        '<span class="mng-pcon">' + esc(c.teamOfOrigin || '自由') + '</span>' +
+        '<span class="mng-pact"><button data-act="buy" data-cid="' + c.id + '">买入</button></span></div>';
+    }
+    html += '</div>';
+  }
+  html += '</div>';
   return html;
 }
 
 function renderSchedule(s) {
-  let html = '<div class="career-card"><h4>联赛规则 · ' + esc(s.team.league) + '</h4>' +
-    '<div class="career-stats"><span>8 队双循环 14 轮 · 胜 3 分 · 甲级前6保级 · 乙级前2升级后2降级 · 丙级前2升级</span></div></div>';
-  html += '<div class="career-grid2">';
+  let html = '<div class="career-card"><h4>赛程 · ' + esc(s.team.league) + ' · 8队双循环14轮</h4>';
+  if (s.season.cup.phase !== 'idle') {
+    const b = s.season.cup.bracket;
+    html += '<div class="mng-cup">';
+    for (const m of b) {
+      const ha = m.a ? s.season.teams.find((t) => t.id === m.a) : null;
+      const hb = m.b ? s.season.teams.find((t) => t.id === m.b) : null;
+      const mine = m.a === 'player' || m.b === 'player';
+      const label = m.played ? (ha ? ha.tag : '') + ' ' + (m.score ? m.score.join(':') : '') + ' ' + (hb ? hb.tag : '') : (ha ? ha.tag : '?') + 'vs' + (hb ? hb.tag : '?');
+      html += '<span class="mng-cupm' + (mine ? ' mine' : '') + '">' + m.round + ' ' + esc(label) + (mine && !m.played ? ' <button data-act="play-cup">打</button>' : '') + '</span>';
+    }
+    if (s.season.cup.champion) {
+      const champ = s.season.teams.find((t) => t.id === s.season.cup.champion);
+      html += '<b>冠军 ' + esc(champ ? champ.tag : s.season.cup.champion) + '</b>';
+    }
+    html += '</div>';
+  }
+  html += '</div><div class="career-grid2">';
   const byRound = {};
   for (const f of s.season.fixtures) (byRound[f.round] = byRound[f.round] || []).push(f);
   for (let r = 1; r <= s.season.totalRounds; r++) {
     const fs = byRound[r] || [];
-    html += '<div class="career-card"><div class="career-round' + (r === s.season.round ? ' cur' : '') + '">第 ' + r + ' 轮</div>';
+    html += '<div class="career-card"><div class="career-round' + (r === s.season.round ? ' cur' : '') + '">R' + r + '</div>';
     for (const f of fs) {
       const h = s.season.teams.find((t) => t.id === f.home);
       const a = s.season.teams.find((t) => t.id === f.away);
       const mine = f.home === 'player' || f.away === 'player';
       let label;
       if (f.played) label = (h ? h.tag : '') + ' ' + (f.score ? f.score.join(':') : '') + ' ' + (a ? a.tag : '');
-      else if (mine) label = '我的战队 vs ' + (a ? a.tag : '');
+      else if (mine) label = '我 vs ' + (a ? a.tag : '');
       else label = (h ? h.tag : '') + ' vs ' + (a ? a.tag : '');
-      html += '<div class="career-fixture' + (mine ? ' mine' : '') + '"><span>' + esc(label) + '</span>' + (mine && !f.played ? '<button data-act="play">打</button>' : '') + (mine && f.played ? '<span>· ' + (f.winner === 'player' ? '胜' : '负') + '</span>' : '') + '</div>';
+      html += '<div class="career-fixture' + (mine ? ' mine' : '') + '"><span>' + esc(label) + '</span>' + (mine && !f.played ? '<button data-act="play">打</button>' : '') + (mine && f.played ? '<span>·' + (f.winner === 'player' ? '胜' : '负') + '</span>' : '') + '</div>';
     }
     html += '</div>';
   }
@@ -148,95 +224,25 @@ function renderSchedule(s) {
   return html;
 }
 
-function renderRoster(s) {
-  let html = '<div class="career-card"><h4>阵容（' + s.team.roster.length + '/6）· 化学 ' + s.team.chemistry + '</h4><div class="career-roster">';
+function renderTrain(s) {
+  let html = '<div class="career-card"><h4>训练 · 剩余 ' + s.team.trainingLeft + ' 次</h4><div class="mng-roster">';
   for (const p of s.team.roster) {
-    html += '<div class="career-player-card">' +
-      '<b>' + esc(p.name) + '</b><span>' + esc(p.role) + ' · ' + p.rating + ' 评 · 潜力 ' + '★'.repeat(Math.max(1, Math.round(p.potential / 18))) + '</span>' +
-      '<span>身价 ¥' + money(p.price) + ' · 合同 ' + p.contractYears + ' 年 · ' + p.age + ' 岁</span>' +
-      '<span>士气 ' + p.morale + ' · 疲劳 ' + p.fatigue + ' · 压力 ' + p.stress + '</span>' +
-      '<span>性格：' + (PERSONALITY_CN[p.personality] || p.personality) + '</span>' +
-      '<div class="career-actions"><button data-act="rest" data-pid="' + p.id + '">休息</button>' +
-      (p.contractYears <= 1 ? '<button data-act="renew" data-pid="' + p.id + '">续约</button>' : '') +
-      (transferWindowOpen(s) ? '<button data-act="sell" data-pid="' + p.id + '">卖出</button>' : '') + '</div></div>';
-  }
-  html += '</div></div>';
-  return html;
-}
-
-function renderTransfer(s) {
-  const windowOpen = transferWindowOpen(s);
-  let html = '<div class="career-card"><h4>转会窗' + (windowOpen ? '（开放中，剩余 ' + s.team.transfersLeft + ' 次）' : '（第 5-8 轮开放）') + '</h4>';
-  html += '<div class="career-stats"><span>球探噪声 ±' + scoutingNoise(s) + ' · 深度球探可看精确潜力</span></div></div>';
-  if (!windowOpen) return html;
-  const pool = candidates(s);
-  const filtered = filterCandidates(pool, { role: transferRole, sort: transferSort });
-  html += '<div class="career-card"><h4>候选池</h4><div class="career-stats">' +
-    '<select data-filter="role"><option value="">全部位置</option>' + NEED_ROLES.map((r) => '<option value="' + r + '"' + (transferRole === r ? ' selected' : '') + '>' + r + '</option>').join('') + '</select>' +
-    '<select data-filter="sort"><option value="rating" ' + (transferSort === 'rating' ? 'selected' : '') + '>按评级</option><option value="price" ' + (transferSort === 'price' ? 'selected' : '') + '>按身价</option><option value="potential" ' + (transferSort === 'potential' ? 'selected' : '') + '>按潜力</option></select></div><div class="career-pool">';
-  for (const c of filtered) {
-    const v = scoutedView(c, scoutingNoise(s));
-    html += '<div class="career-player-card">' +
-      '<b>' + esc(c.name) + '</b><span>' + esc(c.role) + ' · 评级 ' + v.rating + ' ±' + scoutingNoise(s) + ' · 潜力 ' + '★'.repeat(v.potentialStars) + '</span>' +
-      '<span>身价 ¥' + money(c.price) + ' · 年龄 ' + c.age + ' · 出身 ' + esc(c.teamOfOrigin || '自由') + '</span>' +
-      '<span>性格：' + (PERSONALITY_CN[c.personality] || c.personality) + '</span>' +
-      '<div class="career-actions"><button data-act="buy" data-cid="' + c.id + '">买入 ¥' + money(c.price) + '</button></div></div>';
-  }
-  html += '</div></div>';
-  return html;
-}
-
-function renderTraining(s) {
-  let html = '<div class="career-card"><h4>训练（剩余 ' + s.team.trainingLeft + ' 次）</h4><div class="career-stats"><span>选择属性与档位提升选手能力</span></div></div>';
-  for (const p of s.team.roster) {
-    html += '<div class="career-card"><h4>' + esc(p.name) + ' · ' + esc(p.role) + '</h4><div class="career-stats">' +
-      ATTRS.map((a) => '<span>' + (ATTR_CN[a] || a) + ' ' + p.attrs[a] + '</span>').join('') + '</div>';
-    html += '<div class="career-stats"><select data-train-attr="' + p.id + '">' +
-      ATTRS.map((a) => '<option value="' + a + '">' + (ATTR_CN[a] || a) + '</option>').join('') + '</select></div>';
-    html += '<div class="career-actions">';
+    const attr = trainAttr[p.id] || 'aim';
+    html += '<div class="mng-trow"><span class="mng-pname">' + esc(p.name) + '</span>' +
+      '<span class="mng-ptrain">' + ATTRS.map((a) => '<span style="color:' + (a === attr ? '#ffd27a' : '') + '">' + (ATTR_CN[a] || a) + p.attrs[a] + '</span>').join('') + '</span>' +
+      '<span><select data-train-attr="' + p.id + '">' + ATTRS.map((a) => '<option value="' + a + '"' + (a === attr ? ' selected' : '') + '>' + (ATTR_CN[a] || a) + '</option>').join('') + '</select></span>';
     for (const tier of TRAIN_TIERS) {
       const prev = trainingPreview(s, p, tier.key);
-      html += '<button data-act="train" data-pid="' + p.id + '" data-attr-select="' + p.id + '" data-tier="' + tier.key + '">' + tier.label + ' ¥' + money(prev.cost) + '（+' + prev.gained + '）</button>';
+      html += '<button data-act="train" data-pid="' + p.id + '" data-attr-select="' + p.id + '" data-tier="' + tier.key + '">' + tier.label + '¥' + money(prev.cost) + '(+' + prev.gained + ')</button>';
     }
-    html += '</div></div>';
+    html += '<button data-act="rest" data-pid="' + p.id + '">休</button></div>';
   }
-  html += '<div class="career-card"><h4>设施</h4>';
+  html += '</div></div>';
+  html += '<div class="career-card"><h4>设施</h4><div class="mng-fac">';
   for (const f of facilityStatus(s)) {
-    html += '<div class="career-stats"><span>' + f.label + ' Lv.' + f.level + '/' + f.max + ' · ' + esc(f.desc) + '</span>' +
-      (f.cost ? '<button data-act="upgrade" data-fac="' + f.key + '">升级 ¥' + money(f.cost) + '</button>' : '') + '</div>';
+    html += '<span>' + f.label + ' L' + f.level + '/' + f.max + ' ' + esc(f.desc) + (f.cost ? ' <button data-act="upgrade" data-fac="' + f.key + '">升¥' + money(f.cost) + '</button>' : '') + '</span>';
   }
-  html += '</div>';
-  return html;
-}
-
-function renderStandings(s) {
-  const table = [...s.season.standings].sort((a, b) => b.pts - a.pts || b.w - a.w);
-  let html = '<div class="career-card"><h4>积分榜</h4><div class="career-table"><table><tr><th>#</th><th>队伍</th><th>场</th><th>胜</th><th>负</th><th>分</th></tr>';
-  table.forEach((row, i) => {
-    const t = s.season.teams.find((x) => x.id === row.teamId);
-    const cls = row.teamId === 'player' ? ' class="mine"' : '';
-    html += '<tr' + cls + '><td>' + (i + 1) + '</td><td>' + esc(t ? t.name : row.teamId) + '</td><td>' + row.played + '</td><td>' + row.w + '</td><td>' + row.l + '</td><td>' + row.pts + '</td></tr>';
-  });
-  html += '</table></div></div>';
-  return html;
-}
-
-function renderCup(s) {
-  if (s.season.cup.phase === 'idle') return '<div class="career-card"><h4>杯赛</h4><div class="career-stats"><span>联赛结束后开始</span></div></div>';
-  const b = s.season.cup.bracket;
-  let html = '<div class="career-card"><h4>淘汰赛</h4>';
-  for (const m of b) {
-    const ha = m.a ? s.season.teams.find((t) => t.id === m.a) : null;
-    const hb = m.b ? s.season.teams.find((t) => t.id === m.b) : null;
-    const mine = m.a === 'player' || m.b === 'player';
-    const label = m.played ? (ha ? ha.tag : '') + ' ' + (m.score ? m.score.join(':') : '') + ' ' + (hb ? hb.tag : '') : (ha ? ha.tag : '待定') + ' vs ' + (hb ? hb.tag : '待定');
-    html += '<div class="career-cup-match' + (mine ? ' mine' : '') + '"><span>' + m.round + ' · ' + esc(label) + '</span>' + (mine && !m.played ? '<button data-act="play-cup">打</button>' : '') + '</div>';
-  }
-  if (s.season.cup.champion) {
-    const champ = s.season.teams.find((t) => t.id === s.season.cup.champion);
-    html += '<div class="career-stats"><b>冠军：' + esc(champ ? champ.name : s.season.cup.champion) + '</b></div>';
-  }
-  html += '</div>';
+  html += '</div></div>';
   return html;
 }
 
@@ -245,25 +251,18 @@ function renderFinance(s) {
   const sb = seasonBudget(s);
   const fr = financialRisk(s);
   const tp = transferProfit(s);
-  let html = '<div class="career-card"><h4>财务概览 · ' + fr.level + '</h4><div class="career-kpis">' +
+  let html = '<div class="career-card"><h4>财务 · ' + fr.level + '</h4><div class="career-kpis">' +
     '<div class="career-kpi"><b>¥' + money(s.team.bank) + '</b><span>现金</span></div>' +
-    '<div class="career-kpi"><b>¥' + money(cf.projected) + '</b><span>预测赛季末</span></div>' +
-    '<div class="career-kpi"><b>¥' + money(sb.budget) + '</b><span>赛季预算</span></div>' +
-    '<div class="career-kpi"><b>¥' + money(sponsorIncome(s)) + '</b><span>本季赞助</span></div>' +
-    '</div>' + (fr.reasons.length ? '<div class="career-stats"><span>风险：' + fr.reasons.join('；') + '</span></div>' : '') + '</div>';
-  html += '<div class="career-card"><h4>资金流水</h4>' + ledgerRecent(s, 30).map((l) => '<div class="career-news">' + esc(l.label) + ' · ' + (l.type === 'income' ? '+' : '-') + money(l.amount) + '</div>').join('') + '</div>';
-  html += '<div class="career-card"><h4>转会盈亏</h4><div class="career-stats"><span>卖出 ¥' + money(tp.sellTotal) + ' · 买入 ¥' + money(tp.buyTotal) + '</span></div></div>';
-  return html;
-}
-
-function renderStats(s) {
-  let html = '<div class="career-card"><h4>赛季数据</h4><div class="career-kpis">' +
-    '<div class="career-kpi"><b>' + s.manager.seasonStats.w + '胜</b><span>' + s.manager.seasonStats.l + ' 负</span></div>' +
-    '<div class="career-kpi"><b>' + s.manager.seasonStats.played + '</b><span>场次</span></div>' +
-    '<div class="career-kpi"><b>¥' + money(s.records.totalPrize) + '</b><span>生涯奖金</span></div>' +
-    '<div class="career-kpi"><b>' + s.records.cupChampions + '</b><span>杯赛冠军</span></div>' +
-    '</div></div>';
-  html += '<div class="career-card"><h4>生涯</h4>' + s.history.map((hh) => '<div class="career-news">第' + hh.seasonId + '赛季 · ' + esc(hh.league) + ' · 第' + hh.rank + '名 · 奖金 ¥' + money(hh.prize) + '</div>').join('') + '</div>';
+    '<div class="career-kpi"><b>¥' + money(cf.projected) + '</b><span>季末预测</span></div>' +
+    '<div class="career-kpi"><b>¥' + money(sb.budget) + '</b><span>预算</span></div>' +
+    '<div class="career-kpi"><b>¥' + money(sponsorIncome(s)) + '</b><span>赞助</span></div>' +
+    '<div class="career-kpi"><b>' + s.manager.seasonStats.w + '胜</b><span>' + s.manager.seasonStats.l + '负</span></div>' +
+    '<div class="career-kpi"><b>¥' + money(tp.sellTotal - tp.buyTotal) + '</b><span>转会盈亏</span></div>' +
+    '</div>' + (fr.reasons.length ? '<div class="mng-advice">' + fr.reasons.map(esc).join(' · ') + '</div>' : '') + '</div>';
+  html += '<div class="career-grid2"><div class="career-card"><h4>资金流水</h4>' + ledgerRecent(s, 20).map((l) => '<div class="career-news">' + esc(l.label) + ' ' + (l.type === 'income' ? '+' : '-') + money(l.amount) + '</div>').join('') + '</div>';
+  html += '<div class="career-card"><h4>生涯</h4>' +
+    '<div class="career-kpis"><div class="career-kpi"><b>¥' + money(s.records.totalPrize) + '</b><span>生涯奖金</span></div><div class="career-kpi"><b>' + s.records.cupChampions + '</b><span>杯赛冠军</span></div></div>' +
+    s.history.map((hh) => '<div class="career-news">S' + hh.seasonId + ' ' + esc(hh.league) + ' 第' + hh.rank + '名 ¥' + money(hh.prize) + '</div>').join('') + '</div></div>';
   return html;
 }
 
@@ -312,6 +311,7 @@ function onClick(e) {
     const selId = t.getAttribute('data-attr-select');
     const sel = selId && doc.querySelector ? doc.querySelector('[data-train-attr="' + selId + '"]') : null;
     const attr = (sel && sel.value) || 'aim';
+    trainAttr[selId] = attr;
     const r = trainPlayer(s, t.getAttribute('data-pid'), attr, t.getAttribute('data-tier'));
     toast(r.ok ? '训练完成 ' + (ATTR_CN[attr] || attr) + ' +' + r.gained : (r.msg || '训练失败'));
     render();
@@ -328,6 +328,8 @@ function onClick(e) {
 function onChange(e) {
   const target = e && e.target;
   const filter = target && target.getAttribute ? target.getAttribute('data-filter') : null;
+  const trainSel = target && target.getAttribute ? target.getAttribute('data-train-attr') : null;
+  if (trainSel) { trainAttr[trainSel] = target.value; return; }
   if (!filter) return;
   if (filter === 'role') transferRole = target.value || '';
   else if (filter === 'sort') transferSort = target.value || 'rating';

@@ -610,6 +610,51 @@ td.money{color:var(--gold);font-family:var(--f-num)}
 .career-series i{display:inline-block;width:14px;height:24px;min-height:6px;border-radius:3px;background:#ff5d5d;vertical-align:bottom}
 .career-series i.win{background:#58d68d}
 .career-series i.cup{border:1px solid #ffd75e}
+/* ---------- 电竞经理高密度 UI ---------- */
+.mng-health{display:flex;flex-wrap:wrap;gap:6px 18px;align-items:center;font-size:13px}
+.mng-health .mng-dot{font-size:11px;margin-right:2px}
+.mng-health .mng-k{color:#8b93a3;margin-right:4px}
+.mng-health b{color:#fff}
+.mng-advice{color:#ffb066;font-size:12px;margin-top:6px;line-height:1.5}
+.mng-next{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap}
+.mng-next b{font-size:14px}
+.mng-next small{color:#8b93a3;font-size:12px}
+.mng-goal{display:flex;gap:16px;flex-wrap:wrap;font-size:13px;color:#d7dbe3}
+.mng-goal span{border:1px solid rgba(255,255,255,.12);border-radius:6px;padding:4px 10px;background:rgba(255,255,255,.04)}
+.mng-ev{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:4px 0;border-bottom:1px solid rgba(255,255,255,.06)}
+.mng-ev button{margin-left:4px}
+.mng-roster{display:flex;flex-direction:column;gap:3px}
+.mng-prow{display:grid;grid-template-columns:1.2fr .6fr .7fr 1fr .5fr .5fr 1fr .5fr 1.4fr;gap:8px;align-items:center;padding:4px 8px;border-radius:6px;background:rgba(255,255,255,.035);font-size:12.5px}
+.mng-prow:hover{background:rgba(255,255,255,.07)}
+.mng-pname{font-weight:600;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.mng-prole{color:#ffb066}
+.mng-prating{color:#7ee0ff;font-weight:600}
+.mng-ppot{color:#ffd75e;font-size:11px;letter-spacing:1px}
+.mng-pstate{font-size:11.5px;color:#d7dbe3}
+.mng-pprice{color:#b8c0ce;font-size:11.5px}
+.mng-pcon{color:#8b93a3;font-size:11.5px}
+.mng-pact{display:flex;gap:4px;justify-content:flex-end}
+.mng-pact button{padding:2px 8px;font-size:11.5px;border-radius:4px;border:1px solid rgba(255,255,255,.14);background:rgba(255,255,255,.06);color:#fff;cursor:pointer}
+.mng-pact button:hover{background:rgba(255,138,42,.25);border-color:var(--accent)}
+.mng-filter{display:flex;gap:8px;margin-bottom:6px}
+.mng-filter select{background:rgba(10,13,17,.7);border:1px solid rgba(255,255,255,.14);color:#fff;border-radius:6px;padding:3px 8px;font-size:12px}
+.mng-cup{display:flex;flex-wrap:wrap;gap:6px;margin-top:4px}
+.mng-cupm{border:1px solid rgba(255,255,255,.12);border-radius:6px;padding:3px 8px;font-size:12px;color:#d7dbe3;background:rgba(255,255,255,.04)}
+.mng-cupm.mine{border-color:var(--accent);color:#ffb066}
+.mng-cup button{padding:1px 6px;font-size:11px;border-radius:4px;border:1px solid var(--accent);background:rgba(255,138,42,.14);color:#ffb066;cursor:pointer;margin-left:4px}
+.mng-trow{display:flex;gap:8px;align-items:center;padding:6px 8px;border-radius:6px;background:rgba(255,255,255,.035);font-size:12px;flex-wrap:wrap}
+.mng-trow select{background:rgba(10,13,17,.7);border:1px solid rgba(255,255,255,.14);color:#fff;border-radius:6px;padding:2px 6px;font-size:12px}
+.mng-trow button{padding:3px 8px;font-size:11.5px;border-radius:4px;border:1px solid rgba(255,255,255,.14);background:rgba(255,255,255,.06);color:#fff;cursor:pointer}
+.mng-trow button:hover{background:rgba(255,138,42,.25);border-color:var(--accent)}
+.mng-ptrain{display:flex;gap:6px;flex-wrap:wrap;color:#b8c0ce;font-size:11.5px}
+.mng-fac{display:flex;flex-wrap:wrap;gap:8px}
+.mng-fac span{border:1px solid rgba(255,255,255,.12);border-radius:6px;padding:4px 10px;font-size:12px;color:#d7dbe3;background:rgba(255,255,255,.04)}
+.mng-fac button{padding:1px 6px;font-size:11px;border-radius:4px;border:1px solid rgba(255,255,255,.14);background:rgba(255,255,255,.06);color:#fff;cursor:pointer;margin-left:4px}
+.mng-table{width:100%;border-collapse:collapse;font-size:12.5px}
+.mng-table td{padding:3px 6px;text-align:center;color:#d7dbe3}
+.mng-table th{padding:3px 6px;text-align:center;color:#8b93a3;font-weight:400;font-size:11.5px;border-bottom:1px solid rgba(255,255,255,.1)}
+.mng-table tr.mine td{color:#ffb066;font-weight:600}
+
 /* ---------- 主菜单 UI 优化 ---------- */
 .menu-panel{width:min(1120px,96vw);padding:18px 0 22px}
 .menu-badges{display:flex;justify-content:center;gap:8px;margin-top:10px;flex-wrap:wrap}
