@@ -9,7 +9,7 @@ CS2D 在经典 5v5 爆破之外新增多个可玩模式，入口在主菜单顶�
 | 局域网对战 | 两个浏览器通过同一 Node 服务端 WebSocket 中继同步同一局 | src/lan.js + server.js |
 | 赛博斗蛐蛐 | 两个职业战队 AI 5v5 对战，下注观战，按赔率结算 | src/modes.js |
 | 生涯模式 | 个人+真实 CS2 战队阵容，联赛杯赛双轨、训练、转会、升降级、多赛季成长 | src/career.js + src/career-ui.js |
-| 排位赛 | 5 场定级 + MMR 天梯，7 段位 4 小段，对手按 MMR 匹配 | src/ranked.js + src/ranked-ui.js |
+| 电竞经理 | 经营战队、转会/训练/财务，比赛 AI 实机观战，老板压力/事件流/羁绊 | src/manager.js + src/manager-match.js + src/manager-ui.js |
 | 单挑模式 | 1v1 MR9，选择真实 CS2 选手对手并记录战绩 | src/duel.js |
 | 地图编辑 | 浏览器绘制墙体/掩体/水位/出生点/炸弹点，保存 JSON 并试玩 | src/map-editor.js |
 

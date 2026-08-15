@@ -494,6 +494,11 @@ td.money{color:var(--gold);font-family:var(--f-num)}
   position: fixed; left: 50%; top: 46px; transform: translateX(-50%); z-index: 30; pointer-events: none;
   width: min(760px, 94vw);
 }
+#managerMatchPanel {
+  position: fixed; left: 50%; top: 46px; transform: translateX(-50%); z-index: 30; pointer-events: none;
+  width: min(760px, 94vw);
+}
+#managerMatchPanel .cyber-controls { pointer-events: auto; }
 .cyber-panel {
   position: relative; display: flex; align-items: stretch; gap: 10px;
   background: rgba(8,10,14,.86); border: 1px solid rgba(255,255,255,.14); border-radius: 8px;

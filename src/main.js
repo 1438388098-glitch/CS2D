@@ -15,8 +15,10 @@ import {MAPS} from './config.js';
 import {isMuted, setAudioContext, startAmbient, initAudio, getBusVolume, setBusVolume, syncSpatialAudio} from './audio.js';
 import './modes.js';
 import './retake-mode.js';
+import './manager-match.js';
 import {nextRenderScale} from './render-scale.js';
 import {initCareerUi} from './career-ui.js';
+import {initManagerUi} from './manager-ui.js';
 import {majorAction} from './modes.js';
 import {initLan, hostStartMatchNow, smoothRemote} from './lan.js';
 import {openMapEditor, closeMapEditor, saveEditorMap, playEditorMapNow, installSavedEditorMap} from './map-editor.js';
@@ -79,6 +81,7 @@ async function boot() {
   } catch (err) { /* no storage in test/headless contexts */ }
   initUi(document, canvas, game);
   initCareerUi(document, game);
+  initManagerUi(document, game);
   initUiDom(game);
   initInput(game, canvas);
   initLan(game);

@@ -640,7 +640,7 @@ function uiHover() {
 }
 
 function hideModePanels() {
-  for (const id of ['majorPanel', 'lanPanel', 'editorOverlay', 'cyberPanel', 'careerPanel', 'duelPanel']) {
+  for (const id of ['majorPanel', 'lanPanel', 'editorOverlay', 'cyberPanel', 'careerPanel', 'duelPanel', 'managerPanel', 'managerMatchPanel']) {
     const p = el(id);
     if (p) p.style.display = 'none';
   }
@@ -752,6 +752,8 @@ box.innerHTML = '<div class="mode-hint">点击“开始”进入地图编辑器�
     box.innerHTML = '<div class="mode-hint">单挑模式：1v1 ' + ROUND.MATCH_WIN + ' 胜（BO' + (ROUND.MATCH_WIN * 2 - 1) + '），对手各有专属风格，可打专用小图或官方竞技图。点「开始比赛」进入配置面板。</div>';
   } else if (mode === 'career') {
 box.innerHTML = '<div class="mode-hint">生涯模式：个人+战队，进入生涯总部管理赛季、训练与阵容。</div>';
+  } else if (mode === 'manager') {
+    box.innerHTML = '<div class="mode-hint">电竞经理：经营战队、转会训练、比赛 AI 实机观战。</div>';
   } else {
     box.innerHTML = '';
   }
@@ -938,6 +940,11 @@ function bindMenu() {
     }
     if (game.opts.mode === 'career') {
       if (window.__openCareer) window.__openCareer();
+      e.currentTarget.blur();
+      return;
+    }
+    if (game.opts.mode === 'manager') {
+      if (window.__openManager) window.__openManager();
       e.currentTarget.blur();
       return;
     }
