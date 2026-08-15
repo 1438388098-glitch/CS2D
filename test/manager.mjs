@@ -153,6 +153,7 @@ ok('nextFixture exists round1', nextFixture(s) && nextFixture(s).round === 1);
   const h = teamHealth(s);
   ok('health has 5 keys', ['money', 'morale', 'fatigue', 'roster', 'stress'].every((k) => k in h));
   ok('health levels valid', ['green', 'yellow', 'red'].includes(h.money));
+  ok('complete roster health green', h.roster === 'green');
   const ch = computeChemistry(s);
   ok('chemistry 30-95', ch >= 30 && ch <= 95);
   const bonus = sameTeamBonus(s);

@@ -5,6 +5,11 @@ export const BACKUP_KEY = 'cs2d_manager_backup';
 export const VERSION = 1;
 
 export const ROLES = ['突破', '狙击', '指挥', '步枪', '自由人', '补枪'];
+export const NEED_ROLES = ['突破', '狙击', '指挥', '自由人', '补枪'];
+export const RENEWAL_RATE = 0.12;
+export const PRICE_PER_RATING = 300;
+export const MATCH_WIN_LIMIT = 5;
+export const MATCH_MAX_ROUNDS = 9;
 export const ROLE_ARCHE = { 突破: 'breacher', 狙击: 'sniper', 指挥: 'support', 步枪: 'rifler', 自由人: 'lurk', 补枪: 'rifler' };
 
 export const ROLE_WEIGHTS = {
@@ -144,7 +149,6 @@ export function teamIdFromName(name) {
   return null;
 }
 
-let uidCounter = 0;
 function newPlayerId(p) {
   const origin = p.teamOfOrigin || 'fa';
   const seed = String(origin) + ':' + String(p.name) + ':' + String(p.role);
@@ -181,7 +185,7 @@ export function makePlayerFromMajor(p) {
 
 export function playerPrice(p, league) {
   const rules = LEAGUE_RULES[league] || LEAGUE_RULES['乙级'];
-  return Math.min(Math.round(p.rating * 300 * rules.costScale), rules.priceCap);
+  return Math.min(Math.round(p.rating * PRICE_PER_RATING * rules.costScale), rules.priceCap);
 }
 
 export function buildManagerRoster(league) {
@@ -189,20 +193,21 @@ export function buildManagerRoster(league) {
   const [lo, hi] = rules.ratingRange;
   const all = [];
   for (const team of MAJOR_TEAMS) for (const p of team.players) all.push(p);
-  const needRoles = ['突破', '狙击', '指挥', '自由人', '补枪'];
   const chosen = [];
-  for (const role of needRoles) {
-    const cands = all.filter((p) => p.role === role || (role === '补枪' && p.role === '步枪'));
-    const picked = cands[Math.floor(rng() * cands.length)];
-    if (picked) chosen.push(picked);
+  const used = new Set();
+  for (const role of NEED_ROLES) {
+    let cands = all.filter((p) => p.role === role && !used.has(p.name));
+    if (role === '补枪' && !cands.length) cands = all.filter((p) => p.role === '步枪' && !used.has(p.name));
+    const picked = cands.length ? cands[Math.floor(rng() * cands.length)] : null;
+    if (picked) { chosen.push(picked); used.add(picked.name); }
   }
   if (chosen.length < 5) {
-    for (const p of all) { if (chosen.length >= 5) break; if (!chosen.includes(p)) chosen.push(p); }
+    for (const p of all) { if (chosen.length >= 5) break; if (!used.has(p.name)) { chosen.push(p); used.add(p.name); } }
   }
   const roster = chosen.slice(0, 5).map((p) => {
     const pl = makePlayerFromMajor(p);
     pl.price = playerPrice(pl, league);
-    pl.renewalCost = Math.round(pl.price * 0.12);
+    pl.renewalCost = Math.round(pl.price * RENEWAL_RATE);
     pl.form = ['W', 'W', 'L'];
     return pl;
   });
@@ -404,8 +409,8 @@ export function simulateManagerMatch(s, home, away, opts = {}) {
   const stats = {};
   const rounds = [];
   let homeScore = 0, awayScore = 0;
-  const maxRounds = 9;
-  for (let i = 0; i < maxRounds && homeScore < 5 && awayScore < 5; i++) {
+  const maxRounds = MATCH_MAX_ROUNDS;
+  for (let i = 0; i < maxRounds && homeScore < MATCH_WIN_LIMIT && awayScore < MATCH_WIN_LIMIT; i++) {
     const r = simulateManagerRound(i, home, away, s, stats);
     rounds.push(r);
     if (r.winner === home.id) homeScore++; else awayScore++;
@@ -428,18 +433,20 @@ export function makeManagerCandidates(s) {
   const pool = [];
   const used = new Set(s.team.roster.map((p) => p.name));
   for (const role of ROLES) {
-    const cands = all.filter((p) => !used.has(p.name) && (p.role === role || (role === '补枪' && p.role === '步枪')));
+    let cands = all.filter((p) => !used.has(p.name) && p.role === role);
+    if (role === '补枪' && !cands.length) cands = all.filter((p) => !used.has(p.name) && p.role === '步枪');
     for (let i = 0; i < 2; i++) {
       if (!cands.length) break;
       const idx = Math.floor(rng() * cands.length);
       const src = cands.splice(idx, 1)[0];
+      used.add(src.name);
       const rating = clamp(randInt(lo - 6, hi + 7), 45, 97);
       const pl = makePlayerFromMajor(src);
       pl.rating = rating;
       pl.potential = clamp(rating + randInt(3, 12), 40, 99);
       pl.price = playerPrice(pl, s.team.league);
       pl.contractYears = 3;
-      pl.renewalCost = Math.round(pl.price * 0.12);
+      pl.renewalCost = Math.round(pl.price * RENEWAL_RATE);
       pl.teamOfOrigin = teamIdFromName(src.name);
       pool.push(pl);
     }
@@ -543,7 +550,7 @@ export function renewPlayer(s, id) {
   if (s.team.bank < p.renewalCost) return { ok: false, msg: '资金不足' };
   s.team.bank -= p.renewalCost;
   p.contractYears = 3;
-  p.renewalCost = Math.round(p.price * 0.12);
+  p.renewalCost = Math.round(p.price * RENEWAL_RATE);
   s.team.morale = clamp(s.team.morale + 1, 20, 100);
   addLedger(s, 'expense', p.renewalCost, '续约：' + p.name);
   pushNews(s, 'info', p.name + ' 续约 3 年');
@@ -685,7 +692,7 @@ export function boardTrust(s) { return s.board.trust; }
 export function seasonGoalProgress(s) {
   const goal = s.board.goal;
   const rank = s.season.standings.findIndex((x) => x.teamId === 'player') + 1;
-  const cupRound = s.season.cup.champion === 'player' ? 3 : (s.season.cup.phase === 'finished' ? 0 : (s.season.cupResult != null ? s.season.cupResult : null));
+  const cupRound = s.season.cup.champion === 'player' ? 3 : (s.season.cup.phase === 'finished' ? (s.season.cupResult != null ? s.season.cupResult : 0) : (s.season.cupResult != null ? s.season.cupResult : null));
   const rankOk = rank > 0 && rank <= goal.rank;
   const cupOk = cupRound != null ? cupRound >= goal.cup : null;
   return { rank, cupRound, rankOk, cupOk, reward: goal.reward };
@@ -716,8 +723,7 @@ export function teamHealth(s) {
   const morale = s.team.morale >= 65 ? 'green' : s.team.morale >= 45 ? 'yellow' : 'red';
   const avgFatigue = s.team.roster.reduce((a, p) => a + p.fatigue, 0) / Math.max(1, s.team.roster.length);
   const fatigue = avgFatigue < 35 ? 'green' : avgFatigue < 60 ? 'yellow' : 'red';
-  const roles = ROLES.slice(0, 5);
-  const gaps = roles.filter((r) => !s.team.roster.some((p) => p.role === r));
+  const gaps = NEED_ROLES.filter((r) => !s.team.roster.some((p) => p.role === r));
   const roster = gaps.length === 0 ? 'green' : 'yellow';
   const stress = s.team.stressSum >= 60 ? 'red' : s.team.stressSum >= 30 ? 'yellow' : 'green';
   const advice = [];
@@ -840,7 +846,7 @@ export function settlePlayerMatch(s, win, kills, deaths, opts = {}) {
     if (!m) return { ok: false, msg: '杯赛已结束' };
     home = s.season.teams.find((x) => x.id === 'player');
     away = s.season.teams.find((x) => x.id === (m.a === 'player' ? m.b : m.a));
-    const score = win ? [5, 0] : [0, 5];
+    const score = m.a === 'player' ? (win ? [5, 0] : [0, 5]) : (win ? [0, 5] : [5, 0]);
     markCupMatch(s, m, score, win);
     if (!opts.noReward) {
       const cupWinBonus = win ? (m.round === 'F' ? LEAGUE_RULES[s.team.league].cupFinalPrize : LEAGUE_RULES[s.team.league].cupRoundPrize) : 0;
@@ -950,7 +956,10 @@ export function seasonReport(s) {
   const rankPrize = { 1: 30000, 2: 20000, 3: 15000, 4: 8000, 5: 8000, 6: 8000, 7: 4000, 8: 4000 }[rank] || 0;
   const cupPrize = cupRound === 3 ? rules.cupFinalPrize : (cupRound >= 1 ? rules.cupRoundPrize : 0);
   const nextLeague = promoteLeague(s.team.league, rank);
-  return { rank, table, cupRound, rankPrize, cupPrize, nextLeague, promoted: nextLeague !== s.team.league, relegated: nextLeague !== s.team.league };
+  const leagueOrder = { '甲级': 3, '乙级': 2, '丙级': 1 };
+  const curRank = leagueOrder[s.team.league] || 2;
+  const nxtRank = leagueOrder[nextLeague] || 2;
+  return { rank, table, cupRound, rankPrize, cupPrize, nextLeague, promoted: nxtRank > curRank, relegated: nxtRank < curRank };
 }
 
 export function nextSeason() {

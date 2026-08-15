@@ -1,7 +1,7 @@
 import { registerMode } from './registry.js';
 import { setupMatchEntities, startRound, endRound } from './game.js';
 import { teamDiffParams } from './modes.js';
-import { ROLE_ARCHE, sameTeamBonus, getState, settlePlayerMatch, nextFixture } from './manager.js';
+import { ROLE_ARCHE, sameTeamBonus, getState, settlePlayerMatch, nextFixture, MATCH_WIN_LIMIT, MATCH_MAX_ROUNDS } from './manager.js';
 import { clamp } from './utils.js';
 import { ctx } from './ctx.js';
 
@@ -84,12 +84,13 @@ export function managerStart(game) {
   const tBots = game.entities.filter((e) => e.bot && e.team === 't');
   const cBots = game.entities.filter((e) => e.bot && e.team === 'ct');
   const myRoster = s.team.roster.slice().sort((a, b) => (a.role === '指挥' ? -1 : b.role === '指挥' ? 1 : 0));
+  const myRating = Math.round(myRoster.reduce((a, p) => a + p.rating, 0) / Math.max(1, myRoster.length));
   const isHome = !isCup && f.home === 'player';
   mapManagerRosterToBots(isHome ? myRoster : opp.roster, tBots, s, 't');
   mapManagerRosterToBots(isHome ? opp.roster : myRoster, cBots, s, 'ct');
   game.manager = {
     oppId: opp.id, oppName: opp.name, oppTag: opp.tag, oppRating: opp.rating,
-    isHome, isCup, scoreLimit: 5, speed: 1, skip: false, ended: false,
+    myRating, isHome, isCup, scoreLimit: MATCH_WIN_LIMIT, speed: 1, skip: false, ended: false,
     settled: false
   };
   startRound(game);
@@ -109,7 +110,7 @@ function managerPanelHtml(game) {
   const leader = game.entities.filter((e) => e.bot && !e.dead).sort((a, b) => b.kills - a.kills)[0];
   const mapId = game.opts.mapId || 'dust2';
   return '<div class="cyber-panel">' +
-    '<div class="cyber-card c-left"><b>我方</b><span>我的战队</span><i>' + g.oppRating + '</i><em>' + myScore + ' · ' + myKills + ' 击杀</em></div>' +
+    '<div class="cyber-card c-left"><b>我方</b><span>我的战队</span><i>' + g.myRating + '</i><em>' + myScore + ' · ' + myKills + ' 击杀</em></div>' +
     '<div class="cyber-mid"><b>' + myScore + ' : ' + oppScore + '</b><span>R' + game.round + ' · ' + mapId + '</span>' +
     '<em>' + (game.manager.isHome ? '主场' : '客场') + ' · 比分</em></div>' +
     '<div class="cyber-card c-right"><b>' + g.oppName + '</b><span>对手</span><i>' + g.oppRating + '</i><em>' + oppScore + ' · ' + oppKills + ' 击杀</em></div>' +
@@ -167,8 +168,8 @@ export function managerUpdate(game, dt) {
     g._panelT = now;
     bindPanel(game);
   }
-  const limit = g.scoreLimit || 5;
-  const afterLimit = game.round > 9;
+  const limit = g.scoreLimit || MATCH_WIN_LIMIT;
+  const afterLimit = game.round > MATCH_MAX_ROUNDS;
   const tWon = game.score.T >= limit || (afterLimit && game.score.T > game.score.CT);
   const cWon = game.score.CT >= limit || (afterLimit && game.score.CT > game.score.T);
   if (tWon || cWon) {
@@ -181,7 +182,7 @@ export function managerOnFinish(game) {
   const g = game.manager;
   if (!g || g.settled) return;
   const s = getState();
-  const winAt = game.ot ? (game.otWin || 8) : 5;
+  const winAt = game.ot ? (game.otWin || 8) : MATCH_WIN_LIMIT;
   const tWon = game.score.T >= winAt;
   const cWon = game.score.CT >= winAt;
   const myWon = g.isHome ? tWon : cWon;
