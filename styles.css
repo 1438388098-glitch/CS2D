@@ -963,3 +963,14 @@ td.money{color:var(--gold);font-family:var(--f-num)}
 /* 阵营/难度扁平纯色（去渐变） */
 .btn.team-wide.ct,.btn.team.ct{background:#2a5ba0;background-image:none;border-color:#3e7fd4}
 .btn.team-wide.t,.btn.team.t{background:#a86a1e;background-image:none;border-color:#c97a2e}
+/* ===== 玻璃动效 ===== */
+/* 面板入场：用独立 scale/opacity 动画，不覆盖 .panel 的 translate(-50%,-50%) 居中 */
+@keyframes glass-in{from{opacity:0;scale:.965}to{opacity:1;scale:1}}
+.panel{animation:glass-in .3s var(--ease) both}
+/* 玻璃/面板状态过渡（hover/开关时背景与描边平滑） */
+.glass,.panel{transition:background-color .2s var(--ease),border-color .2s var(--ease),box-shadow .2s var(--ease)}
+/* 可交互玻璃卡的 hover 微交互（上浮 + 描边亮起） */
+.mode-card,.map-chips .map-card,.career-card,.ranked-card,.eg-cell,.bi,.kf{transition:background-color .18s var(--ease),border-color .18s var(--ease),transform .18s var(--ease),box-shadow .18s var(--ease)}
+.mode-card:hover,.map-chips .map-card:hover,.career-card:hover,.ranked-card:hover,.eg-cell:hover,.bi:hover{transform:translateY(-2px)}
+/* 按钮按下反馈 */
+.btn:active{transform:scale(.98)}
