@@ -52,9 +52,9 @@
     name: 'Team Spirit',
     league: '乙级',
     bank: 12000,
-    roster: [ 5 名选手 ],     // { id, name, role, rating, potential, attrs:{aim,move,clutch,nade},
+    roster: [ 5 名选手 ],     // { id, name, role, rating, potential, attrs:9维能力,
                               //   price, contractYears, renewalCost, age, personality,
-                              //   morale, fatigue, stress, chemistry, form, stats:{kills,deaths,mvp} }
+                              //   morale, fatigue, stress, chemistry, form, stats }
     coach: { name, level, focus },   // 教练，影响训练效率
     facilities: { academy:0, medical:0, scouting:0, analytics:0 },
     trainingLeft: 2, transfersLeft: 2, transferWindow: false,
@@ -86,23 +86,60 @@
 
 ### 选手对象（roster 元素）
 
+统一能力池 9 维（战斗 + 战术 + 心理 + 纪律），按位置的权重合成 rating，并映射到实机 aiParams。
+
 ```js
 {
   id: 'p1', name: 'donk',
-  role: '突破',              // 突破/狙击/补枪/指挥/自由人
+  role: '突破',              // 突破/狙击/指挥/步枪/自由人/补枪（来自 MAJOR_TEAMS 数据）
   age: 19,
-  attrs: { aim: 92, movement: 88, clutch: 85, nade: 76 },
-  rating: 88,                // 由 attrs 合成
+  attrs: {
+    aim: 92, react: 90, movement: 88, clutch: 85, nade: 76,   // 战斗五维
+    gameIQ: 78, leadership: 55,                                // 战术两维
+    composure: 80, aggression: 90, discipline: 70             // 心理+纪律
+  },
+  rating: 88,                // 由 attrs 按 role 权重合成
   potential: 94,             // 隐藏，对玩家显示为星级 1-5
   personality: 'hyperAggressive',  // 性格标签，影响事件触发与相性
-  morale: 70, fatigue: 30, stress: 20,   // 0-100
+  morale: 70, fatigue: 30, stress: 20,   // 0-100 状态
   chemistry: {},             // { partnerId: 相性分 } 战队羁绊
   contractYears: 3, renewalCost: 12000,
   price: 26400,
   form: [ 'W', 'W', 'L' ],
-  stats: { kills: 0, deaths: 0, mvp: 0, games: 0 }
+  stats: { kills: 0, deaths: 0, mvp: 0, games: 0, firstKills: 0,
+           clutchWins: 0, adr: 0, rating: 0 }   // 比赛进阶统计
 }
 ```
+
+**能力池定义（9 维，全部可参与实机映射）：**
+
+| 维度 | 中文 | 归属 | 映射的 aiParams |
+|---|---|---|---|
+| aim | 枪法 | 战斗 | spreadMult、prefireChance |
+| react | 反应 | 战斗 | react、aimSpeed |
+| movement | 身法 | 战斗 | strafe、counterStrafe |
+| clutch | 残局 | 战斗 | saveChance、riskT |
+| nade | 道具 | 战斗 | nadeUse、ecoDiscipline |
+| gameIQ | 战术理解 | 战术 | rotateChance、riskT |
+| leadership | 指挥 | 战术 | IGL 选举 leadershipScore |
+| composure | 冷静 | 心理 | saveChance、decisions 稳定性 |
+| aggression | 冲击力 | 心理 | rushChance、riskT、vanguard 分工 |
+| discipline | 纪律性 | 纪律 | ecoDiscipline |
+
+### 位置 × 能力权重矩阵（rating 合成 + 实机侧重）
+
+每个 role 有主能力/副能力权重，决定 rating 合成；同时映射局内 archetype（persona.js 的 breacher/sniper/support/lurk/rifler），决定实机分工行为：
+
+| role | 主能力（高权重） | 副能力 | archetype | 实机表现 |
+|---|---|---|---|---|
+| 突破 | aim 0.30, react 0.25 | movement, aggression | breacher | 主攻冲点、高 aggression、首杀率高 |
+| 狙击 | aim 0.35, react 0.25 | composure, positioning | sniper | 远战 idealMul×1.6、AWP 配额、架点 |
+| 指挥 | leadership 0.30, gameIQ 0.25 | nade, composure | support | IGL 转点决策、leadershipScore 高 |
+| 补枪 | aim 0.28, gameIQ 0.22 | nade, teamwork | rifler | 高 tradeSpeed，跟突破补枪 |
+| 自由人 | clutch 0.32, gameIQ 0.22 | movement, stealth | lurk | 绕后侧翼、残局 1vN |
+| 步枪 | aim 0.25, movement 0.25 | nade, gameIQ | rifler | 全能均衡 |
+
+**rating 合成公式**：`rating = round(Σ(attr[i] × weight[role][i]) × (1 + 年龄修正))`，clamp 40-99。现有 MAJOR_TEAMS 240 人的新维度由旧 4 维推导补齐：`react ≈ aim`、`gameIQ ≈ (nade+clutch)/2`、`leadership = 指挥位 base 70 否则 (nade+clutch)/2×0.6`、`composure ≈ clutch`、`aggression = 突破位 base 75 否则 (aim+movement)/2×0.7`、`discipline ≈ nade`。
 
 ---
 
@@ -136,17 +173,25 @@
 
 ### 4.1 选手状态 → aiParams 映射（本项目核心差异化）
 
-`randomizeCyberTeam`（modes.js:1152）现在只用队伍 rating+style。本模式新增 `mapManagerRosterToBots`，在 teamDiffParams/hellMix 基础上叠加选手级影响：
+`randomizeCyberTeam`（modes.js:1152）现在只用队伍 rating+style。本模式新增 `mapManagerRosterToBots(roster, bots, side)`，为每名 bot 生成 aiParams = `teamDiffParams` 基线 + **位置 archetype** + **9 维能力映射** + 状态修正：
 
-- `aim` → spreadMult、prefireChance（高 aim 更准）
-- `movement` → strafe、counterStrafe（高 movement 身法更好）
-- `clutch` → 残局参数（saveChance、clutch 场景反应）
-- `nade` → nadeUse、道具效率
-- `morale`（50 为基准）→ 全项 ±5%
-- `fatigue`（50 为基准）→ 全项衰减最多 -10%（疲劳高手抖/移动慢）
-- `form` 近 3 场 W/L → ±3%
-- **战队羁绊**：同队选手 >2 人同场时，全队 react/spread 小加成（见 §4.3）
-- 生成用 seedWorld 保证同一 pendingMatch 可复现
+1. **位置 → archetype**：按 role 设 `persona` 字段（breacher/sniper/support/lurk/rifler，见位置矩阵），驱动局内分工（突破主攻/狙击架点/自由人绕后）。`e.persona` 会被 `assignRoles` 消费。
+2. **能力 → aiParams 基准**（能力 0-100 线性映射到参数区间）：
+   - `aim` → `spreadMult = 1.1 - aim/200`、`prefireChance = aim/800`（clamp 0-0.12）
+   - `react` → `react = 0.22 - react/625`（clamp 0.06-0.22）、`aimSpeed = 40 + react×0.9`
+   - `movement` → `strafe = 0.6 - movement/400`（clamp 0.36-0.6）、`counterStrafe = 1.1 - movement/500`
+   - `clutch` → `saveChance = 0.75 - clutch/400`（clamp 0.3-0.75，残局强=敢打）、`riskT = 0.6 + clutch/250`
+   - `nade` → `nadeUse = 0.6 + nade/250`、`ecoDiscipline = 0.9 + nade/800`
+   - `gameIQ` → `rotateChance = 0.5 + gameIQ/250`、`riskT += gameIQ/1500`
+   - `composure` → `saveChance 稳定：composure<50 时 riskT ×0.85`、残局判定加成
+   - `aggression` → `rushChance = 0.3 + aggression/300`、`riskT += aggression/800`
+   - `discipline` → `ecoDiscipline = 0.8 + discipline/400`、`spreadCtrl = 0.9 + discipline/800`
+3. **状态修正**（覆盖在基准上）：
+   - `morale`（50 为基准）→ 全部战斗参数 ±5%
+   - `fatigue`（50 为基准）→ 全项衰减最多 -10%（`spreadMult ×1.1`、`strafe ×1.08`、`react ×1.05`）
+   - `form` 近 3 场 W/L → ±3%
+   - **战队羁绊**：同队选手 ≥3 人同场时，全队 react -5%、spreadMult -3%（见 §4.3）
+4. **生成用 seedWorld 保证同一 pendingMatch 可复现**。
 
 ### 4.2 观战面板与倍速
 
