@@ -18,7 +18,6 @@
   <div id="modeHud" style="display:none"></div>
   <div id="cyberPanel" style="display:none"></div>
   <div class="ov" id="careerPanel" style="display:none"></div>
-  <div class="ov" id="rankedPanel" style="display:none"></div>
   <div id="hud-root" style="display:none">
     <div id="hud-top">
       <div class="ht-main">
@@ -100,7 +99,6 @@
           <h2 class="menu-sec">选 择 模 式</h2>
           <div id="modeSel" class="mode-list">
             <button class="mode-card sel" data-mode="classic"><b>经典爆破</b><small>5v5 拆包</small></button>
-            <button class="mode-card" data-mode="ranked"><b>排位赛</b><small>定级 + MMR 天梯</small></button>
             <button class="mode-card" data-mode="career"><b>生涯模式</b><small>个人 + 战队</small></button>
             <button class="mode-card" data-mode="cyber"><b>赛博斗蛐蛐</b><small>下注观战</small></button>
             <details class="mode-more" id="modeMore">
@@ -329,24 +327,61 @@
   </div>
 
   <div class="ov" id="editorOverlay" style="display:none">
-        <div class="panel editor-panel">
+    <div class="panel editor-panel">
       <div class="editor-head">
-        <div class="editor-title-row"><h3>地图编辑器</h3><input id="editorName" maxlength="20" value="自定义地图" placeholder="地图名称"></div>
-        <div class="editor-size-row"><label>宽</label><input id="editorW" type="number" min="16" max="160" value="40"><label>高</label><input id="editorH" type="number" min="16" max="160" value="30"><button class="btn small" id="editorResize">应用尺寸</button></div>
+        <div class="editor-title-row">
+          <h3>地图编辑器</h3>
+          <input id="editorName" maxlength="24" value="自定义地图" placeholder="地图名称">
+          <input id="editorAccent" type="color" value="#6ad1a8" title="地图强调色">
+          <input id="editorTagline" maxlength="40" value="" placeholder="一句话描述（可选）">
+        </div>
+        <div class="editor-size-row">
+          <label>宽</label><input id="editorW" type="number" min="16" max="160" value="40">
+          <label>高</label><input id="editorH" type="number" min="16" max="160" value="30">
+          <button class="btn small" id="editorResize">应用尺寸</button>
+          <label>模板</label><select id="editorTemplate"><option value="">— 新建空白 —</option></select>
+        </div>
+        <div class="editor-toolbar">
+          <div class="et-group">
+            <button class="btn small sel" id="editorToolPaint" title="B">笔刷</button>
+            <button class="btn small" id="editorToolFill" title="F">填充</button>
+            <button class="btn small" id="editorToolRect" title="R">矩形</button>
+            <button class="btn small" id="editorToolLine" title="L">直线</button>
+            <button class="btn small" id="editorToolPick" title="E">取色</button>
+            <button class="btn small" id="editorToolSelect" title="S">选区</button>
+          </div>
+          <div class="et-group">
+            <label>笔刷</label><select id="editorBrush"><option value="1">1</option><option value="2">2</option><option value="3">3</option><option value="4">4</option><option value="5">5</option></select>
+            <button class="btn small" id="editorBrushCircle" title="刷子形状：方/圆">◼</button>
+            <button class="btn small" id="editorHollow" title="矩形描边/实心">▣</button>
+          </div>
+          <div class="et-group">
+            <label>镜像</label>
+            <select id="editorMirror"><option value="none">关</option><option value="h">水平</option><option value="v">垂直</option><option value="quad">四象限</option></select>
+            <button class="btn small" id="editorGrid" title="网格开关">#</button>
+            <button class="btn small" id="editorUndo" title="Z 撤销">撤销</button>
+            <button class="btn small" id="editorRedo" title="Y 重做">重做</button>
+          </div>
+          <div class="et-group" id="editorSelGroup">
+            <span class="et-label">选区</span>
+            <button class="btn small" id="editorSelCopy" title="Ctrl+C 复制">复制</button>
+            <button class="btn small" id="editorSelCut" title="Ctrl+X 剪切">剪切</button>
+            <button class="btn small" id="editorSelPaste" title="Ctrl+V 粘贴">粘贴</button>
+            <button class="btn small" id="editorSelDelete" title="Delete 删除">删除</button>
+            <button class="btn small" id="editorSelRot" title="O 旋转90°">旋转</button>
+            <button class="btn small" id="editorSelFlipH" title="水平翻转">↔</button>
+            <button class="btn small" id="editorSelFlipV" title="垂直翻转">↕</button>
+            <button class="btn small" id="editorSelClear" title="Esc 取消选区">✕</button>
+          </div>
+        </div>
         <div id="editorPalette" class="editor-palette"></div>
-        <div class="editor-tools">
-          <button class="btn small sel" id="editorToolPaint">笔刷</button>
-          <button class="btn small" id="editorToolFill">填充</button>
-          <button class="btn small" id="editorToolRect">矩形</button>
-          <button class="btn small" id="editorToolLine">直线</button>
-          <button class="btn small" id="editorToolPick">取色</button>
-          <label>笔刷</label><select id="editorBrush"><option value="1">1</option><option value="2">2</option><option value="3">3</option><option value="4">4</option></select>
-          <label>模板</label><select id="editorTemplate"><option value="">— 空白 —</option></select>
-          <button class="btn small" id="editorUndo">撤销</button>
-          <button class="btn small" id="editorRedo">重做</button>
+        <div class="editor-mapmgmt">
+          <span class="et-label">自定义地图</span>
+          <div id="editorMapList" class="editor-map-list"></div>
         </div>
         <div class="row editor-actions">
           <button class="btn small" id="editorSave">保存</button>
+          <button class="btn small" id="editorSaveAs">另存为新图</button>
           <button class="btn small" id="editorLoad">读取</button>
           <button class="btn small" id="editorExport">复制 JSON</button>
           <button class="btn small" id="editorDownload">下载 .json</button>
@@ -359,17 +394,9 @@
         </div>
         <div id="editorStatus" class="lan-status"></div>
         <div id="editorHelp" class="editor-help" style="display:none">
-          <b>快捷键</b>
-          <span>B 笔刷</span>
-          <span>F 填充</span>
-          <span>R 矩形</span>
-          <span>L 直线</span>
-          <span>E 取色</span>
-          <span>X 地面</span>
-          <span>Z 撤销</span>
-          <span>Y 重做</span>
-          <span>[ / ] 笔刷大小</span>
-          <span>滚轮 缩放</span>
+          <b>工具</b><span>B 笔刷</span><span>F 填充</span><span>R 矩形</span><span>L 直线</span><span>E 取色</span><span>S 选区</span><span>X 地面</span>
+          <b>编辑</b><span>Ctrl+C 复制选区</span><span>Ctrl+X 剪切</span><span>Ctrl+V 粘贴</span><span>Delete 删除</span><span>O 旋转90°</span><span>Z/Y 撤销重做</span>
+          <b>视图</b><span>滚轮 缩放</span><span>中键拖动 平移</span><span>[ / ] 笔刷大小</span><span>空格 临时平移</span>
         </div>
         <textarea id="editorJson" spellcheck="false" placeholder="地图 JSON 可在此粘贴并导入"></textarea>
       </div>

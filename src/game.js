@@ -448,7 +448,6 @@ export function finishMatch(game) {
   const all = game.entities.slice();
   all.sort((a, b) => b.kills - a.kills);
   const mvp = all[0];
-  const mvpInfo = game.opts && game.opts.mode === 'ranked' && game.rankedMatch && game.rankedMatch.mvpInfo ? game.rankedMatch.mvpInfo : null;
   let bestWeapon = null;
   let bestN = 0;
   for (const key in p.wKills) {
@@ -456,9 +455,7 @@ export function finishMatch(game) {
   }
   ui.showMatchEnd(win, game.score.T + ' : ' + game.score.CT,
     p.kills + ' 杀 / ' + p.deaths + ' 死 / ' + p.assists + ' 助攻',
-    mvpInfo
-      ? mvpInfo.name + ' (' + (mvpInfo.team === 'ct' ? 'CT' : 'T') + ') — 综合评分 ' + mvpInfo.score
-      : mvp.name + ' (' + (mvp.team === 'ct' ? 'CT' : 'T') + ') — ' + mvp.kills + ' 击杀',
+    mvp.name + ' (' + (mvp.team === 'ct' ? 'CT' : 'T') + ') — ' + mvp.kills + ' 击杀',
     {
       hits: game.stats.hits,
       shots: game.stats.shots,

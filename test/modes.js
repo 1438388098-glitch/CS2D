@@ -1,6 +1,5 @@
 import '../src/modes.js';
 import '../src/career.js';
-import '../src/ranked.js';
 import '../src/duel.js';
 import { CYBER_ROSTER, CYBER_START_COINS, CYBER_BAILOUT_COINS, MODE_MAPS, cyberCoins, cyberBailoutIfBroke, cyberChance, cyberPayout, MAJOR_TEAMS, majorAction } from '../src/modes.js';
 import { getMapDef, getMode, getModes } from '../src/registry.js';
@@ -13,7 +12,7 @@ const ok = (name, cond) => {
 };
 
 const ids = [...getModes().keys()];
-for (const id of ['classic', 'major', 'cyber', 'lan', 'editor', 'career', 'ranked', 'duel']) {
+for (const id of ['classic', 'major', 'cyber', 'lan', 'editor', 'career', 'duel']) {
   ok('registered ' + id, ids.includes(id));
 }
 ok('mode maps include forge', MODE_MAPS.includes('forge'));

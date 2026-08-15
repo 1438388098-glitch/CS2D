@@ -17,7 +17,6 @@ import './modes.js';
 import './retake-mode.js';
 import {nextRenderScale} from './render-scale.js';
 import {initCareerUi} from './career-ui.js';
-import {initRankedUi} from './ranked-ui.js';
 import {majorAction} from './modes.js';
 import {initLan, hostStartMatchNow, smoothRemote} from './lan.js';
 import {openMapEditor, closeMapEditor, saveEditorMap, playEditorMapNow, installSavedEditorMap} from './map-editor.js';
@@ -80,7 +79,6 @@ async function boot() {
   } catch (err) { /* no storage in test/headless contexts */ }
   initUi(document, canvas, game);
   initCareerUi(document, game);
-  initRankedUi(document, game);
   initUiDom(game);
   initInput(game, canvas);
   initLan(game);

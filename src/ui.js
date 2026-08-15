@@ -174,11 +174,10 @@ function createUiApi() {
       if (majorNext) {
         const isMajor = game.opts && game.opts.mode === 'major';
         const isCareer = game.opts && game.opts.mode === 'career';
-        const isRanked = game.opts && game.opts.mode === 'ranked';
-        majorNext.style.display = (isMajor || isCareer || isRanked) ? 'inline-flex' : 'none';
-        majorNext.textContent = isRanked ? '返回排位' : (isCareer ? '返回生涯总部' : '返回 Major 战报');
+        majorNext.style.display = (isMajor || isCareer) ? 'inline-flex' : 'none';
+        majorNext.textContent = isCareer ? '返回生涯总部' : '返回 Major 战报';
         const againBtn = el('againBtn');
-        if (againBtn) againBtn.style.display = (isCareer || isRanked) ? 'none' : 'inline-flex';
+        if (againBtn) againBtn.style.display = isCareer ? 'none' : 'inline-flex';
       }
       const f = el('endFinal');
       if (!f) return;
@@ -640,7 +639,7 @@ function uiHover() {
 }
 
 function hideModePanels() {
-  for (const id of ['majorPanel', 'lanPanel', 'editorOverlay', 'cyberPanel', 'careerPanel', 'rankedPanel']) {
+  for (const id of ['majorPanel', 'lanPanel', 'editorOverlay', 'cyberPanel', 'careerPanel']) {
     const p = el(id);
     if (p) p.style.display = 'none';
   }
@@ -789,8 +788,6 @@ box.innerHTML = '<div class="mode-hint">点击“开始”进入地图编辑器�
     }
     const resetBtn = el('duelResetBtn');
     if (resetBtn) resetBtn.onclick = () => { if (window.confirm('确定重置单挑战绩？')) { resetDuel(); renderModeSettings(); } };
-  } else if (mode === 'ranked') {
-box.innerHTML = '<div class="mode-hint">排位赛：5 场定级赛确定段位，之后按 MMR 匹配对手。</div>';
   } else if (mode === 'career') {
 box.innerHTML = '<div class="mode-hint">生涯模式：个人+战队，进入生涯总部管理赛季、训练与阵容。</div>';
   } else {
@@ -892,11 +889,6 @@ function bindMenu() {
   }
   if (startBtn) startBtn.onclick = (e) => {
     initAudio();
-    if (game.opts.mode === 'ranked') {
-      if (window.__openRanked) window.__openRanked();
-      e.currentTarget.blur();
-      return;
-    }
     if (game.opts.mode === 'career') {
       if (window.__openCareer) window.__openCareer();
       e.currentTarget.blur();
@@ -977,8 +969,7 @@ function bindOverlays() {
   if (majorMenu) majorMenu.onclick = () => { majorAction(game, 'menu'); };
   const majorNextBtn = el('majorNextBtn');
   if (majorNextBtn) majorNextBtn.onclick = () => {
-    if (game.opts && game.opts.mode === 'ranked' && window.__rankedEndMatch) window.__rankedEndMatch(game);
-    else if (game.opts && game.opts.mode === 'career' && window.__careerEndMatch) window.__careerEndMatch(game);
+    if (game.opts && game.opts.mode === 'career' && window.__careerEndMatch) window.__careerEndMatch(game);
     else majorAction(game, 'next');
   };
   const lanStartBtn = el('lanStartBtn');
@@ -1502,11 +1493,12 @@ export function syncMapCards() {
       name.className = 'mc-name';
       name.textContent = m.name || m.id;
       btn.appendChild(name);
-      if (m.category === 'custom' || m.id === 'custom-map') {
+      {
+        const isCustom = m.category === 'custom' || m.id === 'custom-map';
         const edit = doc.createElement('span');
         edit.className = 'mc-edit';
-        edit.textContent = '编辑';
-        edit.title = '在编辑器中修改此地图';
+        edit.textContent = isCustom ? '编辑' : '副本';
+        edit.title = isCustom ? '在编辑器中修改此地图' : '复制到编辑器修改（另存为新图）';
         edit.setAttribute('role', 'button');
         edit.tabIndex = 0;
         edit.onclick = (e) => {
