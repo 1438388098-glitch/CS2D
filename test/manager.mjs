@@ -1,4 +1,4 @@
-import { resetManager, loadManager, setStorage, setRng, getState, SAVE_KEY, BACKUP_KEY, VERSION, ROLE_WEIGHTS, buildManagerRoster, deriveAttrs, ratingFromAttrs, playerPrice, newManagerCareer, buildNewSeason, nextFixture, simulateManagerMatch } from '../src/manager.js';
+import { resetManager, loadManager, setStorage, setRng, getState, SAVE_KEY, BACKUP_KEY, VERSION, ROLE_WEIGHTS, buildManagerRoster, deriveAttrs, ratingFromAttrs, playerPrice, newManagerCareer, buildNewSeason, nextFixture, simulateManagerMatch, candidates, buyPlayer, sellPlayer, renewPlayer, transferWindowOpen, scoutingNoise, scoutedView, filterCandidates } from '../src/manager.js';
 
 const ok = (name, cond) => {
   if (!cond) throw new Error('manager: ' + name + ' FAIL');
@@ -60,6 +60,39 @@ ok('nextFixture exists round1', nextFixture(s) && nextFixture(s).round === 1);
   ok('sim winner valid', r.winner === me.id || r.winner === opp.id);
   ok('sim mvp present', r.mvp && r.mvp.name);
   ok('sim players sorted', r.players[0] && r.players[0].kills >= r.players[r.players.length - 1].kills);
+}
+
+{
+  s.season.round = 6;
+  ok('transfer window open', transferWindowOpen(s));
+  const pool = candidates(s);
+  ok('candidate pool 12', pool.length === 12);
+  ok('candidate roles covered', new Set(pool.map((c) => c.role)).size >= 5);
+  const cv = scoutedView(pool[0], 5);
+  ok('scouted view has stars', cv.potentialStars >= 1 && cv.potentialStars <= 5);
+  const filtered = filterCandidates(pool, { role: '狙击' });
+  ok('filter by role', filtered.every((c) => c.role === '狙击'));
+  s.team.bank = 99999;
+  const c = pool.find((x) => x.role === '狙击') || pool[0];
+  const buy = buyPlayer(s, c.id);
+  ok('buy ok', buy.ok && s.team.roster.length >= 5);
+  ok('bank decreased', s.team.bank < 99999);
+  ok('transfersLeft--', s.team.transfersLeft === 1);
+  s.season.round = 1;
+  s.team.transfersLeft = 2;
+  const sp = s.team.roster[0];
+  const sell = sellPlayer(s, sp.id);
+  ok('sell needs window', !sell.ok && sell.msg === '转会窗未开放');
+  s.season.round = 6;
+  s.team.transfersLeft = 2;
+  s.team.roster.push({ ...pool[1], id: 'extra6', role: '补枪', price: 5000, contractYears: 3, renewalCost: 600 });
+  const sell2 = sellPlayer(s, 'extra6');
+  ok('sell 6th works', sell2.ok && s.team.roster.length === 5);
+  const rp = s.team.roster[0];
+  rp.contractYears = 1;
+  s.team.bank = 50000;
+  const rn = renewPlayer(s, rp.id);
+  ok('renew ok', rn.ok && rp.contractYears === 3);
 }
 
 console.log('manager: all PASS');

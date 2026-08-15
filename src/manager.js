@@ -410,3 +410,135 @@ export function simulateManagerMatch(s, home, away, opts = {}) {
   const winner = homeScore >= awayScore ? home.id : away.id;
   return { mapId: opts.mapId || home.homeMap || 'dust2', homeId: home.id, awayId: away.id, score: [homeScore, awayScore], winner, rounds, timeline: rounds.flatMap((r) => r.events.map((e) => ({ ...e, round: r.round }))), players, mvp, totalKills: players.reduce((a, p) => a + p.kills, 0) };
 }
+
+export function scoutingNoise(s) {
+  return Math.max(2, 5 - (s.team.facilities.scouting || 0));
+}
+
+export function makeManagerCandidates(s) {
+  const rules = LEAGUE_RULES[s.team.league] || LEAGUE_RULES['乙级'];
+  const [lo, hi] = rules.ratingRange;
+  const all = [];
+  for (const team of MAJOR_TEAMS) for (const p of team.players) all.push(p);
+  const pool = [];
+  const used = new Set(s.team.roster.map((p) => p.name));
+  for (const role of ROLES) {
+    const cands = all.filter((p) => !used.has(p.name) && (p.role === role || (role === '补枪' && p.role === '步枪')));
+    for (let i = 0; i < 2; i++) {
+      if (!cands.length) break;
+      const idx = Math.floor(rng() * cands.length);
+      const src = cands.splice(idx, 1)[0];
+      const rating = clamp(randInt(lo - 6, hi + 7), 45, 97);
+      const pl = makePlayerFromMajor(src);
+      pl.rating = rating;
+      pl.potential = clamp(rating + randInt(3, 12), 40, 99);
+      pl.price = playerPrice(pl, s.team.league);
+      pl.contractYears = 3;
+      pl.renewalCost = Math.round(pl.price * 0.12);
+      pl.teamOfOrigin = teamIdFromName(src.name);
+      pool.push(pl);
+    }
+  }
+  return pool;
+}
+
+export function candidates(s) {
+  if (!s.team.pool) s.team.pool = makeManagerCandidates(s);
+  return s.team.pool;
+}
+
+export function scoutedView(p, noise) {
+  const v = { ...p, rating: Math.round(p.rating + (rng() * 2 - 1) * noise), potentialStars: Math.round(clamp(p.potential / 20, 1, 5)) };
+  return v;
+}
+
+export function filterCandidates(pool, filters = {}) {
+  return pool.filter((c) =>
+    (!filters.role || c.role === filters.role) &&
+    (!filters.minRating || c.rating >= filters.minRating) &&
+    (!filters.maxPrice || c.price <= filters.maxPrice)
+  ).sort((a, b) => (filters.sort === 'price' ? a.price - b.price : filters.sort === 'potential' ? b.potential - a.potential : b.rating - a.rating));
+}
+
+export function transferWindowOpen(s) { return s.season.round >= 5 && s.season.round <= 8; }
+
+function addLedger(s, type, amount, label) {
+  s.team.ledger.push({ t: Date.now(), seasonId: s.season.id, round: s.season.round, type, amount, label });
+  if (s.team.ledger.length > 300) s.team.ledger.splice(0, s.team.ledger.length - 300);
+}
+function pushNews(s, type, text) {
+  s.news.unshift({ t: Date.now(), type, text });
+  if (s.news.length > 30) s.news.length = 30;
+}
+function refreshTeamRating(s) {
+  const avg = Math.round(s.team.roster.reduce((a, p) => a + p.rating, 0) / Math.max(1, s.team.roster.length));
+  const t = s.season.teams.find((x) => x.id === 'player');
+  if (t) t.rating = avg;
+  return avg;
+}
+
+export function buyPlayer(s, candId) {
+  const p = (s.team.pool || []).find((c) => c.id === candId);
+  if (!p) return { ok: false, msg: '候选不存在' };
+  if (!transferWindowOpen(s)) return { ok: false, msg: '转会窗未开放' };
+  if (s.team.transfersLeft <= 0) return { ok: false, msg: '转会次数已用完' };
+  if (s.team.bank < p.price) return { ok: false, msg: '资金不足' };
+  const sameRole = s.team.roster.find((x) => x.role === p.role);
+  const refund = sameRole ? Math.floor(sameRole.price * (LEAGUE_RULES[s.team.league].refundScale || 0.5)) : 0;
+  if (sameRole) {
+    s.team.roster = s.team.roster.map((x) => (x.id === sameRole.id ? { ...p, id: sameRole.id, form: sameRole.form } : x));
+  } else {
+    s.team.roster.push({ ...p });
+  }
+  s.team.bank -= p.price;
+  s.team.bank += refund;
+  s.team.transfersLeft--;
+  s.team.pool = s.team.pool.filter((c) => c.id !== candId);
+  s.team.morale = clamp(s.team.morale + 2, 20, 100);
+  addLedger(s, 'expense', -p.price, '买入：' + p.name);
+  if (refund) addLedger(s, 'income', refund, '卖出：' + sameRole.name);
+  pushNews(s, 'info', '签下 ' + p.name + '（' + p.role + '，' + p.rating + ' 评）');
+  refreshTeamRating(s);
+  save();
+  return { ok: true, refund };
+}
+
+export function sellPlayer(s, id) {
+  const p = s.team.roster.find((x) => x.id === id);
+  if (!p) return { ok: false, msg: '选手不存在' };
+  if (!transferWindowOpen(s)) return { ok: false, msg: '转会窗未开放' };
+  if (s.team.transfersLeft <= 0) return { ok: false, msg: '转会次数已用完' };
+  if (s.team.roster.length <= 5) return { ok: false, msg: '阵容不能少于 5 人' };
+  const refund = Math.floor(p.price * (LEAGUE_RULES[s.team.league].refundScale || 0.5));
+  s.team.roster = s.team.roster.filter((x) => x.id !== id);
+  s.team.bank += refund;
+  s.team.transfersLeft--;
+  s.team.morale = clamp(s.team.morale - 2, 20, 100);
+  addLedger(s, 'income', refund, '卖出：' + p.name);
+  pushNews(s, 'info', '出售 ' + p.name + '，回款 ' + refund);
+  refreshTeamRating(s);
+  save();
+  return { ok: true, refund };
+}
+
+export function sellPreview(s, id) {
+  const p = s.team.roster.find((x) => x.id === id);
+  if (!p) return null;
+  const restAvg = s.team.roster.filter((x) => x.id !== id).reduce((a, x) => a + x.rating, 0) / Math.max(1, s.team.roster.length - 1);
+  return { refund: Math.floor(p.price * (LEAGUE_RULES[s.team.league].refundScale || 0.5)), ratingImpact: refreshTeamRating(s) - Math.round(restAvg), roleGap: !s.team.roster.some((x) => x.id !== id && x.role === p.role) };
+}
+
+export function renewPlayer(s, id) {
+  const p = s.team.roster.find((x) => x.id === id);
+  if (!p) return { ok: false, msg: '选手不存在' };
+  if (p.contractYears > 1) return { ok: false, msg: '合同未到期' };
+  if (s.team.bank < p.renewalCost) return { ok: false, msg: '资金不足' };
+  s.team.bank -= p.renewalCost;
+  p.contractYears = 3;
+  p.renewalCost = Math.round(p.price * 0.12);
+  s.team.morale = clamp(s.team.morale + 1, 20, 100);
+  addLedger(s, 'expense', -p.renewalCost, '续约：' + p.name);
+  pushNews(s, 'info', p.name + ' 续约 3 年');
+  save();
+  return { ok: true };
+}
