@@ -1,4 +1,4 @@
-import { resetManager, loadManager, setStorage, setRng, getState, SAVE_KEY, BACKUP_KEY, VERSION, ROLE_WEIGHTS, buildManagerRoster, deriveAttrs, ratingFromAttrs, playerPrice } from '../src/manager.js';
+import { resetManager, loadManager, setStorage, setRng, getState, SAVE_KEY, BACKUP_KEY, VERSION, ROLE_WEIGHTS, buildManagerRoster, deriveAttrs, ratingFromAttrs, playerPrice, newManagerCareer, buildNewSeason, nextFixture } from '../src/manager.js';
 
 const ok = (name, cond) => {
   if (!cond) throw new Error('manager: ' + name + ' FAIL');
@@ -41,5 +41,14 @@ const full99 = { aim: 99, react: 99, movement: 99, clutch: 99, nade: 99, gameIQ:
 ok('rating full 99', ratingFromAttrs('狙击', full99) === 99);
 ok('rating snip aim heavy', ratingFromAttrs('狙击', { ...full99, aim: 99, react: 99 }) > ratingFromAttrs('狙击', { ...full99, aim: 50, react: 50 }));
 ok('price capped', playerPrice({ rating: 99 }, '甲级') <= 30000);
+
+s = newManagerCareer();
+ok('career fixtures 56', s.season.fixtures.length === 56);
+ok('career standings 8', s.season.standings.length === 8);
+ok('career teams 8', s.season.teams.length === 8);
+ok('player team present', s.season.teams.some((t) => t.id === 'player'));
+ok('round robin home+away', s.season.fixtures.filter((f) => f.home === 'player').length === 7 && s.season.fixtures.filter((f) => f.away === 'player').length === 7);
+ok('fixtures have map', s.season.fixtures.every((f) => f.mapId));
+ok('nextFixture exists round1', nextFixture(s) && nextFixture(s).round === 1);
 
 console.log('manager: all PASS');

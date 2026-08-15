@@ -210,3 +210,120 @@ export function buildManagerRoster(league) {
   }
   return roster;
 }
+
+export const MAP_IDS = ['dust2', 'metro', 'forge', 'atrium', 'arctic'];
+
+function roundRobin(ids) {
+  const n = ids.length;
+  const rounds = [];
+  const rest = ids.slice(1);
+  for (let r = 0; r < n - 1; r++) {
+    const line = [ids[0], ...rest];
+    const pairs = [];
+    for (let i = 0; i < n / 2; i++) pairs.push([line[i], line[n - 1 - i]]);
+    rounds.push(pairs);
+    rest.unshift(rest.pop());
+  }
+  const second = rounds.map((pairs) => pairs.map(([a, b]) => [b, a]));
+  return [...rounds, ...second];
+}
+
+function makeFixtures(teamIds) {
+  const fixtures = [];
+  roundRobin(teamIds).forEach((pairs, ri) => {
+    for (const [home, away] of pairs) fixtures.push({ round: ri + 1, home, away, score: null, played: false, winner: null });
+  });
+  return fixtures;
+}
+
+function makeStandings(teams) {
+  return teams.map((t) => ({ teamId: t.id, played: 0, w: 0, d: 0, l: 0, pts: 0 }));
+}
+
+function makeCup(standings) {
+  const table = [...standings].sort((a, b) => b.pts - a.pts || b.w - a.w);
+  const ids = table.map((x) => x.teamId);
+  const qf = [[ids[0], ids[7]], [ids[3], ids[4]], [ids[2], ids[5]], [ids[1], ids[6]]];
+  const bracket = qf.map(([a, b]) => ({ round: 'QF', a, b, score: null, played: false, winner: null }));
+  bracket.push({ round: 'SF', a: null, b: null, score: null, played: false, winner: null });
+  bracket.push({ round: 'SF', a: null, b: null, score: null, played: false, winner: null });
+  bracket.push({ round: 'F', a: null, b: null, score: null, played: false, winner: null });
+  return { phase: 'active', bracket };
+}
+
+export function teamProfile(s, teamId) {
+  const t = s.season.teams.find((x) => x.id === teamId);
+  if (!t) return null;
+  return { id: t.id, name: t.name, tag: t.tag, rating: t.rating, style: t.style, homeMap: t.homeMap, form: t.form || [], morale: t.morale };
+}
+
+export function buildManagerTeams(league, playerRoster) {
+  const rules = LEAGUE_RULES[league] || LEAGUE_RULES['乙级'];
+  const [lo, hi] = rules.ratingRange;
+  const playerRating = Math.round(playerRoster.reduce((a, p) => a + p.rating, 0) / Math.max(1, playerRoster.length));
+  const teams = [{
+    id: 'player', name: '我的战队', tag: 'MINE', rating: playerRating,
+    homeMap: pick(MAP_IDS), style: '全能均衡', form: [], morale: 60, roster: playerRoster
+  }];
+  const pool = MAJOR_TEAMS.slice();
+  for (let i = 0; i < 7; i++) {
+    const idx = Math.floor(rng() * pool.length);
+    const src = pool.splice(idx, 1)[0];
+    const rating = randInt(lo, hi);
+    const oppRoster = src.players.slice(0, 5).map((p) => {
+      const pl = makePlayerFromMajor(p);
+      pl.price = playerPrice(pl, league);
+      return pl;
+    });
+    teams.push({
+      id: 't' + (i + 1), name: src.name, tag: src.tag, rating, style: src.style,
+      homeMap: pick(MAP_IDS), form: [], morale: randInt(50, 70), roster: oppRoster,
+      aggression: randInt(40, 70), tactics: '默认'
+    });
+  }
+  return teams;
+}
+
+function refreshCup(s) {
+  const b = s.season.cup.bracket;
+  if (b[4] && !b[4].played && b[0].played && b[1].played) { b[4].a = b[0].winner; b[4].b = b[1].winner; }
+  if (b[5] && !b[5].played && b[2].played && b[3].played) { b[5].a = b[2].winner; b[5].b = b[3].winner; }
+  if (b[6] && !b[6].played && b[4].played && b[5].played) { b[6].a = b[4].winner; b[6].b = b[5].winner; }
+  if (b[6].played) { s.season.cup.phase = 'finished'; s.season.cup.champion = b[6].winner; }
+}
+
+export function assignFixtureMaps(s) {
+  for (const f of s.season.fixtures) {
+    const home = s.season.teams.find((t) => t.id === f.home);
+    f.mapId = home ? home.homeMap : 'dust2';
+  }
+}
+
+export function buildNewSeason(s) {
+  s.season.round = 1;
+  s.season.teams = buildManagerTeams(s.team.league, s.team.roster);
+  const ids = s.season.teams.map((t) => t.id);
+  s.season.fixtures = makeFixtures(ids);
+  s.season.standings = makeStandings(s.season.teams);
+  s.season.cup = { phase: 'idle', bracket: [] };
+  assignFixtureMaps(s);
+  return s;
+}
+
+export function nextFixture(s) {
+  return s.season.fixtures.find((f) => !f.played && (f.home === 'player' || f.away === 'player')) || null;
+}
+
+export function newManagerCareer() {
+  state = migrateManagerState(baseManager());
+  state.team.roster = buildManagerRoster(state.team.league);
+  buildNewSeason(state);
+  save();
+  return state;
+}
+
+export function initManagerIfNeeded() {
+  const raw = read(SAVE_KEY);
+  if (raw) return loadManager();
+  return newManagerCareer();
+}
