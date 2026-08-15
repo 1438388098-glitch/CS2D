@@ -944,7 +944,9 @@ function bindMenu() {
       return;
     }
     if (game.opts.mode === 'manager') {
-      if (window.__openManager) window.__openManager();
+      if (window.__openManager) { window.__openManager(); e.currentTarget.blur(); return; }
+      showToast('经理模式未初始化，请刷新页面');
+      uiSfx('error', 0.4);
       e.currentTarget.blur();
       return;
     }
