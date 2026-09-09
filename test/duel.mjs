@@ -62,4 +62,14 @@ live.score.T = ROUND.MATCH_WIN;
 finishMatch(live);
 ok('duel live settled', live.duelMatch.settled && s.stats.played === 1 && s.stats.w === 1);
 
+
+// 回归：单挑的短局换边覆盖不得泄漏到后续非单挑对局（startMatch 清理一次性模式字段）
+{
+  const g = createGame({ bots: 1, mapId: 'duel-pit' });
+  g.ui = null;
+  g.opts.sideSwapAfter = 2; // 模拟打过单挑后的残留
+  startMatch(g);
+  ok('stale sideSwapAfter cleared on non-duel startMatch', g.opts.sideSwapAfter === undefined);
+}
+
 console.log('duel: all PASS');

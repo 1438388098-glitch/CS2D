@@ -99,6 +99,19 @@ function scaleRows(rows, fx, fy) {
   return out.map((r) => r.join(''));
 }
 
+// 缩图后再修连通：最近邻缩小可能弄断 1 格宽走廊，repair 必须跑在 scale 之后
+function repairScaledRows(rows, seed) {
+  const grid = rows.map((r) => r.split(''));
+  const adapter = {
+    grid,
+    h: grid.length,
+    w: grid[0].length,
+    tile: (x, y, c) => { if (grid[y] && grid[y][x] !== undefined) grid[y][x] = c; }
+  };
+  repairConnectivity(adapter, seed);
+  return grid.map((r) => r.join(''));
+}
+
 function buildDuelMap(opts) {
   const b = createBuilder(opts.w, opts.h);
   border(b);
@@ -122,12 +135,11 @@ function buildDuelMap(opts) {
     const py = 4 + Math.floor(noise(i, 5, s) * (opts.h - 8));
     cover(b, px, py);
   }
-  repairConnectivity(b, s + 21);
   b.site('A', a.x - 1, a.y - 1, 3, 3);
   b.site('B', bb.x - 1, bb.y - 1, 3, 3);
   b.spawn('t', t.x - 1, t.y - 1, 3, 3);
   b.spawn('c', c.x - 1, c.y - 1, 3, 3);
-  return scaleRows(b.rows(), opts.fx || 0.7, opts.fy || 0.7);
+  return repairScaledRows(scaleRows(b.rows(), opts.fx || 0.7, opts.fy || 0.7), (opts.seed || 0) + 33);
 }
 
 export const DUEL_MAPS = [

@@ -236,6 +236,11 @@ export function renderMinimap(game) {
   mctx.textBaseline = 'middle';
   mctx.fillText(mapDef ? mapDef.name : (map ? map.name : ''), ox + mw / 2, oy + mh - 12);
   mctx.restore();
+  // 纹理小地图带留边（竖长图内容居中）：动态层整体平移到内容区
+  const mox = (layers.mmOx || 0) * mmZoom * 0.5;
+  const moy = (layers.mmOy || 0) * mmZoom * 0.5;
+  mctx.save();
+  mctx.translate(mox, moy);
 
   const now = performance.now();
   for (const key of ['A', 'B']) {
@@ -278,7 +283,7 @@ export function renderMinimap(game) {
     mctx.strokeStyle = 'rgba(255,255,255,0.12)';
     mctx.lineWidth = 1;
     if (fogEnabled(game)) {
-      mctx.strokeRect(ox, oy, mw, mh);
+      mctx.strokeRect(0, 0, (map.W || 0) * s, (map.H || 0) * s);
     } else {
       mctx.beginPath();
       mctx.arc(ox + p.x * s, oy + p.y * s, 300 * s, 0, Math.PI * 2);
@@ -387,6 +392,7 @@ export function renderMinimap(game) {
     mctx.fillStyle = blink ? '#fff' : '#888';
     mctx.fillRect(bx - 2, by - 2, 4, 4);
   }
+  mctx.restore();
   mctx.restore();
 }
 

@@ -345,7 +345,10 @@ export function initTextures(map) {
   const staticLayer = mkCanvas(W, H);
   const decalLayer = mkCanvas(W, H);
   const miniMap = mkCanvas(480, 360);
-  const mmScale = 480 / W;
+  // 取两轴缩放较小者并居中：竖长图（如单挑图）不再把底部裁出小地图
+  const mmScale = Math.min(480 / W, 360 / H);
+  const mmOx = (480 - W * mmScale) / 2;
+  const mmOy = (360 - H * mmScale) / 2;
 
   {
     const t = staticLayer.getContext('2d');
@@ -550,7 +553,7 @@ export function initTextures(map) {
     for (let y = 0; y < grid.length; y++) {
       for (let x = 0; x < grid[y].length; x++) {
         const c = grid[y][x];
-        const cx = x * cell, cy = y * cell;
+        const cx = mmOx + x * cell, cy = mmOy + y * cell;
         if (c === '#') {
           t.fillStyle = th.mmWall;
           t.fillRect(cx, cy, cell + 0.6, cell + 0.6);
@@ -583,7 +586,7 @@ export function initTextures(map) {
       if (!ss) continue;
       t.strokeStyle = key === 'A' ? 'rgba(255,140,80,0.85)' : 'rgba(90,160,255,0.85)';
       t.lineWidth = 1.4;
-      t.strokeRect(ss.x0 * mmScale, ss.y0 * mmScale, (ss.x1 - ss.x0) * mmScale, (ss.y1 - ss.y0) * mmScale);
+      t.strokeRect(mmOx + ss.x0 * mmScale, mmOy + ss.y0 * mmScale, (ss.x1 - ss.x0) * mmScale, (ss.y1 - ss.y0) * mmScale);
     }
   }
 
@@ -591,7 +594,7 @@ export function initTextures(map) {
     W, H,
     floorTex, wallTex, wallVariants, crateTex, waterTex,
     thinWallTex, deepWaterTex, platformTex, barrelTex,
-    staticLayer, decalLayer, miniMap, mmScale,
+    staticLayer, decalLayer, miniMap, mmScale, mmOx, mmOy,
     decal: decalLayer,
     decos: decoList
   };

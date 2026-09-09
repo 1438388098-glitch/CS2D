@@ -193,6 +193,8 @@ export function startMatch(game) {
   // 保留调用者传入的世界种子（训练/回放确定性）：Object.assign 会用 fresh.seed=null 覆盖
   const callerSeed = game.seed;
   fresh.opts = game.opts;
+  // 一次性模式覆盖（如单挑的短局换边）不跨对局残留：非该模式的 startMatch 一律回归默认
+  delete fresh.opts.sideSwapAfter;
   fresh.opts.diffParams = game.opts.diff === 'hell' ? adaptiveHellParams(game) : resolveDiff(game.opts.diff, game.opts.hellLevel);
   fresh.mode = game.opts.mode || null;
   fresh.noRoundEnd = false;

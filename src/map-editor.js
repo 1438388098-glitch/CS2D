@@ -1006,6 +1006,7 @@ function validateMap() {
 }
 
 function playEditorMap() {
+  unbindGlobalHandlers();
   const rows = ed.rows;
   const hasT = rows.some((r) => r.includes('t'));
   const hasC = rows.some((r) => r.includes('c'));
@@ -1023,7 +1024,15 @@ function playEditorMap() {
   startMatch(game);
 }
 
+// 解绑 window 级快捷键/鼠标处理器：关闭或试玩后不再劫持正式对局的按键
+function unbindGlobalHandlers() {
+  window.onkeydown = null;
+  window.onkeyup = null;
+  window.onmouseup = null;
+}
+
 function closeEditor() {
+  unbindGlobalHandlers();
   const ov = $('editorOverlay');
   if (ov) ov.style.display = 'none';
   if (game.ui) game.ui.showMenu();
