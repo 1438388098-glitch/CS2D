@@ -148,6 +148,12 @@ export function buildSfx(ac, env) {
     }
     case 'reloadEnd': tick(ac, { out, vol: vol * 0.6, f1: 2800, f2: 1400, guard }); break;
     case 'hit': oscDrop(ac, { out, vol: vol * 0.9, dur: 0.09, type: 'sine', f0: 240, f1: 70, guard }); break;
+    case 'hitArmor': {
+      // 护甲命中：金属高频短噪 + 三角波钝响，与血肉 hit 的低频闷响区分
+      noiseBurst(ac, { out, vol: vol * 0.5, dur: 0.05, freq: 2600, q: 3, type: 'bandpass', guard });
+      oscDrop(ac, { out, vol: vol * 0.5, dur: 0.07, type: 'triangle', f0: 900, f1: 300, guard });
+      break;
+    }
     case 'head': {
       oscDrop(ac, { out, vol: vol * 0.8, dur: 0.06, type: 'sine', f0: 1800, f1: 700, guard });
       noiseBurst(ac, { out, vol: vol * 0.45, dur: 0.03, freq: 3200, q: 2, type: 'bandpass', guard });

@@ -387,6 +387,7 @@ export function applyDamage(v, dmg, opt, game) {
     if (opt.killer === game.player) {
       game.dmgT = 0;
       if (head) emit('sfx', { name: 'head', vol: 0.9, x: v.x, y: v.y, game });
+      else if ((v.armor || 0) > 0 || v.helmet) emit('sfx', { name: 'hitArmor', vol: 0.7, x: v.x, y: v.y, game });
       else emit('sfx', { name: 'hit', vol: 0.7, x: v.x, y: v.y, game });
       game.hitMarkT = head ? 0.35 : 0.22;
       game.hitFlashT = Math.max(game.hitFlashT || 0, head ? 0.22 : 0.14);

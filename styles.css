@@ -324,7 +324,7 @@ td.money{color:var(--gold);font-family:var(--f-num)}
 #hud-root{position:absolute;inset:0;pointer-events:none;font-family:var(--f-cn)}
 #hud-root b{font-family:var(--f-num)}
 
-#hud-top{position:absolute;top:8px;left:50%;transform:translateX(-50%);text-align:center;z-index:4}
+#hud-top{position:absolute;top:8px;left:50%;transform:translateX(-50%) scale(var(--hud-scale,1));text-align:center;z-index:4}
 .ht-main{display:flex;align-items:center;gap:14px;background:var(--bg-1);border:1px solid var(--line-2);border-radius:var(--r-m);padding:5px 18px;box-shadow:0 4px 18px rgba(0,0,0,.5)}
 .ht-t{color:var(--t);font-weight:700;font-size:14px;letter-spacing:1px}
 .ht-c{color:var(--ct);font-weight:700;font-size:14px;letter-spacing:1px}
@@ -333,7 +333,7 @@ td.money{color:var(--gold);font-family:var(--f-num)}
 .ht-sub.hell{color:#ffcf8a;border-color:rgba(255,120,0,.45)}
 .ht-ic{width:12px;height:12px;vertical-align:-1px;margin-right:4px;color:#ff8a2a}
 
-#hud-left{position:absolute;left:var(--hud-edge);bottom:var(--hud-edge);width:238px;background:var(--bg-1);border:1px solid var(--line-2);border-left:3px solid var(--accent);border-radius:var(--r-m);padding:10px 12px;z-index:4;transition:opacity var(--dur-m) var(--ease)}
+#hud-left{position:absolute;left:var(--hud-edge);bottom:var(--hud-edge);width:238px;background:var(--bg-1);border:1px solid var(--line-2);border-left:3px solid var(--accent);border-radius:var(--r-m);padding:10px 12px;z-index:4;transition:opacity var(--dur-m) var(--ease);transform:scale(var(--hud-scale,1));transform-origin:bottom left}
 #hud-left.dead{opacity:0;pointer-events:none}
 .hl-head{display:flex;align-items:center;gap:8px;margin-bottom:6px}
 .hl-ic{width:22px;height:22px;color:var(--txt-1)}
@@ -354,7 +354,7 @@ td.money{color:var(--gold);font-family:var(--f-num)}
 .hl-state{display:inline-flex;align-items:center;gap:5px;background:rgba(0,0,0,.35);border-radius:var(--r-s);padding:2px 8px;font-size:11px;color:var(--txt-1)}
 .hl-sic{width:13px;height:13px;color:var(--accent)}
 
-#hud-right{position:absolute;right:var(--hud-edge);bottom:var(--hud-edge);text-align:right;z-index:4}
+#hud-right{position:absolute;right:var(--hud-edge);bottom:var(--hud-edge);text-align:right;z-index:4;transform:scale(var(--hud-scale,1));transform-origin:bottom right}
 .hr-ammo{position:relative;display:inline-block}
 .hr-mag{font-family:var(--f-num);font-size:34px;font-weight:800;color:var(--txt-0);line-height:1;text-shadow:0 2px 10px rgba(0,0,0,.7)}
 .hr-mag.empty{color:var(--danger);animation:lowhp-pulse .5s var(--ease) infinite}

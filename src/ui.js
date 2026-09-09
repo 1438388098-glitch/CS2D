@@ -1257,6 +1257,24 @@ function bindSettings() {
       try { localStorage.setItem('cs2d_fps_sens', String(game.fpsSens)); } catch (err) { /* 无存储环境 */ }
     });
   }
+  // HUD 缩放滑杆（0.8-1.3 → --hud-scale，作用于四角 HUD 容器的 transform）
+  const hudScaleEl = el('hudScale');
+  if (hudScaleEl) {
+    const root2 = doc.documentElement;
+    const applyHudScale = (v) => {
+      root2.style.setProperty('--hud-scale', String(v));
+    };
+    try {
+      const saved = parseFloat(localStorage.getItem('cs2d_hud_scale'));
+      if (isFinite(saved) && saved >= 0.8 && saved <= 1.3) applyHudScale(saved);
+    } catch (err) { /* 无存储环境 */ }
+    try { hudScaleEl.value = getComputedStyle(root2).getPropertyValue('--hud-scale') || 1; } catch (err) { /* ignore */ }
+    hudScaleEl.addEventListener('input', () => {
+      const v = Math.min(1.3, Math.max(0.8, parseFloat(hudScaleEl.value) || 1));
+      applyHudScale(v);
+      try { localStorage.setItem('cs2d_hud_scale', String(v)); } catch (err) { /* 无存储环境 */ }
+    });
+  }
   // 垂直灵敏度滑杆（默认与水平灵敏度一致，独立存档）
   const sensYEl = el('fpsSensY');
   const sensYVal = el('fpsSensYVal');
@@ -1502,7 +1520,10 @@ export function setMenuBackgroundFromLayer(mapId, layer, w, h) {
     c.getContext('2d').drawImage(layer, 0, 0, w, h, 0, 0, tw, th);
     if (typeof c.toDataURL !== 'function') return;
     menuBgCache[mapId] = c.toDataURL('image/jpeg', 0.72);
-    if (Object.keys(menuBgCache).length === 1) {
+    // 背景轮播偏好：最后游玩的地图生成背景后立即上位（首图仍按首张兜底）
+    let lastMapId = null;
+    try { lastMapId = localStorage.getItem('cs2d_map'); } catch (err) { /* 无存储环境 */ }
+    if (Object.keys(menuBgCache).length === 1 || (lastMapId && mapId === lastMapId)) {
       m.style.backgroundImage = 'url(' + menuBgCache[mapId] + ')';
     }
     startMenuBgRotate();

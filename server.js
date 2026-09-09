@@ -66,10 +66,14 @@ const ALLOWED_EXT = new Set(Object.keys(MIME));
 
 const COMPRESSIBLE_EXT = new Set(['.html', '.js', '.mjs', '.css', '.json', '.svg', '.txt', '.map']);
 const NO_CACHE_EXT = new Set(['.html', '.js', '.mjs', '.css']);
+// 静态资源（图标/纹理/字体）内容稳定且入口页 no-cache 兜底：7 天强缓存减少重复下发
+const LONG_CACHE_EXT = new Set(['.svg', '.png', '.webp', '.jpg', '.jpeg', '.ico', '.woff', '.woff2']);
 
 function cacheControlFor(filePath) {
   const ext = path.extname(filePath).toLowerCase();
-  return NO_CACHE_EXT.has(ext) ? 'no-cache' : 'public, max-age=3600';
+  if (NO_CACHE_EXT.has(ext)) return 'no-cache';
+  if (LONG_CACHE_EXT.has(ext)) return 'public, max-age=604800';
+  return 'public, max-age=3600';
 }
 
 function compressIfPossible(data, req, filePath, cb) {

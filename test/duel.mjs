@@ -1,6 +1,6 @@
 import {
   loadDuel, resetDuel, setStorage, getState, recordResult, save, __clearStateForTest,
-  getOpponents, getStats, pickDuelMap
+  getOpponents, getStats, pickDuelMap, unlockedDuelMaps
 } from '../src/duel.js';
 import { createGame, startMatch, finishMatch } from '../src/game.js';
 import { ROUND } from '../src/config.js';
@@ -26,9 +26,13 @@ setStorage(store);
 let s = resetDuel();
 ok('duel save persisted', store.map.has('cs2d_duel'));
 ok('duel opponents', getOpponents().length >= 8);
-ok('duel map auto rotates', pickDuelMap('auto', 0) === 'duel-pit' && pickDuelMap('auto', 1) === 'duel-alley' && pickDuelMap('auto', 2) === 'duel-forge');
-ok('duel map manual wins', pickDuelMap('duel-forge', 0) === 'duel-forge');
-ok('duel map auto fallback', pickDuelMap('missing', 5) === 'duel-forge');
+ok('duel map auto rotates within unlocked pool', pickDuelMap('auto', 0, 0) === 'duel-pit' && pickDuelMap('auto', 1, 0) === 'duel-alley');
+ok('duel maps unlock every 3 wins', unlockedDuelMaps(0).length === 2 && unlockedDuelMaps(3).length === 3 && pickDuelMap('auto', 2, 3) === 'duel-forge');
+ok('duel manual locked map falls back to latest unlocked', pickDuelMap('duel-forge', 0, 0) === 'duel-alley' && pickDuelMap('duel-forge', 0, 3) === 'duel-forge');
+{
+  const all = unlockedDuelMaps(999);
+  ok('duel map auto fallback unknown id', pickDuelMap('missing', 5, 999) === all[5 % all.length].id);
+}
 recordResult(s, true, 10, 5);
 recordResult(s, false, 4, 9);
 ok('duel stats', s.stats.played === 2 && s.stats.w === 1 && s.stats.l === 1 && s.stats.streak === 0 && s.stats.bestStreak === 1);
