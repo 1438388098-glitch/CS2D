@@ -75,5 +75,6 @@ npm test
 
 - `node scripts/map-balance.mjs [--maps dust2,metro] [--runs 3] [--diff normal]`：竞技图池胜率采样，T 胜率偏离 30%-70% 时退出码 1。
 - `test/spawn-connectivity.mjs`：竞技图池出生点 → A/B 连通性护栏。
+- `npm run soak`：竞技图池 × 难度矩阵串行模拟无崩溃压测（不占 CI）。
 - `test/manager-determinism.mjs`：经理实机赛同 seed 双跑指纹回归。
 - 服务器支持 `server.config.json` 热重载（`rateLimit` 限频 / `maxRooms` 房间数上限，fs.watchFile 轮询即时生效）。
