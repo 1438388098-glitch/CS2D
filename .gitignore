@@ -6,5 +6,7 @@ train/checkpoints/
 .superpowers/
 .worktrees/
 .autopilot/
+.mimosa/
+docs/*.visual-check.*
 .DS_Store
 Thumbs.db
