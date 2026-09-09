@@ -25,6 +25,39 @@ export function weatherKind(mapId) {
   return null;
 }
 
+// 静态参数表缓存：粒子的 (u,v,speed,len,angle,alpha,sway,freq,phase) 只依赖 (kind,seed,count,w,h)，
+// 每帧只重算随时间变化的位置，省去 200 粒 × 多次哈希与查表
+const paramCache = new Map();
+const PARAM_CACHE_MAX = 8;
+function paramTable(kind, s, n, width, height) {
+  const key = kind + '|' + s + '|' + n + '|' + width + 'x' + height;
+  let tbl = paramCache.get(key);
+  if (tbl) return tbl;
+  tbl = new Array(n);
+  for (let i = 0; i < n; i++) {
+    tbl[i] = kind === 'rain'
+      ? {
+          u: hash01(s, i, 1), v: hash01(s, i, 2),
+          speed: 380 + hash01(s, i, 4) * 280,
+          len: 8 + hash01(s, i, 5) * 12,
+          angle: 0.14 + hash01(s, i, 7) * 0.34,
+          alpha: 0.22 + hash01(s, i, 6) * 0.5
+        }
+      : {
+          u: hash01(s, i, 1), v: hash01(s, i, 2),
+          speed: 26 + hash01(s, i, 4) * 54,
+          len: 1 + hash01(s, i, 5) * 2.4,
+          alpha: 0.55 + hash01(s, i, 6) * 0.45,
+          sway: 6 + hash01(s, i, 7) * 16,
+          freq: 0.6 + hash01(s, i, 8) * 1.2,
+          phase: hash01(s, i, 9) * Math.PI * 2
+        };
+  }
+  if (paramCache.size >= PARAM_CACHE_MAX) paramCache.clear();
+  paramCache.set(key, tbl);
+  return tbl;
+}
+
 // 纯逻辑核心：返回 count 个雨/雪粒子 [{x,y,len,angle,speed,alpha}]。
 // rain 为斜短线（len=线长，angle=相对垂直的倾角，speed 快，x 带风漂移），
 // snow 为小圆点（len=半径，angle 恒 0，speed 慢，x 左右摇摆）。
@@ -36,31 +69,21 @@ export function weatherParticles(kind, t, count, w, h, seed) {
   const height = Number.isFinite(h) && h > 0 ? h : 480;
   const s = Math.floor(Math.abs(seed)) || 1;
   const now = Number.isFinite(t) ? t : 0;
+  const tbl = paramTable(kind, s, n, width, height);
   const out = [];
   for (let i = 0; i < n; i++) {
-    const u = hash01(s, i, 1);
-    const v = hash01(s, i, 2);
+    const q = tbl[i];
     if (kind === 'rain') {
-      const speed = 380 + hash01(s, i, 4) * 280;
-      const len = 8 + hash01(s, i, 5) * 12;
-      const angle = 0.14 + hash01(s, i, 7) * 0.34;
-      const alpha = 0.22 + hash01(s, i, 6) * 0.5;
-      const windX = speed * 0.14 * Math.sin(angle);
-      let x = (u * width + now * windX) % width;
+      const windX = q.speed * 0.14 * Math.sin(q.angle);
+      let x = (q.u * width + now * windX) % width;
       if (x < 0) x += width;
-      const y = (v * height + now * speed) % height;
-      out.push({ x, y, len, angle, speed, alpha });
+      const y = (q.v * height + now * q.speed) % height;
+      out.push({ x, y, len: q.len, angle: q.angle, speed: q.speed, alpha: q.alpha });
     } else {
-      const speed = 26 + hash01(s, i, 4) * 54;
-      const len = 1 + hash01(s, i, 5) * 2.4;
-      const alpha = 0.55 + hash01(s, i, 6) * 0.45;
-      const sway = 6 + hash01(s, i, 7) * 16;
-      const freq = 0.6 + hash01(s, i, 8) * 1.2;
-      const phase = hash01(s, i, 9) * Math.PI * 2;
-      let x = (u * width + sway * Math.sin(now * freq + phase)) % width;
+      let x = (q.u * width + q.sway * Math.sin(now * q.freq + q.phase)) % width;
       if (x < 0) x += width;
-      const y = (v * height + now * speed) % height;
-      out.push({ x, y, len, angle: 0, speed, alpha });
+      const y = (q.v * height + now * q.speed) % height;
+      out.push({ x, y, len: q.len, angle: 0, speed: q.speed, alpha: q.alpha });
     }
   }
   return out;

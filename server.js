@@ -290,7 +290,8 @@ function handleData(ws, chunk) {
     const maskLen = masked ? 4 : 0;
     if (ws.buf.length < off + maskLen + len) return;
     const mask = masked ? ws.buf.slice(off, off + 4) : null;
-    const payload = Buffer.from(ws.buf.slice(off + maskLen, off + maskLen + len));
+    // 掩码异或本就原地改：用 subarray 视图替代 Buffer.from 拷贝（payload 仅在本同步处理器内使用）
+    const payload = ws.buf.subarray(off + maskLen, off + maskLen + len);
     if (mask) {
       for (let i = 0; i < payload.length; i++) payload[i] ^= mask[i & 3];
     }

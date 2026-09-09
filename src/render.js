@@ -508,7 +508,12 @@ function drawDeathFX(game) {
 function drawCrates(game) {
   if (!game.crates || !game.crates.length) return;
   for (const c of game.crates) {
-    const s = crateRenderSpec(c.x, c.y, c.hp);
+    // spec 只依赖 (x,y,hp)：缓存到木箱对象，hp 变化（受击）时才重建
+    if (!c._spec || c._specHp !== c.hp) {
+      c._spec = crateRenderSpec(c.x, c.y, c.hp);
+      c._specHp = c.hp;
+    }
+    const s = c._spec;
     ctx.fillStyle = 'rgba(0,0,0,0.42)';
     ctx.fillRect(s.px + 3, s.py + s.tile - 4, s.tile, 4);
     ctx.fillStyle = s.base;
@@ -715,6 +720,25 @@ function getStepFX(e, tSec) {
   return { phase: cyc.phase, swinging: cyc.swinging, dust };
 }
 
+// bot 头顶名离屏缓存：文本栅格化贵，按 (名字|职业|队色) 生成一次小画布，之后 drawImage 贴图
+const _nameTagCache = new Map();
+function nameTagCanvas(text, color) {
+  const key = text + '|' + color;
+  let c = _nameTagCache.get(key);
+  if (c) return c;
+  c = document.createElement('canvas');
+  c.width = 160;
+  c.height = 18;
+  const nc = c.getContext('2d');
+  nc.font = "10px 'Segoe UI','Microsoft YaHei',sans-serif";
+  nc.textAlign = 'center';
+  nc.fillStyle = color;
+  nc.fillText(text, 80, 12);
+  if (_nameTagCache.size > 60) _nameTagCache.clear();
+  _nameTagCache.set(key, c);
+  return c;
+}
+
 function drawEntities(game) {
   const tSec = performance.now() / 1000;
   const z = game.zoom || 1;
@@ -807,13 +831,12 @@ function drawEntities(game) {
     if (prof) bodyMs += performance.now() - bodyT;
     const otherT = prof ? performance.now() : 0;
     if (e.bot) {
+      const arch = ARCHETYPES[e.archetype];
+      const tag = nameTagCanvas(e.name + (arch ? ' ·' + arch.label : ''), e.team === 'ct' ? '#7fb8ff' : '#ffcf8a');
       ctx.save();
       ctx.globalAlpha = 0.85;
-      ctx.font = "10px 'Segoe UI','Microsoft YaHei',sans-serif";
-      ctx.textAlign = 'center';
-      ctx.fillStyle = e.team === 'ct' ? '#7fb8ff' : '#ffcf8a';
-      const arch = ARCHETYPES[e.archetype];
-      ctx.fillText(e.name + (arch ? ' ·' + arch.label : ''), ex, ey - 22);
+      // 画布内文字基线在 y=12，贴图原点 ey-34 使基线落在 ey-22（与原 fillText 一致）
+      ctx.drawImage(tag, ex - 80, ey - 34, 160, 18);
       ctx.restore();
     }
     if (e.defuseT > 0) {
@@ -870,16 +893,18 @@ function drawSmokes(game) {
     ctx.beginPath();
     ctx.arc(s.x, s.y, s.r * 0.72, 0, Math.PI * 2);
     ctx.fill();
-    // 边缘噪点（增强体积感）；用位置+索引确定性伪随机，保证同 seed 画面可复现
+    // 边缘噪点（增强体积感）；用位置+索引确定性伪随机，保证同 seed 画面可复现。
+    // 慢速公转 + 呼吸：噪点团绕烟心缓转、半径微脉动，静止烟也有体积流转感（时间驱动确定性）
     ctx.fillStyle = 'rgba(212,214,217,0.5)';
+    const tNow = game.time || 0;
     const sHash = (n) => {
       let h = (Math.floor(s.x) * 73856093 ^ Math.floor(s.y) * 19349663 ^ n * 83492791) >>> 0;
       h = (h ^ (h >>> 15)) * 2246822519 >>> 0;
       return (h >>> 0) / 4294967296;
     };
     for (let i = 0; i < 6; i++) {
-      const na = sHash(i) * Math.PI * 2;
-      const nr = s.r * (0.55 + sHash(i + 6) * 0.35);
+      const na = sHash(i) * Math.PI * 2 + tNow * 0.15 + i;
+      const nr = s.r * (0.55 + sHash(i + 6) * 0.35) * (1 + 0.06 * Math.sin(tNow * 0.8 + i * 1.7));
       ctx.beginPath();
       ctx.arc(s.x + Math.cos(na) * nr, s.y + Math.sin(na) * nr, 6 + sHash(i + 12) * 8, 0, Math.PI * 2);
       ctx.fill();

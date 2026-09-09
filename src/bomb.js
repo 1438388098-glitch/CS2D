@@ -1,7 +1,7 @@
 import {ROUND, ECONOMY} from './config.js';
 import {addMoney} from './economy.js';
 import {inSite, los, getMap} from './map.js';
-import {applyDamage} from './combat.js';
+import {applyDamage, addDecal} from './combat.js';
 import {endRound, spawnParticle} from './game.js';
 
 import {ctx} from './ctx.js';
@@ -97,6 +97,7 @@ export function explodeBomb(game) {
   game.lastSound = { x: b.x, y: b.y, t: game.time, radius: 1600, conf: 1 };
   game.shake = Math.max(game.shake, 14);
   spawnParticle(game, { kind: 'boom', x: b.x, y: b.y, life: 0.5, size: 300 });
+  addDecal(game, b.x, b.y, 'scorch', 0);
   for (let i = 0; i < 40; i++) {
     const a = rand() * Math.PI * 2;
     spawnParticle(game, { kind: 'fire', x: b.x, y: b.y, vx: Math.cos(a) * rand(100, 420), vy: Math.sin(a) * rand(100, 420), life: rand(0.2, 0.6), size: rand(3, 7) });

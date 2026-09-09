@@ -341,6 +341,7 @@ export function explodeBarrel(game, b, shooter) {
     spawnParticle(game, { kind: 'boom', x: b.x, y: b.y, vx: 0, vy: 0, life: 0.5, size: 160 });
     spawnParticle(game, { kind: 'fire', x: b.x + rand(-40, 40), y: b.y + rand(-40, 40), vx: rand(-60, 60), vy: rand(-80, 0), life: 0.6, size: 18 });
   }
+  addDecal(game, b.x, b.y, 'scorch', 0);
   for (const o of game.entities) {
     if (o.dead) continue;
     const d = Math.hypot(o.x - b.x, o.y - b.y);
@@ -595,7 +596,8 @@ export function recordImpact(game, x, y) {
 }
 
 export function addDecal(game, x, y, type, angle) {
-  game.decals.push({ type, x, y, angle, life: type === 'hole' ? 20 : 6 });
+  if (!game.decals) game.decals = [];
+  game.decals.push({ type, x, y, angle, life: type === 'hole' ? 20 : type === 'scorch' ? 14 : 6 });
   if (game.decals.length > MAX_DECALS) game.decals.splice(0, game.decals.length - MAX_DECALS);
   redrawDecals(game);
 }
@@ -629,6 +631,26 @@ export function redrawDecals(game) {
       t.beginPath(); t.arc(d.x, d.y, 3, 0, Math.PI * 2); t.fill();
       t.fillStyle = 'rgba(255,255,255,' + a * 0.18 + ')';
       t.beginPath(); t.arc(d.x - 1, d.y - 1, 1.2, 0, Math.PI * 2); t.fill();
+    } else if (d.type === 'scorch') {
+      // 爆炸焦痕：中心深黑 + 位置哈希不规则外缘（确定性，同点同形，回放可复现）
+      const h = (n) => {
+        let h2 = (Math.floor(d.x) * 73856093 ^ Math.floor(d.y) * 19349663 ^ n * 83492791) >>> 0;
+        h2 = Math.imul(h2 ^ (h2 >>> 13), 2246822519) >>> 0;
+        return (h2 >>> 0) / 4294967296;
+      };
+      const R = 22 + h(1) * 8;
+      t.fillStyle = 'rgba(12,10,9,' + a * 0.55 + ')';
+      t.beginPath();
+      for (let i = 0; i <= 14; i++) {
+        const ang = (i / 14) * Math.PI * 2;
+        const rr2 = R * (0.75 + h(i + 2) * 0.5);
+        const px2 = d.x + Math.cos(ang) * rr2, py2 = d.y + Math.sin(ang) * rr2;
+        if (i === 0) t.moveTo(px2, py2); else t.lineTo(px2, py2);
+      }
+      t.closePath();
+      t.fill();
+      t.fillStyle = 'rgba(30,26,22,' + a * 0.5 + ')';
+      t.beginPath(); t.arc(d.x, d.y, R * 0.55, 0, Math.PI * 2); t.fill();
     }
   }
   game._decalRev = (game._decalRev || 0) + 1;

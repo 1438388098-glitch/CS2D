@@ -1,5 +1,5 @@
 import { passable, los, tileAt } from './map.js';
-import { applyDamage } from './combat.js';
+import { applyDamage, addDecal } from './combat.js';
 import { ctx } from './ctx.js';
 import { rand, angDiff } from './utils.js';
 import { addRipple } from './water-fx.js';
@@ -39,6 +39,7 @@ export function updateGrenades(game, dt) {
         game.lastSound = { x: g.x, y: g.y, t: game.time, radius: 1200, conf: 0.85 };
         game.shake = Math.max(game.shake, 9);
         spawnParticle(game, { kind: 'boom', x: g.x, y: g.y, life: 0.5, size: 180 });
+        addDecal(game, g.x, g.y, 'scorch', 0);
         for (let f = 0; f < 26; f++) {
           const a = rand() * Math.PI * 2;
           spawnParticle(game, { kind: 'fire', x: g.x, y: g.y, vx: Math.cos(a) * rand(80, 360), vy: Math.sin(a) * rand(80, 360), life: rand(0.2, 0.5), size: rand(3, 6) });

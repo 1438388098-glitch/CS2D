@@ -72,9 +72,19 @@ function bindBus() {
   bus.on('objtext', (p) => api.setObjText(p.main, p.sub));
   bus.on('objtextShow', () => { const ot = el('objtext'); if (ot) ot.style.display = 'block'; });
   bus.on('holdbar', (p) => api.setHoldBar(p.show, p.pct));
-  bus.on('flash', (p) => { const f = el('flash'); if (f) f.style.opacity = p.opacity; });
-  bus.on('dmg', (p) => { const d = el('dmgv'); if (d) d.style.opacity = p.opacity; });
-  bus.on('lowhp', (p) => { const l = el('lowhp'); if (l) l.style.opacity = p.opacity; });
+  // 高频透明度事件差量写：update() 每模拟步 emit（8 倍速观战 ~480 次/s），值不变时跳过 DOM 写
+  const lastOpacity = {};
+  const setOpacity = (key, id, v) => {
+    const e = el(id);
+    if (!e) return;
+    const q = Math.round(v * 100);
+    if (lastOpacity[key] === q) return;
+    lastOpacity[key] = q;
+    e.style.opacity = v;
+  };
+  bus.on('flash', (p) => setOpacity('flash', 'flash', p.opacity));
+  bus.on('dmg', (p) => setOpacity('dmg', 'dmgv', p.opacity));
+  bus.on('lowhp', (p) => setOpacity('lowhp', 'lowhp', p.opacity));
   bus.on('hideMenu', () => { const m = el('menu'); if (m) m.classList.remove('show'); });
   bus.on('hideEnd', () => { const e = el('end'); if (e) e.classList.remove('show'); });
   bus.on('closeBuy', () => {
@@ -123,8 +133,9 @@ function createUiApi() {
     setObjText: (main, sub) => {
       const o1 = el('obj1'), o2 = el('obj2');
       if (!o1) return;
-      o1.textContent = main;
-      o2.textContent = sub;
+      // update() 每模拟步调用：文案不变时跳过 textContent 写
+      if (o1.textContent !== main) o1.textContent = main;
+      if (o2.textContent !== sub) o2.textContent = sub;
     },
     setHoldBar: (show, pct) => {
       const hb = el('holdbar'), hf = el('holdbarfill');

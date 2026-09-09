@@ -3,7 +3,6 @@ import { fogEnabled, castVisionPolygon, fogVisionRadius } from './fog.js';
 
 const FOG_SCALE = 0.1;
 const FOG_RAYS = 96;
-const FOG_BLUR = 12;
 const FOG_CACHE_MS = 250;   // 缓存刷新周期：放宽后视点小幅移动不触发重算（雾重算是 2D 帧耗大头）
 
 function viewpointsFor(game) {
@@ -77,17 +76,23 @@ export function renderFogLayer(game) {
     const pts = castVisionPolygon(game, v.x, v.y, radius, FOG_RAYS);
     if (!pts.length) continue;
     fctx.save();
-    fctx.shadowColor = 'rgba(0,0,0,1)';
-    fctx.shadowBlur = FOG_BLUR;
-    fctx.shadowOffsetX = 0;
-    fctx.shadowOffsetY = 0;
+    fctx.strokeStyle = 'rgba(0,0,0,1)';
     fctx.fillStyle = 'rgba(0,0,0,1)';
+    fctx.lineJoin = 'round';
     fctx.beginPath();
     fctx.moveTo(pts[0].x * FOG_SCALE, pts[0].y * FOG_SCALE);
     for (let i = 1; i < pts.length; i++) {
       fctx.lineTo(pts[i].x * FOG_SCALE, pts[i].y * FOG_SCALE);
     }
     fctx.closePath();
+    // 双段描边模拟软边（destination-out 下逐段半透明擦除），比 shadowBlur 便宜一个量级
+    fctx.globalAlpha = 0.3;
+    fctx.lineWidth = 18;
+    fctx.stroke();
+    fctx.globalAlpha = 0.55;
+    fctx.lineWidth = 9;
+    fctx.stroke();
+    fctx.globalAlpha = 1;
     fctx.fill();
     fctx.restore();
   }

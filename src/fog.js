@@ -15,12 +15,14 @@ function fogBlocked(game, x, y, map) {
   return false;
 }
 
-export function castRayEndpoint(game, x, y, angle, radius = fogVisionRadius(game), step = 12) {
+export function castRayEndpoint(game, x, y, angle, radius = fogVisionRadius(game), step = 0) {
   const map = getMap();
   if (!Number.isFinite(radius) || radius <= 0) radius = fogVisionRadius(game);
+  // 步长自适应：默认取半格宽（≥12px），对角线级射程（~3000px）下单次重算的步进量减半
+  const stepEff = step > 0 ? step : Math.max(12, ((map && map.tile) || 24) / 2);
   const cos = Math.cos(angle), sin = Math.sin(angle);
   let px = x, py = y;
-  for (let d = step; d <= radius; d += step) {
+  for (let d = stepEff; d <= radius; d += stepEff) {
     px = x + cos * d;
     py = y + sin * d;
     if (fogBlocked(game, px, py, map)) break;
