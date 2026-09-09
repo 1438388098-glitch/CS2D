@@ -46,9 +46,7 @@ assert.equal(viewGame.viewMode, 'top', 'setViewMode should fall back to top for 
 
 viewGame.viewMode = 'top';
 toggleViewMode(viewGame);
-assert.equal(viewGame.viewMode, 'fps', 'toggleViewMode should move top -> fps');
-toggleViewMode(viewGame);
-assert.equal(viewGame.viewMode, 'top', 'toggleViewMode should wrap fps -> top');
+assert.equal(viewGame.viewMode, 'top', 'toggleViewMode should stay top (fps/3D shelved in attic/)');
 
 assert.equal(fpsCursorStyle({ viewMode: 'fps', state: 'LIVE' }), 'none', 'FPS live should hide the system cursor');
 assert.equal(fpsCursorStyle({ viewMode: 'fps', state: 'BUY' }), 'none', 'FPS buy should hide the system cursor');

@@ -1176,11 +1176,6 @@ function bindSettings() {
     renderHelpBindings();
     if (!okBind) { const st = el('editorStatus'); if (st) st.textContent = '该键已被其他操作使用'; }
   }, true);
-  // 视角模式存档
-  try {
-    const fm = localStorage.getItem('cs2d_viewmode');
-    if (fm === 'fps') game.viewMode = 'fps';
-  } catch (err) { /* 无存储环境 */ }
   // 视角切换按钮
   const viewSel = el('viewModeSel');
   const refreshViewSel = () => {

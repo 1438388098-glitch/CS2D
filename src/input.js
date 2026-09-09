@@ -13,7 +13,8 @@ let fpsFallbackY = null;
 // pointer lock 首帧 movementX/Y 含光标回中偏移，锁定后首个 mousemove 丢弃一次增量
 let firstLockFrame = false;
 
-const VIEW_MODES = ['top', 'fps'];
+// 第一人称（fps/3D）视图已打入冷宫（attic/）：视角固定俯视，V 键与设置面板不再提供 fps
+const VIEW_MODES = ['top'];
 
 export function fpsCursorStyle(game) {
   return game && game.viewMode === 'fps' && (game.state === 'BUY' || game.state === 'LIVE') ? 'none' : '';
