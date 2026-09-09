@@ -13,7 +13,7 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '20.x'
-          cache: 'npm'
+          # 零依赖项目无 lockfile，setup-node 的 npm 缓存会因缺 package-lock.json 直接报错
       - name: Syntax check
         run: npm run check
       - name: Architecture check (cycle guard)
