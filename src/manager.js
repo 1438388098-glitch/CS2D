@@ -52,7 +52,7 @@ function baseManager() {
       morale: 65, chemistry: 60, stressSum: 0,
       sponsor: 3200, fans: 2000, ticketBase: 800
     },
-    season: { id: 1, round: 1, totalRounds: 14, teams: [], fixtures: [], standings: [], cup: { phase: 'idle', bracket: [] }, matchHistory: [] },
+    season: { id: 1, round: 1, totalRounds: 15, teams: [], fixtures: [], standings: [], cup: { phase: 'idle', bracket: [] }, matchHistory: [] },
     board: { goal: { rank: 6, cup: 0, reward: 12000 }, trust: 70, fired: false },
     history: [], news: [], achievements: [], records: { bestSeasonRank: 99, totalPrize: 0, cupChampions: 0, bestWinStreak: 0 }
   };
@@ -242,8 +242,10 @@ function roundRobin(ids) {
 
 function makeFixtures(teamIds) {
   const fixtures = [];
+  // 赛程节奏差异化：第 8 轮为休息周（轮次号跳号），推进逻辑对空轮自然跳过
   roundRobin(teamIds).forEach((pairs, ri) => {
-    for (const [home, away] of pairs) fixtures.push({ round: ri + 1, home, away, score: null, played: false, winner: null });
+    const round = ri + 1 + (ri + 1 >= 8 ? 1 : 0);
+    for (const [home, away] of pairs) fixtures.push({ round, home, away, score: null, played: false, winner: null });
   });
   return fixtures;
 }
@@ -351,11 +353,23 @@ function simDuelWin(aRating, dRating, aPower, dPower) {
   return clamp(0.5 + (aRating - dRating) * 0.006 + (aPower - dPower) * 0.01, 0.12, 0.92);
 }
 
-function simulateManagerRound(index, home, away, s, stats) {
+// 地图偏好权重：主图 +6%；另按队伍 id 确定性挑一张"苦手图" -6%（模拟不再与地图无关）
+function teamMapEdge(s, teamId, mapId) {
+  if (!mapId) return 1;
+  const t = s.season.teams.find((x) => x.id === teamId);
+  const homeMap = t ? (t.homeMap || 'dust2') : 'dust2';
+  if (mapId === homeMap) return 1.06;
+  let h = 0;
+  for (const c of String(teamId)) h = (h * 31 + c.charCodeAt(0)) >>> 0;
+  const pool = ['dust2', 'metro', 'forge', 'atrium', 'arctic'];
+  return pool[h % pool.length] === mapId ? 0.94 : 1;
+}
+
+function simulateManagerRound(index, home, away, s, stats, mapId) {
   const attacker = index % 2 === 0 ? home : away;
   const defender = attacker === home ? away : home;
-  const aPower = teamPower(s, attacker.id, 'attack');
-  const dPower = teamPower(s, defender.id, 'defense');
+  const aPower = teamPower(s, attacker.id, 'attack') * teamMapEdge(s, attacker.id, mapId);
+  const dPower = teamPower(s, defender.id, 'defense') * teamMapEdge(s, defender.id, mapId);
   const events = [];
   if (rng() < 0.4) events.push({ t: 'utility', side: attacker.id, text: attacker.name + ' 使用道具控制入口' });
   const entry = (attacker.roster || [])[Math.floor(rng() * Math.max(1, (attacker.roster || []).length))] || { name: attacker.name, rating: attacker.rating, role: '步枪' };
@@ -407,15 +421,16 @@ export function simulateManagerMatch(s, home, away, opts = {}) {
   const rounds = [];
   let homeScore = 0, awayScore = 0;
   const maxRounds = MATCH_MAX_ROUNDS;
+  const mapId = opts.mapId || home.homeMap || 'dust2';
   for (let i = 0; i < maxRounds && homeScore < MATCH_WIN_LIMIT && awayScore < MATCH_WIN_LIMIT; i++) {
-    const r = simulateManagerRound(i, home, away, s, stats);
+    const r = simulateManagerRound(i, home, away, s, stats, mapId);
     rounds.push(r);
     if (r.winner === home.id) homeScore++; else awayScore++;
   }
   const players = Object.values(stats).map((p) => ({ ...p })).sort((a, b) => b.kills - a.kills || b.dmg - a.dmg);
   const mvp = players.slice().sort((a, b) => (b.kills * 2 + b.dmg / 100 + b.plants + b.defuses + b.clutches * 2) - (a.kills * 2 + a.dmg / 100 + a.plants + a.defuses + a.clutches * 2))[0] || null;
   const winner = homeScore >= awayScore ? home.id : away.id;
-  return { mapId: opts.mapId || home.homeMap || 'dust2', homeId: home.id, awayId: away.id, score: [homeScore, awayScore], winner, rounds, timeline: rounds.flatMap((r) => r.events.map((e) => ({ ...e, round: r.round }))), players, mvp, totalKills: players.reduce((a, p) => a + p.kills, 0) };
+  return { mapId: mapId, homeId: home.id, awayId: away.id, score: [homeScore, awayScore], winner, rounds, timeline: rounds.flatMap((r) => r.events.map((e) => ({ ...e, round: r.round }))), players, mvp, totalKills: players.reduce((a, p) => a + p.kills, 0) };
 }
 
 export function scoutingNoise(s) {
@@ -835,6 +850,11 @@ export function markFixture(s, f, score, winner) {
 
 export function settlePlayerMatch(s, win, kills, deaths, opts = {}) {
   const rules = LEAGUE_RULES[s.team.league] || LEAGUE_RULES['乙级'];
+  // 休息周（空轮）跳过：轮次号推进到下一个尚有比赛的轮次
+  while (s.season.round <= s.season.totalRounds &&
+    !s.season.fixtures.some((f) => f.round === s.season.round && !f.played)) {
+    s.season.round++;
+  }
   let isHome = false;
   let home = null;
   let away = null;

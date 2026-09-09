@@ -301,6 +301,16 @@ function renderDash(s) {
   const recordAlertHtml = recordAlerts.length ? '<div class="career-card"><h4>本场纪录刷新</h4>' +
     recordAlerts.map((a) => '<div class="career-row"><span>' + esc(a.label) + '</span><b>' + a.oldValue + ' → ' + a.newValue + '</b></div>').join('') +
     '</div>' : '';
+  // 教练组综合诊断：目标/财务/轮换三路建议聚合一屏（原散落在各 tab）
+  const fr = financialRisk(s);
+  const ra = rotationAdvice(s);
+  const diagSev = (advice.onTrack ? 0 : 1) + (fr.score >= 60 ? 2 : fr.score >= 35 ? 1 : 0) + (ra.shouldRest ? 1 : 0);
+  const diagHtml = '<div class="career-card"><h4>教练组综合诊断</h4>' +
+    '<div class="career-news' + (advice.onTrack ? '' : ' warn') + '">目标 · ' + esc(advice.priority) + '：' + advice.lines.map(esc).join('；') + '</div>' +
+    '<div class="career-news' + (fr.score >= 35 ? ' warn' : '') + '">财务 · 风险指数 ' + fr.score + '/100（' + esc(fr.level) + '）：' + esc(fr.advice[0] || '') + '</div>' +
+    '<div class="career-news' + (ra.shouldRest ? ' warn' : '') + '">轮换 · ' + esc(ra.advice) + '（' + esc(ra.reason) + '）</div>' +
+    (diagSev >= 2 ? '<div class="career-news warn">综合预警：' + diagSev + ' 项风险叠加' + (fr.score >= 60 ? '，优先稳住财务' : '') + (ra.shouldRest ? '，务必安排休息' : '') + '</div>' : '') +
+    '</div>';
   return '<div class="career-grid2">' +
     '<div class="career-card"><h4>玩家档案</h4><div class="career-player"><b>' + esc(s.player.name) + '</b><span>' + esc(honor.title) + ' · 等级 ' + s.player.level + '</span></div><div class="career-xp">经验 ' + s.player.xp + ' / ' + xpNeeded(s.player.level) + '<div class="career-bar"><i style="width:' + Math.min(100, Math.round(s.player.xp / xpNeeded(s.player.level) * 100)) + '%"></i></div></div>' + attrsBars(s) +
     '<div class="career-stats"><span>荣誉 ' + esc(honor.reason) + '</span></div>' +
@@ -308,6 +318,7 @@ function renderDash(s) {
     matchHtml +
     recordAlertHtml +
     readinessHtml +
+    diagHtml +
     goalHtml +
     '<div class="career-card"><h4>事件流</h4>' + news + '</div>' +
     '<div class="career-card"><h4>积分榜速览</h4>' + top + '</div>' +

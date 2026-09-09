@@ -84,7 +84,10 @@ ok('recent form reads fixtures', formHome === 'W');
 s = resetCareer();
 s.season.round = 12;
 const lateF = findPlayerFixture(s);
-s.season.standings.forEach((x, i) => { x.pts = 30 - i * 2; });
+// 显式构造争冠态势（第 1 vs 第 2、分差 2），不依赖该轮抽到的对手
+s.season.standings.forEach((x) => { x.pts = 20; });
+s.season.standings.find((x) => x.teamId === (lateF.home === 'player' ? lateF.away : lateF.home)).pts = 22;
+s.season.standings.find((x) => x.teamId === 'player').pts = 24;
 ok('title match importance', matchImportance(s, lateF) === '争冠战');
 ok('info carries importance', nextMatchInfo(s).importance === '争冠战');
 
@@ -93,7 +96,7 @@ const playerStanding = s.season.standings.find((x) => x.teamId === 'player');
 playerStanding.played = 6;
 playerStanding.pts = 12;
 const pace = seasonPace(s);
-ok('season pace projects points', pace.played === 6 && pace.remaining === 8 && pace.projected === 28);
+ok('season pace projects points', pace.played === 6 && pace.remaining === 9 && pace.projected === 30);
 ok('season pace rank', pace.currentRank === 1 && pace.projectedRank === 1);
 
 s = resetCareer();
