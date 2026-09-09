@@ -297,6 +297,10 @@ td.money{color:var(--gold);font-family:var(--f-num)}
 .eb-row.t .eb-track i{background:linear-gradient(90deg,#a86a1e,var(--t))}
 .eb-row.c .eb-track i{background:linear-gradient(90deg,#2a5ba0,var(--ct))}
 .eb-row b{font-family:var(--f-num);font-size:14px;width:26px;text-align:left;color:var(--txt-1)}
+/* 击杀榜行：玩家名/武器名标签更宽，武器榜金色系 */
+.eb-row.kb .eb-lab{width:76px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:11px}
+.eb-row.w .eb-lab{width:64px;text-align:left;color:var(--gold)}
+.eb-row.w .eb-track i{background:linear-gradient(90deg,#8a6a1e,var(--gold))}
 #toast{position:absolute;top:14%;left:50%;transform:translateX(-50%);font-size:15px;letter-spacing:2px;color:var(--gold);background:var(--bg-3);padding:8px 22px;border-radius:var(--r-s);opacity:0;transition:opacity .3s;pointer-events:none}
 #toast.show{opacity:1}
 #deathinfo{position:absolute;top:36%;left:50%;transform:translate(-50%,-50%);text-align:center;font-size:27px;font-weight:800;letter-spacing:3px;color:#fff;white-space:nowrap;text-shadow:0 0 28px rgba(255,50,50,.45),0 4px 20px rgba(0,0,0,.9);opacity:0;pointer-events:none}
@@ -401,6 +405,8 @@ td.money{color:var(--gold);font-family:var(--f-num)}
 }
 .mode-card b { font-size: 13px; letter-spacing: .5px; }
 .mode-card small { color: var(--txt-2); font-size: 11px; }
+/* 模式卡片图标：金色小图标独立一行压在标题上 */
+.mc-ic { width: 15px; height: 15px; flex: 0 0 auto; fill: var(--gold); opacity: .9; }
 .mode-card:hover { border-color: var(--accent); transform: translateY(-1px); }
 .mode-card.sel { border-color: var(--accent); background: rgba(255,138,42,.12); color: #fff; box-shadow: inset 0 0 0 1px rgba(255,138,42,.25); }
 .mode-settings { margin-top: 10px; min-height: 28px; }

@@ -261,6 +261,40 @@ function createUiApi() {
           rowC.innerHTML = '<span class="eb-lab">CT</span><div class="eb-track"><i style="width:' + (cScore / maxV * 100) + '%"></i></div><b>' + cScore + '</b>';
           bars.appendChild(rowT);
           bars.appendChild(rowC);
+          // 全场击杀榜：双方按击杀排序的横向条形图（前 8 名，队色区分）
+          const roster = game.entities.filter((e2) => e2 && e2.kills > 0).sort((x, y2) => y2.kills - x.kills).slice(0, 8);
+          if (roster.length) {
+            const kMax = roster[0].kills;
+            const lab = doc.createElement('div');
+            lab.className = 'stat-line';
+            lab.innerHTML = '<small style="opacity:.6">全场击杀榜</small>';
+            bars.appendChild(lab);
+            for (const r of roster) {
+              const row = doc.createElement('div');
+              row.className = 'eb-row kb ' + (r.team === 't' ? 't' : 'c');
+              row.innerHTML = '<span class="eb-lab">' + r.name + '</span><div class="eb-track"><i style="width:' + Math.round(r.kills / kMax * 100) + '%"></i></div><b>' + r.kills + '</b>';
+              bars.appendChild(row);
+            }
+          }
+          // 玩家武器击杀榜：前三武器横向条形图
+          const wk = game.player && game.player.weapKills;
+          if (wk) {
+            const top = Object.keys(wk).sort((a2, b2) => wk[b2] - wk[a2]).slice(0, 3);
+            if (top.length) {
+              const wMax = wk[top[0]];
+              const wlab = doc.createElement('div');
+              wlab.className = 'stat-line';
+              wlab.innerHTML = '<small style="opacity:.6">你的武器击杀</small>';
+              bars.appendChild(wlab);
+              for (const id2 of top) {
+                const wd2 = WEAPONS[id2];
+                const row = doc.createElement('div');
+                row.className = 'eb-row w';
+                row.innerHTML = '<span class="eb-lab">' + (wd2 ? wd2.name : id2) + '</span><div class="eb-track"><i style="width:' + Math.round(wk[id2] / wMax * 100) + '%"></i></div><b>' + wk[id2] + '</b>';
+                bars.appendChild(row);
+              }
+            }
+          }
         }
       }
       el('end').classList.add('show');

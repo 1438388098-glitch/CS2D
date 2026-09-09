@@ -451,6 +451,10 @@ export function killEntity(v, killer, weapon, head, game) {
   const wname = WEAPONS[weapon] ? WEAPONS[weapon].name : (weapon === 'bomb' ? '炸弹' : (weapon === 'grenade' ? '手雷' : (weapon === 'barrel' ? '油桶' : '战术刀')));
   if (killer && killer !== v) {
     killer.kills++;
+    // 按武器累计击杀（结算界面武器榜数据源）
+    if (!killer.weapKills) killer.weapKills = {};
+    const wk = WEAPONS[weapon] ? weapon : (weapon === 'grenade' ? 'grenade' : 'knife');
+    killer.weapKills[wk] = (killer.weapKills[wk] || 0) + 1;
     addMoney(killer, killRewardFor(weapon));
     for (const o of game.entities) {
       if (o !== killer && o.team === killer.team && !o.dead) {

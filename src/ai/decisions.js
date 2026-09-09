@@ -261,7 +261,13 @@ function netObjective(e, game, act) {
   const laneSite = e.netLane === 'other' ? csOther : cs;
   const ctHold = () => {
     const hold = e.role === 'a' ? m.holds.A : m.holds.B;
-    const p = hold.anchors[e.anchorIdx % hold.anchors.length] || hold.anchors[0];
+    const anchors = hold.anchors;
+    // 守点换位随机性：驻守期间低概率轮换锚点（交火中不换），避免 CT 站位每回合完全固定
+    if (anchors.length > 1 && !e.aimTarget && rand() < 0.01) {
+      const cur = (e._holdIdx === undefined ? e.anchorIdx : e._holdIdx) % anchors.length;
+      e._holdIdx = (cur + 1 + Math.floor(rand() * (anchors.length - 1))) % anchors.length;
+    }
+    const p = anchors[(e._holdIdx === undefined ? e.anchorIdx : e._holdIdx) % anchors.length] || anchors[0];
     return { x: p.x, y: p.y, face: p.face !== undefined ? p.face : Math.atan2(hold.entry.y - p.y, hold.entry.x - p.x) };
   };
   const tEntry = (s) => {

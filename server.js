@@ -194,14 +194,34 @@ function broadcast(room, payload, except) {
   }
 }
 
-// 每连接限频：正常快照 ~30Hz + 事件，远低于 200 msg/s；超限判定为异常/攻击，直接断开
+// 可热重载配置：server.config.json（可选，缺省用内置默认）。fs.watchFile 轮询跨平台，
+// 变更对新连接/新帧即时生效，无需重启服务器。
+const HOT_CFG_PATH = path.join(ROOT, 'server.config.json');
+const hotCfg = { rateLimit: 200, maxRooms: 50 };
+let hotCfgMtime = null;
+function refreshHotCfg() {
+  try {
+    if (!fs.existsSync(HOT_CFG_PATH)) return;
+    const st = fs.statSync(HOT_CFG_PATH);
+    if (hotCfgMtime === st.mtimeMs) return;
+    hotCfgMtime = st.mtimeMs;
+    const j = JSON.parse(fs.readFileSync(HOT_CFG_PATH, 'utf8'));
+    hotCfg.rateLimit = Math.max(30, Math.min(2000, Number(j.rateLimit) || 200));
+    hotCfg.maxRooms = Math.max(1, Math.min(500, Number(j.maxRooms) || 50));
+    console.log('  [config] server.config.json 已热重载: rateLimit=' + hotCfg.rateLimit + ' maxRooms=' + hotCfg.maxRooms);
+  } catch (err) { /* 配置缺失/损坏时沿用旧值 */ }
+}
+refreshHotCfg();
+fs.watchFile(HOT_CFG_PATH, { interval: 3000 }, refreshHotCfg);
+
+// 每连接限频：正常快照 ~30Hz + 事件，远低于 rateLimit；超限判定为异常/攻击，直接断开
 function throttle(ws) {
   const now = Date.now();
   if (!ws._rateWindow || now - ws._rateWindow >= 1000) {
     ws._rateWindow = now;
     ws._rateCount = 0;
   }
-  if (++ws._rateCount > 200) {
+  if (++ws._rateCount > hotCfg.rateLimit) {
     try { ws.socket.destroy(); } catch (err) { /* closed */ }
     return false;
   }
@@ -223,7 +243,16 @@ function handleFrame(ws, payload) {
     ws.role = msg.role === 'host' ? 'host' : 'guest';
     ws.name = String(msg.name || 'LAN Player').slice(0, 16);
     let r = rooms.get(room);
-    if (!r) { r = { clients: new Set(), host: null }; rooms.set(room, r); }
+    if (!r) {
+      // 房间数上限（可热重载）：满员时新房间拒绝建房，已有房间不受影响
+      if (rooms.size >= hotCfg.maxRooms) {
+        sendFrame(ws, { type: 'error', reason: 'room-limit' });
+        ws.room = null;
+        ws.role = null;
+        return;
+      }
+      r = { clients: new Set(), host: null }; rooms.set(room, r);
+    }
     if (ws.role === 'host' && r.host && r.host !== ws) {
       sendFrame(ws, { type: 'error', reason: 'host-exists' });
       ws.room = null;
