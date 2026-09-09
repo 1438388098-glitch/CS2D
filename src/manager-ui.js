@@ -160,6 +160,20 @@ function renderRoster(s) {
       (transferWindowOpen(s) ? '<button data-act="sell" data-pid="' + pp.id + '">卖</button>' : ''));
   }
   html += '</div></div>';
+  // HLTV 评价: 每个选手的滚动 HLO + 最近一场
+  const hltvRows = s.team.roster.filter((p) => p && p.name).map((p) => {
+    const rating = (typeof p.hltvRating === 'number') ? p.hltvRating.toFixed(2) : '1.00';
+    const last = (p.hltvHistory && p.hltvHistory.length) ? p.hltvHistory[p.hltvHistory.length - 1].rating.toFixed(2) : '-';
+    const matches = (p.hltvHistory && p.hltvHistory.length) || 0;
+    const color = (p.hltvRating || 0) >= 1.10 ? '#4ade80' : ((p.hltvRating || 0) >= 0.95 ? '#facc15' : '#f87171');
+    return '<div class="mng-prow"><span class="mng-pname">' + esc(p.name) + '</span>' +
+      '<span class="mng-prole">' + esc(p.role) + '</span>' +
+      '<span style="color:' + color + ';font-weight:bold">' + rating + '</span>' +
+      '<span class="mng-pstate">最近 ' + last + '</span>' +
+      '<span class="mng-pstate">' + matches + ' 场</span></div>';
+  }).join('');
+  html += '<div class="career-card"><h4>HLTV 社区评价 · 选手滚动 HLO</h4><div class="mng-roster">' + hltvRows + '</div>' +
+    '<div class="career-news">HLTV 风格评分: 1.00 = 联赛平均, 越高表现越好</div></div>';
   const windowOpen = transferWindowOpen(s);
   html += '<div class="career-card"><h4>转会窗' + (windowOpen ? ' · 剩余 ' + s.team.transfersLeft + ' 次 · 噪声±' + scoutingNoise(s) : ' · 第5-8轮开放') + '</h4>';
   if (windowOpen) {

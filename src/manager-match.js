@@ -182,7 +182,7 @@ function finishManagerMatch(game, tWon) {
   game.over = true;
   game.state = 'END';
   game.noRoundEnd = true;
-  emit('banner', { t1: myWon ? '获胜' : '落败', t2: '比分 ' + game.score.T + ':' + game.score.CT, col: myWon ? '#ffd27a' : '#ff4d4d' });
+  emit('banner', { t1: myWon ? '获胜' : '落败', t2: '比分 ' + game.score.T + ':' + game.score.CT + (mvpObj && mvpObj.hltv ? ' · MVP ' + mvpObj.name + ' HLO ' + mvpObj.hltv.total.toFixed(2) : ''), col: myWon ? '#ffd27a' : '#ff4d4d' });
   if (myWon) emit('sfx', { name: 'win', vol: 0.9, game });
   else emit('sfx', { name: 'lose', vol: 0.8, game });
   if (result && result.ok && typeof window !== 'undefined' && window.__managerEndMatch) window.__managerEndMatch(game);
