@@ -1,4 +1,5 @@
 import { MAJOR_TEAMS } from './modes.js';
+import { computeMatchHltv, pickHltvMvp } from './hltv-rating.js';
 
 export const SAVE_KEY = 'cs2d_manager';
 export const BACKUP_KEY = 'cs2d_manager_backup';
@@ -412,8 +413,29 @@ export function simulateManagerMatch(s, home, away, opts = {}) {
     rounds.push(r);
     if (r.winner === home.id) homeScore++; else awayScore++;
   }
-  const players = Object.values(stats).map((p) => ({ ...p })).sort((a, b) => b.kills - a.kills || b.dmg - a.dmg);
-  const mvp = players.slice().sort((a, b) => (b.kills * 2 + b.dmg / 100 + b.plants + b.defuses + b.clutches * 2) - (a.kills * 2 + a.dmg / 100 + a.plants + a.defuses + a.clutches * 2))[0] || null;
+  const playersRaw = Object.values(stats).map((p) => ({ ...p })).sort((a, b) => b.kills - a.kills || b.dmg - a.dmg);
+  // HLTV: 反推每个选手的回合参与度 (roundsWon/roundsSurvived)
+  for (const p of playersRaw) {
+    let rw = 0, rs = 0;
+    for (const r of rounds) {
+      if (r.winner === p.team) rw++; else rs++;
+    }
+    p.roundsWon = rw;
+    p.roundsSurvived = rs;
+  }
+  const players = playersRaw;
+  // HLTV: 给每个选手算单场 HLO rating + 选 HLO 最高的作为 MVP
+  let mvp = null;
+  try {
+    const withHltv = computeMatchHltv(players, opts.state || { team: { league: '乙级' }, season: { teams: [] } }, rounds);
+    mvp = pickHltvMvp(withHltv);
+    for (let i = 0; i < players.length; i++) {
+      players[i].hltv = withHltv[i].hltv;
+    }
+  } catch (e) {
+    // HLO 模块异常时降级为旧公式
+    mvp = players.slice().sort((a, b) => (b.kills * 2 + b.dmg / 100 + b.plants + b.defuses + b.clutches * 2) - (a.kills * 2 + b.dmg / 100 + a.plants + b.defuses + b.clutches * 2))[0] || null;
+  }
   const winner = homeScore >= awayScore ? home.id : away.id;
   return { mapId: opts.mapId || home.homeMap || 'dust2', homeId: home.id, awayId: away.id, score: [homeScore, awayScore], winner, rounds, timeline: rounds.flatMap((r) => r.events.map((e) => ({ ...e, round: r.round }))), players, mvp, totalKills: players.reduce((a, p) => a + p.kills, 0) };
 }
@@ -860,7 +882,7 @@ export function settlePlayerMatch(s, win, kills, deaths, opts = {}) {
     markFixture(s, f, score, win ? 'player' : (isHome ? f.away : f.home));
     let bankGain = 0;
     if (!opts.noReward) {
-      bankGain = (win ? rules.matchWin : rules.matchLose) + (opts.mvp ? 250 : 0);
+      bankGain = (win ? rules.matchWin : rules.matchLose) + ((opts.mvp && opts.mvp.team === 'player') ? 250 : 0);
       s.team.bank += bankGain;
       addLedger(s, 'income', bankGain, (win ? '比赛胜利奖金' : '比赛出场费') + '：' + home.name + ' vs ' + away.name);
       if (isHome) {
