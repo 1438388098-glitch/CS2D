@@ -311,20 +311,30 @@ function drawDmgPops2D(game) {
 }
 
 // 动态水面：可见浅水瓦片叠加移动亮线（时间相位差），裁剪到相机视口
+let _waterGrid = null;
+let _waterHasWater = false;
 function drawWaterOverlay(game) {
   if (game.state !== 'BUY' && game.state !== 'LIVE') return;
   const grid = getGrid();
   if (!grid || !grid.length) return;
+  // 无水地图直接跳出：网格对象身份变化（切图/编辑器重载）时才整网重扫一次
+  if (_waterGrid !== grid) {
+    _waterGrid = grid;
+    _waterHasWater = false;
+    for (const row of grid) { if (row.indexOf('~') !== -1) { _waterHasWater = true; break; } }
+  }
+  if (!_waterHasWater) return;
+  const T = mapTile();
   const now = performance.now() / 1000;
-  const x0 = Math.max(0, Math.floor((game.camX - game.canvasW / game.zoom / 2) / mapTile()) - 1);
-  const y0 = Math.max(0, Math.floor((game.camY - game.canvasH / game.zoom / 2) / mapTile()) - 1);
-  const x1 = Math.min(grid[0].length, Math.ceil((game.camX + game.canvasW / game.zoom / 2) / mapTile()) + 1);
-  const y1 = Math.min(grid.length, Math.ceil((game.camY + game.canvasH / game.zoom / 2) / mapTile()) + 1);
+  const x0 = Math.max(0, Math.floor((game.camX - game.canvasW / game.zoom / 2) / T) - 1);
+  const y0 = Math.max(0, Math.floor((game.camY - game.canvasH / game.zoom / 2) / T) - 1);
+  const x1 = Math.min(grid[0].length, Math.ceil((game.camX + game.canvasW / game.zoom / 2) / T) + 1);
+  const y1 = Math.min(grid.length, Math.ceil((game.camY + game.canvasH / game.zoom / 2) / T) + 1);
   ctx.save();
   for (let y = y0; y < y1; y++) {
     for (let x = x0; x < x1; x++) {
       if (grid[y][x] !== '~') continue;
-      const px = x * mapTile(), py = y * mapTile();
+      const px = x * T, py = y * T;
       const seed = (x * 7 + y * 13) % 17;
       const off = (now * 14 + seed * 5) % 30;
       ctx.fillStyle = 'rgba(220,240,255,0.20)';
@@ -715,25 +725,27 @@ function drawEntities(game) {
   let stepMs = 0;
   let bodyMs = 0;
   let otherMs = 0;
+  // 内嵌剖析只在显式开启（window.__cs2dProf=true，诊断脚本用）时采集，生产路径每实体省 8 次 performance.now
+  const prof = typeof window !== 'undefined' && !!window.__cs2dProf;
   const stepCounts = { entities: 0, feet: 0, dust: 0 };
   for (const e of game.entities) {
     const ex = viewX(e), ey = viewY(e), ea = viewAngle(e);
     if (ex < vx0 || ex > vx1 || ey < vy0 || ey > vy1) continue;
-    const calcT = performance.now();
+    const calcT = prof ? performance.now() : 0;
     const stFx = getStepFX(e, tSec);
-    calcMs += performance.now() - calcT;
+    if (prof) calcMs += performance.now() - calcT;
     if (e.dead) continue;
-    const stepT = performance.now();
+    const stepT = prof ? performance.now() : 0;
     if (stFx) {
       stepCounts.entities++;
       if (stFx.swinging > 0) stepCounts.feet += 2;
       stepCounts.dust += stFx.dust ? stFx.dust.length : 0;
       drawStepFx(ctx, e, stFx);
     }
-    stepMs += performance.now() - stepT;
+    if (prof) stepMs += performance.now() - stepT;
     const isP = e === game.player;
     const darkCol = e.team === 'ct' ? '#4d9bff' : '#ffa03d';
-    const bodyT = performance.now();
+    const bodyT = prof ? performance.now() : 0;
     ctx.save();
     ctx.translate(ex, ey);
     ctx.fillStyle = 'rgba(0,0,0,0.35)';
@@ -788,8 +800,8 @@ function drawEntities(game) {
     ctx.fillStyle = isP ? '#1c2b3a' : (e.team === 'ct' ? '#1d3557' : '#3a2413');
     ctx.fillRect(-4, -6, 8, 4);
     ctx.restore();
-    bodyMs += performance.now() - bodyT;
-    const otherT = performance.now();
+    if (prof) bodyMs += performance.now() - bodyT;
+    const otherT = prof ? performance.now() : 0;
     if (e.bot) {
       ctx.save();
       ctx.globalAlpha = 0.85;
@@ -821,7 +833,7 @@ function drawEntities(game) {
       ctx.arc(ex + 14, ey - 12, 4, 0, Math.PI * 2);
       ctx.fill();
     }
-    otherMs += performance.now() - otherT;
+    if (prof) otherMs += performance.now() - otherT;
   }
   game._renderStageMs.stepCalc = calcMs;
   game._renderStageMs.stepFx = stepMs;
@@ -831,26 +843,31 @@ function drawEntities(game) {
 }
 
 function drawSmokes(game) {
+  ctx.save();
   for (const s of game.smokes) {
     // 淡入（半径增长期）+ 淡出（生命末期 2s），其余时段完全遮挡
     const fade = clamp(s.life / 2, 0, 1) * clamp((s.r - 20) / 40, 0.3, 1);
-    // 外圈柔边
-    const g = ctx.createRadialGradient(s.x, s.y, s.r * 0.3, s.x, s.y, s.r);
-    g.addColorStop(0, 'rgba(206,208,211,' + (0.96 * fade) + ')');
-    g.addColorStop(0.75, 'rgba(190,193,197,' + (0.94 * fade) + ')');
-    g.addColorStop(0.95, 'rgba(150,155,161,' + (0.55 * fade) + ')');
-    g.addColorStop(1, 'rgba(120,124,130,0)');
-    ctx.fillStyle = g;
+    ctx.globalAlpha = fade;
+    // 外圈柔边：烟体几何 (x,y,r) 终生不变，径向渐变只建一次缓存在烟体上，透明度交给 globalAlpha
+    if (!s._grad) {
+      const g = ctx.createRadialGradient(s.x, s.y, s.r * 0.3, s.x, s.y, s.r);
+      g.addColorStop(0, 'rgba(206,208,211,0.96)');
+      g.addColorStop(0.75, 'rgba(190,193,197,0.94)');
+      g.addColorStop(0.95, 'rgba(150,155,161,0.55)');
+      g.addColorStop(1, 'rgba(120,124,130,0)');
+      s._grad = g;
+    }
+    ctx.fillStyle = s._grad;
     ctx.beginPath();
     ctx.arc(s.x, s.y, s.r, 0, Math.PI * 2);
     ctx.fill();
     // 实心核（完全遮挡，与 LOS/子弹截断判定一致）
-    ctx.fillStyle = 'rgba(198,200,204,' + (0.97 * fade) + ')';
+    ctx.fillStyle = 'rgba(198,200,204,0.97)';
     ctx.beginPath();
     ctx.arc(s.x, s.y, s.r * 0.72, 0, Math.PI * 2);
     ctx.fill();
     // 边缘噪点（增强体积感）；用位置+索引确定性伪随机，保证同 seed 画面可复现
-    ctx.fillStyle = 'rgba(212,214,217,' + (0.5 * fade) + ')';
+    ctx.fillStyle = 'rgba(212,214,217,0.5)';
     const sHash = (n) => {
       let h = (Math.floor(s.x) * 73856093 ^ Math.floor(s.y) * 19349663 ^ n * 83492791) >>> 0;
       h = (h ^ (h >>> 15)) * 2246822519 >>> 0;
@@ -870,12 +887,11 @@ function drawSmokes(game) {
       const t = clamp((SMOKE_DISSOLVE_LIFE - s.life) / SMOKE_DISSOLVE_LIFE, 0, 1);
       const n = clamp(Math.round(s.r / 25), 4, 12);
       const trail = smokeDissolveTrail(s, t, sSeed, n);
-      if (trail.length) {
-        const trailPts = trail.map((p) => ({ x: p.x, y: p.y, r: p.r, alpha: p.alpha * fade }));
-        drawSmokeTrail(ctx, trailPts);
-      }
+      // globalAlpha 已含 fade，尾迹点直接绘制，免去每帧 map 重建中间数组
+      if (trail.length) drawSmokeTrail(ctx, trail);
     }
   }
+  ctx.restore();
 }
 
 function drawParticles(game) {
@@ -992,16 +1008,18 @@ function drawTracers(game) {
     const dist = Math.hypot(dx, dy) || 1;
     const ux = dx / dist, uy = dy / dist;
     const ex = t.x1 + ux * dist * s.len, ey = t.y1 + uy * dist * s.len;
-    // 渐变：发射点最亮 → 末端淡出；CT 冷蓝、T 方武器口径暖色
+    // 双段描边替代每帧渐变：粗低透段模拟渐变尾，细亮核段做弹道光芯；
+    // lighter 合成增强发光感（CT 冷蓝、T 方武器口径暖色）
     const rgb = t.team === 'ct' ? '135,190,255' : s.color;
-    const g = ctx.createLinearGradient(t.x1, t.y1, ex, ey);
-    g.addColorStop(0, 'rgba(' + rgb + ',' + s.alpha + ')');
-    g.addColorStop(1, 'rgba(' + rgb + ',0)');
-    ctx.strokeStyle = g;
-    ctx.lineWidth = s.width;
+    ctx.globalCompositeOperation = 'lighter';
+    ctx.strokeStyle = 'rgba(' + rgb + ',' + (s.alpha * 0.35) + ')';
+    ctx.lineWidth = s.width * 2.2;
     ctx.beginPath();
     ctx.moveTo(t.x1, t.y1);
     ctx.lineTo(ex, ey);
+    ctx.stroke();
+    ctx.strokeStyle = 'rgba(' + rgb + ',' + s.alpha + ')';
+    ctx.lineWidth = s.width;
     ctx.stroke();
   }
   ctx.restore();

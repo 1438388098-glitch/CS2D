@@ -14,6 +14,9 @@ let ctx = null;
 let layers = null;
 let lastMiniUpdate = 0;
 let mmZoom = 1;
+// MAPS 是 Proxy，.find 每次访问都重建数组：小地图每帧查地图名改为按 mapId 缓存
+let miniMapDef = null;
+let miniMapDefId = null;
 
 export function initHud(canvas, layersRef) {
   ctx = canvas.getContext('2d');
@@ -222,7 +225,11 @@ export function renderMinimap(game) {
   mctx.fillStyle = grd;
   mctx.fillRect(ox, oy + mh - 26, mw, 26);
   const map = getMap();
-  const mapDef = MAPS.find((m) => m.id === game.mapId);
+  if (miniMapDefId !== game.mapId) {
+    miniMapDefId = game.mapId;
+    miniMapDef = MAPS.find((m) => m.id === game.mapId) || null;
+  }
+  const mapDef = miniMapDef;
   mctx.fillStyle = 'rgba(255,255,255,.5)';
   mctx.font = "10px 'Microsoft YaHei',sans-serif";
   mctx.textAlign = 'center';

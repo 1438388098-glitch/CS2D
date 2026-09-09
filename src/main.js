@@ -262,29 +262,31 @@ function startLoop() {
       const workMs = performance.now() - tWork0;
       const frameLoadPct = lastWorkMs > 0 ? Math.min(999, lastWorkMs / Math.max(frameMs, 0.1) * 100) : 0;
       workMsEma = workMsEma * 0.9 + workMs * 0.1;
-      if (window.__cs2d) window.__cs2d.stats = {
-        frameMs: frameMsEma,
-        renderMs: renderMsEma,
-        frameDelta: frameMs,
-        frameNow: frameMs,
-        frameAvgMs: perf.avg,
-        frameMaxMs: perf.max,
-        frameDrops: perf.drops,
-        frameWindow: perf.count,
-        renderNow: renderMs,
-        workNow: workMs,
-        workMs: workMsEma,
-        frameLoadPct,
-        fpsWindow: realFps,
-        simFps,
-        simTotalSteps,
-        longTaskCount: longTaskLastCount,
-        longTaskMs: longTaskLastMs,
-        longTaskTotalCount,
-        longTaskTotalMs,
-        render3d: game._renderStats || null,
-        scale: scaleCur
-      };
+      if (window.__cs2d) {
+        // 就地复用同一 stats 对象，避免每帧新建 20 键大对象
+        const st = window.__cs2d.stats || (window.__cs2d.stats = {});
+        st.frameMs = frameMsEma;
+        st.renderMs = renderMsEma;
+        st.frameDelta = frameMs;
+        st.frameNow = frameMs;
+        st.frameAvgMs = perf.avg;
+        st.frameMaxMs = perf.max;
+        st.frameDrops = perf.drops;
+        st.frameWindow = perf.count;
+        st.renderNow = renderMs;
+        st.workNow = workMs;
+        st.workMs = workMsEma;
+        st.frameLoadPct = frameLoadPct;
+        st.fpsWindow = realFps;
+        st.simFps = simFps;
+        st.simTotalSteps = simTotalSteps;
+        st.longTaskCount = longTaskLastCount;
+        st.longTaskMs = longTaskLastMs;
+        st.longTaskTotalCount = longTaskTotalCount;
+        st.longTaskTotalMs = longTaskTotalMs;
+        st.render3d = game._renderStats || null;
+        st.scale = scaleCur;
+      }
       lastWorkMs = workMs;
     } catch (err) {
       console.error('frame error:', err);

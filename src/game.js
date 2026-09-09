@@ -466,7 +466,7 @@ export function finishMatch(game) {
     });
 }
 
-function objectiveText(game) {
+export function objectiveText(game) {
   const p = game.player;
   if (!p) return { main: '', sub: '' };
   const ik = getBindLabel('interact');
@@ -963,23 +963,6 @@ function updatePlayer(game, dt) {
       if (game.bomb) game.bomb.defusing = false;
     }
   }
-}
-
-function castLaserEnd(p, game) {
-  const map = getMap();
-  if (!map || !map.W || !map.H) return { x: p.x, y: p.y };
-  const w = weaponDef(p);
-  const range = w && w.range ? w.range : 1500;
-  const cos = Math.cos(p.angle), sin = Math.sin(p.angle);
-  const step = 6;
-  let px = p.x, py = p.y;
-  for (let d = 0; d <= range; d += step) {
-    px = p.x + cos * d;
-    py = p.y + sin * d;
-    if (px < 0 || py < 0 || px > map.W || py > map.H) break;
-    if (!passableTolerant(px, py)) break;
-  }
-  return { x: px, y: py };
 }
 
 function updatePlayerAim(game, dt) {
