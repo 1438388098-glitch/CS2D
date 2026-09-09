@@ -313,6 +313,9 @@ function drawDeco(t, kind, px, py, rnd) {
 }
 
 // ===== 主入口 =====
+// 小纹理缓存（官方图 id → 图块集）：128px 级纹理生成代价固定，进图/菜单背景预生成时复用
+const smallTexCache = new Map();
+
 export function initTextures(map) {
   const W = map.W, H = map.H;
   const th = THEMES[map.id] || THEMES.dust2;
@@ -331,15 +334,36 @@ export function initTextures(map) {
   };
 
   // 各生成器独立 LCG 子流（不同异或常数）：素材加载与否不影响其他纹理的随机消费位置
-  const floorTex = real.floor || genFloorTex(th, lcg(texSeed ^ 0x51F10A));
-  const wallTex = real.wall || genWallTex(th, lcg(texSeed ^ 0xA11E50));
-  const thinWallTex = real.thin || genThinTex();
-  const waterTex = genWaterTex(th, lcg(texSeed ^ 0xCAFEB0));
-  const deepWaterTex = genDeepWaterTex(th, lcg(texSeed ^ 0xDEE10C));
-  const platformTex = genPlatformTex();
-  const crateTex = real.thin || genThinTex(); // 木箱用木纹
-  const barrelTex = genBarrelTex();
-  const wallVariants = { v0: wallTex, v1: genWallVariant(wallTex, 1), v2: genWallVariant(wallTex, 2), v3: genWallVariant(wallTex, 3) };
+  // 小纹理缓存：官方图按 id 复用（图块内容确定不变）；自定义/编辑器图同 id 可能换图，跳过缓存。
+  // 真实素材异步加载：以“调用时是否有真实素材”为缓存有效性的一部分，加载完成后自然重建
+  const cacheable = !!(map.id && map.category !== 'custom' && !String(map.id).startsWith('custom'));
+  const cacheKey = cacheable ? String(map.id) : null;
+  const hasReal = !!(real.floor || real.wall);
+  let small = cacheable ? smallTexCache.get(cacheKey) : null;
+  if (!small || small.hasReal !== hasReal) {
+    small = {
+      hasReal,
+      floorTex: real.floor || genFloorTex(th, lcg(texSeed ^ 0x51F10A)),
+      wallTex: real.wall || genWallTex(th, lcg(texSeed ^ 0xA11E50)),
+      thinWallTex: real.thin || genThinTex(),
+      waterTex: genWaterTex(th, lcg(texSeed ^ 0xCAFEB0)),
+      deepWaterTex: genDeepWaterTex(th, lcg(texSeed ^ 0xDEE10C)),
+      platformTex: genPlatformTex(),
+      crateTex: real.thin || genThinTex(), // 木箱用木纹
+      barrelTex: genBarrelTex()
+    };
+    small.wallVariants = { v0: small.wallTex, v1: genWallVariant(small.wallTex, 1), v2: genWallVariant(small.wallTex, 2), v3: genWallVariant(small.wallTex, 3) };
+    if (cacheable) smallTexCache.set(cacheKey, small);
+  }
+  const floorTex = small.floorTex;
+  const wallTex = small.wallTex;
+  const thinWallTex = small.thinWallTex;
+  const waterTex = small.waterTex;
+  const deepWaterTex = small.deepWaterTex;
+  const platformTex = small.platformTex;
+  const crateTex = small.crateTex;
+  const barrelTex = small.barrelTex;
+  const wallVariants = small.wallVariants;
   const decoList = [];
 
   const staticLayer = mkCanvas(W, H);

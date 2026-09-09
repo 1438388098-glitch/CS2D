@@ -94,11 +94,31 @@ function buildReverb(ac, mapId) {
   delay.delayTime.value = p.delay;
   const fb = ac.createGain();
   fb.gain.value = p.fb;
+  // 反馈环串低通：高频逐次衰减，尾音更自然（消除金属感）
+  const damp = ac.createBiquadFilter();
+  damp.type = 'lowpass';
+  damp.frequency.value = 2200;
   const wet = ac.createGain();
   wet.gain.value = p.wet;
-  delay.connect(fb); fb.connect(delay);
+  delay.connect(damp); damp.connect(fb); fb.connect(delay);
   delay.connect(wet);
-  return { delay, wet, nodes: [delay, fb, wet] };
+  return { delay, wet, nodes: [delay, fb, damp, wet] };
+}
+
+// 共享混响 send：按 mapId 建一次复用（挂在 sfx bus 上），不再每声 boom/awp/shotgun 现建 5 节点即弃
+const reverbSends = new Map();
+function getReverbSend(ac, mapId, out) {
+  const key = String(mapId || 'dust2');
+  let send = reverbSends.get(key);
+  if (send && send.ac === ac) return send;
+  const rev = buildReverb(ac, key);
+  const wetIn = ac.createGain();
+  wetIn.gain.value = 1;
+  rev.wet.connect(wetIn);
+  wetIn.connect(out);
+  send = { ac, delay: rev.delay, wetIn };
+  reverbSends.set(key, send);
+  return send;
 }
 
 // 高频音效节流表：同 name 短间隔只发一次（脚步/水花/命中常态密集，防节点风暴）
@@ -178,19 +198,14 @@ export function sfx(name, vol, x, y, game, wid, mat) {
       chain = lp;
       tails.push(lp);
     }
-    // 空间混响：boom/awp/shotgun
-    let rev = null;
+    // 空间混响：boom/awp/shotgun（共享 send，节点常驻）
     if ((name === 'boom' || name === 'awp' || name === 'shotgun') && g) {
-      rev = buildReverb(ac, g.mapId);
-      chain.connect(rev.delay);
+      const send = getReverbSend(ac, g.mapId, out);
+      chain.connect(send.delay);
       const dry = ac.createGain();
       dry.gain.value = 1;
       chain.connect(dry);
-      const wetIn = ac.createGain();
-      wetIn.gain.value = 1;
-      rev.wet.connect(wetIn);
-      wetIn.connect(out);
-      tails.push(...rev.nodes, dry, wetIn);
+      tails.push(dry);
     }
     if (name === 'boom' && g) {
       // 爆炸低频余音：0.35s 后触发 90→28Hz 下坠音
