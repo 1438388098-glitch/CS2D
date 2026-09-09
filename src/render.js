@@ -581,7 +581,9 @@ function drawDrops(game) {
   ctx.font = "12px 'Segoe UI','Microsoft YaHei',sans-serif";
   ctx.textAlign = 'center';
   for (const d of game.drops) {
-    const info = dropRenderInfo(d);
+    // info 只依赖 (wid/kind)，drop 生命周期内不变：缓存到 drop 对象免每帧重建
+    if (!d._info) d._info = dropRenderInfo(d);
+    const info = d._info;
     if (!info) continue;
     const blink = 0.65 + 0.35 * Math.sin(performance.now() / 280);
     const near = game.player && !game.player.dead && Math.hypot(game.player.x - d.x, game.player.y - d.y) < 48;
@@ -612,7 +614,9 @@ function drawDrops(game) {
     }
     ctx.restore();
     ctx.fillStyle = near ? 'rgba(255,240,180,' + blink + ')' : 'rgba(255,220,150,' + blink * 0.8 + ')';
-    ctx.font = near ? "bold 11px 'Segoe UI','Microsoft YaHei',sans-serif" : "9px 'Segoe UI','Microsoft YaHei',sans-serif";
+    // font 状态切换昂贵：仅在 near 翻转时重设
+    const wantFont = near ? "bold 11px 'Segoe UI','Microsoft YaHei',sans-serif" : "9px 'Segoe UI','Microsoft YaHei',sans-serif";
+    if (ctx.font !== wantFont) ctx.font = wantFont;
     ctx.fillText(info.label, d.x, d.y - 16);
     if (near) {
       ctx.fillStyle = 'rgba(140,255,170,0.9)';
@@ -846,7 +850,7 @@ function drawSmokes(game) {
   ctx.save();
   for (const s of game.smokes) {
     // 淡入（半径增长期）+ 淡出（生命末期 2s），其余时段完全遮挡
-    const fade = clamp(s.life / 2, 0, 1) * clamp((s.r - 20) / 40, 0.3, 1);
+    const fade = clamp(s.life / SMOKE_DISSOLVE_LIFE, 0, 1) * clamp((s.r - 20) / 40, 0.3, 1);
     ctx.globalAlpha = fade;
     // 外圈柔边：烟体几何 (x,y,r) 终生不变，径向渐变只建一次缓存在烟体上，透明度交给 globalAlpha
     if (!s._grad) {
@@ -894,27 +898,28 @@ function drawSmokes(game) {
   ctx.restore();
 }
 
+// 基础圆点粒子的填充色前缀（模块常量，免每帧重建 styles 对象）
+const PARTICLE_STYLES = {
+  blood: 'rgba(150,20,15,',
+  spark: 'rgba(255,200,110,',
+  smokep: 'rgba(190,193,198,',
+  splash: 'rgba(120,190,235,',
+  wood: 'rgba(150,110,60,',
+  dust: 'rgba(172,158,126,'
+};
 function drawParticles(game) {
-  const styles = {
-    blood: 'rgba(150,20,15,',
-    spark: 'rgba(255,200,110,',
-    smokep: 'rgba(190,193,198,',
-    splash: 'rgba(120,190,235,',
-    wood: 'rgba(150,110,60,',
-    dust: 'rgba(172,158,126,'
-  };
-  for (const kind of Object.keys(styles)) {
-    ctx.fillStyle = styles[kind];
-    for (const p of game.particles) {
-      if (p.kind !== kind) continue;
+  // 单遍分发：原来按 kind 分 6 遍遍历 + 特殊粒子第 7 遍，600 粒子上限时 ~4200 次/帧迭代降为 600
+  for (const p of game.particles) {
+    const base = PARTICLE_STYLES[p.kind];
+    if (base) {
+      ctx.fillStyle = base;
       ctx.globalAlpha = clamp(p.life, 0, 1);
       ctx.beginPath();
       ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
       ctx.fill();
+      continue;
     }
-  }
-  ctx.globalAlpha = 1;
-  for (const p of game.particles) {
+    ctx.globalAlpha = 1;
     const a = clamp(p.life, 0, 1);
     if (p.kind === 'shell') {
       ctx.save();
@@ -941,6 +946,7 @@ function drawParticles(game) {
       drawEnhancedBoom(ctx, enhancedBoomSpec(p));
     }
   }
+  ctx.globalAlpha = 1;
 }
 function drawFog(game) {
   const map = getMap();

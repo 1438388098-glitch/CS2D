@@ -183,7 +183,7 @@ function startLoop() {
     try {
       const tWork0 = performance.now();
       const speed = Math.max(1, Math.min(8, Math.floor((game.cyber && game.cyber.speed) || (game.spectate && game.spectate.speed) || 1)));
-      // 固定步长模拟（1/30）：可变 dt 会破坏 seedWorld 确定性重放；累积真实时间按固定步进
+      // 固定步长模拟（FIXED=1/60）：可变 dt 会破坏 seedWorld 确定性重放；累积真实时间按固定步进
       let steps = 0;
       while (acc >= FIXED && steps < 8) {
         acc -= FIXED;

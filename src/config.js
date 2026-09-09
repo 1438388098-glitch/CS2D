@@ -186,6 +186,16 @@ export const BOT_NAMES = ['Rex', 'Nova', 'Echo', 'Onyx', 'Frost', 'Viper', 'Dusk
 
 export const DROP_COL = { rifle: '#ff8a2a', smg: '#ffd75e', shotgun: '#e07a2a', sniper: '#5ab0ff', pistol: '#9ad0ff' };
 
+// 玩家/实体移动手感参数（原散落在 game.js 的魔法数字，集中便于调优）
+export const MOVEMENT = {
+  SPEED: 235,        // 基础移速 px/s（实际乘武器 speed 系数）
+  WATER_MULT: 0.6,   // 涉水减速系数（浅水/深水一致，spec 4.3）
+  STUN_ON_DROP: 0.4, // 高台落地的硬直秒数
+  FRICTION: 7,       // 地面摩擦（指数衰减率/秒）
+  SPLASH_CD: 0.5,    // 溅水触发冷却
+  SPLASH_VEL: 60     // 触发溅水的最小速度 px/s
+};
+
 // Map registry: high-resolution official radar rebuilds
 for (const [id, def] of Object.entries(OFFICIAL_MAPS)) {
   if (id === 'canal' || id === 'blast') continue;

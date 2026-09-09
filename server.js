@@ -216,13 +216,20 @@ function handleFrame(ws, payload) {
   // 等待期保活心跳：仅刷新 lastActive，不回包、不广播
   if (msg.type === 'ping') return;
   if (msg.type === 'hello') {
-    const room = String(msg.room || '').trim();
+    // 房间码实际 6 位：截断 32 字符并剥离控制字符，防畸形超长房名；host 已存在时拒绝第二个 host，防抢房导致中继错乱
+    const room = String(msg.room || '').trim().replace(/[\x00-\x1f\x7f]/g, '').slice(0, 32);
     if (!room) return;
     ws.room = room;
     ws.role = msg.role === 'host' ? 'host' : 'guest';
     ws.name = String(msg.name || 'LAN Player').slice(0, 16);
     let r = rooms.get(room);
     if (!r) { r = { clients: new Set(), host: null }; rooms.set(room, r); }
+    if (ws.role === 'host' && r.host && r.host !== ws) {
+      sendFrame(ws, { type: 'error', reason: 'host-exists' });
+      ws.room = null;
+      ws.role = null;
+      return;
+    }
     r.clients.add(ws);
     if (ws.role === 'host') r.host = ws;
     sendFrame(ws, { type: 'welcome', role: ws.role, room, count: r.clients.size });
