@@ -1234,7 +1234,7 @@ function bindSettings() {
       const b = e.target.closest('.set-btn');
       if (!b) return;
       const mode = b.getAttribute('data-mode');
-      if (mode !== 'fps' && mode !== 'top') return;
+      if (mode !== 'top') return; // 第一人称已下架（attic/），设置面板仅俯视
       setViewMode(game, mode);
       refreshViewSel();
       b.blur(); // 焦点落在按钮上：避免后续 Space/Enter 合成 click 意外切换视角

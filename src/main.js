@@ -116,7 +116,7 @@ async function boot() {
 }
 
 let frameMsEma = 16.7; let renderMsEma = 16.7; let statsT = 0; let scaleCur = 1.0; let scaleT = 0; // E4 自适应：默认全分辨率（1080P），超预算降档
-let healthScale = 1; let healthScaleT = 0; let healthScaleStepT = 0; // 帧健康降档档位：并入 scale 状态机，采纳 render3d-next 的降档并带 3s 恢复节流
+let healthScale = 1; let healthScaleT = 0; let healthScaleStepT = 0; // 帧健康降档档位：并入 scale 状态机（沿袭自 render3d-next 的降档策略），带 3s 恢复节流
 let lastT = performance.now();
 const perfSamples = new Float64Array(60);
 let perfIdx = 0;
@@ -226,7 +226,7 @@ function startLoop() {
         longTaskWindowMs = 0;
         longTaskWindowStart = nowMs;
       }
-      // 帧健康降档并入自适应档位状态机：采纳 render3d-next 的 updateFrameHealth 降档
+      // 帧健康降档并入自适应档位状态机（沿袭自 render3d-next 的 updateFrameHealth 降档策略）
       // （避免每帧 scaleCur 覆盖其降档），健康稳定 ≥3s 后逐步回档，防止无限降低
       {
         const hsRaw = game._renderScale;
