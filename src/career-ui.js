@@ -189,6 +189,10 @@ function onClick(e) {
 function render() {
   const panel = el('careerPanel');
   if (!panel) return;
+  // innerHTML 重建前后恢复滚动位置，避免点按钮/切 tab 后跳回顶部
+  const bodyEl = panel.querySelector('.career-body');
+  const bodyTop = bodyEl ? bodyEl.scrollTop : 0;
+  const panelTop = panel.scrollTop;
   const s = loadCareer();
   const settlement = s.season.cup.phase === 'finished';
   const phase = s.season.cup.phase === 'active' ? ' · 杯赛' : (s.season.cup.phase === 'finished' ? ' · 杯赛结束' : '');
@@ -201,6 +205,9 @@ function render() {
   if (settlement) html += '<button class="career-tab sel" data-act="tab" data-tab="settlement">赛季结算</button>';
   html += '</div><div class="career-body">' + renderTab(s) + '</div>';
   panel.innerHTML = html;
+  const bodyEl2 = panel.querySelector('.career-body');
+  if (bodyEl2) bodyEl2.scrollTop = bodyTop;
+  panel.scrollTop = panelTop;
 }
 
 function attrsBars(s) {

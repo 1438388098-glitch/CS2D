@@ -79,7 +79,7 @@ function refreshLeadershipOnDeath(game) {
     if (e.team === 't') tDead++;
     else if (e.team === 'ct') ctDead++;
   }
-  const sig = tDead + ':' + ctDead;
+  const sig = (tDead << 4) | ctDead;
   if (game._leadSig === sig) return;
   game._leadSig = sig;
   try {
@@ -487,7 +487,12 @@ export function updateBombHud(game) {
   const p = game.player;
   if (!p) return;
   const ot = objectiveText(game);
-  emit('objtext', { main: ot.main, sub: ot.sub });
+  // 每模拟步调用：文案不变则跳过 emit（接收端还有二次差量）
+  if (game._lastObjMain !== ot.main || game._lastObjSub !== ot.sub) {
+    game._lastObjMain = ot.main;
+    game._lastObjSub = ot.sub;
+    emit('objtext', { main: ot.main, sub: ot.sub });
+  }
 }
 
 
@@ -668,19 +673,23 @@ function updateFxTimers(game, dt) {
     ho.t -= dt;
     if (ho.t <= 0 || ho.target.dead) game.hitOutlines.splice(i, 1);
   }
-  if (game.flashT > 0) {
-    game.flashT -= dt;
-    emit('flash', { opacity: Math.min(0.9, game.flashT * 0.22) });
-  } else {
-    emit('flash', { opacity: 0 });
-  }
-  emit('dmg', { opacity: clamp(game.dmgT * 2, 0, 1) });
+  if (game.flashT > 0) game.flashT -= dt;
+  // 发送端差量：透明度值不变（0.01 精度）则跳过 emit，省每步对象分配与监听者遍历
+  const flashOp = game.flashT > 0 ? Math.min(0.9, game.flashT * 0.22) : 0;
+  const flashQ = Math.round(flashOp * 100);
+  if (game._lastFlashQ !== flashQ) { game._lastFlashQ = flashQ; emit('flash', { opacity: flashOp }); }
+  const dmgOp = clamp(game.dmgT * 2, 0, 1);
+  const dmgQ = Math.round(dmgOp * 100);
+  if (game._lastDmgQ !== dmgQ) { game._lastDmgQ = dmgQ; emit('dmg', { opacity: dmgOp }); }
   const pl = game.player;
-  if (pl && !pl.dead && pl.hp <= 25) {
-    const hpRatio = (25 - pl.hp) / 25;
-    emit('lowhp', { opacity: clamp(0.15 + hpRatio * 0.5, 0, 0.55) + 0.08 * Math.sin(performance.now() / 150) });
-  } else if (pl && !pl.dead) {
-    emit('lowhp', { opacity: 0 });
+  if (pl && !pl.dead) {
+    let lowOp = 0;
+    if (pl.hp <= 25) {
+      const hpRatio = (25 - pl.hp) / 25;
+      lowOp = clamp(0.15 + hpRatio * 0.5, 0, 0.55) + 0.08 * Math.sin(performance.now() / 150);
+    }
+    const lowQ = Math.round(lowOp * 100);
+    if (game._lastLowQ !== lowQ) { game._lastLowQ = lowQ; emit('lowhp', { opacity: lowOp }); }
   }
 }
 

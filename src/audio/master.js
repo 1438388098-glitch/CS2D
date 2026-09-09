@@ -1,6 +1,6 @@
 import {ctx as gameCtx} from '../ctx.js';
 import {clamp} from '../utils.js';
-import {initAudioCore, getAc, isAudioReady, resumeAudio, bindAudioUnlock, getBus, setBusVolume, getBusVolume, setMasterGain, VOL_DEFAULTS} from './core.js';
+import {initAudioCore, getAc, isAudioReady, resumeAudio, bindAudioUnlock, getBus, setBusVolume, getBusVolume, setMasterGain, throttle, VOL_DEFAULTS} from './core.js';
 import {buildShot, buildSfx, buildUi, buildAmbient} from './patches.js';
 import {readAudioPrefs, writeAudioPrefs} from './prefs.js';
 
@@ -42,6 +42,10 @@ export function setMuted(v) {
     prefs.muted = v;
     writeAudioPrefs(prefs, localStorage);
   } catch (e) { /* 无存储 */ }
+  // 对局中解除静音：环境音立即恢复（muted 期间 startAmbient 会早退）
+  if (!v && lastAmbientMapId != null) {
+    try { startAmbient(lastAmbientMapId); } catch (e) { /* 无音频环境 */ }
+  }
 }
 
 export function isMuted() { return muted; }
@@ -97,9 +101,14 @@ function buildReverb(ac, mapId) {
   return { delay, wet, nodes: [delay, fb, wet] };
 }
 
+// 高频音效节流表：同 name 短间隔只发一次（脚步/水花/命中常态密集，防节点风暴）
+const SFX_THROTTLE_MS = { step: 80, splash: 200, hit: 30, hitArmor: 30, head: 40 };
+
 export function sfx(name, vol, x, y, game, wid, mat) {
   resumeAudio();
   if (!isAudioReady() || muted) return;
+  const thMs = SFX_THROTTLE_MS[name];
+  if (thMs && !throttle(name, thMs)) return;
   const ac = getAc();
   try {
     const g = game || (gameProvider && gameProvider());
@@ -136,7 +145,8 @@ export function sfx(name, vol, x, y, game, wid, mat) {
     const useSpatialPanner = hasPos && distToListener > 24;
     if (useSpatialPanner && ac.createPanner) {
       panner = ac.createPanner();
-      panner.panningModel = 'HRTF';
+      // 远距用 equalpower（HRTF 卷积昂贵且此处 rolloffFactor=0 无距离衰减收益），近距保留 HRTF 定位感
+      panner.panningModel = distToListener > 600 ? 'equalpower' : 'HRTF';
       panner.distanceModel = 'inverse';
       panner.refDistance = 1;
       panner.maxDistance = 4000;
@@ -269,8 +279,10 @@ export { setBusVolume, getBusVolume };
 
 // 环境音：地图专属 loop，切换地图时自动切换
 let ambient = null;
+let lastAmbientMapId = null;
 
 export function startAmbient(mapId) {
+  lastAmbientMapId = mapId;
   resumeAudio();
   if (!isAudioReady() || muted) return;
   const ac = getAc();

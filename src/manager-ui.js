@@ -59,6 +59,10 @@ function render() {
   const s = getState();
   const panel = el('managerPanel');
   if (!panel) return;
+  // innerHTML 重建前后恢复滚动位置，避免点按钮/切筛选后跳回顶部
+  const bodyEl = panel.querySelector('.career-body');
+  const bodyTop = bodyEl ? bodyEl.scrollTop : 0;
+  const panelTop = panel.scrollTop;
   const h = teamHealth(s);
   const fr = financialRisk(s);
   let html = '<div class="career-top">' +
@@ -76,6 +80,9 @@ function render() {
   html += rr(s);
   html += '</div>';
   panel.innerHTML = html;
+  const bodyEl2 = panel.querySelector('.career-body');
+  if (bodyEl2) bodyEl2.scrollTop = bodyTop;
+  panel.scrollTop = panelTop;
 }
 
 function healthDot(c, label, val) {
