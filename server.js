@@ -244,7 +244,9 @@ function handleFrame(ws, payload) {
     const room = String(msg.room || '').trim().replace(/[\x00-\x1f\x7f]/g, '').slice(0, 32);
     if (!room) return;
     ws.room = room;
-    ws.role = msg.role === 'host' ? 'host' : 'guest';
+    // 角色白名单：host / guest / spectator（第三方观战）。观战端加入房间 clients 参与广播，
+    // 但不占对战槽（无 welcome 之外的独立配额语义，peer count 仍为房间成员数）。
+    ws.role = msg.role === 'host' ? 'host' : (msg.role === 'spectator' ? 'spectator' : 'guest');
     ws.name = String(msg.name || 'LAN Player').slice(0, 16);
     let r = rooms.get(room);
     if (!r) {
@@ -271,6 +273,8 @@ function handleFrame(ws, payload) {
   }
   if (!ws.room) return;
   if (msg.type === 'relay' || msg.type === 'input' || msg.type === 'start' || msg.type === 'hit') {
+    // 观战端只收不发：其 relay 类消息一律忽略，防止第三方观战端注入伪造的输入/开赛/命中事件
+    if (ws.role === 'spectator') return;
     broadcast(ws.room, msg, ws);
     return;
   }

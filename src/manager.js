@@ -830,8 +830,13 @@ function updateTeamDynamics(s, homeId, awayId, winner) {
     t.form = form;
     t.morale = clamp(Number(t.morale || 50) + (won ? 2 : -2), 20, 100);
     if (teamId !== 'player') {
-      const formScore = form.reduce((a, f) => a + (f === 'W' ? 1 : -1), 0);
-      t.rating = clamp(Math.round(Number(t.rating || 70) + (won ? 0.8 : -0.8) + formScore * 0.1), lo - 5, hi + 5);
+      // 非玩家队动态评级随连胜/连败漂移：每场 ±1（小幅、确定性，不引入随机），
+      // 并 clamp 在所在联赛 ratingRange [lo, hi] 内；玩家队 rating 永不漂移
+      const mark = won ? 'W' : 'L';
+      let streak = 0;
+      for (let i = form.length - 1; i >= 0 && form[i] === mark; i--) streak++;
+      t.streak = streak;
+      t.rating = clamp(Math.round(Number(t.rating || 70) + (won ? 1 : -1)), lo, hi);
     }
   }
 }

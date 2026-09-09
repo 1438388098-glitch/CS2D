@@ -2195,8 +2195,15 @@ function updateTeamDynamics(s, homeId, awayId, winner, opts = {}) {
     team.form = form;
     team.recentForm = form.join('');
     team.morale = clamp(Number(team.morale || 50) + (won ? 2 : -2), 20, 100);
-    const formScore = form.reduce((a, f) => a + (f === 'W' ? 1 : -1), 0);
-    team.rating = clamp(Math.round(Number(team.rating || 70) + (won ? 0.8 : -0.8) + formScore * 0.1), lo - 5, hi + 5);
+    if (teamId !== 'player') {
+      // 非玩家队动态评级随连胜/连败漂移：每场 ±1（小幅、确定性，不引入随机），
+      // 并 clamp 在所在联赛 ratingRange [lo, hi] 内；玩家队 rating 由 refreshPlayerRating 管理，永不漂移
+      const mark = won ? 'W' : 'L';
+      let streak = 0;
+      for (let i = form.length - 1; i >= 0 && form[i] === mark; i--) streak++;
+      team.streak = streak;
+      team.rating = clamp(Math.round(Number(team.rating || 70) + (won ? 1 : -1)), lo, hi);
+    }
   }
 }
 
