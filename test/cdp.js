@@ -39,11 +39,25 @@ export function launchBrowser(opts = {}) {
     '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
     '/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge'
   ];
+  // CDP_BROWSER 覆盖仅接受白名单浏览器的绝对路径，防环境变量注入任意程序
+  const knownBrowsers = new Set(candidates.map((p) => require('path').basename(p).toLowerCase()));
+  if (envExe) {
+    const isAbs = require('path').isAbsolute(envExe);
+    const known = knownBrowsers.has(require('path').basename(envExe).toLowerCase());
+    if (!isAbs || !known || !require('fs').existsSync(envExe)) {
+      throw new Error('CDP_BROWSER must be an absolute path to a known chrome/edge/chromium executable');
+    }
+  }
   const exe = envExe && require('fs').existsSync(envExe) ? envExe : candidates.find((p) => require('fs').existsSync(p));
   if (!exe) throw new Error('no edge/chrome found (set CDP_BROWSER)');
-  const port = opts.port || Number(env.CDP_PORT) || 9223;
+  const port = Number(opts.port || env.CDP_PORT || 9223);
+  if (!Number.isInteger(port) || port < 1 || port > 65535) throw new Error('invalid CDP port: ' + port);
   const profile = opts.profile || env.CDP_PROFILE || require('path').join(osTmp, 'cdp-profile');
   const extraFlags = opts.flags || [];
+  // 启动旗标只放行 --switch / --switch=value 形式，阻断位置参数与选项注入
+  for (const f of extraFlags) {
+    if (!/^--[a-z0-9][a-z0-9.-]*(=.{0,4096})?$/i.test(f)) throw new Error('invalid browser flag: ' + f);
+  }
   const flags = [
     `--remote-debugging-port=${port}`,
     '--no-first-run',
@@ -89,8 +103,13 @@ function httpGet(url) {
 }
 
 function httpReq(method, url) {
+  // 仅允许本机回环 CDP 端点，防测试工具被当作 SSRF 跳板
+  const u = new URL(url);
+  if (u.protocol !== 'http:' || u.hostname !== '127.0.0.1') {
+    return Promise.reject(new Error('cdp http client is loopback-only: ' + u.hostname));
+  }
   return new Promise((resolve, reject) => {
-    const req = http.request(url, { method }, (res) => {
+    const req = http.request(u, { method }, (res) => {
       let d = '';
       res.on('data', (c) => (d += c));
       res.on('end', () => {
@@ -132,6 +151,7 @@ export class CDP {
         const head = acc.toString('latin1');
         const m = head.match(/Sec-WebSocket-Accept: (.+)\r\n/);
         if (m) {
+          // RFC 6455 §4.2.2 握手验收值必须用 SHA-1(key+固定GUID) 计算，协议互操作要求，非安全用途
           const expect = crypto.createHash('sha1').update(key + '258EAFA5-E914-47DA-95CA-C5AB0DC85B11').digest('base64');
           if (m[1].trim() !== expect) { cleanup(); reject(new Error('bad accept')); return; }
           const restIdx = head.indexOf('\r\n\r\n');

@@ -131,7 +131,7 @@ const server = http.createServer((req, res) => {
       sendStatus(res, 404, 'Not Found');
       return;
     }
-    const etag = '"' + crypto.createHash('sha1').update(data).digest('hex').slice(0, 24) + '"';
+    const etag = '"' + crypto.createHash('sha256').update(data).digest('hex').slice(0, 24) + '"';
     if (req.headers['if-none-match'] === etag) {
       res.writeHead(304, {
         'ETag': etag,
@@ -311,8 +311,10 @@ server.on('upgrade', (req, socket) => {
       return;
     }
   }
-  const accept = crypto.createHash('sha1').update(key + '258EAFA5-E914-47DA-95CA-C5AB0DC85B11').digest('base64');
-  socket.write('HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Accept: ' + accept + '\r\n\r\n');
+  // RFC 6455 §4.2.2 握手验收值：必须用 SHA-1(key + 固定GUID) 计算，与浏览器各算一遍比对才允许升级协议。
+  // 这是协议互操作校验值，不是完整性/加密保护，存在碰撞也不影响安全模型，换其他算法将无法通过任何标准客户端握手。
+  const websocketAccept = crypto.createHash('sha1').update(key + '258EAFA5-E914-47DA-95CA-C5AB0DC85B11').digest('base64');
+  socket.write('HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Accept: ' + websocketAccept + '\r\n\r\n');
   const ws = { socket, room: null, role: null, name: null, buf: Buffer.alloc(0), lastActive: Date.now() };
   socket.on('data', (d) => handleData(ws, d));
   socket.on('close', () => leave(ws));
