@@ -286,20 +286,37 @@ function drawHitOutlines(game) {
   ctx.restore();
 }
 
+// 伤害数字分级样式（纯函数，供测试断言）：字号按伤害分 4 档，
+// 爆头数字在出现后 0.12s 内弹到 1.55 倍再 0.25s 回落，强化"打中头"的瞬间感
+export function dmgPopStyle(pop) {
+  const age = 0.8 - clamp(pop.t, 0, 0.8);
+  const tier = pop.dmg >= 90 ? 3 : pop.dmg >= 50 ? 2 : pop.dmg >= 22 ? 1 : 0;
+  let size = 11 + tier * 2.5;
+  if (pop.head) {
+    const grow = clamp(age / 0.12, 0, 1);
+    const settle = clamp(1 - Math.max(0, age - 0.12) / 0.25, 0, 1);
+    size *= 1 + 0.55 * grow * settle;
+  }
+  return { size, alpha: clamp(pop.t / 0.3, 0, 1) };
+}
+
 function drawDmgPops2D(game) {
   const pops = game.dmgPops;
   if (!pops || !pops.length) return;
   const t = ctx;
-  t.font = '12px Arial';
   t.textAlign = 'center';
   t.lineJoin = 'round';
   t.lineWidth = 3;
   const n = Math.min(pops.length, 12);
+  let lastFont = '';
   for (let i = 0; i < n; i++) {
     const pop = pops[i];
     if (!pop || pop.t === undefined || pop.t > 0.8) continue;
+    const st = dmgPopStyle(pop);
     let sy = pop.y - (1 - pop.t / 0.8) * 30;
-    t.globalAlpha = clamp(pop.t / 0.3, 0, 1);
+    t.globalAlpha = st.alpha;
+    const font = st.size.toFixed(1) + 'px Arial';
+    if (font !== lastFont) { t.font = font; lastFont = font; }
     t.strokeStyle = '#000';
     t.fillStyle = pop.head ? '#ffd34d' : '#ffffff';
     const txt = String(Math.round(pop.dmg));
@@ -717,7 +734,7 @@ function getStepFX(e, tSec) {
   st.px = e.x; st.py = e.y;
   const cyc = stepCycle(st.acc, tSec, st.seed);
   const dust = moving ? stepDust(st.acc, tSec, st.seed, DUST_PER_STEP) : [];
-  return { phase: cyc.phase, swinging: cyc.swinging, dust };
+  return { phase: cyc.phase, swinging: cyc.swinging, dust, moving };
 }
 
 // bot 头顶名离屏缓存：文本栅格化贵，按 (名字|职业|队色) 生成一次小画布，之后 drawImage 贴图
@@ -756,6 +773,12 @@ function drawEntities(game) {
   // 内嵌剖析只在显式开启（window.__cs2dProf=true，诊断脚本用）时采集，生产路径每实体省 8 次 performance.now
   const prof = typeof window !== 'undefined' && !!window.__cs2dProf;
   const stepCounts = { entities: 0, feet: 0, dust: 0 };
+  // 受击白闪查表：本帧存在命中标记时才建 Map（常帧零开销），目标死亡时标记已随 updateFxTimers 清除
+  let flashByEntity = null;
+  if (game.hitOutlines && game.hitOutlines.length) {
+    flashByEntity = new Map();
+    for (const ho of game.hitOutlines) flashByEntity.set(ho.target, ho);
+  }
   for (const e of game.entities) {
     const ex = viewX(e), ey = viewY(e), ea = viewAngle(e);
     if (ex < vx0 || ex > vx1 || ey < vy0 || ey > vy1) continue;
@@ -785,13 +808,25 @@ function drawEntities(game) {
     ctx.beginPath();
     ctx.ellipse(0, 0, 16, 16, 0, 0, Math.PI * 2);
     ctx.stroke();
-    const bob = isP && e.walking ? Math.sin(performance.now() / 160) * 2.5 : 0;
+    // 行走起伏：玩家保持原有节奏；bot 用 stepCycle 相位驱动（幅度略小）——人群不再滑行
+    let bob = 0;
+    if (isP) bob = e.walking ? Math.sin(performance.now() / 160) * 2.5 : 0;
+    else if (stFx && stFx.moving) bob = botBob(stFx.phase, tSec);
     ctx.translate(0, bob);
     ctx.rotate(ea);
     ctx.fillStyle = darkCol;
     ctx.beginPath();
     ctx.ellipse(0, 0, 12, 15, 0, 0, Math.PI * 2);
     ctx.fill();
+    // 受击白闪：刚被命中的实体躯干短暂提亮（复用 hitOutlines 剩余时间，头部标记更持久）
+    const fl = flashByEntity && flashByEntity.get(e);
+    const fa = fl ? bodyFlashAlpha(fl.t, fl.head) : 0;
+    if (fa > 0) {
+      ctx.fillStyle = 'rgba(255,255,255,' + fa + ')';
+      ctx.beginPath();
+      ctx.ellipse(0, 0, 12, 15, 0, 0, Math.PI * 2);
+      ctx.fill();
+    }
     ctx.fillStyle = '#2c3038';
     ctx.beginPath();
     ctx.arc(0, -4, 9, 0, Math.PI * 2);
@@ -923,35 +958,92 @@ function drawSmokes(game) {
   ctx.restore();
 }
 
-// 基础圆点粒子的填充色前缀（模块常量，免每帧重建 styles 对象）
+// 基础圆点粒子的填充色（模块常量，免每帧重建 styles 对象；globalAlpha 负责淡出）
+// 注意：色值必须是完整合法 fillStyle —— 带尾逗号的 'rgba(r,g,b,' 会被 canvas 静默忽略，
+// 导致粒子沿用上一状态颜色（曾致血/烟/水花全部画成烟灰色）。
 const PARTICLE_STYLES = {
-  blood: 'rgba(150,20,15,',
-  spark: 'rgba(255,200,110,',
-  smokep: 'rgba(190,193,198,',
-  splash: 'rgba(120,190,235,',
-  wood: 'rgba(150,110,60,',
-  dust: 'rgba(172,158,126,'
+  blood: 'rgb(150,20,15)',
+  smokep: 'rgb(190,193,198)',
+  splash: 'rgb(120,190,235)',
+  dust: 'rgb(172,158,126)'
 };
+
+// 条纹粒子速度→长度规格（纯函数，供测试断言）：条纹沿速度反方向拖出，
+// 长度随速度线性增长并夹在 [2,10]，速度近零时退化为默认方向的 2px 短点
+export function particleStreakSpec(p) {
+  const vx = p.vx || 0, vy = p.vy || 0;
+  const speed = Math.hypot(vx, vy);
+  const len = clamp(speed * 0.035, 2, 10);
+  const inv = speed > 0.001 ? 1 / speed : 0;
+  return { len, ux: speed > 0.001 ? vx * inv : 1, uy: speed > 0.001 ? vy * inv : 0 };
+}
+
+// 受击白闪强度（纯函数，供测试断言）：复用 hitOutlines 剩余时间，头部标记持续更久
+export function bodyFlashAlpha(t, head) {
+  return clamp(t / (head ? 0.45 : 0.3), 0, 1) * 0.45;
+}
+
+// bot 行走起伏（纯函数，供测试断言）：相位来自 stepCycle，幅度小于玩家的 2.5
+export function botBob(phase, tSec) {
+  return Math.sin(phase * Math.PI * 2 + tSec * 9) * 1.8;
+}
+
 function drawParticles(game) {
   // 单遍分发：原来按 kind 分 6 遍遍历 + 特殊粒子第 7 遍，600 粒子上限时 ~4200 次/帧迭代降为 600
   for (const p of game.particles) {
     const base = PARTICLE_STYLES[p.kind];
     if (base) {
+      const a = clamp(p.life, 0, 1);
       ctx.fillStyle = base;
-      ctx.globalAlpha = clamp(p.life, 0, 1);
+      ctx.globalAlpha = a;
       ctx.beginPath();
       ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
       ctx.fill();
+      if (p.kind === 'blood') {
+        // 深色内核：血滴更浓更有层次
+        ctx.fillStyle = 'rgb(96,10,8)';
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, p.size * 0.55, 0, Math.PI * 2);
+        ctx.fill();
+      }
       continue;
     }
     ctx.globalAlpha = 1;
     const a = clamp(p.life, 0, 1);
-    if (p.kind === 'shell') {
+    if (p.kind === 'spark') {
+      // 加色条纹火花：沿速度反方向拖出光条，双层描边（软橙晕 + 亮黄核），替换原平面圆点
+      const st = particleStreakSpec(p);
+      const tx = p.x - st.ux * st.len, ty = p.y - st.uy * st.len;
+      ctx.globalCompositeOperation = 'lighter';
+      ctx.lineCap = 'round';
+      ctx.strokeStyle = 'rgba(255,170,60,' + (a * 0.4) + ')';
+      ctx.lineWidth = 2.6;
+      ctx.beginPath();
+      ctx.moveTo(p.x, p.y);
+      ctx.lineTo(tx, ty);
+      ctx.stroke();
+      ctx.strokeStyle = 'rgba(255,228,160,' + a + ')';
+      ctx.lineWidth = 1.1;
+      ctx.stroke();
+      ctx.globalCompositeOperation = 'source-over';
+    } else if (p.kind === 'wood') {
+      // 木屑条纹：哑光短棕线（不加色，保持碎片质感）
+      const st = particleStreakSpec(p);
+      const wl = Math.min(st.len, 6);
+      ctx.strokeStyle = 'rgba(150,110,60,' + a + ')';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(p.x, p.y);
+      ctx.lineTo(p.x - st.ux * wl, p.y - st.uy * wl);
+      ctx.stroke();
+    } else if (p.kind === 'shell') {
       ctx.save();
       ctx.translate(p.x, p.y);
       ctx.rotate(p.spin || 0);
       ctx.fillStyle = 'rgba(200,150,60,' + a + ')';
       ctx.fillRect(-2, -1, 4, 2);
+      ctx.fillStyle = 'rgba(255,232,170,' + (a * 0.8) + ')';
+      ctx.fillRect(-2, -1, 4, 0.8);
       ctx.restore();
     } else if (p.kind === 'swing') {
       ctx.strokeStyle = 'rgba(255,255,255,' + (a * 0.5) + ')';
