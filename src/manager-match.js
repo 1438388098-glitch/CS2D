@@ -4,6 +4,7 @@ import { teamDiffParams } from './modes.js';
 import { ROLE_ARCHE, sameTeamBonus, getState, settlePlayerMatch, nextFixture, MATCH_WIN_LIMIT, MATCH_MAX_ROUNDS } from './manager.js';
 import { clamp } from './utils.js';
 import { ctx } from './ctx.js';
+import { computeMatchHltv as _computeMatchHltv, pickHltvMvp as _pickHltvMvp, updateHltvRolling as _updateHltvRolling } from './hltv-rating.js';
 
 function emit(evt, p) { ctx.bus.emit(evt, p); }
 
@@ -157,13 +158,49 @@ function finishManagerMatch(game, tWon) {
   g.settled = true;
   const s = getState();
   const myWon = g.isHome ? tWon : !tWon;
-  const result = settlePlayerMatch(s, myWon, 0, 0, { mvp: null });
+  // HLTV: 收集这场比赛所有选手 stats 算 HLO rating, 选 HLO 最高作为 MVP
+  let mvpObj = null;
+  try {
+    const playerEntities = (game.entities || []).filter((e) => e && e.bot);
+    const roundsArr = (g.rounds || []).map((r) => ({ round: r.round || 0, winner: r.winner }));
+    const playerStats = playerEntities.map((e) => ({
+      name: e.name, team: (e.team || '').toLowerCase() === 'ct' ? 'player' : 'opp',
+      kills: e.kills || 0, deaths: e.deaths || 0, dmg: e.dmg || 0,
+      plants: e.plants || 0, defuses: e.defuses || 0, clutches: e.clutches || 0,
+      roundsWon: 0, roundsSurvived: 0
+    }));
+    for (const ps of playerStats) {
+      let rw = 0, rs = 0;
+      for (const r of roundsArr) {
+        const teamWon = (r.winner === 'CT' && ps.team === 'player' && g.isHome) || (r.winner === 'T' && ps.team === 'player' && !g.isHome) || (r.winner !== 'CT' && r.winner !== 'T' && ps.team === 'opp');
+        if (teamWon) rw++; else rs++;
+      }
+      ps.roundsWon = rw;
+      ps.roundsSurvived = rs;
+    }
+    const withHltv = _computeMatchHltv(playerStats, s, roundsArr);
+    mvpObj = _pickHltvMvp(withHltv);
+    // HLTV: 给玩家 roster 里每个有 HLO 数据的选手更新 hltvHistory
+    if (mvpObj && withHltv) {
+      for (const ph of withHltv) {
+        if (ph.team !== 'player') continue;
+        const p = (s.team.roster || []).find((r) => r.name === ph.name);
+        if (p) _updateHltvRolling(p, ph.hltv.total);
+      }
+    }
+    // 缓存全员 HLO, 在 settlePlayerMatch 内部累加 tournamentStats + yearlyRating
+    var __hltvAllWithHltv = withHltv;
+  } catch (e) {
+    mvpObj = null;
+    var __hltvAllWithHltv = null;
+  }
+  const result = settlePlayerMatch(s, myWon, 0, 0, { mvp: mvpObj, playersWithHltv: __hltvAllWithHltv, gameType: g.isCup ? 'cup' : 'league' });
   const el = typeof document !== 'undefined' ? document.getElementById('managerMatchPanel') : null;
   if (el) el.style.display = 'none';
   game.over = true;
   game.state = 'END';
   game.noRoundEnd = true;
-  emit('banner', { t1: myWon ? '获胜' : '落败', t2: '比分 ' + game.score.T + ':' + game.score.CT, col: myWon ? '#ffd27a' : '#ff4d4d' });
+  emit('banner', { t1: myWon ? '获胜' : '落败', t2: '比分 ' + game.score.T + ':' + game.score.CT + (mvpObj && mvpObj.hltv ? ' · MVP ' + mvpObj.name + ' HLO ' + mvpObj.hltv.total.toFixed(2) : ''), col: myWon ? '#ffd27a' : '#ff4d4d' });
   if (myWon) emit('sfx', { name: 'win', vol: 0.9, game });
   else emit('sfx', { name: 'lose', vol: 0.8, game });
   if (result && result.ok && typeof window !== 'undefined' && window.__managerEndMatch) window.__managerEndMatch(game);

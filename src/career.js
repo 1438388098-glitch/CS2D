@@ -2,6 +2,7 @@ import { ROUND } from './config.js';
 import {registerMode, MODE_MAPS} from './registry.js';
 import {setupMatchEntities, startRound, startMatch} from './game.js';
 import {teamDiffParams, simScore} from './modes.js';
+import { computeMatchHltv as _computeMatchHltv, pickHltvMvp as _pickHltvMvp, updateHltvRolling as _updateHltvRolling } from './hltv-rating.js';
 
 const SAVE_KEY = 'cs2d_career';
 const BACKUP_KEY = 'cs2d_career_backup';
@@ -2159,11 +2160,33 @@ export function simulateCareerMatch(home, away, options = {}) {
     rounds.push(r);
     if (r.winner === homeTeam.id) homeScore++; else awayScore++;
   }
-  const players = Object.values(stats).map((p) => ({ ...p })).sort((a, b) => b.kills - a.kills || b.dmg - a.dmg);
-  const mvp = players.slice().sort((a, b) =>
-    (b.kills * 2 + b.dmg / 100 + b.plants + b.defuses + b.clutches * 2) -
-    (a.kills * 2 + a.dmg / 100 + a.plants + a.defuses + a.clutches * 2)
-  )[0] || null;
+  const playersRaw = Object.values(stats).map((p) => ({ ...p })).sort((a, b) => b.kills - a.kills || b.dmg - a.dmg);
+  // HLTV: 反推每个选手的回合参与度
+  for (const p of playersRaw) {
+    let rw = 0, rs = 0;
+    for (const r of rounds) {
+      if (r.winner === p.team) rw++; else rs++;
+    }
+    p.roundsWon = rw;
+    p.roundsSurvived = rs;
+  }
+  const players = playersRaw;
+  // HLTV: 用 HLO rating 最高的作为 MVP, 失败时降级为旧公式
+  let mvp = null;
+  try {
+    if (options.state) {
+      const withHltv = _computeMatchHltv(players, options.state, rounds);
+      mvp = _pickHltvMvp(withHltv);
+      for (let i = 0; i < players.length; i++) players[i].hltv = withHltv[i].hltv;
+    } else {
+      throw new Error('no state');
+    }
+  } catch (e) {
+    mvp = players.slice().sort((a, b) =>
+      (b.kills * 2 + b.dmg / 100 + b.plants + b.defuses + b.clutches * 2) -
+      (a.kills * 2 + a.dmg / 100 + a.plants + b.defuses + a.clutches * 2)
+    )[0] || null;
+  }
   const winnerId = homeScore >= awayScore ? homeTeam.id : awayTeam.id;
   return {
     mapId: options.mapId || (homeTeam.homeMap || 'dust2'),
@@ -2518,8 +2541,50 @@ export function careerEndMatch(game) {
   const kills = p.kills || 0;
   const deaths = p.deaths || 0;
   const teamBots = game.entities.filter((e) => e.bot && e.team === p.team);
-  const maxTeammateKills = teamBots.reduce((m, e) => Math.max(m, e.kills || 0), 0);
-  const mvp = kills >= 5 && kills > maxTeammateKills;
+  // HLTV: 用真实比赛 stats 算 HLO rating 替代旧的 kills >= 5 判定
+  let mvp = false;
+  try {
+    const roundsArr = (game.careerMatch && game.careerMatch.rounds) || [];
+    const playerStats = [{
+      name: p.name || 'player',
+      team: p.team === 't' ? 'player' : 'opp',
+      kills, deaths,
+      dmg: p.dmg || 0,
+      plants: p.plants || 0, defuses: p.defuses || 0, clutches: p.clutches || 0,
+      roundsWon: 0, roundsSurvived: 0
+    }];
+    // 队友 stats
+    for (const e of teamBots) {
+      playerStats.push({
+        name: e.name, team: e.team === 't' ? 'player' : 'opp',
+        kills: e.kills || 0, deaths: e.deaths || 0, dmg: e.dmg || 0,
+        plants: e.plants || 0, defuses: e.defuses || 0, clutches: e.clutches || 0,
+        roundsWon: 0, roundsSurvived: 0
+      });
+    }
+    // 反推 roundsWon/Survived
+    for (const ps of playerStats) {
+      let rw = 0, rs = 0;
+      for (const r of roundsArr) {
+        if (r.winner === ps.team || (r.winner && ps.team === 'player' && ((cm.venue === 'home' && r.winner === 't') || (cm.venue === 'away' && r.winner === 'ct')))) rw++; else rs++;
+      }
+      ps.roundsWon = rw;
+      ps.roundsSurvived = rs;
+    }
+    const withHltv = _computeMatchHltv(playerStats, s, roundsArr);
+    const playerHltv = withHltv.find((x) => x.name === (p.name || 'player'));
+    const maxTeammateHltv = withHltv.filter((x) => x.team === 'player' && x.name !== (p.name || 'player')).reduce((m, x) => Math.max(m, x.hltv?.total || 0), 0);
+    // MVP 条件: 玩家 HLO >= 1.05 且不低于队友最高
+    mvp = (playerHltv?.hltv?.total || 0) >= 1.05 && (playerHltv?.hltv?.total || 0) >= maxTeammateHltv;
+    // 顺便给玩家 player.hltvRating 更新 (Career 模式的 player 对象)
+    if (playerHltv?.hltv && p.name) {
+      _updateHltvRolling(p, playerHltv.hltv.total);
+    }
+  } catch (e) {
+    // 降级为旧公式
+    const maxTeammateKills = teamBots.reduce((m, e) => Math.max(m, e.kills || 0), 0);
+    mvp = kills >= 5 && kills > maxTeammateKills;
+  }
   const homeScore = cm.venue === 'home' ? game.score.T : game.score.CT;
   const awayScore = cm.venue === 'home' ? game.score.CT : game.score.T;
   const levelBefore = s.player.level;
@@ -2753,6 +2818,25 @@ export function seasonStats(history, season) {
     deaths,
     totalDmg: dmg,
     mvp
+  };
+}
+
+export function hltvSeasonSummary(s) {
+  // HLTV: 用玩家 player.hltvRating (滚动平均) 作为赛季 HLO
+  // history 数组里只存单场; 当前赛季的实时滚动由 player.hltvRating 表示
+  const p = s && s.player;
+  const hltv = (p && typeof p.hltvRating === 'number') ? p.hltvRating : 1.00;
+  const history = (p && Array.isArray(p.hltvHistory)) ? p.hltvHistory : [];
+  const matches = history.length;
+  let totalRating = 0;
+  for (const h of history) totalRating += (h.rating || 0);
+  const lastHltv = history.length ? history[history.length - 1].rating : 0;
+  const seasonAvg = matches ? Math.round((totalRating / matches) * 100) / 100 : 0;
+  return {
+    rating: Math.round(hltv * 100) / 100,
+    seasonAvg: seasonAvg,
+    last: Math.round(lastHltv * 100) / 100,
+    matches: matches
   };
 }
 

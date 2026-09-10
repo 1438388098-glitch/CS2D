@@ -7,8 +7,10 @@ import {
   trainPlayer, restPlayer, trainingPreview, facilityStatus, upgradeFacility,
   sponsorIncome, cashflowForecast, seasonBudget, financialRisk,
   ledgerRecent, transferProfit, computeChemistry, pendingEvents, respondEvent,
+  formatDate, isChristmasBreak,
   TRAIN_TIERS, ATTRS, PERSONALITY_CN, NEED_ROLES, ROLES
 } from './manager.js';
+import { yearlyTop } from './hltv-rating.js';
 import { startManagerMatch } from './manager-match.js';
 
 let doc = null;
@@ -17,6 +19,7 @@ let tab = 'dash';
 let transferRole = '';
 let transferSort = 'rating';
 let trainAttr = {};
+let yearlyVisible = false;  // 年度榜单浮层开关
 
 function el(id) { return doc ? doc.getElementById(id) : null; }
 function esc(s) { return String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])); }
@@ -67,11 +70,12 @@ function render() {
   const fr = financialRisk(s);
   let html = '<div class="career-top">' +
     '<span class="ct-mode">电竞经理</span>' +
-    '<span class="ct-season">S' + s.season.id + ' · R' + s.season.round + '/' + s.season.totalRounds + ' · ' + esc(s.team.league) + (s.season.cup.phase !== 'idle' ? ' · 杯赛' : '') + '</span>' +
+    '<span class="ct-season">S' + s.season.id + ' · R' + s.season.round + '/' + s.season.totalRounds + ' · ' + esc(s.team.league) + (s.season.cup.phase !== 'idle' ? ' · 杯赛' : '') + ' · ' + esc(formatDate(s)) + (isChristmasBreak(s) ? ' · 圣诞休赛期' : '') + '</span>' +
     '<span class="ct-bank">¥' + money(s.team.bank) + '</span>' +
     '<span class="ct-bank" style="color:' + healthColor(h.morale) + '">士气' + s.team.morale + '</span>' +
     '<span class="ct-bank" style="color:' + healthColor(fr.level === '高风险' ? 'red' : fr.level === '紧张' ? 'yellow' : 'green') + '">' + esc(fr.level) + '</span>' +
     '<span class="ct-bank">信任' + s.board.trust + '</span>' +
+    '<button data-act="yearly" title="年度 HLO 榜单 Top 5">📊 年度 Top 5</button>' +
     '<button data-act="menu">←主菜单</button></div>';
   html += '<div class="career-tabs">';
   for (const [id, label] of TABS) html += '<button class="career-tab' + (tab === id ? ' sel' : '') + '" data-act="tab" data-tab="' + id + '">' + label + '</button>';
@@ -79,10 +83,69 @@ function render() {
   const rr = { dash: renderDash, roster: renderRoster, schedule: renderSchedule, train: renderTrain, finance: renderFinance }[tab] || renderDash;
   html += rr(s);
   html += '</div>';
+  if (yearlyVisible) html += renderYearlyPopup(s);
   panel.innerHTML = html;
   const bodyEl2 = panel.querySelector('.career-body');
   if (bodyEl2) bodyEl2.scrollTop = bodyTop;
   panel.scrollTop = panelTop;
+}
+
+function renderYearlyPopup(s) {
+  const top5 = yearlyTop(s.yearlyRating, 5);
+  const year = (s.yearlyRating && s.yearlyRating.year) || 2026;
+  const top20 = s.yearlyTop20;
+  const hist = (s.yearlyHistory || []).slice(-3);  // HLO Top 10 快照
+  const top20Hist = (s.yearlyTop20History || []).slice(-10);  // Top 20 历史 (Q6=C)
+  let body = '<div class="career-card" style="margin-top:10px"><div class="mng-next"><div><b>📊 年度榜单 · ' + year + ' 年</b>' +
+    '<button data-act="yearly-close" style="float:right">关闭</button></div></div>';
+
+  // 视图 1: 当前年度 HLO Top 5
+  body += '<div class="career-news" style="margin-top:6px"><b>HLO 加权 Top 5 (本赛季累计)</b></div>';
+  if (top5.length === 0) {
+    body += '<div class="career-news">今年暂无比赛数据, 打几场就有了~</div>';
+  } else {
+    body += '<div class="mng-roster">';
+    top5.forEach((e, i) => {
+      const isPlayer = e.team === 'player' ? ' mine' : '';
+      const avg = e.games > 0 ? (e.hltvSum / e.games).toFixed(2) : '0.00';
+      body += '<div class="mng-row' + isPlayer + '"><span>#' + (i + 1) + ' ' + esc(e.name) + '</span><span>' + e.games + ' 场 · avg ' + avg + ' · 加权 ' + e.weightedScore.toFixed(2) + ' · 最佳 ' + e.bestHlo.toFixed(2) + '</span></div>';
+    });
+    body += '</div>';
+  }
+
+  // 视图 2: 当前年度 HLTV Top 20 (已发布时显示)
+  if (top20 && Array.isArray(top20.entries) && top20.entries.length > 0) {
+    body += '<div class="career-news" style="margin-top:12px"><b>HLTV Top 20 · ' + top20.year + ' 年</b> (荣誉分 + rating 综合)</div>';
+    body += '<div class="mng-roster">';
+    top20.entries.forEach((e) => {
+      const isPlayer = e.team === 'player' ? ' mine' : '';
+      const tag = e.from === 'rating' ? ' [rating补]' : '';
+      body += '<div class="mng-row' + isPlayer + '"><span>#' + e.rank + ' ' + esc(e.name) + ' (' + esc(e.role || '通用') + ')' + tag + '</span><span>' + e.totalScore + ' 分 · rating ' + e.rating + ' · bestHlo ' + e.bestHlo.toFixed(2) + '</span></div>';
+    });
+    body += '</div>';
+  }
+
+  // 视图 3: 历史 Top 20 (Q4=C 次年可查看)
+  if (top20Hist.length > 0) {
+    body += '<div class="career-news" style="margin-top:12px"><b>历年 Top 20 (最近 ' + top20Hist.length + ' 年)</b></div>';
+    top20Hist.forEach((h) => {
+      const top1 = h.entries[0];
+      body += '<div class="career-news">' + h.year + ' #1 ' + esc(top1 ? top1.name : '-') + ' (' + (top1 ? top1.totalScore : 0) + ' 分)';
+      if (h.entries.length > 1) body += ' · 完整 ' + h.entries.length + ' 人';
+      body += '</div>';
+    });
+  }
+
+  // 视图 4: 历史 HLO 快照
+  if (hist.length > 0) {
+    body += '<div class="career-news" style="margin-top:12px"><b>历史年度 HLO #1 (最近 ' + hist.length + ' 年)</b></div>';
+    hist.forEach((h) => {
+      body += '<div class="career-news">' + h.year + ' 年 #1 ' + esc(h.top[0] ? h.top[0].name : '-') + ' (加权 ' + (h.top[0] ? h.top[0].weightedScore.toFixed(2) : '-') + ')</div>';
+    });
+  }
+
+  body += '</div>';
+  return body;
 }
 
 function healthDot(c, label, val) {
@@ -167,6 +230,20 @@ function renderRoster(s) {
       (transferWindowOpen(s) ? '<button data-act="sell" data-pid="' + pp.id + '">卖</button>' : ''));
   }
   html += '</div></div>';
+  // HLTV 评价: 每个选手的滚动 HLO + 最近一场
+  const hltvRows = s.team.roster.filter((p) => p && p.name).map((p) => {
+    const rating = (typeof p.hltvRating === 'number') ? p.hltvRating.toFixed(2) : '1.00';
+    const last = (p.hltvHistory && p.hltvHistory.length) ? p.hltvHistory[p.hltvHistory.length - 1].rating.toFixed(2) : '-';
+    const matches = (p.hltvHistory && p.hltvHistory.length) || 0;
+    const color = (p.hltvRating || 0) >= 1.10 ? '#4ade80' : ((p.hltvRating || 0) >= 0.95 ? '#facc15' : '#f87171');
+    return '<div class="mng-prow"><span class="mng-pname">' + esc(p.name) + '</span>' +
+      '<span class="mng-prole">' + esc(p.role) + '</span>' +
+      '<span style="color:' + color + ';font-weight:bold">' + rating + '</span>' +
+      '<span class="mng-pstate">最近 ' + last + '</span>' +
+      '<span class="mng-pstate">' + matches + ' 场</span></div>';
+  }).join('');
+  html += '<div class="career-card"><h4>HLTV 社区评价 · 选手滚动 HLO</h4><div class="mng-roster">' + hltvRows + '</div>' +
+    '<div class="career-news">HLTV 风格评分: 1.00 = 联赛平均, 越高表现越好</div></div>';
   const windowOpen = transferWindowOpen(s);
   html += '<div class="career-card"><h4>转会窗' + (windowOpen ? ' · 剩余 ' + s.team.transfersLeft + ' 次 · 噪声±' + scoutingNoise(s) : ' · 第5-8轮开放') + '</h4>';
   if (windowOpen) {
@@ -280,6 +357,8 @@ function onClick(e) {
   const s = getState();
   if (act === 'tab') { tab = t.getAttribute('data-tab') || 'dash'; render(); }
   else if (act === 'menu') { el('managerPanel').style.display = 'none'; if (game.ui) game.ui.showMenu(); }
+  else if (act === 'yearly') { yearlyVisible = !yearlyVisible; render(); }
+  else if (act === 'yearly-close') { yearlyVisible = false; render(); }
   else if (act === 'play') {
     el('managerPanel').style.display = 'none';
     startManagerMatch(game, null, null, false);
