@@ -994,6 +994,13 @@ function drawEntities(game) {
       // 画布内文字基线在 y=12，贴图原点 ey-34 使基线落在 ey-22（与原 fillText 一致）
       ctx.drawImage(tag, ex - 80, ey - 34, 160, 18);
       ctx.restore();
+      // 名牌血条：受伤的 bot 在名字上方显示 3px 血量细条（绿→黄→红分档）
+      if (e.hp > 0 && e.hp < 100) {
+        ctx.fillStyle = 'rgba(0,0,0,0.55)';
+        ctx.fillRect(ex - 17, ey - 39, 34, 4);
+        ctx.fillStyle = hpBarColor(e.hp);
+        ctx.fillRect(ex - 16, ey - 38, 32 * clamp(e.hp / 100, 0, 1), 2);
+      }
     }
     if (e.defuseT > 0) {
       const pct = clamp(e.defuseT / (e.weapons.kit ? 2.5 : 5), 0, 1);
@@ -1107,6 +1114,13 @@ export function bodyFlashAlpha(t, head) {
 // bot 行走起伏（纯函数，供测试断言）：相位来自 stepCycle，幅度小于玩家的 2.5
 export function botBob(phase, tSec) {
   return Math.sin(phase * Math.PI * 2 + tSec * 9) * 1.8;
+}
+
+// 名牌血条颜色分档（纯函数，供测试断言）：>60 健康 / 31~60 受伤 / ≤30 危殆
+export function hpBarColor(hp) {
+  if (hp > 60) return '#5ade7c';
+  if (hp > 30) return '#ffc44d';
+  return '#ff5a4d';
 }
 
 function drawParticles(game) {

@@ -98,7 +98,7 @@ html,body{width:100%;height:100%;overflow:hidden;background:var(--bg-0);font-fam
 #helpOverlay .panel{padding:26px 30px;width:min(520px,94vw)}
 #helpOverlay .ctrl-list{font-size:13px;color:var(--txt-2)}
 #helpOverlay .ctrl-list b{color:var(--txt-1)}
-#flash{background:#fff;opacity:0;pointer-events:none}
+#flash{position:fixed;inset:0;pointer-events:none;opacity:0;z-index:8;background:radial-gradient(ellipse at center,#fff 0%,#fff 50%,rgba(255,243,214,.94) 80%,rgba(255,233,183,.85) 100%)}
 #vignette{position:fixed;inset:0;pointer-events:none;background:radial-gradient(ellipse at center,transparent 55%,rgba(0,0,0,.45) 100%);z-index:5}
 #dmgv{position:fixed;inset:0;pointer-events:none;opacity:0;z-index:6;background:radial-gradient(ellipse at center,transparent 40%,rgba(255,20,20,.55) 100%)}
 #lowhp{position:fixed;inset:0;pointer-events:none;opacity:0;z-index:6;background:radial-gradient(ellipse at center,transparent 55%,rgba(180,0,0,.5) 100%)}
@@ -188,6 +188,8 @@ html,body{width:100%;height:100%;overflow:hidden;background:var(--bg-0);font-fam
 .kf.hs{display:inline-block;background:#c93a2e;color:#fff;font-weight:700;padding:1px 6px;border-radius:3px;margin-left:6px;font-size:11px;letter-spacing:1px}
 .kf.sys{color:#8ab4ff;font-size:12px;font-style:italic}
 @keyframes kfin{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+.kf.out{animation:kfout .26s var(--ease) both}
+@keyframes kfout{from{opacity:1;transform:none}to{opacity:0;transform:translateX(14px)}}
 #scoreboard .panel{width:640px;max-width:94vw}
 .sb-title{display:flex;align-items:baseline;gap:10px}
 .sb-name{font-size:16px;font-weight:700;letter-spacing:2px;color:var(--txt-0)}

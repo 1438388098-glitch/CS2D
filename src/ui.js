@@ -322,6 +322,17 @@ function uiHideBanner() {
   if (b) b.classList.remove('show');
 }
 
+// 击杀信息生命周期：存活 KF_LIFE_MS 后播放 KF_OUT_MS 退场动画再移除（硬移除很突兀）
+export const KF_LIFE_MS = 5200;
+export const KF_OUT_MS = 260;
+function kfExpire(div) {
+  setTimeout(() => {
+    if (!div.parentNode) return;
+    div.classList.add('out');
+    setTimeout(() => { if (div.parentNode) div.parentNode.removeChild(div); }, KF_OUT_MS);
+  }, KF_LIFE_MS);
+}
+
 export function addKillFeed(k, v, w, head, tm) {
   if (!doc) return;
   const div = doc.createElement('div');
@@ -347,7 +358,7 @@ export function addKillFeed(k, v, w, head, tm) {
   if (!kf) return;
   kf.appendChild(div);
   while (kf.children.length > 6) kf.removeChild(kf.firstChild);
-  setTimeout(() => { if (div.parentNode) div.parentNode.removeChild(div); }, 5200);
+  kfExpire(div);
 }
 
 export function showDeathInfo(killerName, weaponName, headshot) {
@@ -421,7 +432,7 @@ export function addSysFeed(txt) {
   if (!kf) return;
   kf.appendChild(div);
   while (kf.children.length > 6) kf.removeChild(kf.firstChild);
-  setTimeout(() => { if (div.parentNode) div.parentNode.removeChild(div); }, 5200);
+  kfExpire(div);
 }
 
 export function showToast(t) {
