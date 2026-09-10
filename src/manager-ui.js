@@ -7,6 +7,7 @@ import {
   trainPlayer, restPlayer, trainingPreview, facilityStatus, upgradeFacility,
   sponsorIncome, cashflowForecast, seasonBudget, financialRisk,
   ledgerRecent, transferProfit, computeChemistry, pendingEvents, respondEvent,
+  formatDate, isChristmasBreak,
   TRAIN_TIERS, ATTRS, PERSONALITY_CN, NEED_ROLES, ROLES
 } from './manager.js';
 import { startManagerMatch } from './manager-match.js';
@@ -63,7 +64,7 @@ function render() {
   const fr = financialRisk(s);
   let html = '<div class="career-top">' +
     '<span class="ct-mode">电竞经理</span>' +
-    '<span class="ct-season">S' + s.season.id + ' · R' + s.season.round + '/' + s.season.totalRounds + ' · ' + esc(s.team.league) + (s.season.cup.phase !== 'idle' ? ' · 杯赛' : '') + '</span>' +
+    '<span class="ct-season">S' + s.season.id + ' · R' + s.season.round + '/' + s.season.totalRounds + ' · ' + esc(s.team.league) + (s.season.cup.phase !== 'idle' ? ' · 杯赛' : '') + ' · ' + esc(formatDate(s)) + (isChristmasBreak(s) ? ' · 圣诞休赛期' : '') + '</span>' +
     '<span class="ct-bank">¥' + money(s.team.bank) + '</span>' +
     '<span class="ct-bank" style="color:' + healthColor(h.morale) + '">士气' + s.team.morale + '</span>' +
     '<span class="ct-bank" style="color:' + healthColor(fr.level === '高风险' ? 'red' : fr.level === '紧张' ? 'yellow' : 'green') + '">' + esc(fr.level) + '</span>' +

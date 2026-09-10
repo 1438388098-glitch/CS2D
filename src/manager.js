@@ -3,7 +3,7 @@ import { computeMatchHltv, pickHltvMvp } from './hltv-rating.js';
 
 export const SAVE_KEY = 'cs2d_manager';
 export const BACKUP_KEY = 'cs2d_manager_backup';
-export const VERSION = 1;
+export const VERSION = 2;
 
 export const ROLES = ['突破', '狙击', '指挥', '步枪', '自由人', '补枪'];
 export const NEED_ROLES = ['突破', '狙击', '指挥', '自由人', '补枪'];
@@ -55,7 +55,13 @@ function baseManager() {
     },
     season: { id: 1, round: 1, totalRounds: 14, teams: [], fixtures: [], standings: [], cup: { phase: 'idle', bracket: [] }, matchHistory: [] },
     board: { goal: { rank: 6, cup: 0, reward: 12000 }, trust: 70, fired: false },
-    history: [], news: [], achievements: [], records: { bestSeasonRank: 99, totalPrize: 0, cupChampions: 0, bestWinStreak: 0 }
+    history: [], news: [], achievements: [], records: { bestSeasonRank: 99, totalPrize: 0, cupChampions: 0, bestWinStreak: 0 },
+    time: {
+      startISO: '2026-01-05',       // 赛季 1 起始日(周一)
+      currentISO: '2026-01-05',     // 当前日期
+      lastPayrollISO: '',           // 上次发薪月份('YYYY-MM')
+      seasonStartRound: 1           // 当前 season.round 在日历里的锚(给跨年用)
+    }
   };
 }
 
@@ -77,6 +83,10 @@ export function migrateManagerState(parsed) {
   parsed.history = Array.isArray(parsed.history) ? parsed.history : [];
   parsed.news = Array.isArray(parsed.news) ? parsed.news : [];
   parsed.achievements = Array.isArray(parsed.achievements) ? parsed.achievements : [];
+  // time 字段 (v2+): 旧档补默认值, 保持可读性
+  if (!parsed.time || typeof parsed.time !== 'object') {
+    parsed.time = { startISO: '2026-01-05', currentISO: '2026-01-05', lastPayrollISO: '', seasonStartRound: 1 };
+  }
   return parsed;
 }
 
@@ -501,6 +511,104 @@ function pushNews(s, type, text) {
   s.news.unshift({ t: Date.now(), type, text });
   if (s.news.length > 30) s.news.length = 30;
 }
+
+// ============== 时间流 (Time Flow) ==============
+// 日历锚: 赛季 1 = 2026-01-05 (周一)。每场玩家比赛 +1 天;
+// 其他自动模拟的 AI 场次不推进日历。每月 1 号触发月度发薪;
+// 12 月期间进入圣诞休赛期, advanceSeason 跳过 round 推进。
+function dateAddISO(iso, days) {
+  // 用 UTC 避免时区漂移; 时间戳保持 00:00:00Z
+  const d = new Date(iso + 'T00:00:00Z');
+  d.setUTCDate(d.getUTCDate() + days);
+  return d.toISOString().slice(0, 10);
+}
+function monthKey(iso) {
+  return iso.slice(0, 7); // 'YYYY-MM'
+}
+function dayOfMonth(iso) {
+  return Number(iso.slice(8, 10));
+}
+function monthOf(iso) {
+  return Number(iso.slice(5, 7));
+}
+function isFirstOfMonth(iso) {
+  return dayOfMonth(iso) === 1;
+}
+function isDecember(iso) {
+  return monthOf(iso) === 12;
+}
+
+// 公开: 给当前日期加上天数, 触发 onTimeAdvance 钩子
+// 注意: 逐日 +1 循环, 确保跨过的月初都能触发 payroll
+export function advanceDate(s, days = 1) {
+  if (!s.time) s.time = { startISO: '2026-01-05', currentISO: '2026-01-05', lastPayrollISO: '', seasonStartRound: 1 };
+  for (let i = 0; i < days; i++) {
+    s.time.currentISO = dateAddISO(s.time.currentISO, 1);
+    onTimeAdvance(s);
+  }
+  return s.time.currentISO;
+}
+
+// 公开: 格式化当前日期供 UI 展示
+export function formatDate(s) {
+  const iso = s.time && s.time.currentISO ? s.time.currentISO : '2026-01-05';
+  const d = new Date(iso + 'T00:00:00Z');
+  const wd = ['日', '一', '二', '三', '四', '五', '六'][d.getUTCDay()];
+  return iso + ' 周' + wd;
+}
+
+// 公开: 12 月期间返回 true, advanceSeason 应跳过 round 推进
+export function isChristmasBreak(s) {
+  if (!s.time) return false;
+  return isDecember(s.time.currentISO);
+}
+
+// 月度发薪: 每月 1 号扣 roster 年化人力成本 / 12 × roster 人数
+// renewalCost 字段语义接近"年化人力成本", 用作月薪基数
+function monthlyPayroll(s) {
+  const roster = s.team.roster || [];
+  if (roster.length === 0) return;
+  let monthlyCost = 0;
+  for (const p of roster) {
+    const annual = Number.isFinite(Number(p.renewalCost)) ? Number(p.renewalCost) : Math.round((Number(p.price) || 0) * 0.12 * costLeague(s.team.league));
+    monthlyCost += Math.round(annual / 12);
+  }
+  if (monthlyCost <= 0) return;
+  if (s.team.bank >= monthlyCost) {
+    s.team.bank -= monthlyCost;
+    addLedger(s, 'expense', -monthlyCost, '月度发薪(' + monthKey(s.time.currentISO) + ')');
+    pushNews(s, 'info', '月度发薪 ¥' + monthlyCost + ', 余 ¥' + s.team.bank);
+  } else {
+    // 没钱: 仍发(欠薪), 但信任 -5 + 新闻警示
+    const shortfall = monthlyCost - s.team.bank;
+    s.team.bank = 0;
+    s.board.trust = clamp(s.board.trust - 5, 0, 100);
+    addLedger(s, 'expense', -monthlyCost, '月度发薪(欠 ¥' + shortfall + ')');
+    pushNews(s, 'lose', '欠薪警告: 缺口 ¥' + shortfall + ', 老板信任 -5');
+    if (s.board.trust <= 20) { s.board.fired = true; pushNews(s, 'lose', '老板忍无可忍, 解雇了你'); }
+  }
+  s.time.lastPayrollISO = monthKey(s.time.currentISO);
+}
+
+function costLeague(league) {
+  if (league === '甲级') return 1.4;
+  if (league === '丙级') return 0.7;
+  return 1.0; // 乙级
+}
+
+// onTimeAdvance: 每次日期推进后的钩子, 触发月度事件
+// 注意: 顺序敏感 — 先发薪再判跨年, 避免跨年那一月被跳过
+function onTimeAdvance(s) {
+  if (!s.time) return;
+  // 月度发薪: 每月 1 号触发 (且不是初始 1 月 5 号 — 用 lastPayrollISO 防重)
+  if (isFirstOfMonth(s.time.currentISO)) {
+    const mk = monthKey(s.time.currentISO);
+    if (mk !== s.time.lastPayrollISO) {
+      monthlyPayroll(s);
+    }
+  }
+}
+
 function teamAvg(roster) {
   return Math.round(roster.reduce((a, p) => a + p.rating, 0) / Math.max(1, roster.length));
 }
@@ -900,6 +1008,8 @@ export function settlePlayerMatch(s, win, kills, deaths, opts = {}) {
   s.manager.seasonStats.played++;
   if (win) s.manager.seasonStats.w++; else s.manager.seasonStats.l++;
   accumulateStress(s);
+  // 时间推进: 玩家比赛 +1 天, 触发月度事件钩子 (发薪)
+  advanceDate(s, 1);
   advanceSeason(s);
   save();
   return { ok: true };
@@ -952,6 +1062,8 @@ function simulateLeagueRound(s) {
 }
 
 function advanceSeason(s) {
+  // 圣诞休赛期: 12 月期间 round 冻结, 等玩家手动结算下赛季时再走 nextSeason
+  if (isChristmasBreak(s)) return;
   if (s.season.cup.phase === 'active') {
     const pendingCup = s.season.cup.bracket.find((m) => !m.played && (m.a === 'player' || m.b === 'player'));
     if (pendingCup) return;
@@ -1012,6 +1124,13 @@ export function nextSeason() {
   s.team.pool = null;
   s.team.stressSum = 0;
   for (const p of s.team.roster) p.fatigue = 0;
+  // 时间推进: 新赛季 = 下一年的 1 月 5 号 (跨年)
+  if (s.time) {
+    const curYear = Number(s.time.currentISO.slice(0, 4));
+    s.time.currentISO = (curYear + 1) + '-01-05';
+    s.time.seasonStartRound = 1;
+    // lastPayrollISO 保留 — 1 月 5 号不是 1 号, 不会重复触发发薪
+  }
   save();
   return s;
 }
