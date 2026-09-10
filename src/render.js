@@ -15,6 +15,7 @@ import {smokeDissolveTrail, drawSmokeTrail, SMOKE_DISSOLVE_LIFE} from './smoke-f
 import {stepCycle, stepDust, drawStepFx, DUST_PER_STEP} from './anim-fx.js';
 import {impactMarksAt, drawImpact} from './impact-fx.js';
 import {weatherKind, weatherParticles, drawWeather, MAX_PARTICLES as WEATHER_MAX_PARTICLES} from './weather-fx.js';
+import {themeWeatherOf} from './textures.js';
 import {enhancedBoomSpec, drawEnhancedBoom} from './boom-fx.js';
 import {visibleShadows, drawShadows} from './shadow-fx.js';
 import {killLabel, drawKillLabel, KILL_LABEL_DUR} from './killcam-fx.js';
@@ -203,18 +204,20 @@ function drawImpacts(game) {
   for (const m of marks) drawImpact(ctx, m);
 }
 
-// 雨雪天气层：地图 id 匹配 rain/snow 才绘制，否则无副作用。
-// 粒子在相机视口（世界坐标）区域内生成并平移到相机原点，固定 seed 全确定性。
+// 天气层：官方图优先 THEMES.weather 数据（dust2 沙霾/canal 雾/blast 烟霭/arctic 雪），
+// 自定义图退回 id 关键词匹配（rain/snow）。粒子密度随主题 density 缩放。
 function drawWeatherLayer(game) {
   const map = getMap();
   if (!map) return;
-  const kind = weatherKind(map.id);
+  const themeW = themeWeatherOf(map.id);
+  const kind = themeW ? themeW.kind : weatherKind(map.id);
   if (!kind) return;
   const z = game.zoom || 1;
   const vw = game.canvasW / z;
   const vh = game.canvasH / z;
   if (!(vw > 0) || !(vh > 0)) return;
-  const parts = weatherParticles(kind, game.time, WEATHER_MAX_PARTICLES, vw, vh, weatherSeed(String(map.id)));
+  const count = Math.round(WEATHER_MAX_PARTICLES * (themeW ? themeW.density : 0.55));
+  const parts = weatherParticles(kind, game.time, count, vw, vh, weatherSeed(String(map.id)));
   if (!parts.length) return;
   const ox = (game.camX || 0) - vw / 2;
   const oy = (game.camY || 0) - vh / 2;
@@ -327,9 +330,19 @@ function drawDmgPops2D(game) {
   t.textAlign = 'start';
 }
 
-// 动态水面：可见浅水瓦片叠加移动亮线（时间相位差），裁剪到相机视口
+// 动态水面：可见浅水(~)瓦片叠加移动亮线、深水(≈)瓦片叠加缓慢漂移焦散暗斑（时间相位差），裁剪到相机视口
 let _waterGrid = null;
-let _waterHasWater = false;
+let _waterShallow = false;
+let _waterDeep = false;
+// 深水焦散规格（纯函数，供测试断言）：暗斑在瓦片内慢速游移，透明度缓慢呼吸
+export function deepCausticSpec(seed, now) {
+  const ph = seed * 1.7;
+  return {
+    dx: Math.sin(now * 0.5 + ph) * 6,
+    dy: Math.cos(now * 0.4 + ph * 1.3) * 4,
+    a: 0.14 + 0.08 * Math.sin(now * 0.8 + ph)
+  };
+}
 function drawWaterOverlay(game) {
   if (game.state !== 'BUY' && game.state !== 'LIVE') return;
   const grid = getGrid();
@@ -337,10 +350,17 @@ function drawWaterOverlay(game) {
   // 无水地图直接跳出：网格对象身份变化（切图/编辑器重载）时才整网重扫一次
   if (_waterGrid !== grid) {
     _waterGrid = grid;
-    _waterHasWater = false;
-    for (const row of grid) { if (row.indexOf('~') !== -1) { _waterHasWater = true; break; } }
+    _waterShallow = false;
+    _waterDeep = false;
+    outer: for (const row of grid) {
+      for (const c of row) {
+        if (c === '~') _waterShallow = true;
+        else if (c === '≈') _waterDeep = true;
+        if (_waterShallow && _waterDeep) break outer;
+      }
+    }
   }
-  if (!_waterHasWater) return;
+  if (!_waterShallow && !_waterDeep) return;
   const T = mapTile();
   const now = performance.now() / 1000;
   const x0 = Math.max(0, Math.floor((game.camX - game.canvasW / game.zoom / 2) / T) - 1);
@@ -350,14 +370,26 @@ function drawWaterOverlay(game) {
   ctx.save();
   for (let y = y0; y < y1; y++) {
     for (let x = x0; x < x1; x++) {
-      if (grid[y][x] !== '~') continue;
+      const c = grid[y][x];
+      if (c !== '~' && c !== '≈') continue;
       const px = x * T, py = y * T;
       const seed = (x * 7 + y * 13) % 17;
-      const off = (now * 14 + seed * 5) % 30;
-      ctx.fillStyle = 'rgba(220,240,255,0.20)';
-      ctx.fillRect(px + off - 10, py + 8 + (seed % 5) * 5, 8, 1.5);
-      ctx.fillStyle = 'rgba(255,255,255,0.12)';
-      ctx.fillRect(px + ((off + 16) % 30) - 12, py + 4 + ((seed + 3) % 6) * 4, 6, 1);
+      if (c === '~') {
+        const off = (now * 14 + seed * 5) % 30;
+        ctx.fillStyle = 'rgba(220,240,255,0.20)';
+        ctx.fillRect(px + off - 10, py + 8 + (seed % 5) * 5, 8, 1.5);
+        ctx.fillStyle = 'rgba(255,255,255,0.12)';
+        ctx.fillRect(px + ((off + 16) % 30) - 12, py + 4 + ((seed + 3) % 6) * 4, 6, 1);
+      } else {
+        // 深水焦散：暗斑游移 + 一条微光波纹，让深浅水有质感差
+        const ca = deepCausticSpec(seed, now);
+        ctx.fillStyle = 'rgba(10,26,46,' + ca.a.toFixed(3) + ')';
+        ctx.beginPath();
+        ctx.ellipse(px + T / 2 + ca.dx, py + T / 2 + ca.dy, T * 0.34, T * 0.22, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = 'rgba(150,210,250,' + (ca.a * 0.45).toFixed(3) + ')';
+        ctx.fillRect(px + ((seed * 7 + now * 6) % T), py + T * 0.7, T * 0.28, 1.2);
+      }
     }
   }
   ctx.restore();

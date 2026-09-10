@@ -55,6 +55,7 @@ export function drawAmbientDust(ctx, game) {
   const x1 = Math.floor((cx + viewW / 2) / cell);
   const y1 = Math.floor((cy + viewH / 2) / cell);
   ctx.save();
+  ctx.globalCompositeOperation = 'lighter';
   ctx.fillStyle = 'rgb(' + DUST_COLOR + ')';
   for (let gy = y0; gy <= y1; gy++) {
     for (let gx = x0; gx <= x1; gx++) {
@@ -63,8 +64,10 @@ export function drawAmbientDust(ctx, game) {
       const offY = gy * cell;
       for (const p of ambientDust(cellSeed, t, DUST_PER_CELL, cell, cell)) {
         ctx.globalAlpha = p.alpha;
-        const size = p.r * 2;
-        ctx.fillRect(offX + p.x - p.r, offY + p.y - p.r, size, size);
+        // 圆形微粒 + 加色合成：替代方块 fillRect，微尘更像悬浮光点而非噪点
+        ctx.beginPath();
+        ctx.arc(offX + p.x, offY + p.y, p.r, 0, Math.PI * 2);
+        ctx.fill();
       }
     }
   }

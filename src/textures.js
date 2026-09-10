@@ -51,6 +51,15 @@ export function themeOf(mapId) {
   return THEMES[mapId] || THEMES.dust2;
 }
 
+// 2D 天气身份（精确 id 匹配）：官方图的 THEMES.weather 声明（dust2=sand/canal=mist/
+// arctic=snow/blast=smoke/metro=null）此前只有 3D 侧消费；自定义地图不在 THEMES 中，
+// 返回 null 由调用方走 weatherKind 关键词兜底。
+export function themeWeatherOf(mapId) {
+  const th = mapId != null && THEMES[mapId];
+  const w = th && th.weather;
+  return w && w.kind ? { kind: w.kind, density: w.density || 0.55, color: w.color || null } : null;
+}
+
 // ===== 确定性 LCG（装饰物位置稳定）=====
 function lcg(seed) {
   let s = seed >>> 0 || 1;
