@@ -84,28 +84,59 @@ function render() {
 }
 
 function renderYearlyPopup(s) {
-  const top = yearlyTop(s.yearlyRating, 5);
+  const top5 = yearlyTop(s.yearlyRating, 5);
   const year = (s.yearlyRating && s.yearlyRating.year) || 2026;
-  const hist = (s.yearlyHistory || []).slice(-3);  // 最近 3 年快照
-  let body = '<div class="career-card" style="margin-top:10px"><div class="mng-next"><div><b>📊 年度 HLO 榜单 · ' + year + ' 年</b>' +
+  const top20 = s.yearlyTop20;
+  const hist = (s.yearlyHistory || []).slice(-3);  // HLO Top 10 快照
+  const top20Hist = (s.yearlyTop20History || []).slice(-10);  // Top 20 历史 (Q6=C)
+  let body = '<div class="career-card" style="margin-top:10px"><div class="mng-next"><div><b>📊 年度榜单 · ' + year + ' 年</b>' +
     '<button data-act="yearly-close" style="float:right">关闭</button></div></div>';
-  if (top.length === 0) {
+
+  // 视图 1: 当前年度 HLO Top 5
+  body += '<div class="career-news" style="margin-top:6px"><b>HLO 加权 Top 5 (本赛季累计)</b></div>';
+  if (top5.length === 0) {
     body += '<div class="career-news">今年暂无比赛数据, 打几场就有了~</div>';
   } else {
     body += '<div class="mng-roster">';
-    top.forEach((e, i) => {
+    top5.forEach((e, i) => {
       const isPlayer = e.team === 'player' ? ' mine' : '';
       const avg = e.games > 0 ? (e.hltvSum / e.games).toFixed(2) : '0.00';
       body += '<div class="mng-row' + isPlayer + '"><span>#' + (i + 1) + ' ' + esc(e.name) + '</span><span>' + e.games + ' 场 · avg ' + avg + ' · 加权 ' + e.weightedScore.toFixed(2) + ' · 最佳 ' + e.bestHlo.toFixed(2) + '</span></div>';
     });
     body += '</div>';
   }
+
+  // 视图 2: 当前年度 HLTV Top 20 (已发布时显示)
+  if (top20 && Array.isArray(top20.entries) && top20.entries.length > 0) {
+    body += '<div class="career-news" style="margin-top:12px"><b>HLTV Top 20 · ' + top20.year + ' 年</b> (荣誉分 + rating 综合)</div>';
+    body += '<div class="mng-roster">';
+    top20.entries.forEach((e) => {
+      const isPlayer = e.team === 'player' ? ' mine' : '';
+      const tag = e.from === 'rating' ? ' [rating补]' : '';
+      body += '<div class="mng-row' + isPlayer + '"><span>#' + e.rank + ' ' + esc(e.name) + ' (' + esc(e.role || '通用') + ')' + tag + '</span><span>' + e.totalScore + ' 分 · rating ' + e.rating + ' · bestHlo ' + e.bestHlo.toFixed(2) + '</span></div>';
+    });
+    body += '</div>';
+  }
+
+  // 视图 3: 历史 Top 20 (Q4=C 次年可查看)
+  if (top20Hist.length > 0) {
+    body += '<div class="career-news" style="margin-top:12px"><b>历年 Top 20 (最近 ' + top20Hist.length + ' 年)</b></div>';
+    top20Hist.forEach((h) => {
+      const top1 = h.entries[0];
+      body += '<div class="career-news">' + h.year + ' #1 ' + esc(top1 ? top1.name : '-') + ' (' + (top1 ? top1.totalScore : 0) + ' 分)';
+      if (h.entries.length > 1) body += ' · 完整 ' + h.entries.length + ' 人';
+      body += '</div>';
+    });
+  }
+
+  // 视图 4: 历史 HLO 快照
   if (hist.length > 0) {
-    body += '<div class="career-news" style="margin-top:8px"><b>历史年度 Top 3:</b></div>';
+    body += '<div class="career-news" style="margin-top:12px"><b>历史年度 HLO #1 (最近 ' + hist.length + ' 年)</b></div>';
     hist.forEach((h) => {
       body += '<div class="career-news">' + h.year + ' 年 #1 ' + esc(h.top[0] ? h.top[0].name : '-') + ' (加权 ' + (h.top[0] ? h.top[0].weightedScore.toFixed(2) : '-') + ')</div>';
     });
   }
+
   body += '</div>';
   return body;
 }

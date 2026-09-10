@@ -1,9 +1,9 @@
 import { MAJOR_TEAMS } from './modes.js';
-import { computeMatchHltv, pickHltvMvp, updateHltvRolling, accumulateTournamentStats, selectTournamentMvp, updateYearlyRating, yearlyTop, TOURNAMENT_WEIGHTS } from './hltv-rating.js';
+import { computeMatchHltv, pickHltvMvp, updateHltvRolling, accumulateTournamentStats, selectTournamentMvp, updateYearlyRating, yearlyTop, TOURNAMENT_WEIGHTS, selectTournamentEvps, selectAllTournamentTeam, collectPlayerRoles, inferCupFinalists, computeYearlyTop20, buildPublishBatches, top20At, awardScore } from './hltv-rating.js';
 
 export const SAVE_KEY = 'cs2d_manager';
 export const BACKUP_KEY = 'cs2d_manager_backup';
-export const VERSION = 3;
+export const VERSION = 4;
 
 export const ROLES = ['突破', '狙击', '指挥', '步枪', '自由人', '补枪'];
 export const NEED_ROLES = ['突破', '狙击', '指挥', '自由人', '补枪'];
@@ -70,7 +70,15 @@ function baseManager() {
     // 颁发的赛事 MVP 历史 (赛季维度)
     awards: [],  // [{ seasonId, type, name, team, avgHlo, games, weight, awardPoints, date }]
     // 年度榜单 (跨年清零, 同年所有赛事累加)
-    yearlyRating: { year: 2026, entries: [] }
+    yearlyRating: { year: 2026, entries: [] },
+    // EVP 历史 (除 MVP 外的 EVP, MVP 已存在 awards 里但 score 不同)
+    evps: [],  // [{ seasonId, type, rank, name, team, avgHlo, weight, awardScore, date }]
+    // 赛事最佳阵容 (all-tournament team)
+    tournamentTeams: [],  // [{ seasonId, type, year, players: [{ name, team, role, avgHlo }] }]
+    // 年度 Top 20 榜单 (年末所有赛事结束后颁发)
+    yearlyTop20: null,  // { year, entries: [{ rank, name, team, role, totalScore, rating, bestHlo, from: 'award'|'rating' }] }
+    // 年度 Top 20 历史快照 (限 10 年, Q6=C)
+    yearlyTop20History: []  // [{ year, entries: [...] }]
   };
 }
 
@@ -112,6 +120,11 @@ export function migrateManagerState(parsed) {
   if (!parsed.yearlyRating || typeof parsed.yearlyRating !== 'object') {
     parsed.yearlyRating = { year: 2026, entries: [] };
   }
+  // v4: EVP / 最佳阵容 / 年度 Top 20
+  if (!Array.isArray(parsed.evps)) parsed.evps = [];
+  if (!Array.isArray(parsed.tournamentTeams)) parsed.tournamentTeams = [];
+  if (!('yearlyTop20' in parsed)) parsed.yearlyTop20 = null;
+  if (!Array.isArray(parsed.yearlyTop20History)) parsed.yearlyTop20History = [];
   return parsed;
 }
 
@@ -664,27 +677,64 @@ export function accumulateMatchStats(s, opts) {
   }
 }
 
-// 颁发赛事 MVP (赛季结束时调用). minGames: 联赛 5 / 杯赛 3.
-// 写入 s.awards, 返回 { league: mvpObj|cup: mvpObj|null }
-export function awardTournamentMvps(s, opts = {}) {
+// 颁发赛季末赛事荣誉: MVP + EVP + 最佳阵容 (联赛 + 杯赛)
+// 写入 s.awards (MVP rank 1), s.evps (rank 2..N), s.tournamentTeams
+// 同时 pushNews
+export function awardSeasonEnd(s, seasonReport) {
   if (!s.tournamentStats) return { league: null, cup: null };
-  const leagueMin = opts.leagueMinGames != null ? opts.leagueMinGames : 5;
-  const cupMin = opts.cupMinGames != null ? opts.cupMinGames : 3;
+  if (!Array.isArray(s.awards)) s.awards = [];
+  if (!Array.isArray(s.evps)) s.evps = [];
+  if (!Array.isArray(s.tournamentTeams)) s.tournamentTeams = [];
+  const dateISO = s.time ? s.time.currentISO : '';
+  const roleMap = collectPlayerRoles(s);
   const result = { league: null, cup: null };
-  // 联赛 MVP
-  const leagueMvp = selectTournamentMvp(s.tournamentStats.league, leagueMin);
-  if (leagueMvp) {
-    s.awards.push(Object.assign({}, leagueMvp, { seasonId: s.season.id, type: 'league', date: s.time ? s.time.currentISO : '' }));
-    result.league = leagueMvp;
-  }
-  // 杯赛 MVP (如果有杯赛数据)
-  if (s.tournamentStats.cup && Object.keys(s.tournamentStats.cup.entries).length > 0) {
-    const cupMvp = selectTournamentMvp(s.tournamentStats.cup, cupMin);
-    if (cupMvp) {
-      s.awards.push(Object.assign({}, cupMvp, { seasonId: s.season.id, type: 'cup', date: s.time ? s.time.currentISO : '' }));
-      result.cup = cupMvp;
+
+  // 联赛: 5 个名额, MVP 不限队伍
+  if (s.tournamentStats.league && Object.keys(s.tournamentStats.league.entries).length > 0) {
+    const evpList = selectTournamentEvps(s.tournamentStats.league, { minGames: 5, playerTeams: roleMap });
+    if (evpList.length > 0) {
+      const mvp = evpList[0];
+      s.awards.push(Object.assign({}, mvp, { seasonId: s.season.id, type: 'league', date: dateISO }));
+      for (let i = 1; i < evpList.length; i++) {
+        s.evps.push(Object.assign({}, evpList[i], { seasonId: s.season.id, type: 'league', date: dateISO }));
+      }
+      pushNews(s, 'award', '联赛 MVP: ' + mvp.name + ' (avgHlo ' + mvp.avgHlo + ', ' + mvp.awardScore + ' 分)');
+      const evpSummary = evpList.slice(1).map((e) => '#' + e.rank + ' ' + e.name + '(' + e.awardScore + '分)').join(', ');
+      if (evpSummary) pushNews(s, 'award', '联赛 EVP: ' + evpSummary);
+      result.league = { mvp, evps: evpList.slice(1) };
+    }
+    // 最佳阵容
+    const team = selectAllTournamentTeam(s.tournamentStats.league, { minGames: 5, playerRoles: roleMap });
+    if (team.players.length > 0) {
+      s.tournamentTeams.push({ seasonId: s.season.id, type: 'league', year: s.time ? Number(s.time.currentISO.slice(0, 4)) : 0, players: team.players });
+      pushNews(s, 'award', '联赛最佳阵容: ' + team.players.map((p) => p.role + ' ' + p.name).join(' · '));
+      result.league.team = team;
     }
   }
+
+  // 杯赛: 8 个名额, MVP 只从决赛两队选
+  if (s.tournamentStats.cup && Object.keys(s.tournamentStats.cup.entries).length > 0) {
+    const finalists = inferCupFinalists(s);
+    const evpList = selectTournamentEvps(s.tournamentStats.cup, { minGames: 3, finalists, playerTeams: roleMap });
+    if (evpList.length > 0) {
+      const mvp = evpList[0];
+      s.awards.push(Object.assign({}, mvp, { seasonId: s.season.id, type: 'cup', date: dateISO }));
+      for (let i = 1; i < evpList.length; i++) {
+        s.evps.push(Object.assign({}, evpList[i], { seasonId: s.season.id, type: 'cup', date: dateISO }));
+      }
+      pushNews(s, 'award', '杯赛 MVP: ' + mvp.name + ' (avgHlo ' + mvp.avgHlo + ', ' + mvp.awardScore + ' 分)');
+      const evpSummary = evpList.slice(1).map((e) => '#' + e.rank + ' ' + e.name + '(' + e.awardScore + '分)').join(', ');
+      if (evpSummary) pushNews(s, 'award', '杯赛 EVP: ' + evpSummary);
+      result.cup = { mvp, evps: evpList.slice(1) };
+    }
+    const team = selectAllTournamentTeam(s.tournamentStats.cup, { minGames: 3, playerRoles: roleMap });
+    if (team.players.length > 0) {
+      s.tournamentTeams.push({ seasonId: s.season.id, type: 'cup', year: s.time ? Number(s.time.currentISO.slice(0, 4)) : 0, players: team.players });
+      pushNews(s, 'award', '杯赛最佳阵容: ' + team.players.map((p) => p.role + ' ' + p.name).join(' · '));
+      result.cup.team = team;
+    }
+  }
+
   return result;
 }
 
@@ -701,12 +751,69 @@ function maybeRotateYear(s) {
   if (!s.yearlyRating || !s.time) return;
   const curYear = Number(s.time.currentISO.slice(0, 4));
   if (curYear !== s.yearlyRating.year) {
-    // 跨年: 保存上年榜单 (Top 10 快照), 清零本年
+    const closingYear = s.yearlyRating.year;
+    // 跨年: 先颁年度 Top 20 (Q5=A, 用上年数据)
+    publishYearlyTop20(s, closingYear);
+    // 保存上年榜单 (Top 10 快照), 清零本年
     if (!Array.isArray(s.yearlyHistory)) s.yearlyHistory = [];
     if (s.yearlyRating.entries.length > 0) {
       s.yearlyHistory.push({ year: s.yearlyRating.year, top: s.yearlyRating.entries.slice(0, 10) });
     }
     s.yearlyRating = { year: curYear, entries: [] };
+  }
+}
+
+// 颁发年度 Top 20 榜单 (跨年时调用). 写入 s.yearlyTop20 + s.yearlyTop20History + 倒序批次 pushNews
+function publishYearlyTop20(s, year) {
+  if (!Array.isArray(s.awards)) s.awards = [];
+  if (!Array.isArray(s.evps)) s.evps = [];
+
+  // 收集该年度的 awards + evps (按 date / seasonId 推断属于哪一年)
+  // 简化: 用全部 awards + evps (单赛季模式, 一赛季 = 一年)
+  const yearAwards = s.awards.filter((a) => a && a.seasonId != null);
+  const yearEvps = s.evps.filter((e) => e && e.seasonId != null);
+
+  // 收集全年所有选手的 rating 数据
+  const roleMap = collectPlayerRoles(s);
+  const ratingEntries = [];
+  for (const p of s.team.roster || []) {
+    if (!p || !p.name) continue;
+    const bestHlo = p.hltvHistory && p.hltvHistory.length ? p.hltvHistory.reduce((m, h) => Math.max(m, h.rating || 0), 0) : 0;
+    ratingEntries.push({ name: p.name, team: 'player', role: p.role || '通用', rating: p.rating || 0, bestHlo, games: p.hltvHistory ? p.hltvHistory.length : 0 });
+  }
+  // 从 tournamentStats 收集所有选手的 rating (用 attr 反推)
+  for (const tsKey of ['league', 'cup']) {
+    const ts = s.tournamentStats && s.tournamentStats[tsKey];
+    if (!ts || !ts.entries) continue;
+    for (const e of Object.values(ts.entries)) {
+      // 跳过已在玩家 roster 里的
+      if (ratingEntries.find((r) => r.name === e.name)) continue;
+      const bestHlo = e.bestHlo || 0;
+      ratingEntries.push({ name: e.name, team: e.team || 'opp', role: roleMap[e.name] || '通用', rating: e.weightedScore || 0, bestHlo, games: e.games || 0 });
+    }
+  }
+
+  const top20 = computeYearlyTop20({ awards: yearAwards, evps: yearEvps, ratingEntries });
+  s.yearlyTop20 = { year, entries: top20 };
+
+  // 历史快照 (Q6=C 限 10 年)
+  if (!Array.isArray(s.yearlyTop20History)) s.yearlyTop20History = [];
+  s.yearlyTop20History.push({ year, entries: top20 });
+  if (s.yearlyTop20History.length > 10) s.yearlyTop20History = s.yearlyTop20History.slice(-10);
+
+  // 倒序批次 pushNews
+  if (top20.length > 0) {
+    const batches = buildPublishBatches();
+    for (const b of batches) {
+      const names = b.ranks.map((r) => {
+        const e = top20At(s.yearlyTop20, r);
+        if (!e) return null;
+        return '#' + r + ' ' + e.name + '(' + e.totalScore + '分' + (e.from === 'rating' ? ', rating ' + e.rating : '') + ')';
+      }).filter(Boolean);
+      if (names.length > 0) {
+        pushNews(s, 'top20', year + ' 年度 HLTV Top 20 · ' + b.label + ': ' + names.join(', '));
+      }
+    }
   }
 }
 
@@ -1210,14 +1317,8 @@ export function nextSeason() {
   if (rep.rank < s.records.bestSeasonRank) s.records.bestSeasonRank = rep.rank;
   s.records.totalPrize += rep.rankPrize + rep.cupPrize;
   if (rep.cupRound === 3) s.records.cupChampions++;
-  // 颁发赛事 MVP (联赛 + 杯赛), 写入 awards + 新闻
-  const mvpResult = awardTournamentMvps(s);
-  if (mvpResult.league) {
-    pushNews(s, 'award', '联赛 MVP: ' + mvpResult.league.name + ' (avgHlo ' + mvpResult.league.avgHlo + ', 含金量 ' + mvpResult.league.awardPoints + ')');
-  }
-  if (mvpResult.cup) {
-    pushNews(s, 'award', '杯赛 MVP: ' + mvpResult.cup.name + ' (avgHlo ' + mvpResult.cup.avgHlo + ', 含金量 ' + mvpResult.cup.awardPoints + ')');
-  }
+  // 颁发赛事 MVP + EVP + 最佳阵容 (联赛 + 杯赛)
+  awardSeasonEnd(s, rep);
   for (const p of s.team.roster) {
     if (p.age <= 24 && rng() < 0.35) {
       const gain = Math.min(3, 100 - p.rating);
