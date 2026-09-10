@@ -5,6 +5,7 @@ import { setViewMode, requestFpsPointerLock, resizeCanvas } from './input.js';
 import { readAudioPrefs, writeAudioPrefs } from './audio/prefs.js';
 import { nextRoundBudget } from './economy.js';
 import { formatPerfMonitor } from './perf-monitor.js';
+import { weaponIconByName } from './ui-dom.js';
 
 let doc = null;
 let canvas = null;
@@ -343,7 +344,13 @@ export function addKillFeed(k, v, w, head, tm) {
   div.appendChild(h);
   const m = doc.createElement('span');
   m.className = 'w';
-  m.textContent = w;
+  const wIcon = weaponIconByName(w);
+  if (wIcon) {
+    m.innerHTML = '<svg class="kf-ic"><use href="assets/icons.svg#' + wIcon + '"/></svg>';
+    m.appendChild(doc.createTextNode(w));
+  } else {
+    m.textContent = w;
+  }
   div.appendChild(m);
   const v2 = doc.createElement('span');
   v2.textContent = v;

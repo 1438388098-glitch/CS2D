@@ -1,4 +1,4 @@
-import { ROUND } from './config.js';
+import { ROUND, WEAPONS } from './config.js';
 import { weaponDef, ammoFor, reserveFor, wkey } from './entities.js';
 import { tileAt } from './map.js';
 import { clamp } from './utils.js';
@@ -8,15 +8,32 @@ let game = null;
 let D = {};
 let lastTop = 0;
 let lastSpecKey = '';
+let lastMoney = null;
 let htMain = null;
 // 购买提示骨架里的 <b>（倒计时数字），只更新文本不重建 HTML
 let buyTipB = null;
 
-const ICON_BY_WEAPON = {
+export const ICON_BY_WEAPON = {
   ak: 'ic-ak', m4: 'ic-m4', famas: 'ic-rifle', mac10: 'ic-mac10', mp9: 'ic-mp9', p90: 'ic-p90',
   xm: 'ic-xm', awp: 'ic-awp', p250: 'ic-p250', deagle: 'ic-deagle', glock: 'ic-p250', usp: 'ic-p250',
-  knife: 'ic-knife-w'
+  knife: 'ic-knife-w', he: 'ic-grenade', flash: 'ic-flash', smoke: 'ic-smoke'
 };
+
+// 武器显示名 → 图标 id（击杀信息用；WEAPONS 表反向索引，未知武器名回退 null 不出图标）
+const ICON_BY_WEAPON_NAME = (() => {
+  const rev = {};
+  for (const [id, icon] of Object.entries(ICON_BY_WEAPON)) {
+    const w = WEAPONS[id];
+    if (w && w.name) rev[w.name] = icon;
+    else rev[id] = icon;
+  }
+  return rev;
+})();
+
+export function weaponIconByName(name) {
+  return ICON_BY_WEAPON_NAME[name] || null;
+}
+
 
 const STATE_ICON = {
   reload: 'ic-reload', scope: 'ic-scope', step: 'ic-step', water: 'ic-wave'
@@ -88,6 +105,21 @@ function updateLeft(p, now) {
     }
     const nm = wd ? wd.name : (p.slot && p.slot.indexOf('nade:') === 0 ? '手雷' : '');
     if (D.hudWeaponName.textContent !== nm) D.hudWeaponName.textContent = nm;
+    // 资金变动浮动提示：金额变化时在钱数旁飘出 +$/$-，1.2s 淡出（同刻只保留最新一条）
+    if (p.money !== lastMoney) {
+      const delta = p.money - (lastMoney == null ? p.money : lastMoney);
+      lastMoney = p.money;
+      if (delta !== 0 && D.hudMoney && D.hudMoney.parentNode) {
+        const foot = D.hudMoney.parentNode;
+        const old = foot.querySelector('.hl-moneydelta');
+        if (old) old.remove();
+        const tip = document.createElement('span');
+        tip.className = 'hl-moneydelta ' + (delta > 0 ? 'gain' : 'loss');
+        tip.textContent = (delta > 0 ? '+$' : '-$') + Math.abs(delta);
+        foot.appendChild(tip);
+        setTimeout(() => tip.remove(), 1300);
+      }
+    }
   }
 
   // 状态行：换弹 > 开镜 > 涉水 > 静步
