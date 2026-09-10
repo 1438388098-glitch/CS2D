@@ -257,6 +257,7 @@ function spawnRound(game) {
   game.input.mouse.wasDown = game.input.mouse.down;
   game.lastKiller = null;
   game.dmgPops.length = 0;
+  if (game.pings) game.pings.length = 0;
   game.tOrder = null;
   const spawnTick = { t: 0, ct: 0 };
   for (const e of game.entities) {

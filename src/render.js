@@ -383,11 +383,43 @@ function drawBombSiteMarks(game) {
   if (game.state !== 'BUY' && game.state !== 'LIVE') return;
   if (!map.sites || !map.sites.A || !map.sites.B) return;
   const pulse = 0.5 + 0.5 * Math.sin(performance.now() / 400);
-  ctx.strokeStyle = 'rgba(255,150,90,' + (0.25 + 0.2 * pulse) + ')';
+  drawSiteMark(map.sites.A, '255,150,90', siteMarkSpec(map.sites.A.x0, map.sites.A.y0, map.sites.A.x1, map.sites.A.y1, pulse));
+  drawSiteMark(map.sites.B, '90,160,255', siteMarkSpec(map.sites.B.x0, map.sites.B.y0, map.sites.B.x1, map.sites.B.y1, pulse));
+}
+
+// 包点标记样式（纯函数，供测试断言）：角标长度按短边 22% 取、上限 18px；
+// 三个透明度随 pulse（0..1）单调增强 —— 内部淡填充 / 细边框 / 角标
+export function siteMarkSpec(x0, y0, x1, y1, pulse) {
+  const w = x1 - x0, h = y1 - y0;
+  const p = clamp(Number(pulse) || 0, 0, 1);
+  return {
+    L: Math.min(18, Math.min(Math.abs(w), Math.abs(h)) * 0.22),
+    fillAlpha: 0.03 + 0.04 * p,
+    lineAlpha: 0.3 + 0.3 * p,
+    bracketAlpha: 0.55 + 0.35 * p
+  };
+}
+
+// 包点绘制：内部淡填充 + 细边框 + 四角战术括号（替代裸 strokeRect）
+function drawSiteMark(site, rgb, spec) {
+  const w = site.x1 - site.x0, h = site.y1 - site.y0;
+  ctx.save();
+  ctx.fillStyle = 'rgba(' + rgb + ',' + spec.fillAlpha + ')';
+  ctx.fillRect(site.x0, site.y0, w, h);
+  ctx.strokeStyle = 'rgba(' + rgb + ',' + spec.lineAlpha + ')';
+  ctx.lineWidth = 1.5;
+  ctx.strokeRect(site.x0, site.y0, w, h);
+  const L = spec.L;
+  ctx.strokeStyle = 'rgba(' + rgb + ',' + spec.bracketAlpha + ')';
   ctx.lineWidth = 3;
-  ctx.strokeRect(map.sites.A.x0, map.sites.A.y0, map.sites.A.x1 - map.sites.A.x0, map.sites.A.y1 - map.sites.A.y0);
-  ctx.strokeStyle = 'rgba(90,160,255,' + (0.25 + 0.2 * pulse) + ')';
-  ctx.strokeRect(map.sites.B.x0, map.sites.B.y0, map.sites.B.x1 - map.sites.B.x0, map.sites.B.y1 - map.sites.B.y0);
+  ctx.lineCap = 'round';
+  ctx.beginPath();
+  ctx.moveTo(site.x0, site.y0 + L); ctx.lineTo(site.x0, site.y0); ctx.lineTo(site.x0 + L, site.y0);
+  ctx.moveTo(site.x1 - L, site.y0); ctx.lineTo(site.x1, site.y0); ctx.lineTo(site.x1, site.y0 + L);
+  ctx.moveTo(site.x1, site.y1 - L); ctx.lineTo(site.x1, site.y1); ctx.lineTo(site.x1 - L, site.y1);
+  ctx.moveTo(site.x0 + L, site.y1); ctx.lineTo(site.x0, site.y1); ctx.lineTo(site.x0, site.y1 - L);
+  ctx.stroke();
+  ctx.restore();
 }
 
 export function crateRenderSpec(x, y, hp, tile = mapTile()) {
@@ -574,6 +606,14 @@ function drawCrates(game) {
   }
 }
 
+// C4 蜂鸣同步警报环（纯函数，供测试断言）：每次蜂鸣发出一圈扩散红环，
+// 扩散时长取 min(0.5s, 蜂鸣间隔)——高频急促期环也更急促
+export function bombAlarmSpec(tsSinceBeep, interval) {
+  const dur = Math.max(0.05, Math.min(0.5, interval || 0.5));
+  const t = clamp(tsSinceBeep / dur, 0, 1);
+  return { t, r: 12 + t * 34, alpha: (1 - t) * 0.55 };
+}
+
 function drawBomb(game) {
   if (!game.bomb) return;
   const b = game.bomb;
@@ -582,10 +622,27 @@ function drawBomb(game) {
   ctx.save();
   if (b.planted) {
     const pulse = 0.4 + 0.3 * Math.sin(performance.now() / 300);
-    ctx.fillStyle = 'rgba(255,60,40,' + pulse * 0.3 + ')';
+    ctx.fillStyle = 'rgba(255,60,40,' + pulse * 0.18 + ')';
     ctx.beginPath();
     ctx.arc(b.x, b.y, 34, 0, Math.PI * 2);
     ctx.fill();
+    // 蜂鸣同步警报环：节拍与 updateCamera 的 sfx beep 完全一致（间隔随倒计时升频）
+    const bt = b.timer || 0;
+    const bInt = bt < 5 ? 0.25 : bt < 10 ? 0.5 : 1;
+    const ts = clamp(bInt - (game._bombBeepT || 0), 0, bInt);
+    const al = bombAlarmSpec(ts, bInt);
+    if (al.alpha > 0.01) {
+      ctx.globalCompositeOperation = 'lighter';
+      ctx.strokeStyle = 'rgba(255,70,45,' + (al.alpha * 0.35) + ')';
+      ctx.lineWidth = 5;
+      ctx.beginPath();
+      ctx.arc(b.x, b.y, al.r, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.strokeStyle = 'rgba(255,120,80,' + al.alpha + ')';
+      ctx.lineWidth = 1.6;
+      ctx.stroke();
+      ctx.globalCompositeOperation = 'source-over';
+    }
   }
   ctx.fillStyle = '#222';
   ctx.fillRect(b.x - 7, b.y - 4, 14, 8);
@@ -688,16 +745,48 @@ function drawLaser(game) {
   ctx.restore();
 }
 
+// 手雷外观规格（纯函数，供测试断言）：三种投掷物各有体色/中带/高光强度/LED 色调
+export function grenadeRenderSpec(kind) {
+  const table = {
+    he: { body: '#3f6b35', band: '#264a20', hi: 'rgba(255,255,255,0.30)', led: '255,90,70' },
+    flash: { body: '#c9c9c9', band: '#787c82', hi: 'rgba(255,255,255,0.55)', led: '255,220,120' },
+    smoke: { body: '#5a5f66', band: '#383c42', hi: 'rgba(255,255,255,0.25)', led: '140,220,160' }
+  };
+  return table[kind] || table.smoke;
+}
+
 function drawGrenades(game) {
+  const blink = Math.sin(performance.now() / 120) > 0;
   for (const g of game.grenades) {
+    const spec = grenadeRenderSpec(g.kind);
+    const ang = Math.atan2(g.vy || 0, g.vx || 1);
+    // 地面投影
+    ctx.fillStyle = 'rgba(0,0,0,0.35)';
+    ctx.beginPath();
+    ctx.ellipse(g.x + 2, g.y + 4, 6, 3, 0, 0, Math.PI * 2);
+    ctx.fill();
     ctx.save();
     ctx.translate(g.x, g.y);
-    ctx.fillStyle = g.kind === 'he' ? '#2f6b2f' : (g.kind === 'flash' ? '#c9c9c9' : '#5a5f66');
+    // 弹体沿飞行方向取向：中带/引信/LED 随轨迹滚动
+    ctx.rotate(ang);
+    ctx.fillStyle = spec.body;
     ctx.beginPath();
     ctx.arc(0, 0, 6, 0, Math.PI * 2);
     ctx.fill();
-    ctx.fillStyle = '#111';
-    ctx.fillRect(-1.5, -3, 3, 6);
+    ctx.fillStyle = spec.band;
+    ctx.fillRect(-6, -1.5, 12, 3);
+    ctx.fillStyle = spec.hi;
+    ctx.beginPath();
+    ctx.arc(-2, -2, 2.4, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = '#222';
+    ctx.fillRect(3.5, -1.5, 3, 3);
+    if (blink) {
+      ctx.fillStyle = 'rgba(' + spec.led + ',0.95)';
+      ctx.beginPath();
+      ctx.arc(6.5, 0, 1.6, 0, Math.PI * 2);
+      ctx.fill();
+    }
     ctx.restore();
   }
 }

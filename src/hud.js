@@ -8,6 +8,7 @@ import { getBindLabel } from './keymap.js';
 import { fogEnabled } from './fog.js';
 import { castAimRay } from './fps-laser.js';
 import { lowHpVignette, drawLowHpVignette, lowHpPulse, drawLowHpPulse, killFlash, drawKillFlash } from './screen-fx.js';
+import { activePings, drawMinimapPings } from './ping-fx.js';
 import { damageArc, drawDamageArc, HIT_ARC_DURATION } from './damage-fx.js';
 
 let ctx = null;
@@ -370,6 +371,8 @@ export function renderMinimap(game) {
       mctx.fillText(e.name, ox + e.x * s + 5, oy + e.y * s - 4);
     }
   }
+  // 事件 ping：安放/拆除/爆炸在对应位置扩散圆环，帮全队读局势
+  drawMinimapPings(mctx, activePings(game.pings, game.time || 0), (wx) => ox + wx * s, (wy) => oy + wy * s);
   if (game.bomb && (game.bomb.dropped || game.bomb.planted)) {
     const blink = Math.sin(now / 160) > 0;
     const bx = ox + game.bomb.x * s;
