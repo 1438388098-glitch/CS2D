@@ -10,6 +10,7 @@ import {
   formatDate, isChristmasBreak,
   TRAIN_TIERS, ATTRS, PERSONALITY_CN, NEED_ROLES, ROLES
 } from './manager.js';
+import { yearlyTop } from './hltv-rating.js';
 import { startManagerMatch } from './manager-match.js';
 
 let doc = null;
@@ -18,6 +19,7 @@ let tab = 'dash';
 let transferRole = '';
 let transferSort = 'rating';
 let trainAttr = {};
+let yearlyVisible = false;  // 年度榜单浮层开关
 
 function el(id) { return doc ? doc.getElementById(id) : null; }
 function esc(s) { return String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])); }
@@ -69,6 +71,7 @@ function render() {
     '<span class="ct-bank" style="color:' + healthColor(h.morale) + '">士气' + s.team.morale + '</span>' +
     '<span class="ct-bank" style="color:' + healthColor(fr.level === '高风险' ? 'red' : fr.level === '紧张' ? 'yellow' : 'green') + '">' + esc(fr.level) + '</span>' +
     '<span class="ct-bank">信任' + s.board.trust + '</span>' +
+    '<button data-act="yearly" title="年度 HLO 榜单 Top 5">📊 年度 Top 5</button>' +
     '<button data-act="menu">←主菜单</button></div>';
   html += '<div class="career-tabs">';
   for (const [id, label] of TABS) html += '<button class="career-tab' + (tab === id ? ' sel' : '') + '" data-act="tab" data-tab="' + id + '">' + label + '</button>';
@@ -76,7 +79,35 @@ function render() {
   const rr = { dash: renderDash, roster: renderRoster, schedule: renderSchedule, train: renderTrain, finance: renderFinance }[tab] || renderDash;
   html += rr(s);
   html += '</div>';
+  if (yearlyVisible) html += renderYearlyPopup(s);
   panel.innerHTML = html;
+}
+
+function renderYearlyPopup(s) {
+  const top = yearlyTop(s.yearlyRating, 5);
+  const year = (s.yearlyRating && s.yearlyRating.year) || 2026;
+  const hist = (s.yearlyHistory || []).slice(-3);  // 最近 3 年快照
+  let body = '<div class="career-card" style="margin-top:10px"><div class="mng-next"><div><b>📊 年度 HLO 榜单 · ' + year + ' 年</b>' +
+    '<button data-act="yearly-close" style="float:right">关闭</button></div></div>';
+  if (top.length === 0) {
+    body += '<div class="career-news">今年暂无比赛数据, 打几场就有了~</div>';
+  } else {
+    body += '<div class="mng-roster">';
+    top.forEach((e, i) => {
+      const isPlayer = e.team === 'player' ? ' mine' : '';
+      const avg = e.games > 0 ? (e.hltvSum / e.games).toFixed(2) : '0.00';
+      body += '<div class="mng-row' + isPlayer + '"><span>#' + (i + 1) + ' ' + esc(e.name) + '</span><span>' + e.games + ' 场 · avg ' + avg + ' · 加权 ' + e.weightedScore.toFixed(2) + ' · 最佳 ' + e.bestHlo.toFixed(2) + '</span></div>';
+    });
+    body += '</div>';
+  }
+  if (hist.length > 0) {
+    body += '<div class="career-news" style="margin-top:8px"><b>历史年度 Top 3:</b></div>';
+    hist.forEach((h) => {
+      body += '<div class="career-news">' + h.year + ' 年 #1 ' + esc(h.top[0] ? h.top[0].name : '-') + ' (加权 ' + (h.top[0] ? h.top[0].weightedScore.toFixed(2) : '-') + ')</div>';
+    });
+  }
+  body += '</div>';
+  return body;
 }
 
 function healthDot(c, label, val) {
@@ -288,6 +319,8 @@ function onClick(e) {
   const s = getState();
   if (act === 'tab') { tab = t.getAttribute('data-tab') || 'dash'; render(); }
   else if (act === 'menu') { el('managerPanel').style.display = 'none'; if (game.ui) game.ui.showMenu(); }
+  else if (act === 'yearly') { yearlyVisible = !yearlyVisible; render(); }
+  else if (act === 'yearly-close') { yearlyVisible = false; render(); }
   else if (act === 'play') {
     el('managerPanel').style.display = 'none';
     startManagerMatch(game, null, null, false);
