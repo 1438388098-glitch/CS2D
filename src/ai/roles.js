@@ -15,6 +15,13 @@ function initAdaptive(game) {
 }
 
 export function recordRoundResult(game, winner, winType) {
+  // 回合日志（轻量）：HLTV KAST 需要逐回合胜负方与本回合阵亡名单。
+  // 此刻 e.dead 恰好表示"本回合内死亡"（每回合出生时重置），无需快照。
+  if (!game.roundLog) game.roundLog = [];
+  game.roundLog.push({
+    winner: winner || null,
+    casualties: (game.entities || []).filter((e) => e && e.dead).map((e) => e.name)
+  });
   if (!game.adaptive) initAdaptive(game);
   const ad = game.adaptive;
   const site = game.tAttackSite;

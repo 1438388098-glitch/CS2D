@@ -4,7 +4,7 @@ import { teamDiffParams } from './modes.js';
 import { ROLE_ARCHE, sameTeamBonus, getState, settlePlayerMatch, nextFixture, MATCH_WIN_LIMIT, MATCH_MAX_ROUNDS } from './manager.js';
 import { clamp } from './utils.js';
 import { ctx } from './ctx.js';
-import { computeMatchHltv as _computeMatchHltv, pickHltvMvp as _pickHltvMvp, updateHltvRolling as _updateHltvRolling } from './hltv-rating.js';
+import { computeMatchHltv as _computeMatchHltv, pickHltvMvp as _pickHltvMvp, updateHltvRolling as _updateHltvRolling, deriveRoundParticipation as _deriveRoundParticipation } from './hltv-rating.js';
 
 function emit(evt, p) { ctx.bus.emit(evt, p); }
 
@@ -162,21 +162,23 @@ function finishManagerMatch(game, tWon) {
   let mvpObj = null;
   try {
     const playerEntities = (game.entities || []).filter((e) => e && e.bot);
-    const roundsArr = (g.rounds || []).map((r) => ({ round: r.round || 0, winner: r.winner }));
+    // 我方阵容按 venue 映射：主 T 客 CT（mapManagerRosterToBots：isHome ? myRoster : opp.roster → tBots）。
+    // 回合数据来自内核回合日志（recordRoundResult，winner 为 't'/'ct' + 本回合阵亡名单）；
+    // 此前读 g.rounds（从未存在，恒空）且按 'CT'/'T' 大写与 home 归属反推，映射双重错误。
+    const playerIsT = !!g.isHome;
+    const sideOf = (w) => w === 't' ? (playerIsT ? 'player' : 'opp') : (w === 'ct' ? (playerIsT ? 'opp' : 'player') : null);
+    const myTeam = playerIsT ? 't' : 'ct';
+    const roundsArr = (game.roundLog || []).map((r, i) => ({ round: i + 1, winner: sideOf(r.winner), casualties: r.casualties || [] })).filter((r) => r.winner);
     const playerStats = playerEntities.map((e) => ({
-      name: e.name, team: (e.team || '').toLowerCase() === 'ct' ? 'player' : 'opp',
+      name: e.name, team: (e.team || '').toLowerCase() === myTeam ? 'player' : 'opp',
       kills: e.kills || 0, deaths: e.deaths || 0, dmg: e.dmg || 0,
       plants: e.plants || 0, defuses: e.defuses || 0, clutches: e.clutches || 0,
       roundsWon: 0, roundsSurvived: 0
     }));
     for (const ps of playerStats) {
-      let rw = 0, rs = 0;
-      for (const r of roundsArr) {
-        const teamWon = (r.winner === 'CT' && ps.team === 'player' && g.isHome) || (r.winner === 'T' && ps.team === 'player' && !g.isHome) || (r.winner !== 'CT' && r.winner !== 'T' && ps.team === 'opp');
-        if (teamWon) rw++; else rs++;
-      }
-      ps.roundsWon = rw;
-      ps.roundsSurvived = rs;
+      const part = _deriveRoundParticipation(ps, roundsArr);
+      ps.roundsWon = part.roundsWon;
+      ps.roundsSurvived = part.roundsSurvived;
     }
     const withHltv = _computeMatchHltv(playerStats, s, roundsArr);
     mvpObj = _pickHltvMvp(withHltv);

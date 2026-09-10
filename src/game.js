@@ -123,6 +123,7 @@ export function createGame(opts = {}) {
     ot: false,
     seed: null,
     playerKills: [],
+    roundLog: [], // 逐回合日志：{winner:'t'|'ct'|null, casualties:[姓名]}，recordRoundResult 写入，HLTV KAST 消费
     mapW: 2400, mapH: 1800, canvasW: 1280, canvasH: 720,
     opts: { team: 'ct', diff: 'normal', bots: 4, sound: true, mapId: 'dust2' },
     noRoundEnd: false,

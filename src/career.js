@@ -2,7 +2,7 @@ import { ROUND } from './config.js';
 import {registerMode, MODE_MAPS} from './registry.js';
 import {setupMatchEntities, startRound, startMatch} from './game.js';
 import {teamDiffParams, simScore} from './modes.js';
-import { computeMatchHltv as _computeMatchHltv, pickHltvMvp as _pickHltvMvp, updateHltvRolling as _updateHltvRolling } from './hltv-rating.js';
+import { computeMatchHltv as _computeMatchHltv, pickHltvMvp as _pickHltvMvp, updateHltvRolling as _updateHltvRolling, deriveRoundParticipation as _deriveRoundParticipation, legacyMvpScore as _legacyMvpScore } from './hltv-rating.js';
 
 const SAVE_KEY = 'cs2d_career';
 const BACKUP_KEY = 'cs2d_career_backup';
@@ -2092,8 +2092,10 @@ function simulateCareerRound(index, home, away, options, stats) {
   const duelLoser = entryWin ? defender : attacker;
   const winnerPlayer = entryWin ? entry : anchor;
   const loserPlayer = entryWin ? anchor : entry;
+  const casualties = []; // 本回合阵亡名单（对位败者 + 拆弹失败的拆弹者），供 HLTV KAST
   recordSimKill(stats, duelWinner.id, winnerPlayer.name, winnerPlayer.role, winnerPlayer.rating);
   recordSimDeath(stats, duelLoser.id, loserPlayer.name, loserPlayer.role, loserPlayer.rating);
+  casualties.push(loserPlayer.name);
   events.push({
     t: 'duel',
     side: duelWinner.id,
@@ -2132,6 +2134,7 @@ function simulateCareerRound(index, home, away, options, stats) {
           const clutchPlayer = (attacker.lineup || simLineup(attacker)).find((p) => p.role === '自由人') || entry;
           recordSimKill(stats, attacker.id, clutchPlayer.name, clutchPlayer.role, clutchPlayer.rating);
           recordSimDeath(stats, defender.id, defuser.name, defuser.role, defuser.rating);
+          casualties.push(defuser.name);
           recordSimAct(stats, attacker.id, clutchPlayer.name, clutchPlayer.role, clutchPlayer.rating, 'clutches');
           winner = attacker;
           events.push({ t: 'clutch', side: attacker.id, site, player: clutchPlayer.name, text: clutchPlayer.name + ' 完成 ' + site + ' 点残局' });
@@ -2141,7 +2144,7 @@ function simulateCareerRound(index, home, away, options, stats) {
   }
   const round = index + 1;
   events.push({ t: 'round_end', side: winner.id, round, text: winner.name + ' 赢下第 ' + round + ' 回合' });
-  return { round, half, attacker: attacker.id, defender: defender.id, site, tactic, winner: winner.id, events, stats: {} };
+  return { round, half, attacker: attacker.id, defender: defender.id, site, tactic, winner: winner.id, events, stats: {}, casualties };
 }
 
 export function simulateCareerMatch(home, away, options = {}) {
@@ -2161,14 +2164,12 @@ export function simulateCareerMatch(home, away, options = {}) {
     if (r.winner === homeTeam.id) homeScore++; else awayScore++;
   }
   const playersRaw = Object.values(stats).map((p) => ({ ...p })).sort((a, b) => b.kills - a.kills || b.dmg - a.dmg);
-  // HLTV: 反推每个选手的回合参与度
+  // stats 入口统一用 teamId 字段（simStatKey），HLTV 侧消费 team：此处归一并反推回合参与度
   for (const p of playersRaw) {
-    let rw = 0, rs = 0;
-    for (const r of rounds) {
-      if (r.winner === p.team) rw++; else rs++;
-    }
-    p.roundsWon = rw;
-    p.roundsSurvived = rs;
+    if (p.team == null && p.teamId != null) p.team = p.teamId;
+    const part = _deriveRoundParticipation(p, rounds);
+    p.roundsWon = part.roundsWon;
+    p.roundsSurvived = part.roundsSurvived;
   }
   const players = playersRaw;
   // HLTV: 用 HLO rating 最高的作为 MVP, 失败时降级为旧公式
@@ -2182,10 +2183,8 @@ export function simulateCareerMatch(home, away, options = {}) {
       throw new Error('no state');
     }
   } catch (e) {
-    mvp = players.slice().sort((a, b) =>
-      (b.kills * 2 + b.dmg / 100 + b.plants + b.defuses + b.clutches * 2) -
-      (a.kills * 2 + a.dmg / 100 + a.plants + b.defuses + a.clutches * 2)
-    )[0] || null;
+    // HLO 模块异常时降级为旧公式（legacyMvpScore 统一口径，勿手写加权）
+    mvp = players.slice().sort((a, b) => _legacyMvpScore(b) - _legacyMvpScore(a))[0] || null;
   }
   const winnerId = homeScore >= awayScore ? homeTeam.id : awayTeam.id;
   return {
@@ -2544,7 +2543,11 @@ export function careerEndMatch(game) {
   // HLTV: 用真实比赛 stats 算 HLO rating 替代旧的 kills >= 5 判定
   let mvp = false;
   try {
-    const roundsArr = (game.careerMatch && game.careerMatch.rounds) || [];
+    // 回合数据来自内核回合日志（recordRoundResult 记录，winner 为 't'/'ct' + 本回合阵亡名单），
+    // 归一到 player/opp 域后再反推参与度；careerMatch.rounds 从未存在过（恒空数组）
+    const playerIsT = p.team === 't';
+    const sideOf = (w) => w === 't' ? (playerIsT ? 'player' : 'opp') : (w === 'ct' ? (playerIsT ? 'opp' : 'player') : null);
+    const roundsArr = (game.roundLog || []).map((r, i) => ({ round: i + 1, winner: sideOf(r.winner), casualties: r.casualties || [] })).filter((r) => r.winner);
     const playerStats = [{
       name: p.name || 'player',
       team: p.team === 't' ? 'player' : 'opp',
@@ -2562,14 +2565,11 @@ export function careerEndMatch(game) {
         roundsWon: 0, roundsSurvived: 0
       });
     }
-    // 反推 roundsWon/Survived
+    // 反推 roundsWon/Survived（含本回合阵亡名单 → KAST 有真实区分度）
     for (const ps of playerStats) {
-      let rw = 0, rs = 0;
-      for (const r of roundsArr) {
-        if (r.winner === ps.team || (r.winner && ps.team === 'player' && ((cm.venue === 'home' && r.winner === 't') || (cm.venue === 'away' && r.winner === 'ct')))) rw++; else rs++;
-      }
-      ps.roundsWon = rw;
-      ps.roundsSurvived = rs;
+      const part = _deriveRoundParticipation(ps, roundsArr);
+      ps.roundsWon = part.roundsWon;
+      ps.roundsSurvived = part.roundsSurvived;
     }
     const withHltv = _computeMatchHltv(playerStats, s, roundsArr);
     const playerHltv = withHltv.find((x) => x.name === (p.name || 'player'));

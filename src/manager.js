@@ -1,5 +1,5 @@
 import { MAJOR_TEAMS } from './modes.js';
-import { computeMatchHltv, pickHltvMvp, updateHltvRolling, accumulateTournamentStats, selectTournamentMvp, updateYearlyRating, yearlyTop, TOURNAMENT_WEIGHTS, selectTournamentEvps, selectAllTournamentTeam, collectPlayerRoles, inferCupFinalists, computeYearlyTop20, buildPublishBatches, top20At, awardScore } from './hltv-rating.js';
+import { computeMatchHltv, pickHltvMvp, updateHltvRolling, accumulateTournamentStats, selectTournamentMvp, updateYearlyRating, yearlyTop, TOURNAMENT_WEIGHTS, selectTournamentEvps, selectAllTournamentTeam, collectPlayerRoles, collectPlayerTeams, inferCupFinalists, computeYearlyTop20, buildPublishBatches, top20At, awardScore, deriveRoundParticipation, legacyMvpScore } from './hltv-rating.js';
 
 export const SAVE_KEY = 'cs2d_manager';
 export const BACKUP_KEY = 'cs2d_manager_backup';
@@ -420,6 +420,7 @@ function simulateManagerRound(index, home, away, s, stats, mapId) {
   const aPower = teamPower(s, attacker.id, 'attack') * teamMapEdge(s, attacker.id, mapId);
   const dPower = teamPower(s, defender.id, 'defense') * teamMapEdge(s, defender.id, mapId);
   const events = [];
+  const casualties = []; // 本回合阵亡名单（1vX 抽象模型：对位败者 + 拆弹失败的拆弹者）
   if (rng() < 0.4) events.push({ t: 'utility', side: attacker.id, text: attacker.name + ' 使用道具控制入口' });
   const entry = (attacker.roster || [])[Math.floor(rng() * Math.max(1, (attacker.roster || []).length))] || { name: attacker.name, rating: attacker.rating, role: '步枪' };
   const anchor = (defender.roster || []).find((p) => p.role === '指挥') || (defender.roster || [])[0] || { name: defender.name, rating: defender.rating, role: '步枪' };
@@ -431,6 +432,7 @@ function simulateManagerRound(index, home, away, s, stats, mapId) {
   if (!stats[loserPlayer.name]) stats[loserPlayer.name] = { name: loserPlayer.name, role: loserPlayer.role, team: (entryWin ? defender : attacker).id, kills: 0, deaths: 0, dmg: 0, plants: 0, defuses: 0, clutches: 0 };
   stats[winnerPlayer.name].kills++;
   stats[loserPlayer.name].deaths++;
+  casualties.push(loserPlayer.name);
   events.push({ t: 'duel', side: duelWinner.id, text: winnerPlayer.name + ' 对位击败 ' + loserPlayer.name });
   const siteControl = rng() < clamp(0.5 + (aPower - dPower) * 0.01 + (entryWin ? 0.12 : 0), 0.22, 0.92);
   let winner;
@@ -455,14 +457,14 @@ function simulateManagerRound(index, home, away, s, stats, mapId) {
       } else {
         const clutchPlayer = (attacker.roster || []).find((p) => p.role === '自由人') || entry;
         if (stats[clutchPlayer.name]) { stats[clutchPlayer.name].kills++; stats[clutchPlayer.name].clutches++; }
-        if (defuser && stats[defuser.name]) stats[defuser.name].deaths++;
+        if (defuser && stats[defuser.name]) { stats[defuser.name].deaths++; casualties.push(defuser.name); }
         winner = attacker;
         events.push({ t: 'clutch', side: attacker.id, text: clutchPlayer.name + ' 完成残局' });
       }
     }
   }
   events.push({ t: 'round_end', side: winner.id, round: index + 1, text: winner.name + ' 赢下第 ' + (index + 1) + ' 回合' });
-  return { round: index + 1, attacker: attacker.id, defender: defender.id, winner: winner.id, events };
+  return { round: index + 1, attacker: attacker.id, defender: defender.id, winner: winner.id, events, casualties };
 }
 
 export function simulateManagerMatch(s, home, away, opts = {}) {
@@ -477,14 +479,11 @@ export function simulateManagerMatch(s, home, away, opts = {}) {
     if (r.winner === home.id) homeScore++; else awayScore++;
   }
   const playersRaw = Object.values(stats).map((p) => ({ ...p })).sort((a, b) => b.kills - a.kills || b.dmg - a.dmg);
-  // HLTV: 反推每个选手的回合参与度 (roundsWon/roundsSurvived)
+  // HLTV: 反推每个选手的回合参与度（阵亡名单进 KAST，不再"非赢即存活"）
   for (const p of playersRaw) {
-    let rw = 0, rs = 0;
-    for (const r of rounds) {
-      if (r.winner === p.team) rw++; else rs++;
-    }
-    p.roundsWon = rw;
-    p.roundsSurvived = rs;
+    const part = deriveRoundParticipation(p, rounds);
+    p.roundsWon = part.roundsWon;
+    p.roundsSurvived = part.roundsSurvived;
   }
   const players = playersRaw;
   // HLTV: 给每个选手算单场 HLO rating + 选 HLO 最高的作为 MVP
@@ -496,8 +495,8 @@ export function simulateManagerMatch(s, home, away, opts = {}) {
       players[i].hltv = withHltv[i].hltv;
     }
   } catch (e) {
-    // HLO 模块异常时降级为旧公式
-    mvp = players.slice().sort((a, b) => (b.kills * 2 + b.dmg / 100 + b.plants + b.defuses + b.clutches * 2) - (a.kills * 2 + b.dmg / 100 + a.plants + b.defuses + b.clutches * 2))[0] || null;
+    // HLO 模块异常时降级为旧公式（legacyMvpScore 统一口径，勿手写加权）
+    mvp = players.slice().sort((a, b) => legacyMvpScore(b) - legacyMvpScore(a))[0] || null;
   }
   const winner = homeScore >= awayScore ? home.id : away.id;
   return { mapId: mapId, homeId: home.id, awayId: away.id, score: [homeScore, awayScore], winner, rounds, timeline: rounds.flatMap((r) => r.events.map((e) => ({ ...e, round: r.round }))), players, mvp, totalKills: players.reduce((a, p) => a + p.kills, 0) };
@@ -702,11 +701,14 @@ export function awardSeasonEnd(s, seasonReport) {
   if (!Array.isArray(s.tournamentTeams)) s.tournamentTeams = [];
   const dateISO = s.time ? s.time.currentISO : '';
   const roleMap = collectPlayerRoles(s);
+  // 姓名 -> teamId 映射：playerTeams 参数语义是"选手所属队伍"，此前误传 roleMap（角色表）
+  // 导致杯赛决赛两队过滤恒为空。league 调用本不消费该参数，统一传正确结构。
+  const teamMap = collectPlayerTeams(s);
   const result = { league: null, cup: null };
 
   // 联赛: 5 个名额, MVP 不限队伍
   if (s.tournamentStats.league && Object.keys(s.tournamentStats.league.entries).length > 0) {
-    const evpList = selectTournamentEvps(s.tournamentStats.league, { minGames: 5, playerTeams: roleMap });
+    const evpList = selectTournamentEvps(s.tournamentStats.league, { minGames: 5, playerTeams: teamMap });
     if (evpList.length > 0) {
       const mvp = evpList[0];
       s.awards.push(Object.assign({}, mvp, { seasonId: s.season.id, type: 'league', date: dateISO }));
@@ -730,7 +732,7 @@ export function awardSeasonEnd(s, seasonReport) {
   // 杯赛: 8 个名额, MVP 只从决赛两队选
   if (s.tournamentStats.cup && Object.keys(s.tournamentStats.cup.entries).length > 0) {
     const finalists = inferCupFinalists(s);
-    const evpList = selectTournamentEvps(s.tournamentStats.cup, { minGames: 3, finalists, playerTeams: roleMap });
+    const evpList = selectTournamentEvps(s.tournamentStats.cup, { minGames: 3, finalists, playerTeams: teamMap });
     if (evpList.length > 0) {
       const mvp = evpList[0];
       s.awards.push(Object.assign({}, mvp, { seasonId: s.season.id, type: 'cup', date: dateISO }));

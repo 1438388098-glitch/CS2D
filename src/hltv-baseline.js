@@ -73,3 +73,30 @@ export function normalizeToBaseline(value, baseline, scale = 1.5) {
   const raw = 1 + (value - baseline) / baseline * scale;
   return Math.max(0.5, Math.min(1.5, raw));
 }
+
+// ============== 动态分项锚点（阶段 2：接入 computePlayerHltv）==============
+// 60 rating 选手的单场基准分项（与 hltv-rating 原硬编码锚一致）：
+// 0.65 KPR / 0.65 DPR / 80 ADR / 60% KAST / 1.5 impact
+export const BASE_ANCHORS = { kpr: 0.65, dpr: 0.65, adr: 80, kast: 0.6, impact: 1.5 };
+
+// 把联赛中位 rating 换算成分项锚点：线性缩放（甲级中位 ~86 → KPR 锚 0.93）。
+// KAST 是比例型指标不随水平缩放；其余按 median/60 线性放大。
+export function anchorsForRating(medianRating) {
+  const k = clampNum(Number(medianRating) || 60, 30, 120) / 60;
+  return {
+    kpr: BASE_ANCHORS.kpr * k,
+    dpr: BASE_ANCHORS.dpr * k,
+    adr: BASE_ANCHORS.adr * k,
+    kast: BASE_ANCHORS.kast,
+    impact: BASE_ANCHORS.impact * k
+  };
+}
+
+// 联赛动态锚点：锚 1.00 = 该联赛中位水平的选手单场表现
+export function leagueAnchors(state, league) {
+  return anchorsForRating(hltvBaseline(state, league));
+}
+
+function clampNum(v, lo, hi) {
+  return Math.max(lo, Math.min(hi, v));
+}

@@ -2,13 +2,15 @@
 // 5 分项: Kill (0.25) / Survival (0.20) / KAST (0.15) / Impact (0.20) / Damage (0.20)
 // 输入: 单场 playerStats + playerAttrs + 单场回合数 + 锚点 baseline
 
-import { normalizeToBaseline, hltvBaseline } from './hltv-baseline.js';
+import { normalizeToBaseline, hltvBaseline, anchorsForRating, leagueAnchors } from './hltv-baseline.js';
 
 /**
  * 从 rounds 数组反推该选手的 roundsWon 和 roundsSurvived
- * 简化模型: 队伍赢了回合 -> 该选手 roundsWon++; 没赢 -> roundsSurvived++ (按 1vX 模型存活者)
+ * 简化模型: 队伍赢了回合 -> roundsWon++;
+ * 没赢的回合 -> 该选手阵亡名单（r.casualties，姓名数组）里没有他才算"存活"；
+ * 无 casualties 数据的旧格式退回"非赢即存活"口径。
  * @param {object} playerStats - 单场 stats 对象 {name, team, kills, ...}
- * @param {Array} rounds - 回合数组 [{round, winner, ...}, ...]
+ * @param {Array} rounds - 回合数组 [{round, winner, casualties?}, ...]
  * @returns {{roundsWon: number, roundsSurvived: number}}
  */
 export function deriveRoundParticipation(playerStats, rounds) {
@@ -17,6 +19,8 @@ export function deriveRoundParticipation(playerStats, rounds) {
   for (const r of rounds || []) {
     if (r.winner === playerStats.team) {
       roundsWon++;
+    } else if (Array.isArray(r.casualties) && r.casualties.length && playerStats.name != null) {
+      if (r.casualties.indexOf(playerStats.name) === -1) roundsSurvived++;
     } else {
       roundsSurvived++;
     }
@@ -54,15 +58,14 @@ export function computePlayerHltv(playerStats, playerAttrs, ctx) {
   // Impact: 残局权重高, 击杀权重中
   const impactRaw = playerStats.clutches * 2 + playerStats.kills * 0.3;
 
-  // baseline 锚: 该联赛平均 rating 对应的 raw 值
-  // 60 attr 选手单场预期: 0.65 KPR, 0.65 DPR, 80 ADR, 60% KAST, 1.5 impact
-  // baseline 由 ctx.baseline 传入 (阶段 1 临时用 60, 阶段 2 用动态)
-  const baseline = ctx.baseline || 60;
-  const baseKPR = 0.65;
-  const baseDPR = 0.65;
-  const baseADR = 80;
-  const baseKAST = 0.60;
-  const baseImpact = 1.5;
+  // baseline 锚: 该联赛平均 rating 对应的分项 raw 值。
+  // 优先 ctx.anchors（leagueAnchors 的分项对象）；只有标量 baseline 时按 median/60 缩放换算。
+  const anchors = (ctx.anchors && typeof ctx.anchors === 'object') ? ctx.anchors : anchorsForRating(ctx.baseline || 60);
+  const baseKPR = anchors.kpr;
+  const baseDPR = anchors.dpr;
+  const baseADR = anchors.adr;
+  const baseKAST = anchors.kast;
+  const baseImpact = anchors.impact;
 
   // 5 分项 sub-rating (各以 1.00 为锚)
   const kill = subRating(kpr, baseKPR, 4.0);           // KPR 0.5 -> 0.5, 1.0 -> 1.6
@@ -103,17 +106,19 @@ export function computePlayerHltv(playerStats, playerAttrs, ctx) {
  * @returns {Array} - 每个 player 加 {hltv: {total, kill, ...}} 字段
  */
 export function computeMatchHltv(players, state, rounds) {
-  const baseline = hltvBaseline(state, state.team.league);
+  const league = (state && state.team && state.team.league) || '乙级';
+  const baseline = hltvBaseline(state, league);
+  const anchors = leagueAnchors(state, league);
   const results = [];
   for (const ps of players) {
     // 找到该选手的 attrs
     let attrs = {};
     if (ps.team === 'player') {
-      const p = (state.team.roster || []).find((r) => r.name === ps.name);
+      const p = ((state && state.team && state.team.roster) || []).find((r) => r.name === ps.name);
       attrs = (p && p.attrs) || {};
     } else {
       // AI 队选手: 用该队 average rating 生成的默认 attrs (简化)
-      const t = (state.season.teams || []).find((x) => x.id === ps.team);
+      const t = ((state && state.season && state.season.teams) || []).find((x) => x.id === ps.team);
       attrs = {
         aim: t ? Math.round(t.rating * 0.95) : 70,
         react: t ? Math.round(t.rating * 0.95) : 70,
@@ -126,11 +131,34 @@ export function computeMatchHltv(players, state, rounds) {
     const hltv = computePlayerHltv(ps, attrs, {
       rounds: rounds,
       baseline: baseline,
-      league: state.team.league
+      anchors: anchors,
+      league: league
     });
     results.push({ ...ps, hltv });
   }
   return results;
+}
+
+// 旧版 MVP 公式（HLO 引入前的 kills/dmg/plants/defuses/clutches 加权）。
+// 提取为纯函数：HLO 模块异常时的降级路径共用，避免两处手写出现 a/b 项笔误漂移。
+export function legacyMvpScore(p) {
+  if (!p) return 0;
+  return (p.kills || 0) * 2 + (p.dmg || 0) / 100 + (p.plants || 0) + (p.defuses || 0) + (p.clutches || 0) * 2;
+}
+
+// 从玩家 roster + AI 队 roster 收集 选手姓名 -> teamId 映射。
+// awardSeasonEnd 用它做杯赛 MVP 决赛两队过滤（勿再误传角色表 roleMap）。
+export function collectPlayerTeams(state) {
+  const map = {};
+  for (const p of (state && state.team && state.team.roster) || []) {
+    if (p && p.name) map[p.name] = 'player';
+  }
+  for (const t of (state && state.season && state.season.teams) || []) {
+    for (const p of t.roster || []) {
+      if (p && p.name) map[p.name] = t.id;
+    }
+  }
+  return map;
 }
 
 /**
