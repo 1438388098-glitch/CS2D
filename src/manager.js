@@ -78,7 +78,9 @@ function baseManager() {
     // 年度 Top 20 榜单 (年末所有赛事结束后颁发)
     yearlyTop20: null,  // { year, entries: [{ rank, name, team, role, totalScore, rating, bestHlo, from: 'award'|'rating' }] }
     // 年度 Top 20 历史快照 (限 10 年, Q6=C)
-    yearlyTop20History: []  // [{ year, entries: [...] }]
+    yearlyTop20History: [],  // [{ year, entries: [...] }]
+    // 年度 HLO 加权 Top 10 快照 (maybeRotateYear 归档；manager-ui "历史 HLO #1" 视图消费)
+    yearlyHistory: []  // [{ year, top: [...≤10] }]
   };
 }
 
@@ -125,6 +127,7 @@ export function migrateManagerState(parsed) {
   if (!Array.isArray(parsed.tournamentTeams)) parsed.tournamentTeams = [];
   if (!('yearlyTop20' in parsed)) parsed.yearlyTop20 = null;
   if (!Array.isArray(parsed.yearlyTop20History)) parsed.yearlyTop20History = [];
+  if (!Array.isArray(parsed.yearlyHistory)) parsed.yearlyHistory = [];
   return parsed;
 }
 
@@ -718,14 +721,16 @@ export function awardSeasonEnd(s, seasonReport) {
       pushNews(s, 'award', '联赛 MVP: ' + mvp.name + ' (avgHlo ' + mvp.avgHlo + ', ' + mvp.awardScore + ' 分)');
       const evpSummary = evpList.slice(1).map((e) => '#' + e.rank + ' ' + e.name + '(' + e.awardScore + '分)').join(', ');
       if (evpSummary) pushNews(s, 'award', '联赛 EVP: ' + evpSummary);
-      result.league = { mvp, evps: evpList.slice(1) };
+      result.league = { mvp, evps: evpList.slice(1), team: null };
     }
     // 最佳阵容
     const team = selectAllTournamentTeam(s.tournamentStats.league, { minGames: 5, playerRoles: roleMap });
     if (team.players.length > 0) {
       s.tournamentTeams.push({ seasonId: s.season.id, type: 'league', year: s.time ? Number(s.time.currentISO.slice(0, 4)) : 0, players: team.players });
       pushNews(s, 'award', '联赛最佳阵容: ' + team.players.map((p) => p.role + ' ' + p.name).join(' · '));
-      result.league.team = team;
+      // 空引用防御：evpList 为空时 result.league 仍是 null，此处不能直接 .team 赋值
+      if (result.league) result.league.team = team;
+      else result.league = { mvp: null, evps: [], team };
     }
   }
 
@@ -742,13 +747,14 @@ export function awardSeasonEnd(s, seasonReport) {
       pushNews(s, 'award', '杯赛 MVP: ' + mvp.name + ' (avgHlo ' + mvp.avgHlo + ', ' + mvp.awardScore + ' 分)');
       const evpSummary = evpList.slice(1).map((e) => '#' + e.rank + ' ' + e.name + '(' + e.awardScore + '分)').join(', ');
       if (evpSummary) pushNews(s, 'award', '杯赛 EVP: ' + evpSummary);
-      result.cup = { mvp, evps: evpList.slice(1) };
+      result.cup = { mvp, evps: evpList.slice(1), team: null };
     }
     const team = selectAllTournamentTeam(s.tournamentStats.cup, { minGames: 3, playerRoles: roleMap });
     if (team.players.length > 0) {
       s.tournamentTeams.push({ seasonId: s.season.id, type: 'cup', year: s.time ? Number(s.time.currentISO.slice(0, 4)) : 0, players: team.players });
       pushNews(s, 'award', '杯赛最佳阵容: ' + team.players.map((p) => p.role + ' ' + p.name).join(' · '));
-      result.cup.team = team;
+      if (result.cup) result.cup.team = team;
+      else result.cup = { mvp: null, evps: [], team };
     }
   }
 
@@ -785,10 +791,11 @@ function publishYearlyTop20(s, year) {
   if (!Array.isArray(s.awards)) s.awards = [];
   if (!Array.isArray(s.evps)) s.evps = [];
 
-  // 收集该年度的 awards + evps (按 date / seasonId 推断属于哪一年)
-  // 简化: 用全部 awards + evps (单赛季模式, 一赛季 = 一年)
-  const yearAwards = s.awards.filter((a) => a && a.seasonId != null);
-  const yearEvps = s.evps.filter((e) => e && e.seasonId != null);
+  // 收集该年度的 awards + evps：按颁奖日期（ISO 前缀）过滤到结算年份。
+  // 此前只过滤 seasonId 非空——多年存档下往年荣誉会重复计入次年 Top20（荣誉分持续膨胀）
+  const yearPrefix = String(year) + '-';
+  const yearAwards = s.awards.filter((a) => a && typeof a.date === 'string' && a.date.startsWith(yearPrefix));
+  const yearEvps = s.evps.filter((e) => e && typeof e.date === 'string' && e.date.startsWith(yearPrefix));
 
   // 收集全年所有选手的 rating 数据
   const roleMap = collectPlayerRoles(s);
@@ -1372,6 +1379,9 @@ export function nextSeason() {
     s.time.seasonStartRound = 1;
     // lastPayrollISO 保留 — 1 月 5 号不是 1 号, 不会重复触发发薪
   }
+  // 跳年已发生：立即结算上年年度榜单（此前依赖新赛季首场比赛的 advanceDate 钩子，
+  // 玩家不开赛就永远看不到 Top20）
+  maybeRotateYear(s);
   // 重置赛事级统计 (新赛季开始)
   resetTournamentStats(s);
   save();
