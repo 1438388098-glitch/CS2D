@@ -173,10 +173,13 @@ function finishManagerMatch(game, tWon) {
         if (p) _updateHltvRolling(p, ph.hltv.total);
       }
     }
+    // 缓存全员 HLO, 在 settlePlayerMatch 内部累加 tournamentStats + yearlyRating
+    var __hltvAllWithHltv = withHltv;
   } catch (e) {
     mvpObj = null;
+    var __hltvAllWithHltv = null;
   }
-  const result = settlePlayerMatch(s, myWon, 0, 0, { mvp: mvpObj });
+  const result = settlePlayerMatch(s, myWon, 0, 0, { mvp: mvpObj, playersWithHltv: __hltvAllWithHltv, gameType: g.isCup ? 'cup' : 'league' });
   const el = typeof document !== 'undefined' ? document.getElementById('managerMatchPanel') : null;
   if (el) el.style.display = 'none';
   game.over = true;

@@ -1,9 +1,9 @@
 import { MAJOR_TEAMS } from './modes.js';
-import { computeMatchHltv, pickHltvMvp } from './hltv-rating.js';
+import { computeMatchHltv, pickHltvMvp, updateHltvRolling, accumulateTournamentStats, selectTournamentMvp, updateYearlyRating, yearlyTop, TOURNAMENT_WEIGHTS } from './hltv-rating.js';
 
 export const SAVE_KEY = 'cs2d_manager';
 export const BACKUP_KEY = 'cs2d_manager_backup';
-export const VERSION = 2;
+export const VERSION = 3;
 
 export const ROLES = ['突破', '狙击', '指挥', '步枪', '自由人', '补枪'];
 export const NEED_ROLES = ['突破', '狙击', '指挥', '自由人', '补枪'];
@@ -61,7 +61,16 @@ function baseManager() {
       currentISO: '2026-01-05',     // 当前日期
       lastPayrollISO: '',           // 上次发薪月份('YYYY-MM')
       seasonStartRound: 1           // 当前 season.round 在日历里的锚(给跨年用)
-    }
+    },
+    // 赛事级 HLO 统计 (本季 + 杯赛期间累加, 赛季结束颁奖时清空)
+    tournamentStats: {
+      league: { type: 'league', weight: 1.0, entries: {} },
+      cup: { type: 'cup', weight: 1.8, entries: {} }
+    },
+    // 颁发的赛事 MVP 历史 (赛季维度)
+    awards: [],  // [{ seasonId, type, name, team, avgHlo, games, weight, awardPoints, date }]
+    // 年度榜单 (跨年清零, 同年所有赛事累加)
+    yearlyRating: { year: 2026, entries: [] }
   };
 }
 
@@ -86,6 +95,22 @@ export function migrateManagerState(parsed) {
   // time 字段 (v2+): 旧档补默认值, 保持可读性
   if (!parsed.time || typeof parsed.time !== 'object') {
     parsed.time = { startISO: '2026-01-05', currentISO: '2026-01-05', lastPayrollISO: '', seasonStartRound: 1 };
+  }
+  // tournament / awards / yearlyRating (v3+)
+  if (!parsed.tournamentStats || typeof parsed.tournamentStats !== 'object') {
+    parsed.tournamentStats = {
+      league: { type: 'league', weight: 1.0, entries: {} },
+      cup: { type: 'cup', weight: 1.8, entries: {} }
+    };
+  } else {
+    parsed.tournamentStats.league = parsed.tournamentStats.league || { type: 'league', weight: 1.0, entries: {} };
+    parsed.tournamentStats.league.entries = parsed.tournamentStats.league.entries || {};
+    parsed.tournamentStats.cup = parsed.tournamentStats.cup || { type: 'cup', weight: 1.8, entries: {} };
+    parsed.tournamentStats.cup.entries = parsed.tournamentStats.cup.entries || {};
+  }
+  if (!Array.isArray(parsed.awards)) parsed.awards = [];
+  if (!parsed.yearlyRating || typeof parsed.yearlyRating !== 'object') {
+    parsed.yearlyRating = { year: 2026, entries: [] };
   }
   return parsed;
 }
@@ -607,6 +632,82 @@ function onTimeAdvance(s) {
       monthlyPayroll(s);
     }
   }
+  // 跨年: 年度榜单归档 + 重置
+  maybeRotateYear(s);
+}
+
+// ============== 赛事级 HLO 累加 + 年度榜单 (v3) ==============
+// 在 settlePlayerMatch 末尾调用. opts.playersWithHltv 由 manager-match.js 传入.
+// opts.gameType: 'league' | 'cup' (默认 'league')
+// 自动模拟的 AI 场次不进此函数, 因为不走 settlePlayerMatch.
+export function accumulateMatchStats(s, opts) {
+  const players = (opts && opts.playersWithHltv) || [];
+  if (!players.length) return;
+  if (!s.tournamentStats) s.tournamentStats = {
+    league: { type: 'league', weight: 1.0, entries: {} },
+    cup: { type: 'cup', weight: 1.8, entries: {} }
+  };
+  if (!s.yearlyRating) s.yearlyRating = { year: 2026, entries: [] };
+  if (!Array.isArray(s.awards)) s.awards = [];
+
+  const gameType = (opts && opts.gameType) || (s.season.cup.phase === 'active' ? 'cup' : 'league');
+  const statsBucket = s.tournamentStats[gameType];
+  if (!statsBucket) return;
+  const weight = TOURNAMENT_WEIGHTS[gameType] || 1.0;
+  const ctx = { gameType, gameWeight: weight };
+
+  for (const ph of players) {
+    if (!ph || !ph.name || !ph.hltv || typeof ph.hltv.total !== 'number') continue;
+    const teamId = ph.team === 'player' ? 'player' : (ph.team || 'opp');
+    accumulateTournamentStats(statsBucket, ph.name, teamId, ph.hltv.total, ctx);
+    updateYearlyRating(s.yearlyRating, { name: ph.name, team: teamId, hltv: ph.hltv.total, gameType });
+  }
+}
+
+// 颁发赛事 MVP (赛季结束时调用). minGames: 联赛 5 / 杯赛 3.
+// 写入 s.awards, 返回 { league: mvpObj|cup: mvpObj|null }
+export function awardTournamentMvps(s, opts = {}) {
+  if (!s.tournamentStats) return { league: null, cup: null };
+  const leagueMin = opts.leagueMinGames != null ? opts.leagueMinGames : 5;
+  const cupMin = opts.cupMinGames != null ? opts.cupMinGames : 3;
+  const result = { league: null, cup: null };
+  // 联赛 MVP
+  const leagueMvp = selectTournamentMvp(s.tournamentStats.league, leagueMin);
+  if (leagueMvp) {
+    s.awards.push(Object.assign({}, leagueMvp, { seasonId: s.season.id, type: 'league', date: s.time ? s.time.currentISO : '' }));
+    result.league = leagueMvp;
+  }
+  // 杯赛 MVP (如果有杯赛数据)
+  if (s.tournamentStats.cup && Object.keys(s.tournamentStats.cup.entries).length > 0) {
+    const cupMvp = selectTournamentMvp(s.tournamentStats.cup, cupMin);
+    if (cupMvp) {
+      s.awards.push(Object.assign({}, cupMvp, { seasonId: s.season.id, type: 'cup', date: s.time ? s.time.currentISO : '' }));
+      result.cup = cupMvp;
+    }
+  }
+  return result;
+}
+
+// 清空赛事级统计 (颁发后或 nextSeason 时)
+export function resetTournamentStats(s) {
+  s.tournamentStats = {
+    league: { type: 'league', weight: 1.0, entries: {} },
+    cup: { type: 'cup', weight: 1.8, entries: {} }
+  };
+}
+
+// 检查年度是否需要切换 (跨年清零). 在 advanceDate 钩子里调用.
+function maybeRotateYear(s) {
+  if (!s.yearlyRating || !s.time) return;
+  const curYear = Number(s.time.currentISO.slice(0, 4));
+  if (curYear !== s.yearlyRating.year) {
+    // 跨年: 保存上年榜单 (Top 10 快照), 清零本年
+    if (!Array.isArray(s.yearlyHistory)) s.yearlyHistory = [];
+    if (s.yearlyRating.entries.length > 0) {
+      s.yearlyHistory.push({ year: s.yearlyRating.year, top: s.yearlyRating.entries.slice(0, 10) });
+    }
+    s.yearlyRating = { year: curYear, entries: [] };
+  }
 }
 
 function teamAvg(roster) {
@@ -1011,6 +1112,10 @@ export function settlePlayerMatch(s, win, kills, deaths, opts = {}) {
   // 时间推进: 玩家比赛 +1 天, 触发月度事件钩子 (发薪)
   advanceDate(s, 1);
   advanceSeason(s);
+  // 累加赛事级 HLO + 年度榜单 (只对玩家比赛, AI 自动模拟场不在此路径)
+  // opts.playersWithHltv 由 manager-match.js:179 传入 (全员 HLO 数据)
+  // opts.gameType: 'league' | 'cup'
+  accumulateMatchStats(s, opts);
   save();
   return { ok: true };
 }
@@ -1105,6 +1210,14 @@ export function nextSeason() {
   if (rep.rank < s.records.bestSeasonRank) s.records.bestSeasonRank = rep.rank;
   s.records.totalPrize += rep.rankPrize + rep.cupPrize;
   if (rep.cupRound === 3) s.records.cupChampions++;
+  // 颁发赛事 MVP (联赛 + 杯赛), 写入 awards + 新闻
+  const mvpResult = awardTournamentMvps(s);
+  if (mvpResult.league) {
+    pushNews(s, 'award', '联赛 MVP: ' + mvpResult.league.name + ' (avgHlo ' + mvpResult.league.avgHlo + ', 含金量 ' + mvpResult.league.awardPoints + ')');
+  }
+  if (mvpResult.cup) {
+    pushNews(s, 'award', '杯赛 MVP: ' + mvpResult.cup.name + ' (avgHlo ' + mvpResult.cup.avgHlo + ', 含金量 ' + mvpResult.cup.awardPoints + ')');
+  }
   for (const p of s.team.roster) {
     if (p.age <= 24 && rng() < 0.35) {
       const gain = Math.min(3, 100 - p.rating);
@@ -1131,6 +1244,8 @@ export function nextSeason() {
     s.time.seasonStartRound = 1;
     // lastPayrollISO 保留 — 1 月 5 号不是 1 号, 不会重复触发发薪
   }
+  // 重置赛事级统计 (新赛季开始)
+  resetTournamentStats(s);
   save();
   return s;
 }

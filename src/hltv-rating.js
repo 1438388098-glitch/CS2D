@@ -170,3 +170,86 @@ export function updateHltvRolling(player, singleRating, ts = Date.now()) {
   }
   player.hltvRating = Math.round((weightedSum / weightTotal) * 100) / 100;
 }
+
+// ============== 赛事级统计 + 年度榜单 ==============
+// 赛事重要性系数: 联赛 1.0 (基数) / 杯赛 1.8 (单败赛, 容错低)
+// 注: 系数只影响赛事 MVP 的含金量, 不影响 MVP 评选资格
+export const TOURNAMENT_WEIGHTS = {
+  league: 1.0,
+  cup: 1.8
+};
+
+// 给一名选手累加一场比赛的赛事级统计
+// ctx.gameType: 'league' | 'cup' | 'cup-QF' | 'cup-SF' | 'cup-F'
+// ctx.gameWeight: 数字 (= TOURNAMENT_WEIGHTS[ctx.gameType] || 1.0)
+export function accumulateTournamentStats(stats, playerName, teamId, hlo, ctx) {
+  if (!stats) return;
+  if (!stats.entries) stats.entries = {};
+  let e = stats.entries[playerName];
+  if (!e) {
+    e = stats.entries[playerName] = { name: playerName, team: teamId, hltvSum: 0, games: 0, bestHlo: 0, bestGame: null, weightedScore: 0 };
+  }
+  e.team = teamId;
+  e.hltvSum += hlo;
+  e.games += 1;
+  e.weightedScore += hlo * (ctx.gameWeight || 1.0);
+  if (hlo > e.bestHlo) {
+    e.bestHlo = hlo;
+    e.bestGame = { hlo, gameType: ctx.gameType || 'league' };
+  }
+}
+
+// 从赛事统计中选出赛事 MVP
+// 规则: 至少打过 3 场比赛 (杯赛) 或 5 场 (联赛), 取 avgHlo 最高的
+// 返回: { name, team, avgHlo, games, hltvSum, bestHlo, weight, awardPoints }
+export function selectTournamentMvp(stats, minGames = 3) {
+  if (!stats || !stats.entries) return null;
+  const candidates = Object.values(stats.entries).filter((e) => e.games >= minGames);
+  if (candidates.length === 0) return null;
+  candidates.forEach((e) => { e.avgHlo = Math.round((e.hltvSum / e.games) * 100) / 100; });
+  candidates.sort((a, b) => b.avgHlo - a.avgHlo || b.weightedScore - a.weightedScore);
+  const top = candidates[0];
+  const weight = stats.weight || TOURNAMENT_WEIGHTS[stats.type] || 1.0;
+  // 含金量分: weight × (avgHlo - 1.0) × 10, avgHlo < 1.0 时按 0 算
+  const awardPoints = Math.round(weight * Math.max(0, top.avgHlo - 1.0) * 10 * 100) / 100;
+  return {
+    name: top.name,
+    team: top.team,
+    avgHlo: top.avgHlo,
+    games: top.games,
+    hltvSum: Math.round(top.hltvSum * 100) / 100,
+    bestHlo: top.bestHlo,
+    weight,
+    awardPoints,
+    tournamentType: stats.type || 'league'
+  };
+}
+
+// 更新年度榜单 (跨赛事累加, 同年所有比赛都进榜)
+// entry: { name, team, hltv, gameType }
+// 列表按 weightedScore 降序, 限制 Top 50
+export function updateYearlyRating(yearly, entry) {
+  if (!yearly) return;
+  if (!yearly.entries) yearly.entries = [];
+  const weight = TOURNAMENT_WEIGHTS[entry.gameType] || 1.0;
+  let row = yearly.entries.find((e) => e.name === entry.name);
+  if (!row) {
+    row = { name: entry.name, team: entry.team, games: 0, hltvSum: 0, weightedScore: 0, bestHlo: 0, lastUpdated: null };
+    yearly.entries.push(row);
+  }
+  row.team = entry.team;
+  row.games += 1;
+  row.hltvSum += entry.hltv;
+  row.weightedScore += entry.hltv * weight;
+  if (entry.hltv > row.bestHlo) row.bestHlo = entry.hltv;
+  row.lastUpdated = Date.now();
+  // 排序 + Top 50
+  yearly.entries.sort((a, b) => b.weightedScore - a.weightedScore || b.hltvSum - a.hltvSum);
+  if (yearly.entries.length > 50) yearly.entries.length = 50;
+}
+
+// 取年度榜单 Top N
+export function yearlyTop(yearly, n = 5) {
+  if (!yearly || !yearly.entries) return [];
+  return yearly.entries.slice(0, n);
+}
