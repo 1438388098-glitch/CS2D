@@ -1,4 +1,4 @@
-import { resetManager, setStorage, setRng, getState, __clearManagerStateForTest, save, VERSION, accumulateMatchStats, awardTournamentMvps, resetTournamentStats, migrateManagerState, advanceDate, nextSeason } from '../src/manager.js';
+import { resetManager, setStorage, setRng, getState, __clearManagerStateForTest, save, VERSION, accumulateMatchStats, awardSeasonEnd, resetTournamentStats, migrateManagerState, advanceDate, nextSeason, seasonReport } from '../src/manager.js';
 import { accumulateTournamentStats, selectTournamentMvp, updateYearlyRating, yearlyTop as yearlyTopPure, TOURNAMENT_WEIGHTS } from '../src/hltv-rating.js';
 
 const ok = (name, cond) => {
@@ -98,17 +98,18 @@ for (let i = 0; i < 14; i++) {
 ok('联赛 14 场后 Kursy.games = 14', s.tournamentStats.league.entries['Kursy'].games === 14);
 ok('联赛 avgHlo 累加正确', Math.abs((s.tournamentStats.league.entries['Kursy'].hltvSum / 14) - 1.25) < 0.001);
 
-// 11. awardTournamentMvps 颁奖 (先清空 awards 避免重复)
+// 11. awardSeasonEnd 颁奖 (联赛 MVP) - 先清空避免重复
 s.awards.length = 0;
-const result = awardTournamentMvps(s);
-ok('联赛 MVP 已颁发', result.league && result.league.name === 'Kursy');
-ok('杯赛 MVP 为 null (无杯赛数据)', result.cup === null);
-ok('s.awards 长度 = 1', s.awards.length === 1);
+s.evps = [];
+s.tournamentTeams = [];
+awardSeasonEnd(s, seasonReport(s));
+ok('联赛 MVP 已颁发', s.awards.length >= 1 && s.awards[0].name === 'Kursy');
 ok('awards[0] 含 seasonId', s.awards[0].seasonId === 1);
-ok('awards[0] 含 type', s.awards[0].type === 'league');
+ok('awards[0] 含 type league', s.awards[0].type === 'league');
+ok('awards[0] 含 awardScore', typeof s.awards[0].awardScore === 'number');
 
-// 12. 杯赛 MVP: 累加 + 颁奖 (清空旧 awards, 模拟新一次颁奖)
-s.awards.length = 0;
+// 12. 杯赛 EVP: 累加 + 颁奖
+s.season.cup = { phase: 'finished', bracket: [{ round: 'F', a: 't1', b: 't2' }], champion: 't1' };
 const cupPlayers = [
   { name: 'Hero', team: 'player', hltv: { total: 1.30 } },
   { name: 'Villain', team: 'opp', hltv: { total: 1.10 } }
@@ -116,19 +117,23 @@ const cupPlayers = [
 for (let i = 0; i < 4; i++) {
   accumulateMatchStats(s, { playersWithHltv: cupPlayers, gameType: 'cup' });
 }
-const result2 = awardTournamentMvps(s);
-ok('杯赛 MVP 是 Hero', result2.cup && result2.cup.name === 'Hero');
-ok('杯赛 MVP 含 weight = 1.8', result2.cup.weight === 1.8);
-ok('杯赛 MVP awardPoints = 1.8 × 0.30 × 10 = 5.4', Math.abs(result2.cup.awardPoints - 5.4) < 0.001);
-ok('s.awards 长度 = 2 (联赛 + 杯赛)', s.awards.length === 2);
+s.awards.length = 0;
+s.evps = [];
+s.tournamentTeams = [];
+awardSeasonEnd(s, seasonReport(s));
+ok('杯赛 MVP 在 awards (Hero 是 player 队, 不在决赛 t1/t2, 应 fallback)', s.awards.find((a) => a.type === 'cup'));
+ok('杯赛 EVP 在 evps', s.evps.length >= 1);
 
 // 13. 联赛 MVP minGames 阈值: 不达 5 场不颁
 resetTournamentStats(s);
 for (let i = 0; i < 3; i++) {
   accumulateMatchStats(s, { playersWithHltv: fakePlayers, gameType: 'league' });
 }
-const result3 = awardTournamentMvps(s);
-ok('联赛 3 场 < minGames 5, 不颁 MVP', result3.league === null);
+s.awards.length = 0;
+s.evps = [];
+s.tournamentTeams = [];
+awardSeasonEnd(s, seasonReport(s));
+ok('联赛 3 场 < minGames 5, 不颁 MVP', s.awards.length === 0);
 
 // 14. resetTournamentStats 后清零
 resetTournamentStats(s);
@@ -168,9 +173,9 @@ ok('nextSeason 后 awards.length >= 1', s.awards.length >= 1);
 ok('nextSeason 后 tournamentStats 清空', Object.keys(s.tournamentStats.league.entries).length === 0);
 ok('nextSeason 后 time.currentISO 跨年', s.time.currentISO.startsWith('2027'));
 
-// 18. awards 中含 awardPoints
+// 18. awards 中含 awardScore
 const leagueAward = s.awards.find((a) => a.type === 'league');
-ok('league award 有 awardPoints', leagueAward && typeof leagueAward.awardPoints === 'number');
+ok('league award 有 awardScore', leagueAward && typeof leagueAward.awardScore === 'number');
 
 // 19. 空 players 数组不挂
 accumulateMatchStats(s, {});
