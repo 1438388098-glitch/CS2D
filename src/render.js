@@ -15,6 +15,7 @@ import {smokeDissolveTrail, drawSmokeTrail, SMOKE_DISSOLVE_LIFE} from './smoke-f
 import {stepCycle, stepDust, drawStepFx, DUST_PER_STEP} from './anim-fx.js';
 import {impactMarksAt, drawImpact} from './impact-fx.js';
 import {weatherKind, weatherParticles, drawWeather, MAX_PARTICLES as WEATHER_MAX_PARTICLES} from './weather-fx.js';
+import {themeWeatherOf} from './textures.js';
 import {enhancedBoomSpec, drawEnhancedBoom} from './boom-fx.js';
 import {visibleShadows, drawShadows} from './shadow-fx.js';
 import {killLabel, drawKillLabel, KILL_LABEL_DUR} from './killcam-fx.js';
@@ -203,18 +204,20 @@ function drawImpacts(game) {
   for (const m of marks) drawImpact(ctx, m);
 }
 
-// 雨雪天气层：地图 id 匹配 rain/snow 才绘制，否则无副作用。
-// 粒子在相机视口（世界坐标）区域内生成并平移到相机原点，固定 seed 全确定性。
+// 天气层：官方图优先 THEMES.weather 数据（dust2 沙霾/canal 雾/blast 烟霭/arctic 雪），
+// 自定义图退回 id 关键词匹配（rain/snow）。粒子密度随主题 density 缩放。
 function drawWeatherLayer(game) {
   const map = getMap();
   if (!map) return;
-  const kind = weatherKind(map.id);
+  const themeW = themeWeatherOf(map.id);
+  const kind = themeW ? themeW.kind : weatherKind(map.id);
   if (!kind) return;
   const z = game.zoom || 1;
   const vw = game.canvasW / z;
   const vh = game.canvasH / z;
   if (!(vw > 0) || !(vh > 0)) return;
-  const parts = weatherParticles(kind, game.time, WEATHER_MAX_PARTICLES, vw, vh, weatherSeed(String(map.id)));
+  const count = Math.round(WEATHER_MAX_PARTICLES * (themeW ? themeW.density : 0.55));
+  const parts = weatherParticles(kind, game.time, count, vw, vh, weatherSeed(String(map.id)));
   if (!parts.length) return;
   const ox = (game.camX || 0) - vw / 2;
   const oy = (game.camY || 0) - vh / 2;
@@ -286,20 +289,37 @@ function drawHitOutlines(game) {
   ctx.restore();
 }
 
+// 伤害数字分级样式（纯函数，供测试断言）：字号按伤害分 4 档，
+// 爆头数字在出现后 0.12s 内弹到 1.55 倍再 0.25s 回落，强化"打中头"的瞬间感
+export function dmgPopStyle(pop) {
+  const age = 0.8 - clamp(pop.t, 0, 0.8);
+  const tier = pop.dmg >= 90 ? 3 : pop.dmg >= 50 ? 2 : pop.dmg >= 22 ? 1 : 0;
+  let size = 11 + tier * 2.5;
+  if (pop.head) {
+    const grow = clamp(age / 0.12, 0, 1);
+    const settle = clamp(1 - Math.max(0, age - 0.12) / 0.25, 0, 1);
+    size *= 1 + 0.55 * grow * settle;
+  }
+  return { size, alpha: clamp(pop.t / 0.3, 0, 1) };
+}
+
 function drawDmgPops2D(game) {
   const pops = game.dmgPops;
   if (!pops || !pops.length) return;
   const t = ctx;
-  t.font = '12px Arial';
   t.textAlign = 'center';
   t.lineJoin = 'round';
   t.lineWidth = 3;
   const n = Math.min(pops.length, 12);
+  let lastFont = '';
   for (let i = 0; i < n; i++) {
     const pop = pops[i];
     if (!pop || pop.t === undefined || pop.t > 0.8) continue;
+    const st = dmgPopStyle(pop);
     let sy = pop.y - (1 - pop.t / 0.8) * 30;
-    t.globalAlpha = clamp(pop.t / 0.3, 0, 1);
+    t.globalAlpha = st.alpha;
+    const font = st.size.toFixed(1) + 'px Arial';
+    if (font !== lastFont) { t.font = font; lastFont = font; }
     t.strokeStyle = '#000';
     t.fillStyle = pop.head ? '#ffd34d' : '#ffffff';
     const txt = String(Math.round(pop.dmg));
@@ -310,27 +330,66 @@ function drawDmgPops2D(game) {
   t.textAlign = 'start';
 }
 
-// 动态水面：可见浅水瓦片叠加移动亮线（时间相位差），裁剪到相机视口
+// 动态水面：可见浅水(~)瓦片叠加移动亮线、深水(≈)瓦片叠加缓慢漂移焦散暗斑（时间相位差），裁剪到相机视口
+let _waterGrid = null;
+let _waterShallow = false;
+let _waterDeep = false;
+// 深水焦散规格（纯函数，供测试断言）：暗斑在瓦片内慢速游移，透明度缓慢呼吸
+export function deepCausticSpec(seed, now) {
+  const ph = seed * 1.7;
+  return {
+    dx: Math.sin(now * 0.5 + ph) * 6,
+    dy: Math.cos(now * 0.4 + ph * 1.3) * 4,
+    a: 0.14 + 0.08 * Math.sin(now * 0.8 + ph)
+  };
+}
 function drawWaterOverlay(game) {
   if (game.state !== 'BUY' && game.state !== 'LIVE') return;
   const grid = getGrid();
   if (!grid || !grid.length) return;
+  // 无水地图直接跳出：网格对象身份变化（切图/编辑器重载）时才整网重扫一次
+  if (_waterGrid !== grid) {
+    _waterGrid = grid;
+    _waterShallow = false;
+    _waterDeep = false;
+    outer: for (const row of grid) {
+      for (const c of row) {
+        if (c === '~') _waterShallow = true;
+        else if (c === '≈') _waterDeep = true;
+        if (_waterShallow && _waterDeep) break outer;
+      }
+    }
+  }
+  if (!_waterShallow && !_waterDeep) return;
+  const T = mapTile();
   const now = performance.now() / 1000;
-  const x0 = Math.max(0, Math.floor((game.camX - game.canvasW / game.zoom / 2) / mapTile()) - 1);
-  const y0 = Math.max(0, Math.floor((game.camY - game.canvasH / game.zoom / 2) / mapTile()) - 1);
-  const x1 = Math.min(grid[0].length, Math.ceil((game.camX + game.canvasW / game.zoom / 2) / mapTile()) + 1);
-  const y1 = Math.min(grid.length, Math.ceil((game.camY + game.canvasH / game.zoom / 2) / mapTile()) + 1);
+  const x0 = Math.max(0, Math.floor((game.camX - game.canvasW / game.zoom / 2) / T) - 1);
+  const y0 = Math.max(0, Math.floor((game.camY - game.canvasH / game.zoom / 2) / T) - 1);
+  const x1 = Math.min(grid[0].length, Math.ceil((game.camX + game.canvasW / game.zoom / 2) / T) + 1);
+  const y1 = Math.min(grid.length, Math.ceil((game.camY + game.canvasH / game.zoom / 2) / T) + 1);
   ctx.save();
   for (let y = y0; y < y1; y++) {
     for (let x = x0; x < x1; x++) {
-      if (grid[y][x] !== '~') continue;
-      const px = x * mapTile(), py = y * mapTile();
+      const c = grid[y][x];
+      if (c !== '~' && c !== '≈') continue;
+      const px = x * T, py = y * T;
       const seed = (x * 7 + y * 13) % 17;
-      const off = (now * 14 + seed * 5) % 30;
-      ctx.fillStyle = 'rgba(220,240,255,0.20)';
-      ctx.fillRect(px + off - 10, py + 8 + (seed % 5) * 5, 8, 1.5);
-      ctx.fillStyle = 'rgba(255,255,255,0.12)';
-      ctx.fillRect(px + ((off + 16) % 30) - 12, py + 4 + ((seed + 3) % 6) * 4, 6, 1);
+      if (c === '~') {
+        const off = (now * 14 + seed * 5) % 30;
+        ctx.fillStyle = 'rgba(220,240,255,0.20)';
+        ctx.fillRect(px + off - 10, py + 8 + (seed % 5) * 5, 8, 1.5);
+        ctx.fillStyle = 'rgba(255,255,255,0.12)';
+        ctx.fillRect(px + ((off + 16) % 30) - 12, py + 4 + ((seed + 3) % 6) * 4, 6, 1);
+      } else {
+        // 深水焦散：暗斑游移 + 一条微光波纹，让深浅水有质感差
+        const ca = deepCausticSpec(seed, now);
+        ctx.fillStyle = 'rgba(10,26,46,' + ca.a.toFixed(3) + ')';
+        ctx.beginPath();
+        ctx.ellipse(px + T / 2 + ca.dx, py + T / 2 + ca.dy, T * 0.34, T * 0.22, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = 'rgba(150,210,250,' + (ca.a * 0.45).toFixed(3) + ')';
+        ctx.fillRect(px + ((seed * 7 + now * 6) % T), py + T * 0.7, T * 0.28, 1.2);
+      }
     }
   }
   ctx.restore();
@@ -356,11 +415,43 @@ function drawBombSiteMarks(game) {
   if (game.state !== 'BUY' && game.state !== 'LIVE') return;
   if (!map.sites || !map.sites.A || !map.sites.B) return;
   const pulse = 0.5 + 0.5 * Math.sin(performance.now() / 400);
-  ctx.strokeStyle = 'rgba(255,150,90,' + (0.25 + 0.2 * pulse) + ')';
+  drawSiteMark(map.sites.A, '255,150,90', siteMarkSpec(map.sites.A.x0, map.sites.A.y0, map.sites.A.x1, map.sites.A.y1, pulse));
+  drawSiteMark(map.sites.B, '90,160,255', siteMarkSpec(map.sites.B.x0, map.sites.B.y0, map.sites.B.x1, map.sites.B.y1, pulse));
+}
+
+// 包点标记样式（纯函数，供测试断言）：角标长度按短边 22% 取、上限 18px；
+// 三个透明度随 pulse（0..1）单调增强 —— 内部淡填充 / 细边框 / 角标
+export function siteMarkSpec(x0, y0, x1, y1, pulse) {
+  const w = x1 - x0, h = y1 - y0;
+  const p = clamp(Number(pulse) || 0, 0, 1);
+  return {
+    L: Math.min(18, Math.min(Math.abs(w), Math.abs(h)) * 0.22),
+    fillAlpha: 0.03 + 0.04 * p,
+    lineAlpha: 0.3 + 0.3 * p,
+    bracketAlpha: 0.55 + 0.35 * p
+  };
+}
+
+// 包点绘制：内部淡填充 + 细边框 + 四角战术括号（替代裸 strokeRect）
+function drawSiteMark(site, rgb, spec) {
+  const w = site.x1 - site.x0, h = site.y1 - site.y0;
+  ctx.save();
+  ctx.fillStyle = 'rgba(' + rgb + ',' + spec.fillAlpha + ')';
+  ctx.fillRect(site.x0, site.y0, w, h);
+  ctx.strokeStyle = 'rgba(' + rgb + ',' + spec.lineAlpha + ')';
+  ctx.lineWidth = 1.5;
+  ctx.strokeRect(site.x0, site.y0, w, h);
+  const L = spec.L;
+  ctx.strokeStyle = 'rgba(' + rgb + ',' + spec.bracketAlpha + ')';
   ctx.lineWidth = 3;
-  ctx.strokeRect(map.sites.A.x0, map.sites.A.y0, map.sites.A.x1 - map.sites.A.x0, map.sites.A.y1 - map.sites.A.y0);
-  ctx.strokeStyle = 'rgba(90,160,255,' + (0.25 + 0.2 * pulse) + ')';
-  ctx.strokeRect(map.sites.B.x0, map.sites.B.y0, map.sites.B.x1 - map.sites.B.x0, map.sites.B.y1 - map.sites.B.y0);
+  ctx.lineCap = 'round';
+  ctx.beginPath();
+  ctx.moveTo(site.x0, site.y0 + L); ctx.lineTo(site.x0, site.y0); ctx.lineTo(site.x0 + L, site.y0);
+  ctx.moveTo(site.x1 - L, site.y0); ctx.lineTo(site.x1, site.y0); ctx.lineTo(site.x1, site.y0 + L);
+  ctx.moveTo(site.x1, site.y1 - L); ctx.lineTo(site.x1, site.y1); ctx.lineTo(site.x1 - L, site.y1);
+  ctx.moveTo(site.x0 + L, site.y1); ctx.lineTo(site.x0, site.y1); ctx.lineTo(site.x0, site.y1 - L);
+  ctx.stroke();
+  ctx.restore();
 }
 
 export function crateRenderSpec(x, y, hp, tile = mapTile()) {
@@ -498,7 +589,12 @@ function drawDeathFX(game) {
 function drawCrates(game) {
   if (!game.crates || !game.crates.length) return;
   for (const c of game.crates) {
-    const s = crateRenderSpec(c.x, c.y, c.hp);
+    // spec 只依赖 (x,y,hp)：缓存到木箱对象，hp 变化（受击）时才重建
+    if (!c._spec || c._specHp !== c.hp) {
+      c._spec = crateRenderSpec(c.x, c.y, c.hp);
+      c._specHp = c.hp;
+    }
+    const s = c._spec;
     ctx.fillStyle = 'rgba(0,0,0,0.42)';
     ctx.fillRect(s.px + 3, s.py + s.tile - 4, s.tile, 4);
     ctx.fillStyle = s.base;
@@ -542,6 +638,14 @@ function drawCrates(game) {
   }
 }
 
+// C4 蜂鸣同步警报环（纯函数，供测试断言）：每次蜂鸣发出一圈扩散红环，
+// 扩散时长取 min(0.5s, 蜂鸣间隔)——高频急促期环也更急促
+export function bombAlarmSpec(tsSinceBeep, interval) {
+  const dur = Math.max(0.05, Math.min(0.5, interval || 0.5));
+  const t = clamp(tsSinceBeep / dur, 0, 1);
+  return { t, r: 12 + t * 34, alpha: (1 - t) * 0.55 };
+}
+
 function drawBomb(game) {
   if (!game.bomb) return;
   const b = game.bomb;
@@ -550,10 +654,27 @@ function drawBomb(game) {
   ctx.save();
   if (b.planted) {
     const pulse = 0.4 + 0.3 * Math.sin(performance.now() / 300);
-    ctx.fillStyle = 'rgba(255,60,40,' + pulse * 0.3 + ')';
+    ctx.fillStyle = 'rgba(255,60,40,' + pulse * 0.18 + ')';
     ctx.beginPath();
     ctx.arc(b.x, b.y, 34, 0, Math.PI * 2);
     ctx.fill();
+    // 蜂鸣同步警报环：节拍与 updateCamera 的 sfx beep 完全一致（间隔随倒计时升频）
+    const bt = b.timer || 0;
+    const bInt = bt < 5 ? 0.25 : bt < 10 ? 0.5 : 1;
+    const ts = clamp(bInt - (game._bombBeepT || 0), 0, bInt);
+    const al = bombAlarmSpec(ts, bInt);
+    if (al.alpha > 0.01) {
+      ctx.globalCompositeOperation = 'lighter';
+      ctx.strokeStyle = 'rgba(255,70,45,' + (al.alpha * 0.35) + ')';
+      ctx.lineWidth = 5;
+      ctx.beginPath();
+      ctx.arc(b.x, b.y, al.r, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.strokeStyle = 'rgba(255,120,80,' + al.alpha + ')';
+      ctx.lineWidth = 1.6;
+      ctx.stroke();
+      ctx.globalCompositeOperation = 'source-over';
+    }
   }
   ctx.fillStyle = '#222';
   ctx.fillRect(b.x - 7, b.y - 4, 14, 8);
@@ -571,7 +692,9 @@ function drawDrops(game) {
   ctx.font = "12px 'Segoe UI','Microsoft YaHei',sans-serif";
   ctx.textAlign = 'center';
   for (const d of game.drops) {
-    const info = dropRenderInfo(d);
+    // info 只依赖 (wid/kind)，drop 生命周期内不变：缓存到 drop 对象免每帧重建
+    if (!d._info) d._info = dropRenderInfo(d);
+    const info = d._info;
     if (!info) continue;
     const blink = 0.65 + 0.35 * Math.sin(performance.now() / 280);
     const near = game.player && !game.player.dead && Math.hypot(game.player.x - d.x, game.player.y - d.y) < 48;
@@ -602,7 +725,9 @@ function drawDrops(game) {
     }
     ctx.restore();
     ctx.fillStyle = near ? 'rgba(255,240,180,' + blink + ')' : 'rgba(255,220,150,' + blink * 0.8 + ')';
-    ctx.font = near ? "bold 11px 'Segoe UI','Microsoft YaHei',sans-serif" : "9px 'Segoe UI','Microsoft YaHei',sans-serif";
+    // font 状态切换昂贵：仅在 near 翻转时重设
+    const wantFont = near ? "bold 11px 'Segoe UI','Microsoft YaHei',sans-serif" : "9px 'Segoe UI','Microsoft YaHei',sans-serif";
+    if (ctx.font !== wantFont) ctx.font = wantFont;
     ctx.fillText(info.label, d.x, d.y - 16);
     if (near) {
       ctx.fillStyle = 'rgba(140,255,170,0.9)';
@@ -652,16 +777,48 @@ function drawLaser(game) {
   ctx.restore();
 }
 
+// 手雷外观规格（纯函数，供测试断言）：三种投掷物各有体色/中带/高光强度/LED 色调
+export function grenadeRenderSpec(kind) {
+  const table = {
+    he: { body: '#3f6b35', band: '#264a20', hi: 'rgba(255,255,255,0.30)', led: '255,90,70' },
+    flash: { body: '#c9c9c9', band: '#787c82', hi: 'rgba(255,255,255,0.55)', led: '255,220,120' },
+    smoke: { body: '#5a5f66', band: '#383c42', hi: 'rgba(255,255,255,0.25)', led: '140,220,160' }
+  };
+  return table[kind] || table.smoke;
+}
+
 function drawGrenades(game) {
+  const blink = Math.sin(performance.now() / 120) > 0;
   for (const g of game.grenades) {
+    const spec = grenadeRenderSpec(g.kind);
+    const ang = Math.atan2(g.vy || 0, g.vx || 1);
+    // 地面投影
+    ctx.fillStyle = 'rgba(0,0,0,0.35)';
+    ctx.beginPath();
+    ctx.ellipse(g.x + 2, g.y + 4, 6, 3, 0, 0, Math.PI * 2);
+    ctx.fill();
     ctx.save();
     ctx.translate(g.x, g.y);
-    ctx.fillStyle = g.kind === 'he' ? '#2f6b2f' : (g.kind === 'flash' ? '#c9c9c9' : '#5a5f66');
+    // 弹体沿飞行方向取向：中带/引信/LED 随轨迹滚动
+    ctx.rotate(ang);
+    ctx.fillStyle = spec.body;
     ctx.beginPath();
     ctx.arc(0, 0, 6, 0, Math.PI * 2);
     ctx.fill();
-    ctx.fillStyle = '#111';
-    ctx.fillRect(-1.5, -3, 3, 6);
+    ctx.fillStyle = spec.band;
+    ctx.fillRect(-6, -1.5, 12, 3);
+    ctx.fillStyle = spec.hi;
+    ctx.beginPath();
+    ctx.arc(-2, -2, 2.4, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = '#222';
+    ctx.fillRect(3.5, -1.5, 3, 3);
+    if (blink) {
+      ctx.fillStyle = 'rgba(' + spec.led + ',0.95)';
+      ctx.beginPath();
+      ctx.arc(6.5, 0, 1.6, 0, Math.PI * 2);
+      ctx.fill();
+    }
     ctx.restore();
   }
 }
@@ -698,7 +855,26 @@ function getStepFX(e, tSec) {
   st.px = e.x; st.py = e.y;
   const cyc = stepCycle(st.acc, tSec, st.seed);
   const dust = moving ? stepDust(st.acc, tSec, st.seed, DUST_PER_STEP) : [];
-  return { phase: cyc.phase, swinging: cyc.swinging, dust };
+  return { phase: cyc.phase, swinging: cyc.swinging, dust, moving };
+}
+
+// bot 头顶名离屏缓存：文本栅格化贵，按 (名字|职业|队色) 生成一次小画布，之后 drawImage 贴图
+const _nameTagCache = new Map();
+function nameTagCanvas(text, color) {
+  const key = text + '|' + color;
+  let c = _nameTagCache.get(key);
+  if (c) return c;
+  c = document.createElement('canvas');
+  c.width = 160;
+  c.height = 18;
+  const nc = c.getContext('2d');
+  nc.font = "10px 'Segoe UI','Microsoft YaHei',sans-serif";
+  nc.textAlign = 'center';
+  nc.fillStyle = color;
+  nc.fillText(text, 80, 12);
+  if (_nameTagCache.size > 60) _nameTagCache.clear();
+  _nameTagCache.set(key, c);
+  return c;
 }
 
 function drawEntities(game) {
@@ -715,25 +891,33 @@ function drawEntities(game) {
   let stepMs = 0;
   let bodyMs = 0;
   let otherMs = 0;
+  // 内嵌剖析只在显式开启（window.__cs2dProf=true，诊断脚本用）时采集，生产路径每实体省 8 次 performance.now
+  const prof = typeof window !== 'undefined' && !!window.__cs2dProf;
   const stepCounts = { entities: 0, feet: 0, dust: 0 };
+  // 受击白闪查表：本帧存在命中标记时才建 Map（常帧零开销），目标死亡时标记已随 updateFxTimers 清除
+  let flashByEntity = null;
+  if (game.hitOutlines && game.hitOutlines.length) {
+    flashByEntity = new Map();
+    for (const ho of game.hitOutlines) flashByEntity.set(ho.target, ho);
+  }
   for (const e of game.entities) {
     const ex = viewX(e), ey = viewY(e), ea = viewAngle(e);
     if (ex < vx0 || ex > vx1 || ey < vy0 || ey > vy1) continue;
-    const calcT = performance.now();
+    const calcT = prof ? performance.now() : 0;
     const stFx = getStepFX(e, tSec);
-    calcMs += performance.now() - calcT;
+    if (prof) calcMs += performance.now() - calcT;
     if (e.dead) continue;
-    const stepT = performance.now();
+    const stepT = prof ? performance.now() : 0;
     if (stFx) {
       stepCounts.entities++;
       if (stFx.swinging > 0) stepCounts.feet += 2;
       stepCounts.dust += stFx.dust ? stFx.dust.length : 0;
       drawStepFx(ctx, e, stFx);
     }
-    stepMs += performance.now() - stepT;
+    if (prof) stepMs += performance.now() - stepT;
     const isP = e === game.player;
     const darkCol = e.team === 'ct' ? '#4d9bff' : '#ffa03d';
-    const bodyT = performance.now();
+    const bodyT = prof ? performance.now() : 0;
     ctx.save();
     ctx.translate(ex, ey);
     ctx.fillStyle = 'rgba(0,0,0,0.35)';
@@ -745,13 +929,25 @@ function drawEntities(game) {
     ctx.beginPath();
     ctx.ellipse(0, 0, 16, 16, 0, 0, Math.PI * 2);
     ctx.stroke();
-    const bob = isP && e.walking ? Math.sin(performance.now() / 160) * 2.5 : 0;
+    // 行走起伏：玩家保持原有节奏；bot 用 stepCycle 相位驱动（幅度略小）——人群不再滑行
+    let bob = 0;
+    if (isP) bob = e.walking ? Math.sin(performance.now() / 160) * 2.5 : 0;
+    else if (stFx && stFx.moving) bob = botBob(stFx.phase, tSec);
     ctx.translate(0, bob);
     ctx.rotate(ea);
     ctx.fillStyle = darkCol;
     ctx.beginPath();
     ctx.ellipse(0, 0, 12, 15, 0, 0, Math.PI * 2);
     ctx.fill();
+    // 受击白闪：刚被命中的实体躯干短暂提亮（复用 hitOutlines 剩余时间，头部标记更持久）
+    const fl = flashByEntity && flashByEntity.get(e);
+    const fa = fl ? bodyFlashAlpha(fl.t, fl.head) : 0;
+    if (fa > 0) {
+      ctx.fillStyle = 'rgba(255,255,255,' + fa + ')';
+      ctx.beginPath();
+      ctx.ellipse(0, 0, 12, 15, 0, 0, Math.PI * 2);
+      ctx.fill();
+    }
     ctx.fillStyle = '#2c3038';
     ctx.beginPath();
     ctx.arc(0, -4, 9, 0, Math.PI * 2);
@@ -788,17 +984,23 @@ function drawEntities(game) {
     ctx.fillStyle = isP ? '#1c2b3a' : (e.team === 'ct' ? '#1d3557' : '#3a2413');
     ctx.fillRect(-4, -6, 8, 4);
     ctx.restore();
-    bodyMs += performance.now() - bodyT;
-    const otherT = performance.now();
+    if (prof) bodyMs += performance.now() - bodyT;
+    const otherT = prof ? performance.now() : 0;
     if (e.bot) {
+      const arch = ARCHETYPES[e.archetype];
+      const tag = nameTagCanvas(e.name + (arch ? ' ·' + arch.label : ''), e.team === 'ct' ? '#7fb8ff' : '#ffcf8a');
       ctx.save();
       ctx.globalAlpha = 0.85;
-      ctx.font = "10px 'Segoe UI','Microsoft YaHei',sans-serif";
-      ctx.textAlign = 'center';
-      ctx.fillStyle = e.team === 'ct' ? '#7fb8ff' : '#ffcf8a';
-      const arch = ARCHETYPES[e.archetype];
-      ctx.fillText(e.name + (arch ? ' ·' + arch.label : ''), ex, ey - 22);
+      // 画布内文字基线在 y=12，贴图原点 ey-34 使基线落在 ey-22（与原 fillText 一致）
+      ctx.drawImage(tag, ex - 80, ey - 34, 160, 18);
       ctx.restore();
+      // 名牌血条：受伤的 bot 在名字上方显示 3px 血量细条（绿→黄→红分档）
+      if (e.hp > 0 && e.hp < 100) {
+        ctx.fillStyle = 'rgba(0,0,0,0.55)';
+        ctx.fillRect(ex - 17, ey - 39, 34, 4);
+        ctx.fillStyle = hpBarColor(e.hp);
+        ctx.fillRect(ex - 16, ey - 38, 32 * clamp(e.hp / 100, 0, 1), 2);
+      }
     }
     if (e.defuseT > 0) {
       const pct = clamp(e.defuseT / (e.weapons.kit ? 2.5 : 5), 0, 1);
@@ -821,7 +1023,7 @@ function drawEntities(game) {
       ctx.arc(ex + 14, ey - 12, 4, 0, Math.PI * 2);
       ctx.fill();
     }
-    otherMs += performance.now() - otherT;
+    if (prof) otherMs += performance.now() - otherT;
   }
   game._renderStageMs.stepCalc = calcMs;
   game._renderStageMs.stepFx = stepMs;
@@ -831,34 +1033,41 @@ function drawEntities(game) {
 }
 
 function drawSmokes(game) {
+  ctx.save();
   for (const s of game.smokes) {
     // 淡入（半径增长期）+ 淡出（生命末期 2s），其余时段完全遮挡
-    const fade = clamp(s.life / 2, 0, 1) * clamp((s.r - 20) / 40, 0.3, 1);
-    // 外圈柔边
-    const g = ctx.createRadialGradient(s.x, s.y, s.r * 0.3, s.x, s.y, s.r);
-    g.addColorStop(0, 'rgba(206,208,211,' + (0.96 * fade) + ')');
-    g.addColorStop(0.75, 'rgba(190,193,197,' + (0.94 * fade) + ')');
-    g.addColorStop(0.95, 'rgba(150,155,161,' + (0.55 * fade) + ')');
-    g.addColorStop(1, 'rgba(120,124,130,0)');
-    ctx.fillStyle = g;
+    const fade = clamp(s.life / SMOKE_DISSOLVE_LIFE, 0, 1) * clamp((s.r - 20) / 40, 0.3, 1);
+    ctx.globalAlpha = fade;
+    // 外圈柔边：烟体几何 (x,y,r) 终生不变，径向渐变只建一次缓存在烟体上，透明度交给 globalAlpha
+    if (!s._grad) {
+      const g = ctx.createRadialGradient(s.x, s.y, s.r * 0.3, s.x, s.y, s.r);
+      g.addColorStop(0, 'rgba(206,208,211,0.96)');
+      g.addColorStop(0.75, 'rgba(190,193,197,0.94)');
+      g.addColorStop(0.95, 'rgba(150,155,161,0.55)');
+      g.addColorStop(1, 'rgba(120,124,130,0)');
+      s._grad = g;
+    }
+    ctx.fillStyle = s._grad;
     ctx.beginPath();
     ctx.arc(s.x, s.y, s.r, 0, Math.PI * 2);
     ctx.fill();
     // 实心核（完全遮挡，与 LOS/子弹截断判定一致）
-    ctx.fillStyle = 'rgba(198,200,204,' + (0.97 * fade) + ')';
+    ctx.fillStyle = 'rgba(198,200,204,0.97)';
     ctx.beginPath();
     ctx.arc(s.x, s.y, s.r * 0.72, 0, Math.PI * 2);
     ctx.fill();
-    // 边缘噪点（增强体积感）；用位置+索引确定性伪随机，保证同 seed 画面可复现
-    ctx.fillStyle = 'rgba(212,214,217,' + (0.5 * fade) + ')';
+    // 边缘噪点（增强体积感）；用位置+索引确定性伪随机，保证同 seed 画面可复现。
+    // 慢速公转 + 呼吸：噪点团绕烟心缓转、半径微脉动，静止烟也有体积流转感（时间驱动确定性）
+    ctx.fillStyle = 'rgba(212,214,217,0.5)';
+    const tNow = game.time || 0;
     const sHash = (n) => {
       let h = (Math.floor(s.x) * 73856093 ^ Math.floor(s.y) * 19349663 ^ n * 83492791) >>> 0;
       h = (h ^ (h >>> 15)) * 2246822519 >>> 0;
       return (h >>> 0) / 4294967296;
     };
     for (let i = 0; i < 6; i++) {
-      const na = sHash(i) * Math.PI * 2;
-      const nr = s.r * (0.55 + sHash(i + 6) * 0.35);
+      const na = sHash(i) * Math.PI * 2 + tNow * 0.15 + i;
+      const nr = s.r * (0.55 + sHash(i + 6) * 0.35) * (1 + 0.06 * Math.sin(tNow * 0.8 + i * 1.7));
       ctx.beginPath();
       ctx.arc(s.x + Math.cos(na) * nr, s.y + Math.sin(na) * nr, 6 + sHash(i + 12) * 8, 0, Math.PI * 2);
       ctx.fill();
@@ -870,42 +1079,106 @@ function drawSmokes(game) {
       const t = clamp((SMOKE_DISSOLVE_LIFE - s.life) / SMOKE_DISSOLVE_LIFE, 0, 1);
       const n = clamp(Math.round(s.r / 25), 4, 12);
       const trail = smokeDissolveTrail(s, t, sSeed, n);
-      if (trail.length) {
-        const trailPts = trail.map((p) => ({ x: p.x, y: p.y, r: p.r, alpha: p.alpha * fade }));
-        drawSmokeTrail(ctx, trailPts);
-      }
+      // globalAlpha 已含 fade，尾迹点直接绘制，免去每帧 map 重建中间数组
+      if (trail.length) drawSmokeTrail(ctx, trail);
     }
   }
+  ctx.restore();
+}
+
+// 基础圆点粒子的填充色（模块常量，免每帧重建 styles 对象；globalAlpha 负责淡出）
+// 注意：色值必须是完整合法 fillStyle —— 带尾逗号的 'rgba(r,g,b,' 会被 canvas 静默忽略，
+// 导致粒子沿用上一状态颜色（曾致血/烟/水花全部画成烟灰色）。
+const PARTICLE_STYLES = {
+  blood: 'rgb(150,20,15)',
+  smokep: 'rgb(190,193,198)',
+  splash: 'rgb(120,190,235)',
+  dust: 'rgb(172,158,126)'
+};
+
+// 条纹粒子速度→长度规格（纯函数，供测试断言）：条纹沿速度反方向拖出，
+// 长度随速度线性增长并夹在 [2,10]，速度近零时退化为默认方向的 2px 短点
+export function particleStreakSpec(p) {
+  const vx = p.vx || 0, vy = p.vy || 0;
+  const speed = Math.hypot(vx, vy);
+  const len = clamp(speed * 0.035, 2, 10);
+  const inv = speed > 0.001 ? 1 / speed : 0;
+  return { len, ux: speed > 0.001 ? vx * inv : 1, uy: speed > 0.001 ? vy * inv : 0 };
+}
+
+// 受击白闪强度（纯函数，供测试断言）：复用 hitOutlines 剩余时间，头部标记持续更久
+export function bodyFlashAlpha(t, head) {
+  return clamp(t / (head ? 0.45 : 0.3), 0, 1) * 0.45;
+}
+
+// bot 行走起伏（纯函数，供测试断言）：相位来自 stepCycle，幅度小于玩家的 2.5
+export function botBob(phase, tSec) {
+  return Math.sin(phase * Math.PI * 2 + tSec * 9) * 1.8;
+}
+
+// 名牌血条颜色分档（纯函数，供测试断言）：>60 健康 / 31~60 受伤 / ≤30 危殆
+export function hpBarColor(hp) {
+  if (hp > 60) return '#5ade7c';
+  if (hp > 30) return '#ffc44d';
+  return '#ff5a4d';
 }
 
 function drawParticles(game) {
-  const styles = {
-    blood: 'rgba(150,20,15,',
-    spark: 'rgba(255,200,110,',
-    smokep: 'rgba(190,193,198,',
-    splash: 'rgba(120,190,235,',
-    wood: 'rgba(150,110,60,',
-    dust: 'rgba(172,158,126,'
-  };
-  for (const kind of Object.keys(styles)) {
-    ctx.fillStyle = styles[kind];
-    for (const p of game.particles) {
-      if (p.kind !== kind) continue;
-      ctx.globalAlpha = clamp(p.life, 0, 1);
+  // 单遍分发：原来按 kind 分 6 遍遍历 + 特殊粒子第 7 遍，600 粒子上限时 ~4200 次/帧迭代降为 600
+  for (const p of game.particles) {
+    const base = PARTICLE_STYLES[p.kind];
+    if (base) {
+      const a = clamp(p.life, 0, 1);
+      ctx.fillStyle = base;
+      ctx.globalAlpha = a;
       ctx.beginPath();
       ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
       ctx.fill();
+      if (p.kind === 'blood') {
+        // 深色内核：血滴更浓更有层次
+        ctx.fillStyle = 'rgb(96,10,8)';
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, p.size * 0.55, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      continue;
     }
-  }
-  ctx.globalAlpha = 1;
-  for (const p of game.particles) {
+    ctx.globalAlpha = 1;
     const a = clamp(p.life, 0, 1);
-    if (p.kind === 'shell') {
+    if (p.kind === 'spark') {
+      // 加色条纹火花：沿速度反方向拖出光条，双层描边（软橙晕 + 亮黄核），替换原平面圆点
+      const st = particleStreakSpec(p);
+      const tx = p.x - st.ux * st.len, ty = p.y - st.uy * st.len;
+      ctx.globalCompositeOperation = 'lighter';
+      ctx.lineCap = 'round';
+      ctx.strokeStyle = 'rgba(255,170,60,' + (a * 0.4) + ')';
+      ctx.lineWidth = 2.6;
+      ctx.beginPath();
+      ctx.moveTo(p.x, p.y);
+      ctx.lineTo(tx, ty);
+      ctx.stroke();
+      ctx.strokeStyle = 'rgba(255,228,160,' + a + ')';
+      ctx.lineWidth = 1.1;
+      ctx.stroke();
+      ctx.globalCompositeOperation = 'source-over';
+    } else if (p.kind === 'wood') {
+      // 木屑条纹：哑光短棕线（不加色，保持碎片质感）
+      const st = particleStreakSpec(p);
+      const wl = Math.min(st.len, 6);
+      ctx.strokeStyle = 'rgba(150,110,60,' + a + ')';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(p.x, p.y);
+      ctx.lineTo(p.x - st.ux * wl, p.y - st.uy * wl);
+      ctx.stroke();
+    } else if (p.kind === 'shell') {
       ctx.save();
       ctx.translate(p.x, p.y);
       ctx.rotate(p.spin || 0);
       ctx.fillStyle = 'rgba(200,150,60,' + a + ')';
       ctx.fillRect(-2, -1, 4, 2);
+      ctx.fillStyle = 'rgba(255,232,170,' + (a * 0.8) + ')';
+      ctx.fillRect(-2, -1, 4, 0.8);
       ctx.restore();
     } else if (p.kind === 'swing') {
       ctx.strokeStyle = 'rgba(255,255,255,' + (a * 0.5) + ')';
@@ -925,6 +1198,7 @@ function drawParticles(game) {
       drawEnhancedBoom(ctx, enhancedBoomSpec(p));
     }
   }
+  ctx.globalAlpha = 1;
 }
 function drawFog(game) {
   const map = getMap();
@@ -992,16 +1266,18 @@ function drawTracers(game) {
     const dist = Math.hypot(dx, dy) || 1;
     const ux = dx / dist, uy = dy / dist;
     const ex = t.x1 + ux * dist * s.len, ey = t.y1 + uy * dist * s.len;
-    // 渐变：发射点最亮 → 末端淡出；CT 冷蓝、T 方武器口径暖色
+    // 双段描边替代每帧渐变：粗低透段模拟渐变尾，细亮核段做弹道光芯；
+    // lighter 合成增强发光感（CT 冷蓝、T 方武器口径暖色）
     const rgb = t.team === 'ct' ? '135,190,255' : s.color;
-    const g = ctx.createLinearGradient(t.x1, t.y1, ex, ey);
-    g.addColorStop(0, 'rgba(' + rgb + ',' + s.alpha + ')');
-    g.addColorStop(1, 'rgba(' + rgb + ',0)');
-    ctx.strokeStyle = g;
-    ctx.lineWidth = s.width;
+    ctx.globalCompositeOperation = 'lighter';
+    ctx.strokeStyle = 'rgba(' + rgb + ',' + (s.alpha * 0.35) + ')';
+    ctx.lineWidth = s.width * 2.2;
     ctx.beginPath();
     ctx.moveTo(t.x1, t.y1);
     ctx.lineTo(ex, ey);
+    ctx.stroke();
+    ctx.strokeStyle = 'rgba(' + rgb + ',' + s.alpha + ')';
+    ctx.lineWidth = s.width;
     ctx.stroke();
   }
   ctx.restore();

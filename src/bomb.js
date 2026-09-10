@@ -1,11 +1,12 @@
 import {ROUND, ECONOMY} from './config.js';
 import {addMoney} from './economy.js';
 import {inSite, los, getMap} from './map.js';
-import {applyDamage} from './combat.js';
+import {applyDamage, addDecal} from './combat.js';
 import {endRound, spawnParticle} from './game.js';
 
 import {ctx} from './ctx.js';
 import {rand} from './utils.js';
+import {addPing} from './ping-fx.js';
 
 const emit = (evt, p) => ctx.bus.emit(evt, p);
 
@@ -53,6 +54,7 @@ export function plantBomb(e, game) {
     emit('sysfeed', { text: 'Bomb has been planted at ' + (s.label === 'A' ? 'A' : 'B') });
     emit('sfx', { name: 'bombPlanted', vol: 0.9, x: e.x, y: e.y, game });
     game.lastSound = { x: e.x, y: e.y, t: game.time, radius: 900, conf: 0.6 };
+    addPing(game, 'plant', e.x, e.y);
   }
 }
 
@@ -85,6 +87,7 @@ export function defuseBomb(e, game) {
     emit('sysfeed', { text: 'Bomb has been defused!' });
     emit('sfx', { name: 'win', vol: 0.8, x: e.x, y: e.y, game });
     game.lastSound = { x: e.x, y: e.y, t: game.time, radius: 900, conf: 0.6 };
+    addPing(game, 'defuse', e.x, e.y);
     endRound(game, 'ct', '拆弹成功', 'defuse');
   }
 }
@@ -95,8 +98,10 @@ export function explodeBomb(game) {
   b.planted = false;
   emit('sfx', { name: 'boom', vol: 1.3, x: b.x, y: b.y, game });
   game.lastSound = { x: b.x, y: b.y, t: game.time, radius: 1600, conf: 1 };
+  addPing(game, 'boom', b.x, b.y);
   game.shake = Math.max(game.shake, 14);
   spawnParticle(game, { kind: 'boom', x: b.x, y: b.y, life: 0.5, size: 300 });
+  addDecal(game, b.x, b.y, 'scorch', 0);
   for (let i = 0; i < 40; i++) {
     const a = rand() * Math.PI * 2;
     spawnParticle(game, { kind: 'fire', x: b.x, y: b.y, vx: Math.cos(a) * rand(100, 420), vy: Math.sin(a) * rand(100, 420), life: rand(0.2, 0.6), size: rand(3, 7) });

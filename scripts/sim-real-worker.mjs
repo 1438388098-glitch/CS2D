@@ -107,8 +107,9 @@ if (isWorker && workerData.mode === 'match') {
       majorIdx: idx,
       seed,
       champion: st.champion ? { id: st.champion.id, tag: st.champion.tag, name: st.champion.name } : null,
-      finalScore: st.champion && st.playoff ? (st.playoff.rounds[2].pairs[0].score || null) : null,
-      finalMaps: st.champion && st.playoff ? (st.playoff.rounds[2].pairs[0].maps || null) : null,
+      // 双败制下最后一轮即总决赛（bracket==='GF'），兼容旧单败结构（末轮即决赛）
+      finalScore: st.champion && st.playoff ? ((st.playoff.rounds[st.playoff.rounds.length - 1] || {}).pairs?.[0]?.score || null) : null,
+      finalMaps: st.champion && st.playoff ? ((st.playoff.rounds[st.playoff.rounds.length - 1] || {}).pairs?.[0]?.maps || null) : null,
       qualRanking: qualRanked.map((e) => ({ id: e.team.id, w: e.wins, l: e.losses })),
       s1: collectSwiss(st.s1),
       s2: collectSwiss(st.s2),

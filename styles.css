@@ -98,7 +98,7 @@ html,body{width:100%;height:100%;overflow:hidden;background:var(--bg-0);font-fam
 #helpOverlay .panel{padding:26px 30px;width:min(520px,94vw)}
 #helpOverlay .ctrl-list{font-size:13px;color:var(--txt-2)}
 #helpOverlay .ctrl-list b{color:var(--txt-1)}
-#flash{background:#fff;opacity:0;pointer-events:none}
+#flash{position:fixed;inset:0;pointer-events:none;opacity:0;z-index:8;background:radial-gradient(ellipse at center,#fff 0%,#fff 50%,rgba(255,243,214,.94) 80%,rgba(255,233,183,.85) 100%)}
 #vignette{position:fixed;inset:0;pointer-events:none;background:radial-gradient(ellipse at center,transparent 55%,rgba(0,0,0,.45) 100%);z-index:5}
 #dmgv{position:fixed;inset:0;pointer-events:none;opacity:0;z-index:6;background:radial-gradient(ellipse at center,transparent 40%,rgba(255,20,20,.55) 100%)}
 #lowhp{position:fixed;inset:0;pointer-events:none;opacity:0;z-index:6;background:radial-gradient(ellipse at center,transparent 55%,rgba(180,0,0,.5) 100%)}
@@ -188,6 +188,8 @@ html,body{width:100%;height:100%;overflow:hidden;background:var(--bg-0);font-fam
 .kf.hs{display:inline-block;background:#c93a2e;color:#fff;font-weight:700;padding:1px 6px;border-radius:3px;margin-left:6px;font-size:11px;letter-spacing:1px}
 .kf.sys{color:#8ab4ff;font-size:12px;font-style:italic}
 @keyframes kfin{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+.kf.out{animation:kfout .26s var(--ease) both}
+@keyframes kfout{from{opacity:1;transform:none}to{opacity:0;transform:translateX(14px)}}
 #scoreboard .panel{width:640px;max-width:94vw}
 .sb-title{display:flex;align-items:baseline;gap:10px}
 .sb-name{font-size:16px;font-weight:700;letter-spacing:2px;color:var(--txt-0)}
@@ -297,6 +299,10 @@ td.money{color:var(--gold);font-family:var(--f-num)}
 .eb-row.t .eb-track i{background:linear-gradient(90deg,#a86a1e,var(--t))}
 .eb-row.c .eb-track i{background:linear-gradient(90deg,#2a5ba0,var(--ct))}
 .eb-row b{font-family:var(--f-num);font-size:14px;width:26px;text-align:left;color:var(--txt-1)}
+/* 击杀榜行：玩家名/武器名标签更宽，武器榜金色系 */
+.eb-row.kb .eb-lab{width:76px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:11px}
+.eb-row.w .eb-lab{width:64px;text-align:left;color:var(--gold)}
+.eb-row.w .eb-track i{background:linear-gradient(90deg,#8a6a1e,var(--gold))}
 #toast{position:absolute;top:14%;left:50%;transform:translateX(-50%);font-size:15px;letter-spacing:2px;color:var(--gold);background:var(--bg-3);padding:8px 22px;border-radius:var(--r-s);opacity:0;transition:opacity .3s;pointer-events:none}
 #toast.show{opacity:1}
 #deathinfo{position:absolute;top:36%;left:50%;transform:translate(-50%,-50%);text-align:center;font-size:27px;font-weight:800;letter-spacing:3px;color:#fff;white-space:nowrap;text-shadow:0 0 28px rgba(255,50,50,.45),0 4px 20px rgba(0,0,0,.9);opacity:0;pointer-events:none}
@@ -320,7 +326,7 @@ td.money{color:var(--gold);font-family:var(--f-num)}
 #hud-root{position:absolute;inset:0;pointer-events:none;font-family:var(--f-cn)}
 #hud-root b{font-family:var(--f-num)}
 
-#hud-top{position:absolute;top:8px;left:50%;transform:translateX(-50%);text-align:center;z-index:4}
+#hud-top{position:absolute;top:8px;left:50%;transform:translateX(-50%) scale(var(--hud-scale,1));text-align:center;z-index:4}
 .ht-main{display:flex;align-items:center;gap:14px;background:var(--bg-1);border:1px solid var(--line-2);border-radius:var(--r-m);padding:5px 18px;box-shadow:0 4px 18px rgba(0,0,0,.5)}
 .ht-t{color:var(--t);font-weight:700;font-size:14px;letter-spacing:1px}
 .ht-c{color:var(--ct);font-weight:700;font-size:14px;letter-spacing:1px}
@@ -329,7 +335,7 @@ td.money{color:var(--gold);font-family:var(--f-num)}
 .ht-sub.hell{color:#ffcf8a;border-color:rgba(255,120,0,.45)}
 .ht-ic{width:12px;height:12px;vertical-align:-1px;margin-right:4px;color:#ff8a2a}
 
-#hud-left{position:absolute;left:var(--hud-edge);bottom:var(--hud-edge);width:238px;background:var(--bg-1);border:1px solid var(--line-2);border-left:3px solid var(--accent);border-radius:var(--r-m);padding:10px 12px;z-index:4;transition:opacity var(--dur-m) var(--ease)}
+#hud-left{position:absolute;left:var(--hud-edge);bottom:var(--hud-edge);width:238px;background:var(--bg-1);border:1px solid var(--line-2);border-left:3px solid var(--accent);border-radius:var(--r-m);padding:10px 12px;z-index:4;transition:opacity var(--dur-m) var(--ease);transform:scale(var(--hud-scale,1));transform-origin:bottom left}
 #hud-left.dead{opacity:0;pointer-events:none}
 .hl-head{display:flex;align-items:center;gap:8px;margin-bottom:6px}
 .hl-ic{width:22px;height:22px;color:var(--txt-1)}
@@ -350,7 +356,7 @@ td.money{color:var(--gold);font-family:var(--f-num)}
 .hl-state{display:inline-flex;align-items:center;gap:5px;background:rgba(0,0,0,.35);border-radius:var(--r-s);padding:2px 8px;font-size:11px;color:var(--txt-1)}
 .hl-sic{width:13px;height:13px;color:var(--accent)}
 
-#hud-right{position:absolute;right:var(--hud-edge);bottom:var(--hud-edge);text-align:right;z-index:4}
+#hud-right{position:absolute;right:var(--hud-edge);bottom:var(--hud-edge);text-align:right;z-index:4;transform:scale(var(--hud-scale,1));transform-origin:bottom right}
 .hr-ammo{position:relative;display:inline-block}
 .hr-mag{font-family:var(--f-num);font-size:34px;font-weight:800;color:var(--txt-0);line-height:1;text-shadow:0 2px 10px rgba(0,0,0,.7)}
 .hr-mag.empty{color:var(--danger);animation:lowhp-pulse .5s var(--ease) infinite}
@@ -401,6 +407,8 @@ td.money{color:var(--gold);font-family:var(--f-num)}
 }
 .mode-card b { font-size: 13px; letter-spacing: .5px; }
 .mode-card small { color: var(--txt-2); font-size: 11px; }
+/* 模式卡片图标：金色小图标独立一行压在标题上 */
+.mc-ic { width: 15px; height: 15px; flex: 0 0 auto; fill: var(--gold); opacity: .9; }
 .mode-card:hover { border-color: var(--accent); transform: translateY(-1px); }
 .mode-card.sel { border-color: var(--accent); background: rgba(255,138,42,.12); color: #fff; box-shadow: inset 0 0 0 1px rgba(255,138,42,.25); }
 .mode-settings { margin-top: 10px; min-height: 28px; }

@@ -13,7 +13,9 @@
     "train-hell": "node train/run-hell-ladder.mjs --stage=h4,h5,h6,h7",
     "train-dqn": "node train/dqn-train.mjs --style=hold --eps=300",
     "train-fresh": "node train/dqn-fresh.mjs --eps=800",
-    "deploy-ladder": "node train/run-hell-ladder.mjs --stage=deploy"
+    "deploy-ladder": "node train/run-hell-ladder.mjs --stage=deploy",
+    "balance": "node scripts/map-balance.mjs",
+    "soak": "node scripts/soak.mjs"
   },
   "license": "MIT"
 }

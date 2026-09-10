@@ -8,12 +8,16 @@ import { getBindLabel } from './keymap.js';
 import { fogEnabled } from './fog.js';
 import { castAimRay } from './fps-laser.js';
 import { lowHpVignette, drawLowHpVignette, lowHpPulse, drawLowHpPulse, killFlash, drawKillFlash } from './screen-fx.js';
+import { activePings, drawMinimapPings } from './ping-fx.js';
 import { damageArc, drawDamageArc, HIT_ARC_DURATION } from './damage-fx.js';
 
 let ctx = null;
 let layers = null;
 let lastMiniUpdate = 0;
 let mmZoom = 1;
+// MAPS 是 Proxy，.find 每次访问都重建数组：小地图每帧查地图名改为按 mapId 缓存
+let miniMapDef = null;
+let miniMapDefId = null;
 
 export function initHud(canvas, layersRef) {
   ctx = canvas.getContext('2d');
@@ -222,17 +226,26 @@ export function renderMinimap(game) {
   mctx.fillStyle = grd;
   mctx.fillRect(ox, oy + mh - 26, mw, 26);
   const map = getMap();
-  const mapDef = MAPS.find((m) => m.id === game.mapId);
+  if (miniMapDefId !== game.mapId) {
+    miniMapDefId = game.mapId;
+    miniMapDef = MAPS.find((m) => m.id === game.mapId) || null;
+  }
+  const mapDef = miniMapDef;
   mctx.fillStyle = 'rgba(255,255,255,.5)';
   mctx.font = "10px 'Microsoft YaHei',sans-serif";
   mctx.textAlign = 'center';
   mctx.textBaseline = 'middle';
   mctx.fillText(mapDef ? mapDef.name : (map ? map.name : ''), ox + mw / 2, oy + mh - 12);
   mctx.restore();
+  // 纹理小地图带留边（竖长图内容居中）：动态层整体平移到内容区
+  const mox = (layers.mmOx || 0) * mmZoom * 0.5;
+  const moy = (layers.mmOy || 0) * mmZoom * 0.5;
+  mctx.save();
+  mctx.translate(mox, moy);
 
   const now = performance.now();
   for (const key of ['A', 'B']) {
-    const site = map.sites && map.sites[key];
+    const site = map && map.sites && map.sites[key];
     if (!site) continue;
     const px = ox + site.cx * s;
     const py = oy + site.cy * s;
@@ -271,7 +284,7 @@ export function renderMinimap(game) {
     mctx.strokeStyle = 'rgba(255,255,255,0.12)';
     mctx.lineWidth = 1;
     if (fogEnabled(game)) {
-      mctx.strokeRect(ox, oy, mw, mh);
+      mctx.strokeRect(0, 0, (map.W || 0) * s, (map.H || 0) * s);
     } else {
       mctx.beginPath();
       mctx.arc(ox + p.x * s, oy + p.y * s, 300 * s, 0, Math.PI * 2);
@@ -358,6 +371,8 @@ export function renderMinimap(game) {
       mctx.fillText(e.name, ox + e.x * s + 5, oy + e.y * s - 4);
     }
   }
+  // 事件 ping：安放/拆除/爆炸在对应位置扩散圆环，帮全队读局势
+  drawMinimapPings(mctx, activePings(game.pings, game.time || 0), (wx) => ox + wx * s, (wy) => oy + wy * s);
   if (game.bomb && (game.bomb.dropped || game.bomb.planted)) {
     const blink = Math.sin(now / 160) > 0;
     const bx = ox + game.bomb.x * s;
@@ -380,6 +395,7 @@ export function renderMinimap(game) {
     mctx.fillStyle = blink ? '#fff' : '#888';
     mctx.fillRect(bx - 2, by - 2, 4, 4);
   }
+  mctx.restore();
   mctx.restore();
 }
 
@@ -717,6 +733,13 @@ export function renderHud(game) {
   }
   ctx.restore();
 }
+// 准星间隙的通用修正：低血收紧 + 受击扩散（FPS 与俯视两分支共用）
+function crosshairGapMods(game, p, gap) {
+  if (p.hp <= 25) gap = Math.max(3, gap - 2);
+  if (game.dmgSpreadT > 0) gap += clamp(game.dmgSpreadT * 34, 0, 34);
+  return gap;
+}
+
 export function renderCrosshair(game) {
   const dpr = game.dpr || 1;
   const cw = ctx.canvas.width / dpr;
@@ -747,9 +770,7 @@ export function renderCrosshair(game) {
     const rDeg = wd ? p.recoil * 0.6 : 0;
     const spreadPx = crosshairSpreadPx(cw, game.fov, sp, rDeg);
     const baseGap = wd && wd.kind === 'shotgun' ? 12 : 6;
-    let gap = baseGap + clamp(spreadPx, 0, 260) + (p.scoped ? 2 : 0);
-    if (p.hp <= 25) gap = Math.max(3, gap - 2);
-    if (game.dmgSpreadT > 0) gap += clamp(game.dmgSpreadT * 34, 0, 34);
+    let gap = crosshairGapMods(game, p, baseGap + clamp(spreadPx, 0, 260) + (p.scoped ? 2 : 0));
     // D4 命中/开火十字反馈：命中显著扩散+橙红变色，未命中轻微扩散颜色不变
     const fb = crosshairFeedbackFor(game, p);
     if (fb) gap *= fb.spreadMul;
@@ -821,9 +842,7 @@ export function renderCrosshair(game) {
   const py = ch / 2 + (p.y - (game.camY || 0)) * (game.zoom || 1);
   const dist = Math.hypot(mx - px, my - py) || 1;
   const spreadPx = Math.tan(((spread + recoilDeg) * Math.PI) / 180) * dist;
-  let gap = 6 + clamp(spreadPx, 0, 260) + (p.scoped ? 2 : 0);
-  if (p.hp <= 25) gap = Math.max(3, gap - 2);
-  if (game.dmgSpreadT > 0) gap += clamp(game.dmgSpreadT * 34, 0, 34);
+  let gap = crosshairGapMods(game, p, 6 + clamp(spreadPx, 0, 260) + (p.scoped ? 2 : 0));
   const len = 7;
   ctx.save();
   ctx.strokeStyle = 'rgba(0,0,0,0.6)';

@@ -1211,9 +1211,11 @@ function roundRobin(ids) {
 
 function makeFixtures(teamIds) {
   const fixtures = [];
+  // 赛程节奏差异化：第 8 轮为休息周（轮次号跳号），与 manager 模式一致
   roundRobin(teamIds).forEach((pairs, ri) => {
+    const round = ri + 1 + (ri + 1 >= 8 ? 1 : 0);
     for (const [home, away] of pairs) {
-      fixtures.push({ round: ri + 1, home, away, score: null, played: false, winner: null });
+      fixtures.push({ round, home, away, score: null, played: false, winner: null });
     }
   });
   return fixtures;
@@ -1313,7 +1315,7 @@ export function newCareerState() {
       ledger: [], trainingLog: [], transferLog: [], facilities: { academy: 0, medical: 0, scouting: 0 }, morale: 65, rested: false
     },
     season: {
-      id: 1, round: 1, totalRounds: 14,
+      id: 1, round: 1, totalRounds: 15,
       teams, fixtures: makeFixtures(teams.map((t) => t.id)), standings: makeStandings(teams),
       cup: { phase: 'idle', bracket: [] }
     },
@@ -2216,8 +2218,15 @@ function updateTeamDynamics(s, homeId, awayId, winner, opts = {}) {
     team.form = form;
     team.recentForm = form.join('');
     team.morale = clamp(Number(team.morale || 50) + (won ? 2 : -2), 20, 100);
-    const formScore = form.reduce((a, f) => a + (f === 'W' ? 1 : -1), 0);
-    team.rating = clamp(Math.round(Number(team.rating || 70) + (won ? 0.8 : -0.8) + formScore * 0.1), lo - 5, hi + 5);
+    if (teamId !== 'player') {
+      // 非玩家队动态评级随连胜/连败漂移：每场 ±1（小幅、确定性，不引入随机），
+      // 并 clamp 在所在联赛 ratingRange [lo, hi] 内；玩家队 rating 由 refreshPlayerRating 管理，永不漂移
+      const mark = won ? 'W' : 'L';
+      let streak = 0;
+      for (let i = form.length - 1; i >= 0 && form[i] === mark; i--) streak++;
+      team.streak = streak;
+      team.rating = clamp(Math.round(Number(team.rating || 70) + (won ? 1 : -1)), lo, hi);
+    }
   }
 }
 
@@ -2288,8 +2297,8 @@ function simulateRemainingCup(s) {
     const away = s.season.teams.find((x) => x.id === m.b);
     const r = simulateCareerMatch(home, away, {
       mapId: cupMapForRound(m.round),
-      league: s.team.league,
-      homeId: m.a
+      league: s.team.league
+      // 杯赛中立：不再给 a 方主场加成（原 homeId: m.a）
     });
     m.played = true;
     m.score = r.score;
@@ -2592,8 +2601,17 @@ export function careerEndMatch(game) {
   return { ok: true, win, mvp };
 }
 
+// 休息周（空轮）跳过：轮次号推进到下一个尚有未赛比赛的轮次
+function skipRestRound(s) {
+  while (s.season.round <= s.season.totalRounds &&
+    !s.season.fixtures.some((f) => f.round === s.season.round && !f.played)) {
+    s.season.round++;
+  }
+}
+
 export function settlePlayerMatch(win, kills, deaths, opts = {}) {
   const s = getState();
+  skipRestRound(s);
   const pm = s.pendingMatch || inferPendingMatch(s);
   if (!pm) return { ok: false, error: '没有待结算的比赛' };
   const mvp = opts.mvp === true;
@@ -3370,6 +3388,7 @@ export function nextSeason() {
 
 export function simulatePlayerMatch() {
   const s = getState();
+  skipRestRound(s);
   const pm = s.pendingMatch || inferPendingMatch(s);
   if (!pm) return { ok: false, error: '没有可模拟的比赛' };
   const playerTeam = s.season.teams.find((x) => x.id === 'player');

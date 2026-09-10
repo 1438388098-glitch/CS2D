@@ -6,17 +6,7 @@ function ok(name, cond) {
   console.log('fps-integration: ' + name + ' PASS');
 }
 
-// render3d 必须可导入且导出渲染函数（断言放 try 外，防止缺失时假绿）
-{
-  let fn = null;
-  try {
-    const m = await import('../src/render3d.js');
-    fn = m.render3d || m.default || null;
-  } catch (err) {
-    throw new Error('fps-integration: render3d import FAIL — ' + err.message);
-  }
-  ok('render3d importable', typeof fn === 'function');
-}
+// 注：render3d 渲染器已打入冷宫（attic/），本文件只回归 fps 视图下的游戏逻辑（休眠保留）。
 
 function fresh() {
   const g = createGame({ mapId: 'dust2', bots: 1 });

@@ -72,9 +72,19 @@ function bindBus() {
   bus.on('objtext', (p) => api.setObjText(p.main, p.sub));
   bus.on('objtextShow', () => { const ot = el('objtext'); if (ot) ot.style.display = 'block'; });
   bus.on('holdbar', (p) => api.setHoldBar(p.show, p.pct));
-  bus.on('flash', (p) => { const f = el('flash'); if (f) f.style.opacity = p.opacity; });
-  bus.on('dmg', (p) => { const d = el('dmgv'); if (d) d.style.opacity = p.opacity; });
-  bus.on('lowhp', (p) => { const l = el('lowhp'); if (l) l.style.opacity = p.opacity; });
+  // 高频透明度事件差量写：update() 每模拟步 emit（8 倍速观战 ~480 次/s），值不变时跳过 DOM 写
+  const lastOpacity = {};
+  const setOpacity = (key, id, v) => {
+    const e = el(id);
+    if (!e) return;
+    const q = Math.round(v * 100);
+    if (lastOpacity[key] === q) return;
+    lastOpacity[key] = q;
+    e.style.opacity = v;
+  };
+  bus.on('flash', (p) => setOpacity('flash', 'flash', p.opacity));
+  bus.on('dmg', (p) => setOpacity('dmg', 'dmgv', p.opacity));
+  bus.on('lowhp', (p) => setOpacity('lowhp', 'lowhp', p.opacity));
   bus.on('hideMenu', () => { const m = el('menu'); if (m) m.classList.remove('show'); });
   bus.on('hideEnd', () => { const e = el('end'); if (e) e.classList.remove('show'); });
   bus.on('closeBuy', () => {
@@ -123,8 +133,9 @@ function createUiApi() {
     setObjText: (main, sub) => {
       const o1 = el('obj1'), o2 = el('obj2');
       if (!o1) return;
-      o1.textContent = main;
-      o2.textContent = sub;
+      // update() 每模拟步调用：文案不变时跳过 textContent 写
+      if (o1.textContent !== main) o1.textContent = main;
+      if (o2.textContent !== sub) o2.textContent = sub;
     },
     setHoldBar: (show, pct) => {
       const hb = el('holdbar'), hf = el('holdbarfill');
@@ -250,6 +261,40 @@ function createUiApi() {
           rowC.innerHTML = '<span class="eb-lab">CT</span><div class="eb-track"><i style="width:' + (cScore / maxV * 100) + '%"></i></div><b>' + cScore + '</b>';
           bars.appendChild(rowT);
           bars.appendChild(rowC);
+          // 全场击杀榜：双方按击杀排序的横向条形图（前 8 名，队色区分）
+          const roster = game.entities.filter((e2) => e2 && e2.kills > 0).sort((x, y2) => y2.kills - x.kills).slice(0, 8);
+          if (roster.length) {
+            const kMax = roster[0].kills;
+            const lab = doc.createElement('div');
+            lab.className = 'stat-line';
+            lab.innerHTML = '<small style="opacity:.6">全场击杀榜</small>';
+            bars.appendChild(lab);
+            for (const r of roster) {
+              const row = doc.createElement('div');
+              row.className = 'eb-row kb ' + (r.team === 't' ? 't' : 'c');
+              row.innerHTML = '<span class="eb-lab">' + r.name + '</span><div class="eb-track"><i style="width:' + Math.round(r.kills / kMax * 100) + '%"></i></div><b>' + r.kills + '</b>';
+              bars.appendChild(row);
+            }
+          }
+          // 玩家武器击杀榜：前三武器横向条形图
+          const wk = game.player && game.player.weapKills;
+          if (wk) {
+            const top = Object.keys(wk).sort((a2, b2) => wk[b2] - wk[a2]).slice(0, 3);
+            if (top.length) {
+              const wMax = wk[top[0]];
+              const wlab = doc.createElement('div');
+              wlab.className = 'stat-line';
+              wlab.innerHTML = '<small style="opacity:.6">你的武器击杀</small>';
+              bars.appendChild(wlab);
+              for (const id2 of top) {
+                const wd2 = WEAPONS[id2];
+                const row = doc.createElement('div');
+                row.className = 'eb-row w';
+                row.innerHTML = '<span class="eb-lab">' + (wd2 ? wd2.name : id2) + '</span><div class="eb-track"><i style="width:' + Math.round(wk[id2] / wMax * 100) + '%"></i></div><b>' + wk[id2] + '</b>';
+                bars.appendChild(row);
+              }
+            }
+          }
         }
       }
       el('end').classList.add('show');
@@ -277,6 +322,17 @@ function uiHideBanner() {
   if (b) b.classList.remove('show');
 }
 
+// 击杀信息生命周期：存活 KF_LIFE_MS 后播放 KF_OUT_MS 退场动画再移除（硬移除很突兀）
+export const KF_LIFE_MS = 5200;
+export const KF_OUT_MS = 260;
+function kfExpire(div) {
+  setTimeout(() => {
+    if (!div.parentNode) return;
+    div.classList.add('out');
+    setTimeout(() => { if (div.parentNode) div.parentNode.removeChild(div); }, KF_OUT_MS);
+  }, KF_LIFE_MS);
+}
+
 export function addKillFeed(k, v, w, head, tm) {
   if (!doc) return;
   const div = doc.createElement('div');
@@ -302,7 +358,7 @@ export function addKillFeed(k, v, w, head, tm) {
   if (!kf) return;
   kf.appendChild(div);
   while (kf.children.length > 6) kf.removeChild(kf.firstChild);
-  setTimeout(() => { if (div.parentNode) div.parentNode.removeChild(div); }, 5200);
+  kfExpire(div);
 }
 
 export function showDeathInfo(killerName, weaponName, headshot) {
@@ -376,7 +432,7 @@ export function addSysFeed(txt) {
   if (!kf) return;
   kf.appendChild(div);
   while (kf.children.length > 6) kf.removeChild(kf.firstChild);
-  setTimeout(() => { if (div.parentNode) div.parentNode.removeChild(div); }, 5200);
+  kfExpire(div);
 }
 
 export function showToast(t) {
@@ -1176,11 +1232,6 @@ function bindSettings() {
     renderHelpBindings();
     if (!okBind) { const st = el('editorStatus'); if (st) st.textContent = '该键已被其他操作使用'; }
   }, true);
-  // 视角模式存档
-  try {
-    const fm = localStorage.getItem('cs2d_viewmode');
-    if (fm === 'fps') game.viewMode = 'fps';
-  } catch (err) { /* 无存储环境 */ }
   // 视角切换按钮
   const viewSel = el('viewModeSel');
   const refreshViewSel = () => {
@@ -1194,7 +1245,7 @@ function bindSettings() {
       const b = e.target.closest('.set-btn');
       if (!b) return;
       const mode = b.getAttribute('data-mode');
-      if (mode !== 'fps' && mode !== 'top') return;
+      if (mode !== 'top') return; // 第一人称已下架（attic/），设置面板仅俯视
       setViewMode(game, mode);
       refreshViewSel();
       b.blur(); // 焦点落在按钮上：避免后续 Space/Enter 合成 click 意外切换视角
@@ -1215,6 +1266,24 @@ function bindSettings() {
       game.fpsSens = parseFloat(sensEl.value) / 1000;
       if (sensVal) sensVal.textContent = (game.fpsSens * 1000).toFixed(1);
       try { localStorage.setItem('cs2d_fps_sens', String(game.fpsSens)); } catch (err) { /* 无存储环境 */ }
+    });
+  }
+  // HUD 缩放滑杆（0.8-1.3 → --hud-scale，作用于四角 HUD 容器的 transform）
+  const hudScaleEl = el('hudScale');
+  if (hudScaleEl) {
+    const root2 = doc.documentElement;
+    const applyHudScale = (v) => {
+      root2.style.setProperty('--hud-scale', String(v));
+    };
+    try {
+      const saved = parseFloat(localStorage.getItem('cs2d_hud_scale'));
+      if (isFinite(saved) && saved >= 0.8 && saved <= 1.3) applyHudScale(saved);
+    } catch (err) { /* 无存储环境 */ }
+    try { hudScaleEl.value = getComputedStyle(root2).getPropertyValue('--hud-scale') || 1; } catch (err) { /* ignore */ }
+    hudScaleEl.addEventListener('input', () => {
+      const v = Math.min(1.3, Math.max(0.8, parseFloat(hudScaleEl.value) || 1));
+      applyHudScale(v);
+      try { localStorage.setItem('cs2d_hud_scale', String(v)); } catch (err) { /* 无存储环境 */ }
     });
   }
   // 垂直灵敏度滑杆（默认与水平灵敏度一致，独立存档）
@@ -1462,7 +1531,10 @@ export function setMenuBackgroundFromLayer(mapId, layer, w, h) {
     c.getContext('2d').drawImage(layer, 0, 0, w, h, 0, 0, tw, th);
     if (typeof c.toDataURL !== 'function') return;
     menuBgCache[mapId] = c.toDataURL('image/jpeg', 0.72);
-    if (Object.keys(menuBgCache).length === 1) {
+    // 背景轮播偏好：最后游玩的地图生成背景后立即上位（首图仍按首张兜底）
+    let lastMapId = null;
+    try { lastMapId = localStorage.getItem('cs2d_map'); } catch (err) { /* 无存储环境 */ }
+    if (Object.keys(menuBgCache).length === 1 || (lastMapId && mapId === lastMapId)) {
       m.style.backgroundImage = 'url(' + menuBgCache[mapId] + ')';
     }
     startMenuBgRotate();

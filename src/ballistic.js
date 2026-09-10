@@ -63,10 +63,15 @@ export function registerShot(ent) {
 
 // 爆头判定（拟合人类 CS）：命中越靠近目标中心（瞄准精度）、距离越近、武器越精密 → 爆头概率越高
 export function headshotChance(w, ent, perp, dist) {
-  const base = w.kind === 'sniper' ? 0.55 : (w.kind === 'pistol' ? 0.28 : (w.kind === 'rifle' ? 0.2 : (w.kind === 'smg' ? 0.18 : 0.08)));
+  let base = w.kind === 'sniper' ? 0.55 : (w.kind === 'pistol' ? 0.28 : (w.kind === 'rifle' ? 0.2 : (w.kind === 'smg' ? 0.18 : 0.08)));
   const aim = clamp(1 - perp / (ent.rad * 0.75), 0.15, 1);
   const far = clamp(1.2 - dist / w.range, 0.25, 1);
-  return clamp(base * aim * far, 0.03, 0.85);
+  // 目标姿态修正：蹲姿受弹面收紧更难爆头；移动目标头部晃动同样降低命中率
+  let pose = 1;
+  if (ent.crouched) pose *= 0.7;
+  if (ent.walking) pose *= 0.85;
+  else if (Math.hypot(ent.vx || 0, ent.vy || 0) > 120) pose *= 0.8;
+  return clamp(base * aim * far * pose, 0.03, 0.85);
 }
 
 

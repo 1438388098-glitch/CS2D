@@ -84,13 +84,24 @@ export function __clearStateForTest() { state = null; }
 export function getOpponents() { return OPPONENTS.map((o) => ({ ...o })); }
 export function getStats() { const s = loadDuel(); return { ...s.stats, history: s.history.slice(), vs: s.vs || {} }; }
 
-export function pickDuelMap(selected, played) {
+// 地图解锁进度：前 2 张常开，其后每 3 胜解锁一张（赢越多，池子越大）
+export function unlockedDuelMaps(wins) {
+  const n = Math.min(DUEL_MAPS.length, 2 + Math.floor(Math.max(0, wins || 0) / 3));
+  return DUEL_MAPS.slice(0, n);
+}
+
+export function pickDuelMap(selected, played, wins) {
   if (selected === 'arena') {
     const ids = getBombMapIds();
     return ids.length ? ids[Math.max(0, played || 0) % ids.length] : DUEL_MAPS[0].id;
   }
+  const pool = unlockedDuelMaps(wins);
+  const allowed = new Set(pool.map((m) => m.id));
+  // 显式选图仍允许竞技池（arena 系列），但未解锁的单挑图回退到最新解锁张
+  if (selected && selected !== 'auto' && (allowed.has(selected) || getBombMapIds().includes(selected))) return selected;
+  if (selected && selected !== 'auto' && getMapDef(selected) && !allowed.has(selected)) return pool[pool.length - 1].id;
   if (selected && selected !== 'auto' && getMapDef(selected)) return selected;
-  return DUEL_MAPS[Math.max(0, played || 0) % DUEL_MAPS.length].id;
+  return pool[Math.max(0, played || 0) % pool.length].id;
 }
 
 function pickOpponent(name) {
@@ -116,7 +127,7 @@ export function recordResult(s, win, kills, deaths, oppName, mapId) {
 }
 
 function duelStart(game) {
-  const mapId = pickDuelMap(game.opts.duelMap, getState().stats.played);
+  const mapId = pickDuelMap(game.opts.duelMap, getState().stats.played, getState().stats.w);
   const map = getMapDef(mapId) || DUEL_MAPS[0];
   game.opts.mapId = map.id;
   const opp = pickOpponent(game.opts.duelOpponent);

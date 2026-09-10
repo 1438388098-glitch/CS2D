@@ -51,6 +51,15 @@ export function themeOf(mapId) {
   return THEMES[mapId] || THEMES.dust2;
 }
 
+// 2D 天气身份（精确 id 匹配）：官方图的 THEMES.weather 声明（dust2=sand/canal=mist/
+// arctic=snow/blast=smoke/metro=null）此前只有 3D 侧消费；自定义地图不在 THEMES 中，
+// 返回 null 由调用方走 weatherKind 关键词兜底。
+export function themeWeatherOf(mapId) {
+  const th = mapId != null && THEMES[mapId];
+  const w = th && th.weather;
+  return w && w.kind ? { kind: w.kind, density: w.density || 0.55, color: w.color || null } : null;
+}
+
 // ===== 确定性 LCG（装饰物位置稳定）=====
 function lcg(seed) {
   let s = seed >>> 0 || 1;
@@ -313,6 +322,9 @@ function drawDeco(t, kind, px, py, rnd) {
 }
 
 // ===== 主入口 =====
+// 小纹理缓存（官方图 id → 图块集）：128px 级纹理生成代价固定，进图/菜单背景预生成时复用
+const smallTexCache = new Map();
+
 export function initTextures(map) {
   const W = map.W, H = map.H;
   const th = THEMES[map.id] || THEMES.dust2;
@@ -331,21 +343,45 @@ export function initTextures(map) {
   };
 
   // 各生成器独立 LCG 子流（不同异或常数）：素材加载与否不影响其他纹理的随机消费位置
-  const floorTex = real.floor || genFloorTex(th, lcg(texSeed ^ 0x51F10A));
-  const wallTex = real.wall || genWallTex(th, lcg(texSeed ^ 0xA11E50));
-  const thinWallTex = real.thin || genThinTex();
-  const waterTex = genWaterTex(th, lcg(texSeed ^ 0xCAFEB0));
-  const deepWaterTex = genDeepWaterTex(th, lcg(texSeed ^ 0xDEE10C));
-  const platformTex = genPlatformTex();
-  const crateTex = real.thin || genThinTex(); // 木箱用木纹
-  const barrelTex = genBarrelTex();
-  const wallVariants = { v0: wallTex, v1: genWallVariant(wallTex, 1), v2: genWallVariant(wallTex, 2), v3: genWallVariant(wallTex, 3) };
+  // 小纹理缓存：官方图按 id 复用（图块内容确定不变）；自定义/编辑器图同 id 可能换图，跳过缓存。
+  // 真实素材异步加载：以“调用时是否有真实素材”为缓存有效性的一部分，加载完成后自然重建
+  const cacheable = !!(map.id && map.category !== 'custom' && !String(map.id).startsWith('custom'));
+  const cacheKey = cacheable ? String(map.id) : null;
+  const hasReal = !!(real.floor || real.wall);
+  let small = cacheable ? smallTexCache.get(cacheKey) : null;
+  if (!small || small.hasReal !== hasReal) {
+    small = {
+      hasReal,
+      floorTex: real.floor || genFloorTex(th, lcg(texSeed ^ 0x51F10A)),
+      wallTex: real.wall || genWallTex(th, lcg(texSeed ^ 0xA11E50)),
+      thinWallTex: real.thin || genThinTex(),
+      waterTex: genWaterTex(th, lcg(texSeed ^ 0xCAFEB0)),
+      deepWaterTex: genDeepWaterTex(th, lcg(texSeed ^ 0xDEE10C)),
+      platformTex: genPlatformTex(),
+      crateTex: real.thin || genThinTex(), // 木箱用木纹
+      barrelTex: genBarrelTex()
+    };
+    small.wallVariants = { v0: small.wallTex, v1: genWallVariant(small.wallTex, 1), v2: genWallVariant(small.wallTex, 2), v3: genWallVariant(small.wallTex, 3) };
+    if (cacheable) smallTexCache.set(cacheKey, small);
+  }
+  const floorTex = small.floorTex;
+  const wallTex = small.wallTex;
+  const thinWallTex = small.thinWallTex;
+  const waterTex = small.waterTex;
+  const deepWaterTex = small.deepWaterTex;
+  const platformTex = small.platformTex;
+  const crateTex = small.crateTex;
+  const barrelTex = small.barrelTex;
+  const wallVariants = small.wallVariants;
   const decoList = [];
 
   const staticLayer = mkCanvas(W, H);
   const decalLayer = mkCanvas(W, H);
   const miniMap = mkCanvas(480, 360);
-  const mmScale = 480 / W;
+  // 取两轴缩放较小者并居中：竖长图（如单挑图）不再把底部裁出小地图
+  const mmScale = Math.min(480 / W, 360 / H);
+  const mmOx = (480 - W * mmScale) / 2;
+  const mmOy = (360 - H * mmScale) / 2;
 
   {
     const t = staticLayer.getContext('2d');
@@ -550,7 +586,7 @@ export function initTextures(map) {
     for (let y = 0; y < grid.length; y++) {
       for (let x = 0; x < grid[y].length; x++) {
         const c = grid[y][x];
-        const cx = x * cell, cy = y * cell;
+        const cx = mmOx + x * cell, cy = mmOy + y * cell;
         if (c === '#') {
           t.fillStyle = th.mmWall;
           t.fillRect(cx, cy, cell + 0.6, cell + 0.6);
@@ -583,7 +619,7 @@ export function initTextures(map) {
       if (!ss) continue;
       t.strokeStyle = key === 'A' ? 'rgba(255,140,80,0.85)' : 'rgba(90,160,255,0.85)';
       t.lineWidth = 1.4;
-      t.strokeRect(ss.x0 * mmScale, ss.y0 * mmScale, (ss.x1 - ss.x0) * mmScale, (ss.y1 - ss.y0) * mmScale);
+      t.strokeRect(mmOx + ss.x0 * mmScale, mmOy + ss.y0 * mmScale, (ss.x1 - ss.x0) * mmScale, (ss.y1 - ss.y0) * mmScale);
     }
   }
 
@@ -591,7 +627,7 @@ export function initTextures(map) {
     W, H,
     floorTex, wallTex, wallVariants, crateTex, waterTex,
     thinWallTex, deepWaterTex, platformTex, barrelTex,
-    staticLayer, decalLayer, miniMap, mmScale,
+    staticLayer, decalLayer, miniMap, mmScale, mmOx, mmOy,
     decal: decalLayer,
     decos: decoList
   };

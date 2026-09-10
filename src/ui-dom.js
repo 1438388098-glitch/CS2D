@@ -9,6 +9,8 @@ let D = {};
 let lastTop = 0;
 let lastSpecKey = '';
 let htMain = null;
+// 购买提示骨架里的 <b>（倒计时数字），只更新文本不重建 HTML
+let buyTipB = null;
 
 const ICON_BY_WEAPON = {
   ak: 'ic-ak', m4: 'ic-m4', famas: 'ic-rifle', mac10: 'ic-mac10', mp9: 'ic-mp9', p90: 'ic-p90',
@@ -101,8 +103,9 @@ function updateLeft(p, now) {
     D.hudReloadRing.style.background = 'conic-gradient(var(--accent) ' + Math.round((1 - pct) * 360) + 'deg, rgba(255,255,255,.12) 0deg)';
   } else {
     D.hudReloadRing.style.display = 'none';
+    const pTile = tileAt(p.x, p.y);
     if (p.scoped) { st = 'scope'; stTxt = '已开镜'; }
-    else if (tileAt(p.x, p.y) === '~' || tileAt(p.x, p.y) === '≈') { st = 'water'; stTxt = '涉水中'; }
+    else if (pTile === '~' || pTile === '≈') { st = 'water'; stTxt = '涉水中'; }
     else if (p.walking) { st = 'step'; stTxt = '静步'; }
   }
   if (st) {
@@ -171,7 +174,13 @@ function updateTop(p, now) {
 
   if (game.state === 'BUY' && game.buyTime > 0) {
     D.hudBuyTip.style.display = 'block';
-    D.hudBuyTip.innerHTML = '购买阶段 剩余 <b>' + Math.max(0, game.buyTime).toFixed(1) + 's</b> · B 打开购买菜单';
+    // 静态骨架只建一次，倒计时数字用 textContent 差量更新，避免 BUY 期每 100ms 重解析 innerHTML
+    if (!buyTipB) {
+      D.hudBuyTip.innerHTML = '购买阶段 剩余 <b></b> · B 打开购买菜单';
+      buyTipB = D.hudBuyTip.querySelector('b');
+    }
+    const bt = Math.max(0, game.buyTime).toFixed(1) + 's';
+    if (buyTipB.textContent !== bt) buyTipB.textContent = bt;
   } else {
     D.hudBuyTip.style.display = 'none';
   }
@@ -198,18 +207,18 @@ function updateTop(p, now) {
   // 观战条
   const pDead = !p || p.dead;
   if (pDead) {
-    let txt = '\u672c\u56de\u5408\u5df2\u7ed3\u675f';
+    let txt = '本回合已结束';
     if (game.cyber && !game.cyber.ended) {
       const bots = game.entities.filter((e) => e.bot && !e.dead);
       if (bots.length) {
         const target = bots[game.spectateIdx % bots.length];
-        txt = '\u89c2\u6218: ' + target.name + ' (' + (target.team === 't' ? 'T' : 'CT') + ') \u00b7 \u5de6\u952e\u5207\u6362';
+        txt = '观战: ' + target.name + ' (' + (target.team === 't' ? 'T' : 'CT') + ') · 左键切换';
       }
     } else {
       const mates = game.entities.filter((e) => e.team === p.team && !e.dead);
       if (mates.length) {
         const idx = game.spectateIdx % mates.length;
-        txt = '\u89c2\u6218: ' + mates[idx].name + ' \u00b7 \u5de6\u952e\u5207\u6362';
+        txt = '观战: ' + mates[idx].name + ' · 左键切换';
       }
     }
     if (txt !== lastSpecKey) {

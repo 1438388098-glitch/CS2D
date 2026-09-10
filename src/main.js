@@ -1,8 +1,6 @@
 import {createGame, startMatch, update, skipSpectatedRound} from './game.js';
 import {initTextures, preloadTextures} from './textures.js';
 import {initRenderer, render} from './render.js';
-import {initRenderer3d, render3d, fpsCameraEntity} from './render3d.js';
-import {initRenderer3dNext, render3dNext, render3dNextReady, disposeRenderer3dNext} from './render3d-next.js';
 import {updateFpsUi, getAudioPrefs} from './ui.js';
 import {initHud, renderHud, renderCrosshair, renderMinimap, renderLens, toggleMiniZoom, isMiniZoomed, setMiniZoom} from './hud.js';
 import {initUi, setMutedFnExposed, setMenuBackgroundFromLayer, refreshMapPreviews, syncMapCards} from './ui.js';
@@ -33,9 +31,6 @@ setAudioContext(() => game);
 function reloadMapLayers() {
   game.layers = initTextures(getMap());
   initRenderer(canvas, game.layers);
-  initRenderer3d(canvas, game.layers);
-  disposeRenderer3dNext();
-  initRenderer3dNext(canvas, game.layers);
   initHud(canvas, game.layers);
   if (game.layers) setMenuBackgroundFromLayer(game.opts.mapId, game.layers.staticLayer, game.layers.W, game.layers.H);
   startAmbient(game.opts.mapId);
@@ -121,9 +116,7 @@ async function boot() {
 }
 
 let frameMsEma = 16.7; let renderMsEma = 16.7; let statsT = 0; let scaleCur = 1.0; let scaleT = 0; // E4 自适应：默认全分辨率（1080P），超预算降档
-let healthScale = 1; let healthScaleT = 0; let healthScaleStepT = 0; // 帧健康降档档位：并入 scale 状态机，采纳 render3d-next 的降档并带 3s 恢复节流
-let backendLockLegacyUntil = 0; // 后端冷却：切 legacy 后在此毫秒时间戳前锁定 legacy，防逐帧 flip-flop
-const BACKEND_LOCK_MS = 1000;
+let healthScale = 1; let healthScaleT = 0; let healthScaleStepT = 0; // 帧健康降档档位：并入 scale 状态机（沿袭自 render3d-next 的降档策略），带 3s 恢复节流
 let lastT = performance.now();
 const perfSamples = new Float64Array(60);
 let perfIdx = 0;
@@ -190,7 +183,7 @@ function startLoop() {
     try {
       const tWork0 = performance.now();
       const speed = Math.max(1, Math.min(8, Math.floor((game.cyber && game.cyber.speed) || (game.spectate && game.spectate.speed) || 1)));
-      // 固定步长模拟（1/30）：可变 dt 会破坏 seedWorld 确定性重放；累积真实时间按固定步进
+      // 固定步长模拟（FIXED=1/60）：可变 dt 会破坏 seedWorld 确定性重放；累积真实时间按固定步进
       let steps = 0;
       while (acc >= FIXED && steps < 8) {
         acc -= FIXED;
@@ -208,40 +201,8 @@ function startLoop() {
       smoothRemote(game, FIXED);
       smoothRenderEntities(game, frame);
       syncSpatialAudio(game);
-      if (game.viewMode === 'fps' && fpsCameraEntity(game)) {
-        const now3d = performance.now();
-        if (render3dNextReady() && now3d >= backendLockLegacyUntil) {
-          render3dNext(game);
-          if (game._render3dBackend === 'legacy') {
-            // next 本轮回退 legacy：进入冷却（防逐帧 flip-flop），并清屏后再补跑 legacy（防双写/闪烁）
-            backendLockLegacyUntil = now3d + BACKEND_LOCK_MS;
-            const g2d = canvas.getContext('2d');
-            if (g2d) {
-              g2d.setTransform(1, 0, 0, 1, 0, 0);
-              g2d.clearRect(0, 0, canvas.width, canvas.height);
-            }
-            render3d(game);
-          }
-        } else {
-          game._render3dBackend = 'legacy';
-          render3d(game);
-        }
-      } else if (game.viewMode === 'fps') {
-        // 无观战目标（如全队阵亡）：保持暗色 3D 环境底，而非切回 2D 俯视造成视角突变
-        game._render3dBackend = 'legacy';
-        const g2d = canvas.getContext('2d');
-        if (g2d) {
-          g2d.setTransform(1, 0, 0, 1, 0, 0);
-          g2d.clearRect(0, 0, canvas.width, canvas.height);
-          g2d.fillStyle = '#14161a';
-          g2d.fillRect(0, 0, canvas.width, canvas.height);
-          // 恢复 dpr 变换：后续 HUD/准星层按 CSS 像素绘制（对齐 render3d 尾部恢复，防 dpr>1 错位）
-          g2d.setTransform(game.dpr || 1, 0, 0, game.dpr || 1, 0, 0);
-        }
-      } else {
-        game._render3dBackend = 'legacy';
-        render(game);
-      }
+      // 3D/第一人称渲染已打入冷宫（attic/）：视图固定 2D，直接走俯视渲染管线
+      render(game);
       const renderMs = performance.now() - tR0;
       const perf = pushFramePerf(frameMs);
       frameMsEma = frameMsEma * 0.9 + frameMs * 0.1;
@@ -265,7 +226,7 @@ function startLoop() {
         longTaskWindowMs = 0;
         longTaskWindowStart = nowMs;
       }
-      // 帧健康降档并入自适应档位状态机：采纳 render3d-next 的 updateFrameHealth 降档
+      // 帧健康降档并入自适应档位状态机（沿袭自 render3d-next 的 updateFrameHealth 降档策略）
       // （避免每帧 scaleCur 覆盖其降档），健康稳定 ≥3s 后逐步回档，防止无限降低
       {
         const hsRaw = game._renderScale;
@@ -301,29 +262,31 @@ function startLoop() {
       const workMs = performance.now() - tWork0;
       const frameLoadPct = lastWorkMs > 0 ? Math.min(999, lastWorkMs / Math.max(frameMs, 0.1) * 100) : 0;
       workMsEma = workMsEma * 0.9 + workMs * 0.1;
-      if (window.__cs2d) window.__cs2d.stats = {
-        frameMs: frameMsEma,
-        renderMs: renderMsEma,
-        frameDelta: frameMs,
-        frameNow: frameMs,
-        frameAvgMs: perf.avg,
-        frameMaxMs: perf.max,
-        frameDrops: perf.drops,
-        frameWindow: perf.count,
-        renderNow: renderMs,
-        workNow: workMs,
-        workMs: workMsEma,
-        frameLoadPct,
-        fpsWindow: realFps,
-        simFps,
-        simTotalSteps,
-        longTaskCount: longTaskLastCount,
-        longTaskMs: longTaskLastMs,
-        longTaskTotalCount,
-        longTaskTotalMs,
-        render3d: game._renderStats || null,
-        scale: scaleCur
-      };
+      if (window.__cs2d) {
+        // 就地复用同一 stats 对象，避免每帧新建 20 键大对象
+        const st = window.__cs2d.stats || (window.__cs2d.stats = {});
+        st.frameMs = frameMsEma;
+        st.renderMs = renderMsEma;
+        st.frameDelta = frameMs;
+        st.frameNow = frameMs;
+        st.frameAvgMs = perf.avg;
+        st.frameMaxMs = perf.max;
+        st.frameDrops = perf.drops;
+        st.frameWindow = perf.count;
+        st.renderNow = renderMs;
+        st.workNow = workMs;
+        st.workMs = workMsEma;
+        st.frameLoadPct = frameLoadPct;
+        st.fpsWindow = realFps;
+        st.simFps = simFps;
+        st.simTotalSteps = simTotalSteps;
+        st.longTaskCount = longTaskLastCount;
+        st.longTaskMs = longTaskLastMs;
+        st.longTaskTotalCount = longTaskTotalCount;
+        st.longTaskTotalMs = longTaskTotalMs;
+        st.render3d = game._renderStats || null;
+        st.scale = scaleCur;
+      }
       lastWorkMs = workMs;
     } catch (err) {
       console.error('frame error:', err);
@@ -374,9 +337,6 @@ window.__cs2d = {
   get game() { return game; },
   get state() { return { state: game.state, diff: game.opts.diff, mapId: game.opts.mapId, round: game.round, score: game.score }; },
   debug: window.GAME && window.GAME.debug || null,
-  render3d: {
-    get backend() { return render3dNextReady() ? 'next' : 'legacy'; }
-  },
   audio: {
     getBusVolume,
     setBusVolume,

@@ -598,12 +598,20 @@ function paintAt(state, ev, commit) {
     return;
   }
   if (state.tool === 'fill') {
+    // 同色填充无变更：不压撤销历史（避免空撤销步）
+    if (state.rows[ty] && state.rows[ty][tx] === state.sel) { drawEditor(); return; }
     pushHistory();
     floodFill(state, tx, ty);
     drawEditor();
     return;
   }
   if (state.tool === 'rect' || state.tool === 'line') {
+    // 第一次点击仅设锚点不产生变更：不压撤销历史
+    if (!state.anchor) {
+      shapeStep(state, tx, ty);
+      drawEditor();
+      return;
+    }
     pushHistory();
     shapeStep(state, tx, ty);
     drawEditor();
@@ -974,7 +982,7 @@ export function validateRows(rows) {
   if (errors.length) return { ok: false, errors };
   let unreachable = -1;
   try {
-    const def = { id: 'custom-map', name: '自定义地图', accent: '#6ad1a8', rows: rows.slice(), tile: 16 };
+    const def = { id: '__validate_probe__', name: '校验探针', accent: '#6ad1a8', rows: rows.slice(), tile: 16 };
     registerMap(def);
     loadMap(def);
     const map = getMap();
@@ -1006,6 +1014,7 @@ function validateMap() {
 }
 
 function playEditorMap() {
+  unbindGlobalHandlers();
   const rows = ed.rows;
   const hasT = rows.some((r) => r.includes('t'));
   const hasC = rows.some((r) => r.includes('c'));
@@ -1023,7 +1032,15 @@ function playEditorMap() {
   startMatch(game);
 }
 
+// 解绑 window 级快捷键/鼠标处理器：关闭或试玩后不再劫持正式对局的按键
+function unbindGlobalHandlers() {
+  window.onkeydown = null;
+  window.onkeyup = null;
+  window.onmouseup = null;
+}
+
 function closeEditor() {
+  unbindGlobalHandlers();
   const ov = $('editorOverlay');
   if (ov) ov.style.display = 'none';
   if (game.ui) game.ui.showMenu();

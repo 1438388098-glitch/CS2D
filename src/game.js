@@ -1,4 +1,4 @@
-import {ROUND, ECONOMY, MAX_PARTICLES, resolveDiff, MAP_CT_REACT, hellParamsAt} from './config.js';
+import {ROUND, ECONOMY, MAX_PARTICLES, resolveDiff, MAP_CT_REACT, hellParamsAt, MOVEMENT} from './config.js';
 import {addMoney, clearEquipment} from './economy.js';
 import {getMap, loadMap, findMapById, collideCircle, los, pathTo, tileAt, passableTolerant, fallbackSpawn} from './map.js';
 import {createEntity, spawnEntity, weaponDef, ammoFor} from './entities.js';
@@ -79,7 +79,7 @@ function refreshLeadershipOnDeath(game) {
     if (e.team === 't') tDead++;
     else if (e.team === 'ct') ctDead++;
   }
-  const sig = tDead + ':' + ctDead;
+  const sig = (tDead << 4) | ctDead;
   if (game._leadSig === sig) return;
   game._leadSig = sig;
   try {
@@ -193,6 +193,8 @@ export function startMatch(game) {
   // 保留调用者传入的世界种子（训练/回放确定性）：Object.assign 会用 fresh.seed=null 覆盖
   const callerSeed = game.seed;
   fresh.opts = game.opts;
+  // 一次性模式覆盖（如单挑的短局换边）不跨对局残留：非该模式的 startMatch 一律回归默认
+  delete fresh.opts.sideSwapAfter;
   fresh.opts.diffParams = game.opts.diff === 'hell' ? adaptiveHellParams(game) : resolveDiff(game.opts.diff, game.opts.hellLevel);
   fresh.mode = game.opts.mode || null;
   fresh.noRoundEnd = false;
@@ -255,6 +257,7 @@ function spawnRound(game) {
   game.input.mouse.wasDown = game.input.mouse.down;
   game.lastKiller = null;
   game.dmgPops.length = 0;
+  if (game.pings) game.pings.length = 0;
   game.tOrder = null;
   const spawnTick = { t: 0, ct: 0 };
   for (const e of game.entities) {
@@ -466,7 +469,7 @@ export function finishMatch(game) {
     });
 }
 
-function objectiveText(game) {
+export function objectiveText(game) {
   const p = game.player;
   if (!p) return { main: '', sub: '' };
   const ik = getBindLabel('interact');
@@ -485,7 +488,12 @@ export function updateBombHud(game) {
   const p = game.player;
   if (!p) return;
   const ot = objectiveText(game);
-  emit('objtext', { main: ot.main, sub: ot.sub });
+  // 每模拟步调用：文案不变则跳过 emit（接收端还有二次差量）
+  if (game._lastObjMain !== ot.main || game._lastObjSub !== ot.sub) {
+    game._lastObjMain = ot.main;
+    game._lastObjSub = ot.sub;
+    emit('objtext', { main: ot.main, sub: ot.sub });
+  }
 }
 
 
@@ -529,7 +537,7 @@ export function update(game, dt) {
     if (e.dead) continue;
     const curTile = tileAt(e.x, e.y);
     // 涉水减速：浅水/深水均为 40%（spec 4.3）
-    if (curTile === '~' || curTile === '≈') { e.vx *= 0.6; e.vy *= 0.6; }
+    if (curTile === '~' || curTile === '≈') { e.vx *= MOVEMENT.WATER_MULT; e.vy *= MOVEMENT.WATER_MULT; }
     if (e.stunT > 0) { e.vx *= 0.3; e.vy *= 0.3; }
     // FPS 下 bot 与玩家同步减速（玩家已在 updatePlayer 内缩放，此处仅 bot）
     const mvS = e.bot && game.viewMode === 'fps' ? fpsMoveScale(game) : 1;
@@ -538,16 +546,16 @@ export function update(game, dt) {
     collideCircle(e);
     const prevH = e.height;
     e.height = curTile === '^' ? 1 : curTile === 'R' ? 0.5 : 0;
-    if (prevH === 1 && e.height === 0) e.stunT = 0.4;
+    if (prevH === 1 && e.height === 0) e.stunT = MOVEMENT.STUN_ON_DROP;
     if (e.height < prevH) e.airborneT = 0.35;
     else if (e.airborneT > 0) e.airborneT = Math.max(0, e.airborneT - dt);
     if (e.stunT > 0) e.stunT = Math.max(0, e.stunT - dt);
-    e.vx *= Math.max(0, 1 - 7 * dt);
-    e.vy *= Math.max(0, 1 - 7 * dt);
+    e.vx *= Math.max(0, 1 - MOVEMENT.FRICTION * dt);
+    e.vy *= Math.max(0, 1 - MOVEMENT.FRICTION * dt);
     // 溅水：浅水发声/水花 + 涟漪环；深水静音（仅涟漪环，spec 4.3）
     if (e.splashCd > 0) e.splashCd = Math.max(0, e.splashCd - dt);
-    if (e.splashCd <= 0 && (curTile === '~' || curTile === '≈') && Math.hypot(e.vx, e.vy) > 60) {
-      e.splashCd = 0.5;
+    if (e.splashCd <= 0 && (curTile === '~' || curTile === '≈') && Math.hypot(e.vx, e.vy) > MOVEMENT.SPLASH_VEL) {
+      e.splashCd = MOVEMENT.SPLASH_CD;
       addRipple(game, e.x, e.y);
       if (curTile === '~') {
         game.lastSplash = { team: e.team, x: e.x, y: e.y, t: game.time };
@@ -578,30 +586,7 @@ export function update(game, dt) {
       }
     }
   }
-  while (game.particles.length > MAX_PARTICLES) { game._particlePool.push(game.particles.shift()); }
-  for (let i = game.particles.length - 1; i >= 0; i--) {
-    const pa = game.particles[i];
-    pa.life -= dt;
-    if (pa.life <= 0) { game._particlePool.push(pa); game.particles[i] = game.particles[game.particles.length - 1]; game.particles.pop(); continue; }
-    pa.x += pa.vx * dt;
-    pa.y += pa.vy * dt;
-    if (pa.kind === 'shell') {
-      shellLandingStep(pa, dt, (shell) => {
-        if (game.particles.length >= MAX_PARTICLES - 4) return;
-        spawnParticle(game, {
-          kind: 'dust',
-          x: shell.x,
-          y: shell.y,
-          vx: rand(-18, 18),
-          vy: rand(-24, -6),
-          life: 0.32,
-          size: rand(1.5, 3)
-        });
-      });
-    }
-    pa.vx *= Math.max(0, 1 - 3 * dt);
-    pa.vy *= Math.max(0, 1 - 3 * dt);
-  }
+  updateParticles(game, dt);
   for (let di = game.drops.length - 1; di >= 0; di--) {
     const d = game.drops[di];
     if (d.noPickT > 0) d.noPickT = Math.max(0, d.noPickT - dt);
@@ -635,6 +620,45 @@ export function update(game, dt) {
     else if (d.life < 3) decalDirty = true;
   }
   if (decalDirty) redrawDecals(game);
+  updateFxTimers(game, dt);
+  updateCamera(game, dt);
+  if (!game.player || game.player.dead) updatePlayerAim(game, dt);
+  updateBombHud(game);
+  if (game.ui && game.ui.isScoreboardOpen && game.ui.isScoreboardOpen()) {
+    emit('refreshScoreboard');
+  }
+}
+
+// 粒子池回收与推进（从 update 拆出）：超上限回收进池，逐帧推进位置/寿命，弹壳落地扬尘
+function updateParticles(game, dt) {
+  while (game.particles.length > MAX_PARTICLES) { game._particlePool.push(game.particles.shift()); }
+  for (let i = game.particles.length - 1; i >= 0; i--) {
+    const pa = game.particles[i];
+    pa.life -= dt;
+    if (pa.life <= 0) { game._particlePool.push(pa); game.particles[i] = game.particles[game.particles.length - 1]; game.particles.pop(); continue; }
+    pa.x += pa.vx * dt;
+    pa.y += pa.vy * dt;
+    if (pa.kind === 'shell') {
+      shellLandingStep(pa, dt, (shell) => {
+        if (game.particles.length >= MAX_PARTICLES - 4) return;
+        spawnParticle(game, {
+          kind: 'dust',
+          x: shell.x,
+          y: shell.y,
+          vx: rand(-18, 18),
+          vy: rand(-24, -6),
+          life: 0.32,
+          size: rand(1.5, 3)
+        });
+      });
+    }
+    pa.vx *= Math.max(0, 1 - 3 * dt);
+    pa.vy *= Math.max(0, 1 - 3 * dt);
+  }
+}
+
+// 屏幕反馈计时器（从 update 拆出）：震动/受击/命中/爆头等衰减 + flash/dmg/lowhp 的 DOM 事件发射
+function updateFxTimers(game, dt) {
   if (game.shake > 0) game.shake = Math.max(0, game.shake - dt * 20);
   if (game.dmgT > 0) game.dmgT -= dt;
   if (game.dmgSpreadT > 0) game.dmgSpreadT -= dt;
@@ -650,20 +674,28 @@ export function update(game, dt) {
     ho.t -= dt;
     if (ho.t <= 0 || ho.target.dead) game.hitOutlines.splice(i, 1);
   }
-  if (game.flashT > 0) {
-    game.flashT -= dt;
-    emit('flash', { opacity: Math.min(0.9, game.flashT * 0.22) });
-  } else {
-    emit('flash', { opacity: 0 });
-  }
-  emit('dmg', { opacity: clamp(game.dmgT * 2, 0, 1) });
+  if (game.flashT > 0) game.flashT -= dt;
+  // 发送端差量：透明度值不变（0.01 精度）则跳过 emit，省每步对象分配与监听者遍历
+  const flashOp = game.flashT > 0 ? Math.min(0.9, game.flashT * 0.22) : 0;
+  const flashQ = Math.round(flashOp * 100);
+  if (game._lastFlashQ !== flashQ) { game._lastFlashQ = flashQ; emit('flash', { opacity: flashOp }); }
+  const dmgOp = clamp(game.dmgT * 2, 0, 1);
+  const dmgQ = Math.round(dmgOp * 100);
+  if (game._lastDmgQ !== dmgQ) { game._lastDmgQ = dmgQ; emit('dmg', { opacity: dmgOp }); }
   const pl = game.player;
-  if (pl && !pl.dead && pl.hp <= 25) {
-    const hpRatio = (25 - pl.hp) / 25;
-    emit('lowhp', { opacity: clamp(0.15 + hpRatio * 0.5, 0, 0.55) + 0.08 * Math.sin(performance.now() / 150) });
-  } else if (pl && !pl.dead) {
-    emit('lowhp', { opacity: 0 });
+  if (pl && !pl.dead) {
+    let lowOp = 0;
+    if (pl.hp <= 25) {
+      const hpRatio = (25 - pl.hp) / 25;
+      lowOp = clamp(0.15 + hpRatio * 0.5, 0, 0.55) + 0.08 * Math.sin(performance.now() / 150);
+    }
+    const lowQ = Math.round(lowOp * 100);
+    if (game._lastLowQ !== lowQ) { game._lastLowQ = lowQ; emit('lowhp', { opacity: lowOp }); }
   }
+}
+
+// 相机跟随（从 update 拆出）：观战目标选取 + follow 平滑/普通 lerp + 地图边界夹取
+function updateCamera(game, dt) {
   let camTarget = game.player;
   if (game.player && game.player.dead) {
     if (game.cyber && !game.cyber.ended) {
@@ -695,11 +727,6 @@ export function update(game, dt) {
     const hh = game.canvasH / 2 / z;
     game.camX = clamp(game.camX, hw, Math.max(hw, game.mapW - hw));
     game.camY = clamp(game.camY, hh, Math.max(hh, game.mapH - hh));
-  }
-  if (!game.player || game.player.dead) updatePlayerAim(game, dt);
-  updateBombHud(game);
-  if (game.ui && game.ui.isScoreboardOpen && game.ui.isScoreboardOpen()) {
-    emit('refreshScoreboard');
   }
 }
 
@@ -820,7 +847,7 @@ function updatePlayer(game, dt) {
   const keys = input.keys;
   const mouse = input.mouse;
   const w = weaponDef(p);
-  const spd = 235 * (w ? w.speed : 1) * (game.viewMode === 'fps' ? fpsMoveScale(game) : 1);
+  const spd = MOVEMENT.SPEED * (w ? w.speed : 1) * (game.viewMode === 'fps' ? fpsMoveScale(game) : 1);
   let ax = 0, ay = 0;
   if (game.freezeT > 0) {
     ax = 0; ay = 0;
@@ -963,23 +990,6 @@ function updatePlayer(game, dt) {
       if (game.bomb) game.bomb.defusing = false;
     }
   }
-}
-
-function castLaserEnd(p, game) {
-  const map = getMap();
-  if (!map || !map.W || !map.H) return { x: p.x, y: p.y };
-  const w = weaponDef(p);
-  const range = w && w.range ? w.range : 1500;
-  const cos = Math.cos(p.angle), sin = Math.sin(p.angle);
-  const step = 6;
-  let px = p.x, py = p.y;
-  for (let d = 0; d <= range; d += step) {
-    px = p.x + cos * d;
-    py = p.y + sin * d;
-    if (px < 0 || py < 0 || px > map.W || py > map.H) break;
-    if (!passableTolerant(px, py)) break;
-  }
-  return { x: px, y: py };
 }
 
 function updatePlayerAim(game, dt) {

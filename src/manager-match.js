@@ -8,6 +8,16 @@ import { computeMatchHltv as _computeMatchHltv, pickHltvMvp as _pickHltvMvp, upd
 
 function emit(evt, p) { ctx.bus.emit(evt, p); }
 
+// 杯赛图池：杯赛不再误用联赛赛程的图，按已赛场次在竞技池内轮转
+const CUP_MAP_POOL = ['dust2', 'metro', 'forge', 'atrium', 'arctic'];
+// 难度随联赛与对手评级分档（对齐 careerDifficultyFor 口径）
+function managerDifficultyFor(league, oppRating) {
+  const rating = Number(oppRating) || 70;
+  if (league === '甲级' || rating >= 85) return 'hard';
+  if (league === '乙级' || rating >= 78) return 'normal';
+  return rating >= 72 ? 'normal' : 'easy';
+}
+
 export function mapManagerRosterToBots(roster, bots, state, side) {
   const base = teamDiffParams({ rating: Math.round(roster.reduce((a, p) => a + p.rating, 0) / Math.max(1, roster.length)) });
   const bonus = state && state.team ? sameTeamBonus(state) : null;
@@ -50,8 +60,9 @@ export function mapManagerRosterToBots(roster, bots, state, side) {
   }
 }
 
-export function startManagerMatch(game, oppId, venue, isCup) {
-  game.seed = Math.floor(Math.random() * 0x7fffffff);
+export function startManagerMatch(game, oppId, venue, isCup, seed) {
+  // seed 可注入（确定性回归测试用）；缺省随机
+  game.seed = Number.isFinite(seed) && seed > 0 ? Math.floor(seed) : Math.floor(Math.random() * 0x7fffffff);
   game.opts.mode = 'manager';
   game.opts.team = 'ct';
   game.opts.bots = 5;
@@ -72,12 +83,16 @@ export function managerStart(game) {
     const m = s.season.cup.bracket.find((x) => !x.played && (x.a === 'player' || x.b === 'player'));
     if (!m) { emit('toast', { text: '杯赛已结束' }); return; }
     opp = s.season.teams.find((t) => t.id === (m.a === 'player' ? m.b : m.a));
-    game.opts.mapId = f ? (f.mapId || 'dust2') : 'dust2';
+    // 杯赛图从竞技池按已赛场次轮转（原逻辑误用联赛赛程的图）
+    const cupPlayed = s.season.cup.bracket.filter((x) => x.played).length;
+    game.opts.mapId = CUP_MAP_POOL[cupPlayed % CUP_MAP_POOL.length];
   } else {
     opp = s.season.teams.find((t) => t.id === (f.home === 'player' ? f.away : f.home));
     game.opts.mapId = f.mapId || 'dust2';
   }
   if (!opp) { emit('toast', { text: '找不到对手' }); return; }
+  // 难度随联赛与对手评级分档
+  game.opts.diff = managerDifficultyFor(s.team.league, opp.rating);
   game.entities = [];
   setupMatchEntities(game);
   game.entities = game.entities.filter((e) => e.bot);

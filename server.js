@@ -66,10 +66,14 @@ const ALLOWED_EXT = new Set(Object.keys(MIME));
 
 const COMPRESSIBLE_EXT = new Set(['.html', '.js', '.mjs', '.css', '.json', '.svg', '.txt', '.map']);
 const NO_CACHE_EXT = new Set(['.html', '.js', '.mjs', '.css']);
+// 静态资源（图标/纹理/字体）内容稳定且入口页 no-cache 兜底：7 天强缓存减少重复下发
+const LONG_CACHE_EXT = new Set(['.svg', '.png', '.webp', '.jpg', '.jpeg', '.ico', '.woff', '.woff2']);
 
 function cacheControlFor(filePath) {
   const ext = path.extname(filePath).toLowerCase();
-  return NO_CACHE_EXT.has(ext) ? 'no-cache' : 'public, max-age=3600';
+  if (NO_CACHE_EXT.has(ext)) return 'no-cache';
+  if (LONG_CACHE_EXT.has(ext)) return 'public, max-age=604800';
+  return 'public, max-age=3600';
 }
 
 function compressIfPossible(data, req, filePath, cb) {
@@ -194,14 +198,34 @@ function broadcast(room, payload, except) {
   }
 }
 
-// 每连接限频：正常快照 ~30Hz + 事件，远低于 200 msg/s；超限判定为异常/攻击，直接断开
+// 可热重载配置：server.config.json（可选，缺省用内置默认）。fs.watchFile 轮询跨平台，
+// 变更对新连接/新帧即时生效，无需重启服务器。
+const HOT_CFG_PATH = path.join(ROOT, 'server.config.json');
+const hotCfg = { rateLimit: 200, maxRooms: 50 };
+let hotCfgMtime = null;
+function refreshHotCfg() {
+  try {
+    if (!fs.existsSync(HOT_CFG_PATH)) return;
+    const st = fs.statSync(HOT_CFG_PATH);
+    if (hotCfgMtime === st.mtimeMs) return;
+    hotCfgMtime = st.mtimeMs;
+    const j = JSON.parse(fs.readFileSync(HOT_CFG_PATH, 'utf8'));
+    hotCfg.rateLimit = Math.max(30, Math.min(2000, Number(j.rateLimit) || 200));
+    hotCfg.maxRooms = Math.max(1, Math.min(500, Number(j.maxRooms) || 50));
+    console.log('  [config] server.config.json 已热重载: rateLimit=' + hotCfg.rateLimit + ' maxRooms=' + hotCfg.maxRooms);
+  } catch (err) { /* 配置缺失/损坏时沿用旧值 */ }
+}
+refreshHotCfg();
+fs.watchFile(HOT_CFG_PATH, { interval: 3000 }, refreshHotCfg);
+
+// 每连接限频：正常快照 ~30Hz + 事件，远低于 rateLimit；超限判定为异常/攻击，直接断开
 function throttle(ws) {
   const now = Date.now();
   if (!ws._rateWindow || now - ws._rateWindow >= 1000) {
     ws._rateWindow = now;
     ws._rateCount = 0;
   }
-  if (++ws._rateCount > 200) {
+  if (++ws._rateCount > hotCfg.rateLimit) {
     try { ws.socket.destroy(); } catch (err) { /* closed */ }
     return false;
   }
@@ -216,13 +240,31 @@ function handleFrame(ws, payload) {
   // 等待期保活心跳：仅刷新 lastActive，不回包、不广播
   if (msg.type === 'ping') return;
   if (msg.type === 'hello') {
-    const room = String(msg.room || '').trim();
+    // 房间码实际 6 位：截断 32 字符并剥离控制字符，防畸形超长房名；host 已存在时拒绝第二个 host，防抢房导致中继错乱
+    const room = String(msg.room || '').trim().replace(/[\x00-\x1f\x7f]/g, '').slice(0, 32);
     if (!room) return;
     ws.room = room;
-    ws.role = msg.role === 'host' ? 'host' : 'guest';
+    // 角色白名单：host / guest / spectator（第三方观战）。观战端加入房间 clients 参与广播，
+    // 但不占对战槽（无 welcome 之外的独立配额语义，peer count 仍为房间成员数）。
+    ws.role = msg.role === 'host' ? 'host' : (msg.role === 'spectator' ? 'spectator' : 'guest');
     ws.name = String(msg.name || 'LAN Player').slice(0, 16);
     let r = rooms.get(room);
-    if (!r) { r = { clients: new Set(), host: null }; rooms.set(room, r); }
+    if (!r) {
+      // 房间数上限（可热重载）：满员时新房间拒绝建房，已有房间不受影响
+      if (rooms.size >= hotCfg.maxRooms) {
+        sendFrame(ws, { type: 'error', reason: 'room-limit' });
+        ws.room = null;
+        ws.role = null;
+        return;
+      }
+      r = { clients: new Set(), host: null }; rooms.set(room, r);
+    }
+    if (ws.role === 'host' && r.host && r.host !== ws) {
+      sendFrame(ws, { type: 'error', reason: 'host-exists' });
+      ws.room = null;
+      ws.role = null;
+      return;
+    }
     r.clients.add(ws);
     if (ws.role === 'host') r.host = ws;
     sendFrame(ws, { type: 'welcome', role: ws.role, room, count: r.clients.size });
@@ -231,6 +273,8 @@ function handleFrame(ws, payload) {
   }
   if (!ws.room) return;
   if (msg.type === 'relay' || msg.type === 'input' || msg.type === 'start' || msg.type === 'hit') {
+    // 观战端只收不发：其 relay 类消息一律忽略，防止第三方观战端注入伪造的输入/开赛/命中事件
+    if (ws.role === 'spectator') return;
     broadcast(ws.room, msg, ws);
     return;
   }
@@ -283,7 +327,8 @@ function handleData(ws, chunk) {
     const maskLen = masked ? 4 : 0;
     if (ws.buf.length < off + maskLen + len) return;
     const mask = masked ? ws.buf.slice(off, off + 4) : null;
-    const payload = Buffer.from(ws.buf.slice(off + maskLen, off + maskLen + len));
+    // 掩码异或本就原地改：用 subarray 视图替代 Buffer.from 拷贝（payload 仅在本同步处理器内使用）
+    const payload = ws.buf.subarray(off + maskLen, off + maskLen + len);
     if (mask) {
       for (let i = 0; i < payload.length; i++) payload[i] ^= mask[i & 3];
     }

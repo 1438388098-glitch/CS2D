@@ -73,7 +73,7 @@ try {
   const cdp = new CDP(pageUrl);
   await cdp.connect();
   await cdp.navigate(`http://127.0.0.1:${APP_PORT}/`);
-  await cdp.eval(`(()=>{try{localStorage.setItem('cs2d_viewmode','top');localStorage.setItem('cs2d_fog','${FOG ? '1' : '0'}');localStorage.setItem('cs2d_map','dust2');localStorage.removeItem('cs2d_mode')}catch(e){}return true})()`);
+  await cdp.eval(`(()=>{try{localStorage.setItem('cs2d_viewmode','top');localStorage.setItem('cs2d_fog','${FOG ? '1' : '0'}');localStorage.setItem('cs2d_map','dust2');localStorage.removeItem('cs2d_mode');window.__cs2dProf=true}catch(e){}return true})()`);
 
   let booted = false;
   for (let i = 0; i < 60; i++) {

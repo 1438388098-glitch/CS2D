@@ -121,9 +121,20 @@ export function makeShotBuffer(ac, variant) {
   return buf;
 }
 
+// 枪声波形缓存：按 (AudioContext, variant) 生成一次复用，混战每秒数十枪不再重复跑上万样本合成；
+// ac 重建（页面音频解锁/切换）时 Map 随旧 ac 一起被 GC
+const shotBufCache = new WeakMap();
+function cachedShotBuffer(ac, variant) {
+  let byVariant = shotBufCache.get(ac);
+  if (!byVariant) { byVariant = new Map(); shotBufCache.set(ac, byVariant); }
+  let buf = byVariant.get(variant);
+  if (!buf) { buf = makeShotBuffer(ac, variant); byVariant.set(variant, buf); }
+  return buf;
+}
+
 export function buildShot(ac, env) {
   // env: {out, vol, variant, lp}
-  const buf = makeShotBuffer(ac, env.variant || 'rifle');
+  const buf = cachedShotBuffer(ac, env.variant || 'rifle');
   const src = ac.createBufferSource();
   src.buffer = buf;
   src.playbackRate.value = pitch();
@@ -148,6 +159,12 @@ export function buildSfx(ac, env) {
     }
     case 'reloadEnd': tick(ac, { out, vol: vol * 0.6, f1: 2800, f2: 1400, guard }); break;
     case 'hit': oscDrop(ac, { out, vol: vol * 0.9, dur: 0.09, type: 'sine', f0: 240, f1: 70, guard }); break;
+    case 'hitArmor': {
+      // 护甲命中：金属高频短噪 + 三角波钝响，与血肉 hit 的低频闷响区分
+      noiseBurst(ac, { out, vol: vol * 0.5, dur: 0.05, freq: 2600, q: 3, type: 'bandpass', guard });
+      oscDrop(ac, { out, vol: vol * 0.5, dur: 0.07, type: 'triangle', f0: 900, f1: 300, guard });
+      break;
+    }
     case 'head': {
       oscDrop(ac, { out, vol: vol * 0.8, dur: 0.06, type: 'sine', f0: 1800, f1: 700, guard });
       noiseBurst(ac, { out, vol: vol * 0.45, dur: 0.03, freq: 3200, q: 2, type: 'bandpass', guard });
@@ -330,11 +347,11 @@ export function buildAmbient(ac, mapId) {
   let bus = null;
   let timer = null;
   // 冰裂（arctic）：简化实现——8s 低频噪声包络 + 两个固定间隔咔嗒
+  // （noiseBurst/tick 的 at 是相对当前时刻的偏移，传绝对 currentTime 会把调度推迟整个会话时长）
   function iceCrack() {
-    const now = ac.currentTime;
-    noiseBurst(ac, { out: bus, vol: 0.1, dur: 8, freq: 420, q: 0.8, type: 'lowpass', at: now });
-    tick(ac, { out: bus, vol: 0.07, f1: 2600, f2: 1900, at: now + 2.5 });
-    tick(ac, { out: bus, vol: 0.07, f1: 2200, f2: 1500, at: now + 4.5 });
+    noiseBurst(ac, { out: bus, vol: 0.1, dur: 8, freq: 420, q: 0.8, type: 'lowpass', at: 0 });
+    tick(ac, { out: bus, vol: 0.07, f1: 2600, f2: 1900, at: 2.5 });
+    tick(ac, { out: bus, vol: 0.07, f1: 2200, f2: 1500, at: 4.5 });
   }
   // 金属敲击（blast）：噪声 burst 变体，bandpass 400→120Hz 短衰
   function metalKnock() {

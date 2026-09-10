@@ -545,7 +545,7 @@ function makeMajorState(teamId, groupCfg) {
   const groupOf = {};
   grouping.groups.forEach((g, gi) => { for (const t of g) groupOf[t.id] = gi; });
   return {
-    stage: 'qualifier', // qualifier -> s1 -> s2 -> s3 -> playoff
+    stage: 'qualifier', // qualifier -> s1 -> s2 -> s3 -> playoff（双败制）
     qual: makeSwiss(teams.map((t) => ({ team: t, wins: 0, losses: 0, opps: [], status: 'in' })), '积分赛'),
     s1: null, s2: null, s3: null, playoff: null,
     grouping, groupOf,
@@ -712,17 +712,69 @@ function mergeStages(st, from, to) {
   st.stage = to === st.s2 ? 's2' : 's3';
 }
 
+// 季后赛双败制：胜者组（WB）QF→SF→F，QF/SF 败者落入败者组（LB）；
+// WB 决赛败者跌入 LB 决赛，LB 决赛胜者与 WB 冠军会师总决赛（GF，BO5，不设优势局/重置）。
+// 共 14 场：WB 7 + LB 6 + GF 1，每支被淘汰队伍恰好两败
 function makePlayoff(st) {
   const adv = st.s3.teams.filter((t) => t.status === 'adv')
     .sort((a, b) => b.wins - a.wins || b.team.rating - a.team.rating)
     .map((e) => e.team); // 种子 1-8
-  const rounds = [];
+  const mk = (a, b, bo) => ({ a, b, winner: null, score: null, maps: null, bo, played: false });
   const qf = [
     [adv[0], adv[7]], [adv[3], adv[4]], [adv[2], adv[5]], [adv[1], adv[6]]
-  ].map(([a, b]) => ({ a, b, winner: null, score: null, maps: null, bo: 3, played: false }));
-  rounds.push({ pairs: qf, bo: 3, label: '1/4 决赛' });
-  st.playoff = { rounds, round: 0 };
+  ].map(([a, b]) => mk(a, b, 3));
+  st.playoff = {
+    format: 'double', // 双败制
+    rounds: [{ bracket: 'WB', sub: 1, label: '胜者组 · 1/4 决赛', pairs: qf }],
+    round: 0,
+    lbCarry: null, wbFinalists: null, lbR3Pair: null, wbfLoser: null, gfWB: null // 轮次间待传递的晋级/落败队伍
+  };
   st.stage = 'playoff';
+}
+
+// 双败制轮次推进：每打完一轮，按依赖关系追加下一轮（轮次顺序固定：
+// WB QF → LB R1 → WB SF → LB R2 → WB F → LB 半决赛 → LB 决赛 → GF，每时刻至多一轮待打）
+function appendNextPlayoffRound(st, done, wins, losses) {
+  const pf = st.playoff;
+  const mk = (a, b, bo) => ({ a, b, winner: null, score: null, maps: null, bo, played: false });
+  const push = (bracket, sub, label, pairs) => pf.rounds.push({ bracket, sub, label, pairs });
+  if (done.bracket === 'WB') {
+    if (done.sub === 1) {
+      // WB 首轮（QF）完：败者落入 LB 首轮，胜者进 WB 半决赛
+      push('LB', 1, '败者组 · 首轮', [mk(losses[0], losses[1], 3), mk(losses[2], losses[3], 3)]);
+      push('WB', 2, '胜者组 · 半决赛', [mk(wins[0], wins[1], 3), mk(wins[2], wins[3], 3)]);
+    } else if (done.sub === 2) {
+      // WB 半决赛完：败者空降 LB 第二轮，对阵 LB 首轮胜者
+      pf.wbFinalists = wins;
+      push('LB', 2, '败者组 · 第二轮', [mk(pf.lbCarry[0], losses[0], 3), mk(pf.lbCarry[1], losses[1], 3)]);
+      pf.lbCarry = null;
+    } else {
+      // WB 决赛完：胜者直通总决赛，败者跌入 LB 决赛（等 LB 半决赛胜者）
+      pf.gfWB = wins[0];
+      pf.wbfLoser = losses[0];
+      push('LB', 3, '败者组 · 半决赛', [mk(pf.lbR3Pair[0], pf.lbR3Pair[1], 3)]);
+      pf.lbR3Pair = null;
+    }
+    return;
+  }
+  if (done.bracket === 'LB') {
+    if (done.sub === 1) {
+      pf.lbCarry = wins; // LB 首轮胜者等待 WB 半决赛败者
+    } else if (done.sub === 2) {
+      // LB 第二轮完：两名胜者进 LB 半决赛；此时 WB 决赛两强已定，排入赛程
+      pf.lbR3Pair = wins;
+      push('WB', 3, '胜者组 · 决赛', [mk(pf.wbFinalists[0], pf.wbFinalists[1], 3)]);
+      pf.wbFinalists = null;
+    } else if (done.sub === 3) {
+      // LB 半决赛完：胜者对阵 WB 决赛败者，争夺最后一个总决赛席位
+      push('LB', 4, '败者组 · 决赛', [mk(wins[0], pf.wbfLoser, 3)]);
+      pf.wbfLoser = null;
+    } else {
+      // LB 决赛完：LB 冠军与 WB 冠军会师总决赛（BO5）
+      push('GF', 1, '总决赛 · BO5', [mk(pf.gfWB, wins[0], 5)]);
+      pf.gfWB = null;
+    }
+  }
 }
 
 function playPlayoffRound(st) {
@@ -735,25 +787,20 @@ function playPlayoffRound(st) {
     if (!m.userPending && (m.a.id === st.user.id || m.b.id === st.user.id)) m.userPending = true;
   }
   if (roundHasPending(cur)) return; // 等用户处理自己的比赛
-  const wins = [];
+  const wins = [], losses = [];
   for (const m of cur.pairs) {
     const r = runSeries(m.a, m.b, m.bo);
     m.played = true; m.winner = r.winner; m.score = r.score; m.maps = r.maps;
     wins.push(r.winner);
+    losses.push(r.winner.id === m.a.id ? m.b : m.a);
   }
-  if (wins.length === 1) {
+  pf.round++;
+  if (cur.bracket === 'GF') {
     st.champion = wins[0];
     emit('toast', { text: (st.champion.id === st.user.id ? '你 ' : '') + st.champion.tag + ' 夺得 Major 冠军！' });
     return;
   }
-  const nextPairs = [];
-  for (let i = 0; i < wins.length; i += 2) {
-    nextPairs.push({ a: wins[i], b: wins[i + 1], winner: null, score: null, maps: null, bo: 3, played: false });
-  }
-  const label = pf.round === 0 ? '半决赛' : '决赛';
-  if (pf.round === 1) nextPairs[0].bo = 5; // 决赛 BO5
-  pf.rounds.push({ pairs: nextPairs, label });
-  pf.round++;
+  appendNextPlayoffRound(st, cur, wins, losses);
 }
 
 function currentSwiss(st) {
@@ -838,7 +885,7 @@ function stageLabel(st) {
   if (st.stage === 's1') return 'Stage 1 · 竞争组瑞士轮（前 8 晋级）';
   if (st.stage === 's2') return 'Stage 2 · 挑战组瑞士轮（前 8 晋级）';
   if (st.stage === 's3') return 'Stage 3 · 传奇组瑞士轮（前 8 晋级）';
-  if (st.stage === 'playoff') return '淘汰赛 · 单败 BO3 / 决赛 BO5';
+  if (st.stage === 'playoff') return '淘汰赛 · 双败制（胜者组/败者组）BO3 · 总决赛 BO5';
   return '比赛进行中';
 }
 
@@ -1000,13 +1047,25 @@ function renderMajorPanel(game) {
     html += '<div class="mj-panels"><div class="mj-panel"><div class="mj-panel-title">本轮对阵 · R' + sw.round + '</div>' + pairsHtml(st, cur ? cur.pairs : [], '瑞士轮 R' + sw.round, !sw.done) + '</div>';
     html += '<div class="mj-panel"><div class="mj-panel-title">积分榜</div>' + swissTableHtml(sw, st) + '</div></div>';
   } else if (st.stage === 'playoff') {
+    const pf = st.playoff;
+    const isCur = (r) => pf.rounds[pf.round] === r;
+    const col = (rows) => {
+      let out = '';
+      for (const r of rows) {
+        if (!r.pairs.length) continue;
+        out += '<div class="mj-panel-title">' + r.label + '</div>';
+        out += pairsHtml(st, r.pairs, r.label, isCur(r));
+      }
+      return out;
+    };
     html += '<div class="mj-panels"><div class="mj-panel">';
-    for (let i = 0; i < st.playoff.rounds.length; i++) {
-      const r = st.playoff.rounds[i];
-      if (!r.pairs.length) continue;
-      html += '<div class="mj-panel-title">' + r.label + '</div>';
-      html += pairsHtml(st, r.pairs, r.label, i === st.playoff.round && st.playoff.rounds.length < 4);
-    }
+    html += '<div class="mj-panel-title">【胜者组 WB】</div>';
+    html += col(pf.rounds.filter((r) => r.bracket === 'WB'));
+    html += '<div class="mj-panel-title">【总决赛】</div>';
+    html += col(pf.rounds.filter((r) => r.bracket === 'GF'));
+    html += '</div><div class="mj-panel">';
+    html += '<div class="mj-panel-title">【败者组 LB】</div>';
+    html += col(pf.rounds.filter((r) => r.bracket === 'LB'));
     html += '</div></div>';
   }
   if (st.champion) html += '<div class="major-champ">🏆 冠军：' + esc(st.champion.name) + '（' + esc(st.champion.tag) + '）</div>';

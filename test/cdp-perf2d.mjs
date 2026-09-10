@@ -28,7 +28,7 @@ try {
   const cdp = new CDP(pageUrl);
   await cdp.connect();
   await cdp.navigate(`http://127.0.0.1:${APP_PORT}/`);
-  await cdp.eval(`(()=>{try{localStorage.setItem('cs2d_viewmode','top');localStorage.setItem('cs2d_fog','1')}catch(e){}return true})()`);
+  await cdp.eval(`(()=>{try{localStorage.setItem('cs2d_viewmode','top');localStorage.setItem('cs2d_fog','1');window.__cs2dProf=true}catch(e){}return true})()`);
   const bodyLen = await cdp.eval(`document.body ? document.body.innerHTML.length : -1`);
   pass('body html length: ' + bodyLen);
   let booted = false;

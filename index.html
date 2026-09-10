@@ -105,18 +105,18 @@
         <section class="glass menu-col modes-col">
           <h2 class="menu-sec">选 择 模 式</h2>
           <div id="modeSel" class="mode-list">
-            <button class="mode-card sel" data-mode="classic"><b>经典爆破</b><small>5v5 拆包</small></button>
-            <button class="mode-card" data-mode="career"><b>生涯模式</b><small>个人 + 战队</small></button>
-            <button class="mode-card" data-mode="manager"><b>电竞经理</b><small>管理 + 实机观战</small></button>
-            <button class="mode-card" data-mode="cyber"><b>赛博斗蛐蛐</b><small>下注观战</small></button>
+            <button class="mode-card sel" data-mode="classic"><svg class="mc-ic"><use href="assets/icons.svg#ic-bomb"/></svg><b>经典爆破</b><small>5v5 拆包</small></button>
+            <button class="mode-card" data-mode="career"><svg class="mc-ic"><use href="assets/icons.svg#ic-star"/></svg><b>生涯模式</b><small>个人 + 战队</small></button>
+            <button class="mode-card" data-mode="manager"><svg class="mc-ic"><use href="assets/icons.svg#ic-gear"/></svg><b>电竞经理</b><small>管理 + 实机观战</small></button>
+            <button class="mode-card" data-mode="cyber"><svg class="mc-ic"><use href="assets/icons.svg#ic-coin"/></svg><b>赛博斗蛐蛐</b><small>下注观战</small></button>
             <details class="mode-more" id="modeMore">
               <summary>娱乐模式</summary>
               <div class="mode-more-grid">
-                <button class="mode-card" data-mode="retake"><b>回防模式</b><small>CT 回防拆弹</small></button>
-                <button class="mode-card" data-mode="duel"><b>单挑模式</b><small>1v1 MR9</small></button>
-                <button class="mode-card" data-mode="major"><b>Major 锦标赛</b><small>48 队冲冠</small></button>
-                <button class="mode-card" data-mode="lan"><b>局域网对战</b><small>双人同图</small></button>
-                <button class="mode-card" data-mode="editor"><b>地图编辑</b><small>绘制自定义图</small></button>
+                <button class="mode-card" data-mode="retake"><svg class="mc-ic"><use href="assets/icons.svg#ic-shield"/></svg><b>回防模式</b><small>CT 回防拆弹</small></button>
+                <button class="mode-card" data-mode="duel"><svg class="mc-ic"><use href="assets/icons.svg#ic-knife-w"/></svg><b>单挑模式</b><small>1v1 MR9</small></button>
+                <button class="mode-card" data-mode="major"><svg class="mc-ic"><use href="assets/icons.svg#ic-headshot"/></svg><b>Major 锦标赛</b><small>48 队冲冠</small></button>
+                <button class="mode-card" data-mode="lan"><svg class="mc-ic"><use href="assets/icons.svg#ic-volume"/></svg><b>局域网对战</b><small>双人同图</small></button>
+                <button class="mode-card" data-mode="editor"><svg class="mc-ic"><use href="assets/icons.svg#ic-map"/></svg><b>地图编辑</b><small>绘制自定义图</small></button>
               </div>
             </details>
           </div>
@@ -267,13 +267,16 @@
           <label>视角</label>
           <div class="set-btns" id="viewModeSel">
             <button class="set-btn" data-mode="top">俯视</button>
-            <button class="set-btn" data-mode="fps">第一人称</button>
           </div>
         </div>
         <div class="set-row">
           <label>鼠标灵敏度</label>
           <input type="range" id="fpsSens" min="0.5" max="5" step="0.25">
           <span id="fpsSensVal"></span>
+        </div>
+        <div class="set-row">
+          <label>HUD 大小</label>
+          <input type="range" id="hudScale" min="0.8" max="1.3" step="0.05">
         </div>
         <div class="set-row">
           <label>垂直灵敏度</label>
@@ -328,6 +331,7 @@
       <div class="row lan-actions">
         <button class="btn" id="lanHostBtn">创建房间</button>
         <button class="btn" id="lanJoinBtn">加入房间</button>
+        <button class="btn" id="lanSpectateBtn">以观战身份加入</button>
         <button class="btn primary" id="lanStartBtn" disabled>等待玩家</button>
       </div>
       <div id="lanStatus" class="lan-status">请创建房间或输入房间码加入</div>
