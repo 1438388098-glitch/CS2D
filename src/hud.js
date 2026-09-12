@@ -11,6 +11,7 @@ import { lowHpVignette, drawLowHpVignette, lowHpPulse, drawLowHpPulse, killFlash
 import { activePings, drawMinimapPings } from './ping-fx.js';
 import { crosshairStyle, crosshairColorCss, CROSSHAIR_DEFAULTS } from './crosshair-prefs.js';
 import { bombPulseAlpha, drawBombPulse } from './c4-pulse-fx.js';
+import { clutchInfo } from './clutch-fx.js';
 import { damageArc, drawDamageArc, HIT_ARC_DURATION } from './damage-fx.js';
 
 let ctx = null;
@@ -335,6 +336,13 @@ export function renderMinimap(game) {
       mctx.fill();
       mctx.stroke();
       mctx.restore();
+      // 持包者呼吸点：被看见的持包人在小地图上高亮（炸点未下时全队读包位）
+      if (e.hasBomb && !(game.bomb && game.bomb.planted)) {
+        mctx.fillStyle = Math.sin(now / 200) > 0 ? 'rgba(255,184,77,0.95)' : 'rgba(255,184,77,0.4)';
+        mctx.beginPath();
+        mctx.arc(ox + e.x * s, oy + e.y * s, 6.5, 0, Math.PI * 2);
+        mctx.fill();
+      }
     }
   }
 
@@ -751,6 +759,21 @@ export function renderHud(game) {
   // 2D 击杀屏幕边缘白色闪光（candidate-304）：左右下三边 0.35s 内从 1 衰减到 0
   if (game.killFlashT > 0) {
     drawKillFlash(ctx, w2, h2, killFlash(game.killFlashT));
+  }
+  // 残局 1vN 指示：玩家为队内最后一人且敌方 ≥2 人存活（candidate-508）
+  const clutch = clutchInfo(game);
+  if (clutch) {
+    ctx.save();
+    ctx.font = "800 20px 'Microsoft YaHei','Segoe UI',sans-serif";
+    ctx.textAlign = 'center';
+    ctx.lineJoin = 'round';
+    ctx.lineWidth = 5;
+    ctx.strokeStyle = 'rgba(0,0,0,0.75)';
+    const cyText = h2 * 0.3;
+    ctx.strokeText(clutch.label, w2 / 2, cyText);
+    ctx.fillStyle = '#ffd34d';
+    ctx.fillText(clutch.label, w2 / 2, cyText);
+    ctx.restore();
   }
   // C4 终局红脉冲：最后 10s 边缘红晕随蜂鸣节拍呼吸（candidate-506）
   if (game.bomb && game.bomb.planted && game.state === 'LIVE' && (game.bomb.timer || 0) < 10) {
