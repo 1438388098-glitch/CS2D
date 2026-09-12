@@ -4,7 +4,7 @@ import {createEntity, weaponDef, defaultPistol} from './entities.js';
 import {fireWeapon, finishReload, applyDamage} from './combat.js';
 import {setupMatchEntities, startRound, spawnParticle, setCustomBotsUpdater, endRound} from './game.js';
 import {TILE, WEAPONS, ROUND} from './config.js';
-import { createBuilder, buildForge, buildAtrium } from './map-gen.js';
+import { createBuilder, buildForge, buildAtrium, buildHarbor } from './map-gen.js';
 import {hellMix} from './ai/tactics.js';
 import {ctx, seedWorld} from './ctx.js';
 import {clamp, rand, angNorm} from './utils.js';
@@ -1401,6 +1401,15 @@ registerMap({
   tile: 16,
   tagline: 'A 观景长廊 · B 地下档案室 · 中路穹顶转点',
   rows: buildAtrium().rows(),
+  category: 'bomb5v5'
+});
+registerMap({
+  id: 'harbor',
+  name: '废弃港湾',
+  accent: '#4da6ff',
+  tile: 16,
+  tagline: 'A 上层栈桥 · B 下层船坞 · 三横三纵货港通道',
+  rows: buildHarbor().rows(),
   category: 'bomb5v5'
 });
 

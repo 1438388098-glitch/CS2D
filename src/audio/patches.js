@@ -331,6 +331,22 @@ export function buildAmbient(ac, mapId) {
     h.connect(hg);
     hg.connect(volG);
     nodes.push(extra, eg, h, hg);
+  } else if (mapId === 'harbor') {
+    // 海港：湿冷海风（中频带通）+ 慢涌浪起伏，偶有低沉汽笛衬底
+    lp.type = 'bandpass';
+    lp.frequency.value = 900;
+    lp.Q.value = 0.55;
+    volG.gain.value = 0.13;
+    lfo.frequency.value = 1 / 9;
+    lfoG.gain.value = 0.05;
+    extra = ac.createOscillator();
+    extra.type = 'sine';
+    extra.frequency.value = 62;
+    const eg2 = ac.createGain();
+    eg2.gain.value = 0.035;
+    extra.connect(eg2);
+    eg2.connect(volG);
+    nodes.push(extra, eg2);
   } else { // dust2 风
     lp.type = 'lowpass';
     lp.frequency.value = 500;

@@ -107,6 +107,7 @@ export const MAP_CT_REACT = {
   dust2: 0.6,
   arctic: 0.5,
   metro: 0.55,
+  harbor: 0.5,
   forge: 0.5,
   atrium: 0.52,
   'foundry-port': 0.5,
