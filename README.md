@@ -2,6 +2,8 @@
 
 模块化 HTML5 5v5 战术射击游戏（ES Modules，零依赖）。顶部视角 CS，含 A/B 点爆破模式、经济系统、投掷物、AI 人机、多地图。
 
+> 参与开发前先读 [CONTRIBUTING.md](CONTRIBUTING.md)（铁律与流程）与 [docs/ADR/](docs/ADR/)（关键决策）；版本历史见 [CHANGELOG.md](CHANGELOG.md)，推送后按 [docs/PLAYTEST.md](docs/PLAYTEST.md) 验收。
+
 ## 经济系统（CS2 规则）
 
 - 起始 $800，上限 $16,000；半场换边时经济重置为 $800。

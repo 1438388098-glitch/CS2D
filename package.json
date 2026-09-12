@@ -1,6 +1,6 @@
 {
   "name": "cs2d",
-  "version": "2.0.0",
+  "version": "2.1.0",
   "description": "CS2D · 平面反恐精英 —— 模块化 5v5 战术射击",
   "type": "module",
   "scripts": {
