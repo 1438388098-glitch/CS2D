@@ -28,8 +28,7 @@ const P = { dead: false, team: 'ct' };
 }
 {
   const g = mkGame(P, [P, { team: 't', dead: true }, { team: 't', dead: false }]);
-  const c = clutchInfo(g);
-  assert.ok(c && c.vs === 1, 'dead enemies not counted');
+  assert.equal(clutchInfo(g), null, 'dead enemies not counted -> 1v1 is null');
   assert.equal(clutchInfo(null), null, 'null game safe');
 }
 
