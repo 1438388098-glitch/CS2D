@@ -16,6 +16,7 @@ import {stepCycle, stepDust, drawStepFx, DUST_PER_STEP} from './anim-fx.js';
 import {impactMarksAt, drawImpact} from './impact-fx.js';
 import {weatherKind, weatherParticles, drawWeather, MAX_PARTICLES as WEATHER_MAX_PARTICLES} from './weather-fx.js';
 import {themeWeatherOf} from './textures.js';
+import {emberSpec, goldStreakSpec} from './burst-fx.js';
 import {enhancedBoomSpec, drawEnhancedBoom} from './boom-fx.js';
 import {visibleShadows, drawShadows} from './shadow-fx.js';
 import {killLabel, drawKillLabel, KILL_LABEL_DUR} from './killcam-fx.js';
@@ -915,6 +916,22 @@ function drawEntities(game) {
       drawStepFx(ctx, e, stFx);
     }
     if (prof) stepMs += performance.now() - stepT;
+    if (e.muzzleT > 0) {
+      // 枪口瞬时光照：开火帧在枪口下方叠暖色泛光（lighter），暗色地面强化开火感知
+      const ml = clamp(e.muzzleT / 0.06, 0, 1);
+      const lx = ex + Math.cos(ea) * 10;
+      const ly = ey + Math.sin(ea) * 10;
+      ctx.save();
+      ctx.globalCompositeOperation = 'lighter';
+      const g = ctx.createRadialGradient(lx, ly, 2, lx, ly, 34);
+      g.addColorStop(0, 'rgba(255,190,110,' + (0.4 * ml).toFixed(3) + ')');
+      g.addColorStop(1, 'rgba(255,150,60,0)');
+      ctx.fillStyle = g;
+      ctx.beginPath();
+      ctx.arc(lx, ly, 34, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+    }
     const isP = e === game.player;
     const darkCol = e.team === 'ct' ? '#4d9bff' : '#ffa03d';
     const bodyT = prof ? performance.now() : 0;
@@ -1193,6 +1210,33 @@ function drawParticles(game) {
       ctx.beginPath();
       ctx.arc(p.x, p.y, p.size * (1 - p.life * 0.3), 0, Math.PI * 2);
       ctx.fill();
+      ctx.globalAlpha = 1;
+    } else if (p.kind === 'gspark') {
+      // 爆头金色条纹：与 spark 同构但金色更亮，加色渲染
+      const st = goldStreakSpec(p);
+      const tx = p.x - st.ux * st.len, ty = p.y - st.uy * st.len;
+      ctx.globalCompositeOperation = 'lighter';
+      ctx.lineCap = 'round';
+      ctx.strokeStyle = 'rgba(255,190,60,' + (a * 0.4) + ')';
+      ctx.lineWidth = 2.4;
+      ctx.beginPath();
+      ctx.moveTo(p.x, p.y);
+      ctx.lineTo(tx, ty);
+      ctx.stroke();
+      ctx.strokeStyle = 'rgba(255,232,150,' + a + ')';
+      ctx.lineWidth = 1;
+      ctx.stroke();
+      ctx.globalCompositeOperation = 'source-over';
+    } else if (p.kind === 'ember') {
+      // 爆炸余烬：缓升火星，相位闪烁，橙黄渐入暗红后熄灭
+      const es = emberSpec(p);
+      ctx.globalCompositeOperation = 'lighter';
+      ctx.globalAlpha = clamp(es.alpha, 0, 1);
+      ctx.fillStyle = es.color + '1)';
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, es.r, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.globalCompositeOperation = 'source-over';
       ctx.globalAlpha = 1;
     } else if (p.kind === 'boom') {
       drawEnhancedBoom(ctx, enhancedBoomSpec(p));

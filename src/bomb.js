@@ -7,6 +7,7 @@ import {endRound, spawnParticle} from './game.js';
 import {ctx} from './ctx.js';
 import {rand} from './utils.js';
 import {addPing} from './ping-fx.js';
+import {spawnEmbers} from './burst-fx.js';
 
 const emit = (evt, p) => ctx.bus.emit(evt, p);
 
@@ -111,6 +112,8 @@ export function explodeBomb(game) {
     const a2 = rand() * Math.PI * 2;
     spawnParticle(game, { kind: 'smokep', x: b.x + Math.cos(a2) * 40, y: b.y + Math.sin(a2) * 40, vx: Math.cos(a2) * rand(30, 120), vy: Math.sin(a2) * rand(30, 120), life: rand(1.2, 2.4), size: rand(6, 14) });
   }
+  // 爆炸余烬：火星缓升 ~2s，延长高光时刻
+  spawnEmbers(game, spawnParticle, b.x, b.y, 14, 46);
   game._bombExploding = true;
   for (const e of game.entities) {
     if (e.dead) continue;

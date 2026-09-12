@@ -7,6 +7,7 @@ import {clamp, rand, angDiff, viewCap} from './utils.js';
 import {report, MSG} from './info.js';
 
 import {endRound, spawnParticle} from './game.js';
+import {spawnGoldBurst, spawnEmbers} from './burst-fx.js';
 import {DEATH_MARKER_LIFE, TRACER_LIFE} from './render.js';
 import {KILL_LABEL_DUR} from './killcam-fx.js';
 import {HIT_ARC_DURATION} from './damage-fx.js';
@@ -242,6 +243,7 @@ function fireRay(e, game, ang, w, dmg, isPellet) {
     const hitLen = Math.max(4, best.t - Math.sqrt(Math.max(0, hit.rad * hit.rad - best.perp * best.perp)));
     const hx = ox + cos * hitLen, hy = oy + sin * hitLen;
     spawnBlood(hx, hy, ang, head, game);
+    if (head) spawnGoldBurst(game, spawnParticle, hx, hy, ang);
     game.tracers.push({ x1: ox, y1: oy, x2: hx, y2: hy, life: TRACER_LIFE, kind: w.kind, team: e.team });
     addDecal(game, hx, hy, 'hole', ang);
     recordImpact(game, hx, hy);
@@ -341,6 +343,7 @@ export function explodeBarrel(game, b, shooter) {
     spawnParticle(game, { kind: 'boom', x: b.x, y: b.y, vx: 0, vy: 0, life: 0.5, size: 160 });
     spawnParticle(game, { kind: 'fire', x: b.x + rand(-40, 40), y: b.y + rand(-40, 40), vx: rand(-60, 60), vy: rand(-80, 0), life: 0.6, size: 18 });
   }
+  spawnEmbers(game, spawnParticle, b.x, b.y, 6, 30);
   addDecal(game, b.x, b.y, 'scorch', 0);
   for (const o of game.entities) {
     if (o.dead) continue;
