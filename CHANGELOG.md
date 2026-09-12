@@ -10,7 +10,7 @@ v2.1.0 之前的密集迭代历史见 `git log`（commit 均为 conventional 风
 - **经理时间流**：每场 +1 天日历、月度发薪（欠薪扣信任）、12 月圣诞休赛期；存档迁移链 VERSION 1→4
 - **前端表现四轮迭代**：粒子色值修复 + 加色火花条纹/受击白闪/伤害数字分级/全员行走起伏；C4 蜂鸣同步警报环、手雷弹体精修、包点战术括号、小地图事件 ping；深水焦散、尘埃加色、官方图 2D 天气身份（dust2 沙霾 / canal 雾 / blast 烟霭）；闪光弹白屏修复（径向过曝渐变，原实现不可见）+ 击杀信息退场动画 + 名牌血条 + killfeed 武器图标 + 资金增减浮动提示
 - **服务器**：房间名消毒、二次开房拒绝、房间数上限、LAN 观战角色、帧载荷零拷贝、ETag/长缓存、`server.config.json` 热重载、对局结果上报（matchReport → `logs/matches.jsonl`，`node scripts/match-stats.mjs` 汇总）
-- **工程**：自研测试 runner（217+ 文件）、架构环守卫、平衡采样（`npm run balance`）与 soak 压测（`npm run soak`）、CDP 实机 60fps 冒烟、GitHub Actions CI、nightly 重验证工作流
+- **工程**：自研测试 runner（217+ 文件）、架构环守卫、平衡采样（`npm run balance`）与 soak 压测（`npm run soak`）、CDP 实机 60fps 冒烟、GitHub Actions CI
 
 ### 修复
 - HLTV 集成的 9 个审查问题（动态锚点未接入 / KAST 恒定 / 杯赛决赛限制失效 / 降级公式笔误 / 实机回合映射失效 / Top20 延迟发布 / 荣誉跨年膨胀 / 颁奖空引用风险 / 字段未声明）
