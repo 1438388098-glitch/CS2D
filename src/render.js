@@ -10,7 +10,7 @@ import {renderFogLayer} from './fog-layer.js';
 import {drawAmbientDust} from './ambient-fx.js';
 import {weaponSwitchPop, muzzleSmoke, drawMuzzleSmoke, drawWeaponPop, MUZZLE_SMOKE_LIFE} from './weapon-fx.js';
 import {nadeTrajectory, drawNadeTrajectory, NADE_SPEED, NADE_ORIGIN_DIST} from './nade-fx.js';
-import {drawRipple, rippleRing, RIPPLE_LIFE} from './water-fx.js';
+import {drawRipple, rippleRing, RIPPLE_LIFE, addRipple} from './water-fx.js';
 import {smokeDissolveTrail, drawSmokeTrail, SMOKE_DISSOLVE_LIFE} from './smoke-fx.js';
 import {stepCycle, stepDust, drawStepFx, DUST_PER_STEP} from './anim-fx.js';
 import {impactMarksAt, drawImpact} from './impact-fx.js';
@@ -205,7 +205,33 @@ function drawImpacts(game) {
   for (const m of marks) drawImpact(ctx, m);
 }
 
-// 天气层：官方图优先 THEMES.weather 数据（dust2 沙霾/canal 雾/blast 烟霭/arctic 雪），
+// 雨天水面涟漪：rain 图每隔 ~0.16s 在视口附近随机水面瓦片生成一圈涟漪（渲染层纯装饰，
+// 复用 water-fx 的 addRipple 通路与容量上限；随机走 utils.rand，仅表现层）
+function spawnRainRipples(game) {
+  const now = performance.now() / 1000;
+  if (now - _rainRippleAt < 0.16) return;
+  _rainRippleAt = now;
+  if (!_waterTiles || !_waterTiles.length) return;
+  const T = mapTile();
+  const z = game.zoom || 1;
+  const vw = (game.canvasW || 0) / z;
+  const vh = (game.canvasH || 0) / z;
+  const x0 = (game.camX || 0) - vw / 2 - 40;
+  const y0 = (game.camY || 0) - vh / 2 - 40;
+  const x1 = (game.camX || 0) + vw / 2 + 40;
+  const y1 = (game.camY || 0) + vh / 2 + 40;
+  // 随机取一瓦片，最多重试 4 次落进视口附近
+  for (let tries = 0; tries < 4; tries++) {
+    const [gx, gy] = _waterTiles[Math.floor(rand(0, _waterTiles.length))];
+    const wx = gx * T + T / 2;
+    const wy = gy * T + T / 2;
+    if (wx < x0 || wx > x1 || wy < y0 || wy > y1) continue;
+    addRipple(game, wx + rand(-T / 3, T / 3), wy + rand(-T / 3, T / 3));
+    return;
+  }
+}
+
+// 天气层：官方图优先 THEMES.weather 数据（dust2 沙霾/canal 雾/blast 烟霭/arctic 雪/harbor 雨），
 // 自定义图退回 id 关键词匹配（rain/snow）。粒子密度随主题 density 缩放。
 function drawWeatherLayer(game) {
   const map = getMap();
@@ -213,6 +239,7 @@ function drawWeatherLayer(game) {
   const themeW = themeWeatherOf(map.id);
   const kind = themeW ? themeW.kind : weatherKind(map.id);
   if (!kind) return;
+  if (kind === 'rain') spawnRainRipples(game);
   const z = game.zoom || 1;
   const vw = game.canvasW / z;
   const vh = game.canvasH / z;
@@ -335,6 +362,8 @@ function drawDmgPops2D(game) {
 let _waterGrid = null;
 let _waterShallow = false;
 let _waterDeep = false;
+let _waterTiles = null; // 水瓦片中心坐标缓存 [['x,y' 世界坐标]，雨天涟漪取材用]
+let _rainRippleAt = 0;
 // 深水焦散规格（纯函数，供测试断言）：暗斑在瓦片内慢速游移，透明度缓慢呼吸
 export function deepCausticSpec(seed, now) {
   const ph = seed * 1.7;
@@ -353,11 +382,14 @@ function drawWaterOverlay(game) {
     _waterGrid = grid;
     _waterShallow = false;
     _waterDeep = false;
-    outer: for (const row of grid) {
-      for (const c of row) {
-        if (c === '~') _waterShallow = true;
-        else if (c === '≈') _waterDeep = true;
-        if (_waterShallow && _waterDeep) break outer;
+    _waterTiles = [];
+    outer: for (let gy = 0; gy < grid.length; gy++) {
+      const row = grid[gy];
+      for (let gx = 0; gx < row.length; gx++) {
+        const c = row[gx];
+        if (c === '~') { _waterShallow = true; _waterTiles.push([gx, gy]); }
+        else if (c === '≈') { _waterDeep = true; _waterTiles.push([gx, gy]); }
+        if (_waterShallow && _waterDeep && _waterTiles.length > 4000) break outer;
       }
     }
   }

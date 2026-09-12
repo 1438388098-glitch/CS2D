@@ -665,6 +665,15 @@ function updateParticles(game, dt) {
           life: 0.32,
           size: rand(1.5, 3)
         });
+        // 弹壳落地残留：复用 impacts 渲染通路（10s 自寿命，*impacts 自上限），黄铜小点留痕
+        if (!game.impacts) game.impacts = [];
+        game.impacts.push({
+          x: shell.x,
+          y: shell.y,
+          tileType: '.',
+          t0: game.time || 0,
+          seed: ((Math.floor(shell.x) * 73856093 ^ Math.floor(shell.y) * 19349663) >>> 0) || 1
+        });
       });
     }
     pa.vx *= Math.max(0, 1 - 3 * dt);
