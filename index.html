@@ -308,6 +308,33 @@
           <span id="dprSelVal"></span>
         </div>
       </div>
+      <div class="settings-sec">
+        <div class="sec-head">准星</div>
+        <div class="set-row">
+          <label>颜色</label>
+          <div class="set-btns" id="xhairColors"></div>
+        </div>
+        <div class="set-row">
+          <label>长度</label>
+          <input type="range" id="xhairLen" min="2" max="16" step="1">
+          <span id="xhairLenVal"></span>
+        </div>
+        <div class="set-row">
+          <label>间隙</label>
+          <input type="range" id="xhairGap" min="0" max="14" step="1">
+          <span id="xhairGapVal"></span>
+        </div>
+        <div class="set-row">
+          <label>粗细</label>
+          <input type="range" id="xhairThickness" min="1" max="3.5" step="0.25">
+          <span id="xhairThicknessVal"></span>
+        </div>
+        <div class="set-row">
+          <label>中心点</label>
+          <input type="checkbox" id="xhairDot">
+        </div>
+        <div class="row"><button class="btn small" id="xhairReset">恢复默认准星</button></div>
+      </div>
       <button class="btn primary" id="settingsClose" style="margin-top:14px">返 回</button>
     </div>
   </div>

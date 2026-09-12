@@ -6,6 +6,7 @@ import { readAudioPrefs, writeAudioPrefs } from './audio/prefs.js';
 import { nextRoundBudget } from './economy.js';
 import { formatPerfMonitor } from './perf-monitor.js';
 import { weaponIconByName } from './ui-dom.js';
+import { CROSSHAIR_COLORS, crosshairStyle, setCrosshairPrefs, resetCrosshairPrefs } from './crosshair-prefs.js';
 
 let doc = null;
 let canvas = null;
@@ -1292,6 +1293,38 @@ function bindSettings() {
       applyHudScale(v);
       try { localStorage.setItem('cs2d_hud_scale', String(v)); } catch (err) { /* 无存储环境 */ }
     });
+  }
+  // 准星自定义：色板 + 长度/间隙/粗细滑杆 + 中心点开关（即时生效，crosshair-prefs 持久化）
+  const xhColorsEl = el('xhairColors');
+  if (xhColorsEl) {
+    for (const c of CROSSHAIR_COLORS) {
+      const b = doc.createElement('button');
+      b.className = 'set-btn xhair-swatch';
+      b.dataset.c = c;
+      b.style.background = c;
+      b.title = c;
+      b.onclick = () => setCrosshairPrefs({ color: c });
+      xhColorsEl.appendChild(b);
+    }
+    const lenEl = el('xhairLen'), lenVal = el('xhairLenVal');
+    const gapEl = el('xhairGap'), gapVal = el('xhairGapVal');
+    const thEl = el('xhairThickness'), thVal = el('xhairThicknessVal');
+    const dotEl = el('xhairDot');
+    const syncXhair = () => {
+      const st = crosshairStyle();
+      lenEl.value = st.len; lenVal.textContent = st.len;
+      gapEl.value = st.gap; gapVal.textContent = st.gap;
+      thEl.value = st.thickness; thVal.textContent = st.thickness;
+      dotEl.checked = st.dot;
+      for (const b of xhColorsEl.children) b.classList.toggle('sel', b.dataset.c === st.color);
+    };
+    syncXhair();
+    lenEl.addEventListener('input', () => { setCrosshairPrefs({ len: parseFloat(lenEl.value) }); lenVal.textContent = crosshairStyle().len; });
+    gapEl.addEventListener('input', () => { setCrosshairPrefs({ gap: parseFloat(gapEl.value) }); gapVal.textContent = crosshairStyle().gap; });
+    thEl.addEventListener('input', () => { setCrosshairPrefs({ thickness: parseFloat(thEl.value) }); thVal.textContent = crosshairStyle().thickness; });
+    dotEl.addEventListener('change', () => setCrosshairPrefs({ dot: dotEl.checked }));
+    const xhReset = el('xhairReset');
+    if (xhReset) xhReset.onclick = () => { resetCrosshairPrefs(); syncXhair(); };
   }
   // 垂直灵敏度滑杆（默认与水平灵敏度一致，独立存档）
   const sensYEl = el('fpsSensY');

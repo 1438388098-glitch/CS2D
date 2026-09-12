@@ -267,6 +267,8 @@ td.money{color:var(--gold);font-family:var(--f-num)}
 .set-row{display:flex;justify-content:space-between;align-items:center;margin:7px 0;font-size:13px;color:var(--txt-2);flex-wrap:wrap;gap:6px}
 .set-row label{color:var(--txt-2)}
 .set-btns{display:flex;gap:6px}
+.xhair-swatch{width:24px;height:24px;padding:0;border-radius:5px}
+.xhair-swatch.sel{border-color:#fff;box-shadow:0 0 0 1px rgba(0,0,0,.6) inset}
 .set-btn{padding:8px 12px;text-align:center;font-size:13px;border-radius:var(--r-m);background:var(--bg-2);border:1px solid var(--line-2);color:var(--txt-1);cursor:pointer;font-family:var(--f-cn);transition:all var(--dur-s) var(--ease)}
 .set-btn:hover{border-color:var(--accent);color:#fff}
 .set-btn.sel{border-color:var(--accent);color:#ffb066;font-weight:700}

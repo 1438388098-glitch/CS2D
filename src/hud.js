@@ -9,6 +9,7 @@ import { fogEnabled } from './fog.js';
 import { castAimRay } from './fps-laser.js';
 import { lowHpVignette, drawLowHpVignette, lowHpPulse, drawLowHpPulse, killFlash, drawKillFlash } from './screen-fx.js';
 import { activePings, drawMinimapPings } from './ping-fx.js';
+import { crosshairStyle, crosshairColorCss, CROSSHAIR_DEFAULTS } from './crosshair-prefs.js';
 import { damageArc, drawDamageArc, HIT_ARC_DURATION } from './damage-fx.js';
 
 let ctx = null;
@@ -747,6 +748,9 @@ export function renderCrosshair(game) {
   const ch = ctx.canvas.height / dpr;
   const p = game.player;
   if (!p || p.dead) return;
+  const xh = crosshairStyle();
+  // 自定义颜色：默认白时保留敌方高亮/空弹红语义；一旦用户选色则以自定义色为准（反馈色仍优先）
+  const customCore = xh.color === CROSSHAIR_DEFAULTS.color ? null : crosshairColorCss(0.85);
   if (game.viewMode === 'fps') {
     // FPS 准星恒在屏幕中心：3D 视角不显示独立鼠标，朝向由指针锁定的 movementX/Y 驱动；
     // 准星中心即射击线方向
@@ -770,19 +774,19 @@ export function renderCrosshair(game) {
     if (wd && wd.kind === 'sniper' && p.scoped) sp = 0.15;
     const rDeg = wd ? p.recoil * 0.6 : 0;
     const spreadPx = crosshairSpreadPx(cw, game.fov, sp, rDeg);
-    const baseGap = wd && wd.kind === 'shotgun' ? 12 : 6;
+    const baseGap = wd && wd.kind === 'shotgun' ? 12 : xh.gap;
     let gap = crosshairGapMods(game, p, baseGap + clamp(spreadPx, 0, 260) + (p.scoped ? 2 : 0));
     // D4 命中/开火十字反馈：命中显著扩散+橙红变色，未命中轻微扩散颜色不变
     const fb = crosshairFeedbackFor(game, p);
     if (fb) gap *= fb.spreadMul;
-    const len = wd && wd.kind === 'sniper' ? 4 : 7;
+    const len = wd && wd.kind === 'sniper' ? Math.min(4, xh.len) : xh.len;
     const reloading = !!p.reloading;
     if (reloading) gap = baseGap;
     const empty = wd && wd.mag > 0 && ammoFor(p) <= 0;
     ctx.save();
     ctx.globalAlpha = reloading ? 0.35 : 1;
     ctx.strokeStyle = 'rgba(0,0,0,0.6)';
-    ctx.lineWidth = wd && wd.kind === 'shotgun' ? 4.5 : 3.5;
+    ctx.lineWidth = wd && wd.kind === 'shotgun' ? 4.5 : xh.thickness + 2;
     ctx.beginPath();
     ctx.moveTo(mx - gap - len, my); ctx.lineTo(mx - gap, my);
     ctx.moveTo(mx + gap, my); ctx.lineTo(mx + gap + len, my);
@@ -790,8 +794,8 @@ export function renderCrosshair(game) {
     ctx.moveTo(mx, my + gap); ctx.lineTo(mx, my + gap + len);
     ctx.stroke();
     const fbColor = fb && fb.color ? fb.color : null;
-    ctx.strokeStyle = fbColor || (empty ? 'rgba(255,70,60,0.95)' : (p.aimTarget ? 'rgba(255,80,80,0.9)' : 'rgba(255,255,255,0.85)'));
-    ctx.lineWidth = 1.5;
+    ctx.strokeStyle = fbColor || (empty ? 'rgba(255,70,60,0.95)' : (customCore || (p.aimTarget ? 'rgba(255,80,80,0.9)' : 'rgba(255,255,255,0.85)')));
+    ctx.lineWidth = xh.thickness;
     ctx.beginPath();
     ctx.moveTo(mx - gap - len, my); ctx.lineTo(mx - gap, my);
     ctx.moveTo(mx + gap, my); ctx.lineTo(mx + gap + len, my);
@@ -806,10 +810,12 @@ export function renderCrosshair(game) {
       ctx.fillRect(mx - 1, my - hg - 2, 2, 4);
       ctx.fillRect(mx - 1, my + hg - 2, 2, 4);
     }
-    ctx.fillStyle = 'rgba(0,0,0,0.6)';
-    ctx.fillRect(mx - 2, my - 2, 4, 4);
-    ctx.fillStyle = 'rgba(255,255,255,0.9)';
-    ctx.fillRect(mx - 1, my - 1, 2, 2);
+    if (xh.dot) {
+      ctx.fillStyle = 'rgba(0,0,0,0.6)';
+      ctx.fillRect(mx - 2, my - 2, 4, 4);
+      ctx.fillStyle = 'rgba(255,255,255,0.9)';
+      ctx.fillRect(mx - 1, my - 1, 2, 2);
+    }
     // D4 准星目标信息：名称 + 血条
     const tgt = p.aimTarget;
     if (tgt && !tgt.dead) {
@@ -843,19 +849,19 @@ export function renderCrosshair(game) {
   const py = ch / 2 + (p.y - (game.camY || 0)) * (game.zoom || 1);
   const dist = Math.hypot(mx - px, my - py) || 1;
   const spreadPx = Math.tan(((spread + recoilDeg) * Math.PI) / 180) * dist;
-  let gap = crosshairGapMods(game, p, 6 + clamp(spreadPx, 0, 260) + (p.scoped ? 2 : 0));
-  const len = 7;
+  let gap = crosshairGapMods(game, p, xh.gap + clamp(spreadPx, 0, 260) + (p.scoped ? 2 : 0));
+  const len = xh.len;
   ctx.save();
   ctx.strokeStyle = 'rgba(0,0,0,0.6)';
-  ctx.lineWidth = 3.5;
+  ctx.lineWidth = xh.thickness + 2;
   ctx.beginPath();
   ctx.moveTo(mx - gap - len, my); ctx.lineTo(mx - gap, my);
   ctx.moveTo(mx + gap, my); ctx.lineTo(mx + gap + len, my);
   ctx.moveTo(mx, my - gap - len); ctx.lineTo(mx, my - gap);
   ctx.moveTo(mx, my + gap); ctx.lineTo(mx, my + gap + len);
   ctx.stroke();
-  ctx.strokeStyle = p.aimTarget ? 'rgba(255,80,80,0.9)' : 'rgba(255,255,255,0.85)';
-  ctx.lineWidth = 1.5;
+  ctx.strokeStyle = customCore || (p.aimTarget ? 'rgba(255,80,80,0.9)' : 'rgba(255,255,255,0.85)');
+  ctx.lineWidth = xh.thickness;
   ctx.beginPath();
   ctx.moveTo(mx - gap - len, my); ctx.lineTo(mx - gap, my);
   ctx.moveTo(mx + gap, my); ctx.lineTo(mx + gap + len, my);
@@ -880,9 +886,11 @@ export function renderCrosshair(game) {
     ctx.arc(mx, my, fr, 0, Math.PI * 2);
     ctx.stroke();
   }
-  ctx.fillStyle = 'rgba(0,0,0,0.6)';
-  ctx.fillRect(mx - 2, my - 2, 4, 4);
-  ctx.fillStyle = 'rgba(255,255,255,0.9)';
-  ctx.fillRect(mx - 1, my - 1, 2, 2);
+  if (xh.dot) {
+    ctx.fillStyle = 'rgba(0,0,0,0.6)';
+    ctx.fillRect(mx - 2, my - 2, 4, 4);
+    ctx.fillStyle = customCore ? crosshairColorCss(0.9) : 'rgba(255,255,255,0.9)';
+    ctx.fillRect(mx - 1, my - 1, 2, 2);
+  }
   ctx.restore();
 }
