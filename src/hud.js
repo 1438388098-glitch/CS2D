@@ -10,6 +10,7 @@ import { castAimRay } from './fps-laser.js';
 import { lowHpVignette, drawLowHpVignette, lowHpPulse, drawLowHpPulse, killFlash, drawKillFlash } from './screen-fx.js';
 import { activePings, drawMinimapPings } from './ping-fx.js';
 import { crosshairStyle, crosshairColorCss, CROSSHAIR_DEFAULTS } from './crosshair-prefs.js';
+import { bombPulseAlpha, drawBombPulse } from './c4-pulse-fx.js';
 import { damageArc, drawDamageArc, HIT_ARC_DURATION } from './damage-fx.js';
 
 let ctx = null;
@@ -374,6 +375,24 @@ export function renderMinimap(game) {
   }
   // 事件 ping：安放/拆除/爆炸在对应位置扩散圆环，帮全队读局势
   drawMinimapPings(mctx, activePings(game.pings, game.time || 0), (wx) => ox + wx * s, (wy) => oy + wy * s);
+  // 阵亡标记：本回合阵亡位置 1.8s 渐隐 ✕（与死亡特效同寿命），敌我分色
+  for (const e of game.entities) {
+    if (!e.dead || !(e.deathT > 0)) continue;
+    const t = Math.min(e.deathT / 1.8, 1);
+    const alpha = t * 0.75;
+    const mx2 = ox + e.x * s;
+    const my2 = oy + e.y * s;
+    const r = 3.2;
+    mctx.save();
+    mctx.globalAlpha = alpha;
+    mctx.strokeStyle = e.team === p?.team ? 'rgba(120,200,255,0.95)' : 'rgba(255,120,90,0.95)';
+    mctx.lineWidth = 1.6;
+    mctx.beginPath();
+    mctx.moveTo(mx2 - r, my2 - r); mctx.lineTo(mx2 + r, my2 + r);
+    mctx.moveTo(mx2 + r, my2 - r); mctx.lineTo(mx2 - r, my2 + r);
+    mctx.stroke();
+    mctx.restore();
+  }
   if (game.bomb && (game.bomb.dropped || game.bomb.planted)) {
     const blink = Math.sin(now / 160) > 0;
     const bx = ox + game.bomb.x * s;
@@ -732,6 +751,10 @@ export function renderHud(game) {
   // 2D 击杀屏幕边缘白色闪光（candidate-304）：左右下三边 0.35s 内从 1 衰减到 0
   if (game.killFlashT > 0) {
     drawKillFlash(ctx, w2, h2, killFlash(game.killFlashT));
+  }
+  // C4 终局红脉冲：最后 10s 边缘红晕随蜂鸣节拍呼吸（candidate-506）
+  if (game.bomb && game.bomb.planted && game.state === 'LIVE' && (game.bomb.timer || 0) < 10) {
+    drawBombPulse(ctx, w2, h2, bombPulseAlpha(game.bomb.timer, game._bombBeepT || 0, performance.now() / 1000));
   }
   ctx.restore();
 }
