@@ -1,5 +1,5 @@
 import { createBuilder } from './map-gen.js';
-import { registerMap } from './registry.js';
+import { registerMap, MODE_MAPS } from './registry.js';
 
 function border(b) {
   for (let x = 0; x < b.w; x++) { b.wall(x, 0); b.wall(x, b.h - 1); }
@@ -229,6 +229,8 @@ export function installChosenFourthMap() {
   const m = chosenFourthMap();
   if (!m) return null;
   registerMap({ id: m.id, name: m.name, accent: m.accent, rows: m.rows, category: 'bomb5v5' });
+  // 进 major/career 竞技轮换：此前只注册不进 MODE_MAPS，装了也轮不到（内容白装）
+  if (!MODE_MAPS.includes(m.id)) MODE_MAPS.push(m.id);
   if (typeof window !== 'undefined' && window.__syncMapCards) window.__syncMapCards();
   return m;
 }

@@ -461,7 +461,7 @@ const BUY_ICON = {
 };
 
 const BUY_CATS = [
-  { label: '手枪', items: [['p250', 'P250', '半自动'], ['deagle', '沙漠之鹰', '大口径半自动']] },
+  { label: '手枪', items: [['p250', 'P250', '半自动'], ['deagle', '沙漠之鹰', '大口径半自动'], ['glock', 'Glock-18', 'T 出生配枪 · 补购'], ['usp', 'USP-S', 'CT 出生配枪 · 补购']] },
   { label: '冲锋枪', items: [['mac10', 'MAC-10', 'T 专用 · 全自动'], ['mp9', 'MP9', 'CT 专用 · 全自动'], ['p90', 'P90', '全自动 · 50 发']] },
   { label: '霰弹枪', items: [['xm', 'XM1014', '8 弹丸 · 近战']] },
   { label: '步枪', items: [['ak', 'AK-47', 'T 专用 · 全自动'], ['m4', 'M4A4', 'CT 专用 · 全自动'], ['famas', 'FAMAS', 'CT 专用 · 中间步枪']] },

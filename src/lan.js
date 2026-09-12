@@ -138,7 +138,10 @@ function connect(gameRef, role, room, name, isReconnect = false) {
         setStatus('连接断开，' + (reconnectAttempts * 3) + ' 秒后自动重连（' + reconnectAttempts + '/3）…');
         reconnectTimer = setTimeout(() => connect(game, role, room, name, true), reconnectDelayMs(reconnectAttempts));
       } else {
-        setStatus(closedByUser ? '局域网连接已关闭' : '局域网连接已断开');
+        const inMatch = game && game.lan && (game.state === 'BUY' || game.state === 'LIVE' || game.state === 'END');
+        setStatus(closedByUser ? '局域网连接已关闭' : (inMatch ? '局域网连接已断开，对局无法继续' : '局域网连接已断开'));
+        // 对局中断线且重连耗尽：给出"返回主菜单"出口，否则玩家被冻结在死局里只剩一行状态文字
+        if (!closedByUser && inMatch) showHostLeftRecovery();
       }
     }
     setConn('');

@@ -22,6 +22,10 @@ function retakeStart(game) {
   const keys = Object.keys(sites).filter((k) => sites[k]);
   const siteKey = keys.length ? keys[Math.floor(rand() * keys.length)] : 'A';
   const site = sites[siteKey] || sites.A || sites.B;
+  if (!site) {
+    // 无包点图（自定义/竞技池外）无法布置已安放的炸弹：明确告知按经典规则运行，不再静默退化
+    emit('toast', { text: '当前地图无包点，回防模式按经典规则进行' });
+  }
   if (site) {
     // 炸弹已 planted 在站点中心；缩短引信，加快回防节奏
     game.bomb = { x: site.cx, y: site.cy, dropped: false, planted: true, site: siteKey, timer: 25, defusing: false, defuseT: 0 };

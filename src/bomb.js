@@ -64,9 +64,9 @@ export function defuseBomb(e, game) {
     if (e.defuseT > 0) {
       e.defuseT = 0;
       if (game.bomb.defusing) game.bomb.defusing = false;
-      // 拆弹中断提示：被击退/脱离范围需重新拆
+      // 拆弹中断提示：被击退/脱离范围需重新拆（beepWarn 专用警示音，区别于倒计时蜂鸣）
       emit('toast', { text: '拆弹被中断！' });
-      emit('sfx', { name: 'beep', vol: 0.5, x: e.x, y: e.y, game });
+      emit('sfx', { name: 'beepWarn', vol: 0.6, x: e.x, y: e.y, game });
     }
     return;
   }
@@ -85,7 +85,8 @@ export function defuseBomb(e, game) {
     e.defuses++;
     addMoney(e, ECONOMY.DEFUSE_MONEY);
     emit('sysfeed', { text: 'Bomb has been defused!' });
-    emit('sfx', { name: 'win', vol: 0.8, x: e.x, y: e.y, game });
+    // bombDefused 专用胜利音（patches 已有音色此前从未触发）；回合结束的 win 音由 endRound 统一播
+    emit('sfx', { name: 'bombDefused', vol: 0.9, x: e.x, y: e.y, game });
     game.lastSound = { x: e.x, y: e.y, t: game.time, radius: 900, conf: 0.6 };
     addPing(game, 'defuse', e.x, e.y);
     endRound(game, 'ct', '拆弹成功', 'defuse');
