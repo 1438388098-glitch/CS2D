@@ -99,6 +99,14 @@ const KIND_CAPS = {
   smoke: SMOKE_MAX_PARTICLES
 };
 
+// 粒子对象池：调用方（render 的天气层）绘制完毕后 weatherRecycle 归还对象，
+// 下帧 weatherParticles 复用，消除每帧 200 个小对象的稳态分配
+const _pPool = [];
+export function weatherRecycle(parts) {
+  if (!Array.isArray(parts)) return;
+  for (let i = 0; i < parts.length; i++) _pPool.push(parts[i]);
+}
+
 // 纯逻辑核心：返回 count 个天气粒子 [{x,y,len,angle,speed,alpha}]。
 // rain 为斜短线（len=线长，angle=相对垂直的倾角，speed 快，x 带风漂移），
 // snow 为小圆点（len=半径，angle 恒 0，speed 慢，x 左右摇摆），
@@ -116,29 +124,48 @@ export function weatherParticles(kind, t, count, w, h, seed) {
   const out = [];
   for (let i = 0; i < n; i++) {
     const q = tbl[i];
+    const o = _pPool.pop() || {};
     if (kind === 'rain') {
       const windX = q.speed * 0.14 * Math.sin(q.angle);
       let x = (q.u * width + now * windX) % width;
       if (x < 0) x += width;
-      const y = (q.v * height + now * q.speed) % height;
-      out.push({ x, y, len: q.len, angle: q.angle, speed: q.speed, alpha: q.alpha });
+      o.x = x;
+      o.y = (q.v * height + now * q.speed) % height;
+      o.len = q.len;
+      o.angle = q.angle;
+      o.speed = q.speed;
+      o.alpha = q.alpha;
     } else if (kind === 'snow') {
       let x = (q.u * width + q.sway * Math.sin(now * q.freq + q.phase)) % width;
       if (x < 0) x += width;
-      const y = (q.v * height + now * q.speed) % height;
-      out.push({ x, y, len: q.len, angle: 0, speed: q.speed, alpha: q.alpha });
+      o.x = x;
+      o.y = (q.v * height + now * q.speed) % height;
+      o.len = q.len;
+      o.angle = 0;
+      o.speed = q.speed;
+      o.alpha = q.alpha;
     } else if (kind === 'mist' || kind === 'smoke') {
       let x = (q.u * width + now * q.speed + q.sway * Math.sin(now * q.freq + q.phase)) % width;
       if (x < 0) x += width;
       let y = (q.v * height - now * q.rise) % height;
       if (y < 0) y += height;
-      out.push({ x, y, len: q.len, angle: 0, speed: q.speed, alpha: q.alpha });
+      o.x = x;
+      o.y = y;
+      o.len = q.len;
+      o.angle = 0;
+      o.speed = q.speed;
+      o.alpha = q.alpha;
     } else {
       let x = (q.u * width + now * q.speed * Math.sin(q.angle)) % width;
       if (x < 0) x += width;
-      const y = (q.v * height + now * q.speed * Math.cos(q.angle)) % height;
-      out.push({ x, y, len: q.len, angle: q.angle, speed: q.speed, alpha: q.alpha });
+      o.x = x;
+      o.y = (q.v * height + now * q.speed * Math.cos(q.angle)) % height;
+      o.len = q.len;
+      o.angle = q.angle;
+      o.speed = q.speed;
+      o.alpha = q.alpha;
     }
+    out.push(o);
   }
   return out;
 }

@@ -14,7 +14,7 @@ import {drawRipple, rippleRing, RIPPLE_LIFE, addRipple} from './water-fx.js';
 import {smokeDissolveTrail, drawSmokeTrail, SMOKE_DISSOLVE_LIFE} from './smoke-fx.js';
 import {stepCycle, stepDust, drawStepFx, DUST_PER_STEP} from './anim-fx.js';
 import {impactMarksAt, drawImpact} from './impact-fx.js';
-import {weatherKind, weatherParticles, drawWeather, MAX_PARTICLES as WEATHER_MAX_PARTICLES} from './weather-fx.js';
+import {weatherKind, weatherParticles, drawWeather, weatherRecycle, MAX_PARTICLES as WEATHER_MAX_PARTICLES} from './weather-fx.js';
 import {themeWeatherOf} from './textures.js';
 import {emberSpec, goldStreakSpec} from './burst-fx.js';
 import {enhancedBoomSpec, drawEnhancedBoom} from './boom-fx.js';
@@ -253,6 +253,7 @@ function drawWeatherLayer(game) {
   ctx.translate(ox, oy);
   drawWeather(ctx, parts, kind);
   ctx.restore();
+  weatherRecycle(parts); // 粒子对象归还池，消除每帧稳态分配
 }
 
 // 地图 id -> 固定整数种子（FNV-1a，确定性）

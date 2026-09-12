@@ -13,6 +13,7 @@ import {
   weatherKind,
   weatherParticles,
   drawWeather,
+  weatherRecycle,
   MAX_PARTICLES,
   MIST_MAX_PARTICLES,
   SMOKE_MAX_PARTICLES
@@ -140,3 +141,18 @@ const W = 512, H = 384;
 }
 
 console.log('fx-ambience: all PASS');
+
+// ---- 微性能（Round 10）：weatherRecycle 对象复用 ----
+{
+  const ps1 = weatherParticles('rain', 1.0, 10, W, H, 7);
+  weatherRecycle(ps1);
+  const ps2 = weatherParticles('rain', 1.2, 10, W, H, 7);
+  const poolSet = new Set(ps1);
+  assert.ok(ps2.every((p) => poolSet.has(p)), 'pooled objects reused across frames (LIFO order)');
+  for (const p of ps2) {
+    assert.ok(Number.isFinite(p.x) && Number.isFinite(p.y), 'reused object fully rewritten');
+    assert.ok(Number.isFinite(p.alpha), 'alpha rewritten');
+  }
+  weatherRecycle(ps2);
+  assert.equal(weatherParticles('fog', 0, 5, W, H, 7).length, 0, 'unknown kind still empty');
+}

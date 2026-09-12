@@ -30,12 +30,34 @@ function viewpointsFor(game) {
 }
 
 function layerKey(game, views) {
-  const smokeKey = (game.smokes || [])
+  // 缓存命中快路径：上帧组件计数未变才拼串；拼串本身只发生在数量变化/缓存到期帧
+  const smokes = game.smokes || [];
+  const n = views.length;
+  if (game._fogKeyN === n + smokes.length * 1000) {
+    // 数量相同仍需内容变化检测：烟位置量化后逐项比较（少量对象，比拼串省分配）
+    let same = true;
+    for (let i = 0; i < smokes.length; i++) {
+      if (game._fogKeySmoke[i] !== Math.round(smokes[i].x / 48) || game._fogKeySmoke2[i] !== Math.round(smokes[i].y / 48)) { same = false; break; }
+    }
+    if (same) {
+      for (let i = 0; i < n; i++) {
+        if (game._fogKeyView[i] !== Math.round(views[i].x / 32) || game._fogKeyView2[i] !== Math.round(views[i].y / 32)) { same = false; break; }
+      }
+    }
+    if (same) return game._fogKey; // 命中：零分配
+  }
+  // 慢路径：拼串并缓存量化分量供快路径比较
+  const smokeKey = smokes
     .map((s) => Math.round(s.x / 48) + ',' + Math.round(s.y / 48))
     .join(';');
   const posKey = views
     .map((v) => Math.round(v.x / 32) + ',' + Math.round(v.y / 32))
     .join('|');
+  game._fogKeySmoke = smokes.map((s) => Math.round(s.x / 48));
+  game._fogKeySmoke2 = smokes.map((s) => Math.round(s.y / 48));
+  game._fogKeyView = views.map((v) => Math.round(v.x / 32));
+  game._fogKeyView2 = views.map((v) => Math.round(v.y / 32));
+  game._fogKeyN = n + smokes.length * 1000;
   return posKey + '#' + smokeKey;
 }
 
