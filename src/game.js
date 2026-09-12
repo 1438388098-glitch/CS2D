@@ -444,6 +444,20 @@ export function finishMatch(game) {
   const modeDef = game.mode ? getMode(game.mode) : null;
   if (modeDef && modeDef.onFinish) modeDef.onFinish(game);
   const winAt = game.ot ? (game.otWin || ROUND.OT_WIN) : (game.matchWin || ROUND.MATCH_WIN);
+  // 对局结果回流：LAN 房间由房主上报到服务端 logs/matches.jsonl（服务器匹配 matchReport 类型，
+  // 只记录不广播）；离线对局 game.lan 为空，零开销跳过
+  if (game.lan) {
+    try {
+      game.lan.send({
+        type: 'matchReport',
+        map: (game.opts && game.opts.mapId) || '',
+        mode: (game.opts && game.opts.mode) || 'classic',
+        score: { T: game.score.T, CT: game.score.CT },
+        duration: Math.round(game.time || 0),
+        winner: game.score.T >= winAt ? 't' : 'ct'
+      });
+    } catch (err) { /* 上报失败不影响结算 */ }
+  }
   const win = (game.score.T >= winAt && game.player.team === 't') ||
     (game.score.CT >= winAt && game.player.team === 'ct');
   recordDifficultyResult(game, win);

@@ -10,3 +10,4 @@ train/checkpoints/
 docs/*.visual-check.*
 .DS_Store
 Thumbs.db
+logs/

@@ -278,9 +278,40 @@ function handleFrame(ws, payload) {
     broadcast(ws.room, msg, ws);
     return;
   }
+  if (msg.type === 'matchReport') {
+    // 对局结果回流（LAN 房主上报）：清洗字段后追加到 logs/matches.jsonl 供平衡分析。不广播。
+    if (ws.role === 'spectator') return;
+    logMatchReport(ws.room, msg);
+    return;
+  }
   if (msg.type === 'leave') {
     leave(ws);
   }
+}
+
+// 对局日志：logs/matches.jsonl（JSONL，一行一场）。超 5MB 轮转为 .1；写失败只降级不影响中继。
+const MATCH_LOG_DIR = path.join(ROOT, 'logs');
+const MATCH_LOG_PATH = path.join(MATCH_LOG_DIR, 'matches.jsonl');
+function logMatchReport(room, msg) {
+  try {
+    const score = msg.score && Number.isFinite(+msg.score.T) && Number.isFinite(+msg.score.CT)
+      ? { T: +msg.score.T, CT: +msg.score.CT } : null;
+    const rec = {
+      ts: new Date().toISOString(),
+      room: typeof room === 'string' ? room.slice(0, 32) : '',
+      map: typeof msg.map === 'string' ? msg.map.slice(0, 40) : '',
+      mode: typeof msg.mode === 'string' ? msg.mode.slice(0, 24) : '',
+      score,
+      duration: Number.isFinite(+msg.duration) ? Math.round(+msg.duration) : null,
+      winner: msg.winner === 't' || msg.winner === 'ct' ? msg.winner : ''
+    };
+    fs.mkdirSync(MATCH_LOG_DIR, { recursive: true });
+    try {
+      const st = fs.statSync(MATCH_LOG_PATH);
+      if (st.size > 5 * 1024 * 1024) fs.renameSync(MATCH_LOG_PATH, MATCH_LOG_PATH + '.1');
+    } catch (err) { /* 文件尚不存在 */ }
+    fs.appendFileSync(MATCH_LOG_PATH, JSON.stringify(rec) + '\n');
+  } catch (err) { /* 日志失败不影响中继 */ }
 }
 
 function leave(ws) {
