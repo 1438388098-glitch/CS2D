@@ -290,7 +290,12 @@
         <div class="set-row">
           <label>减少镜头动态</label>
           <input type="checkbox" id="reduceMotion">
-          <span class="set-hint">关闭步态晃动 / 后坐视角 / 受击震动（缓解眩晕）</span>
+          <span class="set-hint">关闭步态晃动 / 受击与爆炸震动（缓解眩晕）</span>
+        </div>
+        <div class="set-row">
+          <label>震动强度</label>
+          <input type="range" id="shakeScale" min="0" max="1.5" step="0.25">
+          <span id="shakeScaleVal"></span>
         </div>
         <div class="set-row">
           <label>视野 FOV</label>

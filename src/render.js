@@ -97,6 +97,14 @@ function drawWorldSlice(layer, game) {
   ctx.drawImage(layer, sx0, sy0, sw, sh, sx0, sy0, sw, sh);
 }
 
+// 震动缩放（纯函数，供测试断言）：reduceMotion 归零，自定义强度夹取 [0,1.5]，缺省 1
+export function shakeScaleFor(opts) {
+  if (opts && opts.reduceMotion) return 0;
+  const raw = opts ? opts.shakeScale : undefined;
+  const s = Number(raw);
+  return Number.isFinite(s) ? Math.min(1.5, Math.max(0, s)) : 1;
+}
+
 export function render(game) {
   const __t0 = performance.now();
   const __marks = {};
@@ -116,10 +124,11 @@ export function render(game) {
   ctx.fillStyle = '#14161a';
   ctx.fillRect(0, 0, w2, h2);
   const scale = game.zoom;
+  const shakeMul = shakeScaleFor(game.opts);
   let shx = 0, shy = 0;
-  if (game.shake > 0) {
-    shx = rand(-game.shake, game.shake);
-    shy = rand(-game.shake, game.shake);
+  if (game.shake > 0 && shakeMul > 0) {
+    shx = rand(-game.shake, game.shake) * shakeMul;
+    shy = rand(-game.shake, game.shake) * shakeMul;
   }
   game._shx = shx;
   game._shy = shy;
@@ -350,7 +359,7 @@ function drawDmgPops2D(game) {
     const font = st.size.toFixed(1) + 'px Arial';
     if (font !== lastFont) { t.font = font; lastFont = font; }
     t.strokeStyle = '#000';
-    t.fillStyle = pop.head ? '#ffd34d' : '#ffffff';
+    t.fillStyle = pop.head ? '#ffd34d' : (pop.armor ? '#9ecbff' : '#ffffff');
     const txt = String(Math.round(pop.dmg));
     t.strokeText(txt, pop.x, sy);
     t.fillText(txt, pop.x, sy);
@@ -979,10 +988,11 @@ function drawEntities(game) {
     ctx.beginPath();
     ctx.ellipse(0, 0, 16, 16, 0, 0, Math.PI * 2);
     ctx.stroke();
-    // 行走起伏：玩家保持原有节奏；bot 用 stepCycle 相位驱动（幅度略小）——人群不再滑行
+    // 行走起伏：玩家保持原有节奏（reduceMotion 时关闭）；bot 用 stepCycle 相位驱动（幅度略小）——人群不再滑行
     let bob = 0;
-    if (isP) bob = e.walking ? Math.sin(performance.now() / 160) * 2.5 : 0;
-    else if (stFx && stFx.moving) bob = botBob(stFx.phase, tSec);
+    const motionOff = game.opts && game.opts.reduceMotion;
+    if (isP) bob = e.walking && !motionOff ? Math.sin(performance.now() / 160) * 2.5 : 0;
+    else if (stFx && stFx.moving && !motionOff) bob = botBob(stFx.phase, tSec);
     ctx.translate(0, bob);
     ctx.rotate(ea);
     ctx.fillStyle = darkCol;

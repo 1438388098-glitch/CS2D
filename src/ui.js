@@ -1367,6 +1367,23 @@ function bindSettings() {
       try { localStorage.setItem('cs2d_reduce_motion', rmEl.checked ? '1' : '0'); } catch (err) { /* 无存储 */ }
     });
   }
+  // 震动强度滑杆（0-1.5 倍率，作用于受击/爆炸屏幕震动；render.shakeScaleFor 消费）
+  const shakeEl = el('shakeScale');
+  const shakeVal = el('shakeScaleVal');
+  if (shakeEl) {
+    try {
+      const saved = parseFloat(localStorage.getItem('cs2d_shake_scale'));
+      if (isFinite(saved) && saved >= 0 && saved <= 1.5) game.opts.shakeScale = saved;
+    } catch (err) { /* 无存储 */ }
+    shakeEl.value = game.opts.shakeScale != null ? game.opts.shakeScale : 1;
+    if (shakeVal) shakeVal.textContent = shakeEl.value;
+    shakeEl.addEventListener('input', () => {
+      const v = Math.min(1.5, Math.max(0, parseFloat(shakeEl.value) || 0));
+      game.opts.shakeScale = v;
+      if (shakeVal) shakeVal.textContent = String(v);
+      try { localStorage.setItem('cs2d_shake_scale', String(v)); } catch (err) { /* 无存储 */ }
+    });
+  }
   // 视野 FOV 滑杆（70-110 → 弧度写入 game.fov）
   const fovEl = el('fovSel');
   const fovVal = el('fovSelVal');

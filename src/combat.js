@@ -430,7 +430,8 @@ export function applyDamage(v, dmg, opt, game) {
     const scaled = is2d ? (head || v.hp <= 0 ? amt * 0.6 : 0) : amt;
     game.hitPauseT = Math.max(game.hitPauseT || 0, scaled);
   }
-  game.dmgPops.push({ x: v.x, y: v.y, dmg: hpLoss, head: !!head, t: 0.8 });
+  // 护甲伤害用蓝色数字区分（护甲吸收的部分有独立视觉语义）
+  game.dmgPops.push({ x: v.x, y: v.y, dmg: hpLoss, head: !!head, armor: armLoss > 0, t: 0.8 });
   if (game.dmgPops.length > 12) game.dmgPops.shift();
   if (v.bot && v.highPointT > 0) {
     v.highPointT -= 2;
