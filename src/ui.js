@@ -455,7 +455,7 @@ export function showHitMarker(game, dur) {
 let buyCat = 0;
 
 const BUY_ICON = {
-  ak: 'ic-ak', m4: 'ic-m4', famas: 'ic-rifle', mac10: 'ic-mac10', mp9: 'ic-mp9', p90: 'ic-p90',
+  ak: 'ic-ak', m4: 'ic-m4', famas: 'ic-rifle', aug: 'ic-rifle', sg553: 'ic-rifle', mac10: 'ic-mac10', mp9: 'ic-mp9', p90: 'ic-p90',
   xm: 'ic-xm', awp: 'ic-awp', p250: 'ic-p250', deagle: 'ic-deagle', glock: 'ic-p250', usp: 'ic-p250',
   knife: 'ic-knife-w', armor: 'ic-shield', helm: 'ic-helm', kit: 'ic-kit',
   he: 'ic-grenade', flash: 'ic-flash', smoke: 'ic-smoke'
@@ -465,7 +465,7 @@ const BUY_CATS = [
   { label: '手枪', items: [['p250', 'P250', '半自动'], ['deagle', '沙漠之鹰', '大口径半自动'], ['glock', 'Glock-18', 'T 出生配枪 · 补购'], ['usp', 'USP-S', 'CT 出生配枪 · 补购']] },
   { label: '冲锋枪', items: [['mac10', 'MAC-10', 'T 专用 · 全自动'], ['mp9', 'MP9', 'CT 专用 · 全自动'], ['p90', 'P90', '全自动 · 50 发']] },
   { label: '霰弹枪', items: [['xm', 'XM1014', '8 弹丸 · 近战']] },
-  { label: '步枪', items: [['ak', 'AK-47', 'T 专用 · 全自动'], ['m4', 'M4A4', 'CT 专用 · 全自动'], ['famas', 'FAMAS', 'CT 专用 · 中间步枪']] },
+  { label: '步枪', items: [['ak', 'AK-47', 'T 专用 · 全自动'], ['m4', 'M4A4', 'CT 专用 · 全自动'], ['famas', 'FAMAS', 'CT 专用 · 中间步枪'], ['sg553', 'SG 553', 'T 专用 · 穿甲中间步枪'], ['aug', 'AUG', 'CT 专用 · 精准中间步枪']] },
   { label: '狙击枪', items: [['awp', 'AWP', '开镜 · 一枪致命']] },
   { label: '装备', items: [['armor', '防弹衣', '50% 减伤'], ['helm', '防弹衣+头盔', '防爆头'], ['kit', '拆弹钳', '拆弹减半']] },
   { label: '投掷物', items: [['he', '高爆手雷', '范围伤害'], ['flash', '闪光弹', '致盲敌人'], ['smoke', '烟雾弹', '遮挡视线']] }
