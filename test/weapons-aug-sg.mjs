@@ -33,8 +33,8 @@ import { tracerStyle } from '../src/render.js';
   assert.equal(aug.price, 3300, 'AUG price');
   assert.equal(sg.price, 3000, 'SG 553 price');
 
-  // 口径分档：rifle 档存在
-  const t = tracerStyle(1, 'rifle');
+  // 口径分档：rifle 档存在（t=0 为最亮时刻，见 fx-tracer 契约）
+  const t = tracerStyle(0, 'rifle');
   assert.ok(t.alpha > 0 && t.width > 0, 'rifle tracer tier');
 }
 
