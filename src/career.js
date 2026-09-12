@@ -3,9 +3,10 @@ import {registerMode, MODE_MAPS} from './registry.js';
 import {setupMatchEntities, startRound, startMatch} from './game.js';
 import {teamDiffParams, simScore} from './modes.js';
 import { computeMatchHltv as _computeMatchHltv, pickHltvMvp as _pickHltvMvp, updateHltvRolling as _updateHltvRolling, deriveRoundParticipation as _deriveRoundParticipation, legacyMvpScore as _legacyMvpScore } from './hltv-rating.js';
+import { ctx } from './ctx.js';
 
-const SAVE_KEY = 'cs2d_career';
-const BACKUP_KEY = 'cs2d_career_backup';
+export const SAVE_KEY = 'cs2d_career';
+export const BACKUP_KEY = 'cs2d_career_backup';
 const VERSION = 3;
 const MAP_IDS = MODE_MAPS;
 const ROLES = ['突破', '补枪', '指挥', '自由人'];
@@ -153,8 +154,24 @@ export function isStorageAvailable() { return !!storage; }
 function read(key) {
   try { return storage ? storage.getItem(key) : null; } catch (e) { return null; }
 }
+// 存档写入失败用户可见反馈（配额超限等）：状态翻转时 toast 一次，成功自动复位
+let _saveIssueNotified = false;
+function notifySaveIssue(text) {
+  if (_saveIssueNotified) return;
+  _saveIssueNotified = true;
+  try { ctx.bus.emit('toast', { text }); } catch (e) { /* UI 未就绪 */ }
+}
 function write(key, val) {
-  try { if (storage) { storage.setItem(key, val); return true; } } catch (e) {}
+  try {
+    if (storage) {
+      storage.setItem(key, val);
+      _saveIssueNotified = false;
+      return true;
+    }
+  } catch (e) {
+    notifySaveIssue('⚠ 生涯存档写入失败：浏览器存储空间不足，进度可能无法保存');
+    return false;
+  }
   return false;
 }
 function pick(arr) { return arr[Math.floor(rng() * arr.length)]; }
@@ -1328,18 +1345,41 @@ export function newCareerState() {
   return state;
 }
 
+function careerSaveValid(parsed) {
+  return !!(parsed && (parsed.version === VERSION || parsed.version === 2) && parsed.season && parsed.team && parsed.player);
+}
+
+// 从备份恢复（备份语义 = 上一份好档）：成功则回写主档
+function tryRestoreBackup() {
+  const raw = read(BACKUP_KEY);
+  if (!raw) return null;
+  try {
+    const parsed = JSON.parse(raw);
+    if (careerSaveValid(parsed)) {
+      state = migrateCareerState(parsed);
+      save();
+      return state;
+    }
+  } catch (e) { /* 备份也不可用 */ }
+  return null;
+}
+
 export function loadCareer() {
   if (state) return state;
   const raw = read(SAVE_KEY);
+  let parsed = null;
   if (raw) {
     try {
-      const parsed = JSON.parse(raw);
-      if (parsed && (parsed.version === VERSION || parsed.version === 2) && parsed.season && parsed.team && parsed.player) {
+      parsed = JSON.parse(raw);
+      if (careerSaveValid(parsed)) {
         state = migrateCareerState(parsed);
         save();
         return state;
       }
-    } catch (e) { /* fallthrough */ }
+    } catch (e) { parsed = null; }
+    // 主档损坏：优先用备份恢复，仅当备份不可用才把坏主档留底供排查
+    const restored = tryRestoreBackup();
+    if (restored) { notifySaveIssue('检测到生涯存档损坏，已从备份恢复'); return restored; }
     write(BACKUP_KEY, raw);
   }
   state = newCareerState();

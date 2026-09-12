@@ -1,4 +1,5 @@
 import { MAJOR_TEAMS } from './modes.js';
+import { ctx } from './ctx.js';
 import { computeMatchHltv, pickHltvMvp, updateHltvRolling, accumulateTournamentStats, selectTournamentMvp, updateYearlyRating, yearlyTop, TOURNAMENT_WEIGHTS, selectTournamentEvps, selectAllTournamentTeam, collectPlayerRoles, collectPlayerTeams, inferCupFinalists, computeYearlyTop20, buildPublishBatches, top20At, awardScore, deriveRoundParticipation, legacyMvpScore } from './hltv-rating.js';
 
 export const SAVE_KEY = 'cs2d_manager';
@@ -135,9 +136,23 @@ function read(key) {
   if (!storage) return null;
   try { return storage.getItem(key); } catch (e) { return null; }
 }
+// 存档写入失败（配额超限等）用户可见反馈：状态翻转时 toast 一次，恢复成功自动复位
+let _saveIssueNotified = false;
+function notifySaveIssue(text) {
+  if (_saveIssueNotified) return;
+  _saveIssueNotified = true;
+  try { ctx.bus.emit('toast', { text }); } catch (e) { /* UI 未就绪 */ }
+}
 function write(key, val) {
-  if (!storage) return;
-  try { storage.setItem(key, val); } catch (e) { /* quota */ }
+  if (!storage) return false;
+  try {
+    storage.setItem(key, val);
+    _saveIssueNotified = false;
+    return true;
+  } catch (e) {
+    notifySaveIssue('⚠ 存档写入失败：浏览器存储空间不足，进度可能无法保存');
+    return false;
+  }
 }
 
 export function save() {
@@ -153,18 +168,33 @@ export function resetManager() {
   return state;
 }
 
+// 从备份恢复（备份语义 = 上一份好档）：成功则回写主档，避免下次启动再走备份
+function tryRestoreBackup() {
+  const raw = read(BACKUP_KEY);
+  if (!raw) return null;
+  try {
+    const parsed = JSON.parse(raw);
+    if (parsed && parsed.version === VERSION) {
+      state = migrateManagerState(parsed);
+      write(SAVE_KEY, raw);
+      return state;
+    }
+  } catch (e) { /* 备份也不可用 */ }
+  return null;
+}
+
 export function loadManager() {
   const raw = read(SAVE_KEY);
   if (!raw) return resetManager();
-  try {
-    const parsed = JSON.parse(raw);
-    if (parsed.version === VERSION) { state = migrateManagerState(parsed); return state; }
-    write(BACKUP_KEY, raw);
-    return resetManager();
-  } catch (e) {
-    write(BACKUP_KEY, raw);
-    return resetManager();
-  }
+  let parsed = null;
+  try { parsed = JSON.parse(raw); } catch (e) { parsed = null; }
+  if (parsed && parsed.version === VERSION) { state = migrateManagerState(parsed); return state; }
+  // 主档损坏/版本不符：优先从备份恢复；仅当备份不可用才把主档留底到 BACKUP_KEY 供排查
+  // （旧语义会把坏主档直接覆盖备份，把上一份好档毁掉——一次坏写即生涯全灭）
+  const restored = tryRestoreBackup();
+  if (restored) { notifySaveIssue('检测到经理存档损坏，已从备份恢复'); return restored; }
+  write(BACKUP_KEY, raw);
+  return resetManager();
 }
 
 export function getState() { return state || initManagerIfNeeded(); }

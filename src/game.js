@@ -709,18 +709,39 @@ function updateFxTimers(game, dt) {
   }
 }
 
+// 死亡相机目标选取（纯函数，供测试断言）：击杀镜头期锁定存活击杀者，
+// 之后在队友（或 cyber 的 bot 列表）中选观战目标；目标死亡由 pickSpectateTarget 稳定接管
+export function deathCamTarget(game) {
+  const p = game.player;
+  if (!p || !p.dead) return p;
+  if (game.killCamT > 0 && game.lastKiller && !game.lastKiller.dead) return game.lastKiller;
+  let mates;
+  if (game.cyber && !game.cyber.ended) {
+    mates = game.entities.filter((e) => e.bot && !e.dead);
+  } else {
+    mates = game.entities.filter((e) => e.team === p.team && !e.dead);
+  }
+  return pickSpectateTarget(game, mates);
+}
+
+// 观战目标稳定化（纯决策，供测试断言）：目标仍存活即锁定引用，
+// 防止队友死亡瞬间列表收缩导致 `spectateIdx % length` 取模跳到别人头上
+export function pickSpectateTarget(game, mates) {
+  if (game._specTarget && !game._specTarget.dead && mates.includes(game._specTarget)) {
+    return game._specTarget;
+  }
+  const t = mates.length ? mates[game.spectateIdx % mates.length] : null;
+  game._specTarget = t || null;
+  return t;
+}
+
 // 相机跟随（从 update 拆出）：观战目标选取 + follow 平滑/普通 lerp + 地图边界夹取
 function updateCamera(game, dt) {
   let camTarget = game.player;
   if (game.player && game.player.dead) {
-    if (game.cyber && !game.cyber.ended) {
-      const bots = game.entities.filter((e) => e.bot && !e.dead);
-      if (bots.length) camTarget = bots[game.spectateIdx % bots.length];
-      game.zoom = 0.75;
-    } else {
-      const mates = game.entities.filter((e) => e.team === game.player.team && !e.dead);
-      if (mates.length) camTarget = mates[game.spectateIdx % mates.length];
-    }
+    if (game.killCamT > 0) game.killCamT -= dt;
+    camTarget = deathCamTarget(game);
+    if (game.cyber && !game.cyber.ended) game.zoom = 0.75;
   }
   // 跟随视角：相机以玩家为绝对中心（不 clamp，世界随朝向旋转由 render 完成）
   if (game.viewMode === 'follow' && game.player && !game.player.dead && !game.cyber) {
@@ -754,14 +775,9 @@ export function setCustomBotsUpdater(fn) { modeBotsUpdate = fn; }
 function updateCam(game, dt) {
   let camTarget = game.player;
   if (game.player && game.player.dead) {
-    // 击杀镜头：死亡后 0.9s 锁定击杀者视角，随后切入队友观战
-    if (game.killCamT > 0) {
-      game.killCamT -= dt;
-      if (game.lastKiller && !game.lastKiller.dead) camTarget = game.lastKiller;
-    } else {
-      const mates = game.entities.filter((e) => e.team === game.player.team && !e.dead);
-      if (mates.length) camTarget = mates[game.spectateIdx % mates.length];
-    }
+    // 击杀镜头：死亡后 0.9s 锁定击杀者视角，随后切入队友观战（与 LIVE 态共用 deathCamTarget）
+    if (game.killCamT > 0) game.killCamT -= dt;
+    camTarget = deathCamTarget(game);
   }
   if (game.viewMode === 'follow' && camTarget && !camTarget.dead && !game.cyber) {
     // follow 相机 look-ahead：沿瞄准方向前置一小段，提升前方视野感知；空闲时平滑回落

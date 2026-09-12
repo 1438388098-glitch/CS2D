@@ -3,6 +3,7 @@ import { registerMode, registerMap, getMapDef, getBombMapIds } from './registry.
 import { DUEL_MAPS } from './duel-maps.js';
 import { setupMatchEntities, startRound } from './game.js';
 import { teamDiffParams } from './modes.js';
+import { ctx } from './ctx.js';
 
 const SAVE_KEY = 'cs2d_duel';
 const BACKUP_KEY = 'cs2d_duel_backup';
@@ -35,8 +36,24 @@ export function isStorageAvailable() { return !!storage; }
 function read(key) {
   try { return storage ? storage.getItem(key) : null; } catch (e) { return null; }
 }
+// 存档写入失败用户可见反馈（配额超限等）：状态翻转时 toast 一次，成功自动复位
+let _saveIssueNotified = false;
+function notifySaveIssue(text) {
+  if (_saveIssueNotified) return;
+  _saveIssueNotified = true;
+  try { ctx.bus.emit('toast', { text }); } catch (e) { /* UI 未就绪 */ }
+}
 function write(key, val) {
-  try { if (storage) { storage.setItem(key, val); return true; } } catch (e) {}
+  try {
+    if (storage) {
+      storage.setItem(key, val);
+      _saveIssueNotified = false;
+      return true;
+    }
+  } catch (e) {
+    notifySaveIssue('⚠ 单挑战绩写入失败：浏览器存储空间不足');
+    return false;
+  }
   return false;
 }
 
@@ -54,19 +71,44 @@ export function save() {
   return write(SAVE_KEY, JSON.stringify(state));
 }
 
+function duelSaveValid(parsed) {
+  return !!(parsed && parsed.version === VERSION && parsed.stats);
+}
+
+// 从备份恢复（备份语义 = 上一份好档）：成功则回写主档
+function tryRestoreBackup() {
+  const raw = read(BACKUP_KEY);
+  if (!raw) return null;
+  try {
+    const parsed = JSON.parse(raw);
+    if (duelSaveValid(parsed)) {
+      state = parsed;
+      if (!state.history) state.history = [];
+      if (!state.vs) state.vs = {};
+      save();
+      return state;
+    }
+  } catch (e) { /* 备份也不可用 */ }
+  return null;
+}
+
 export function loadDuel() {
   if (state) return state;
   const raw = read(SAVE_KEY);
+  let parsed = null;
   if (raw) {
     try {
-      const parsed = JSON.parse(raw);
-      if (parsed && parsed.version === VERSION && parsed.stats) {
+      parsed = JSON.parse(raw);
+      if (duelSaveValid(parsed)) {
         state = parsed;
         if (!state.history) state.history = [];
         if (!state.vs) state.vs = {};
         return state;
       }
-    } catch (e) { /* fallthrough */ }
+    } catch (e) { parsed = null; }
+    // 主档损坏：优先用备份恢复，仅当备份不可用才把坏主档留底供排查
+    const restored = tryRestoreBackup();
+    if (restored) { notifySaveIssue('检测到单挑存档损坏，已从备份恢复'); return restored; }
     write(BACKUP_KEY, raw);
   }
   state = newDuelState();

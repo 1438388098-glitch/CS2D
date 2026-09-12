@@ -126,10 +126,10 @@ export function fpsAimInteractAction(game) {
   return bestDrop ? { label: bestDrop.label, action: bestDrop.action } : null;
 }
 
-// FPS death spectate overlay data.
+// Death spectate overlay data（俯视/跟随/FP 视角通用）.
 export function fpsSpectateInfo(game) {
   const p = game && game.player;
-  if (!p || !p.dead || game.viewMode !== 'fps') return null;
+  if (!p || !p.dead) return null;
   const targets = game.entities.filter((e) => e.bot && !e.dead && e.team === p.team);
   if (!targets.length) return null;
   const e = targets[game.spectateIdx % targets.length];
@@ -442,7 +442,8 @@ export function renderHud(game) {
   const h2 = ctx.canvas.height / dpr;
   const p = game.player;
   // FPS 命中反馈/击杀环恒锚定屏幕中心（朝向=鼠标屏幕方向，中心即射击线）
-  if (game.viewMode === 'fps' && p && p.dead) {
+  // 死亡观战信息条：俯视/跟随视角此前完全看不到"在看谁"（只有 FPS 有），现统一绘制
+  if (p && p.dead) {
     const spec = fpsSpectateInfo(game);
     if (spec) {
       ctx.save();
