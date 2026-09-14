@@ -124,8 +124,10 @@ export function fireWeapon(e, game) {
   } else {
     emit('sfx', { name: 'shot', vol: 0.85, x: e.x, y: e.y, game, wid: e.weapons.primary || e.weapons.secondary });
   }
+  // 消音器（candidate-522）：枪声情报半径 ×0.3，静音枪=bot 难以听声定位（战术价值真实成立）
+  const silMul = e.mods && e.mods.sil ? 0.3 : 1;
   const expRad = Math.min(
-    w.kind === 'rifle' ? 950 : (w.kind === 'sniper' ? 1300 : (w.kind === 'smg' ? 700 : (w.kind === 'pistol' ? 450 : (w.kind === 'shotgun' ? 500 : 0)))),
+    (w.kind === 'rifle' ? 950 : (w.kind === 'sniper' ? 1300 : (w.kind === 'smg' ? 700 : (w.kind === 'pistol' ? 450 : (w.kind === 'shotgun' ? 500 : 0))))) * silMul,
     viewCap(game)
   );
   if (expRad > 0) {
@@ -521,6 +523,11 @@ export function killEntity(v, killer, weapon, head, game) {
   }
   // 实体级击杀事件（军备竞赛等模式的钩子）：killfeed 只有名字，这里带引用
   emit('entityKill', { killer, victim: v, weapon, game });
+  // 热力图采样（candidate-572）：击杀/阵亡点位入 heatLog，结算面板给死亡热点提示
+  if (!game.heatLog) game.heatLog = [];
+  if (killer === game.player) game.heatLog.push({ x: v.x, y: v.y, kind: 'kill' });
+  if (v === game.player) game.heatLog.push({ x: v.x, y: v.y, kind: 'death' });
+  if (game.heatLog.length > 200) game.heatLog.shift();
   if (v.hasBomb && (!game.bomb || !game.bomb.planted)) {
     dropBomb(v.x, v.y, game);
   }
@@ -551,6 +558,7 @@ export function killEntity(v, killer, weapon, head, game) {
   }
   if (v === game.player) {
     v.streak = 0;
+    v._diedLastRound = true; // 保险赔付标记（candidate-570）
     game.player.killStreakT = 0;
     game.killStreak = 0;
     game.lastKiller = killer;

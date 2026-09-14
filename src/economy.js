@@ -28,6 +28,7 @@ export function clearEquipment(e) {
   e.weapons.primary = null;
   e.weapons.secondary = null;
   e.weapons.nades = { he: 0, flash: 0, smoke: 0, decoy: 0, moly: 0, emp: 0 };
+  e.mods = null; // 配件随装备清空（换回合重新购买）
   e.weapons.kit = false;
   e.armor = 0;
   e.helmet = false;
@@ -54,6 +55,25 @@ export function buyItem(game, what) {
     p.money -= PRICES.HELM;
     p.armor = 100;
     p.helmet = true;
+    bought = true;
+  } else if (what === 'ext' || what === 'sil') {
+    // 武器配件（candidate-522）：扩容弹匣 +50% 备弹 / 消音器 枪声情报半径 ×0.3
+    if (!p.weapons.primary) return false;
+    p.mods = p.mods || {};
+    if (p.mods[what] || p.money < (what === 'ext' ? PRICES.EXT_MAG : PRICES.SILENCER)) return false;
+    p.money -= what === 'ext' ? PRICES.EXT_MAG : PRICES.SILENCER;
+    p.mods[what] = true;
+    if (what === 'ext') {
+      const w = WEAPONS[p.weapons.primary];
+      if (w) p.reserveMap[p.weapons.primary] = Math.round(w.reserve * 1.5);
+    }
+    bought = true;
+  } else if (what === 'insurance') {
+    // 装备保险（candidate-570）：本回合若阵亡，下回合开局返还主武器价 50%
+    if (p.insured || p.money < PRICES.INSURANCE) return false;
+    p.money -= PRICES.INSURANCE;
+    p.insured = true;
+    p.insuredWid = p.weapons.primary; // 投保时快照主武器（死亡会掉枪，赔付按快照算）
     bought = true;
   } else if (what === 'kit') {
     if (p.team !== 'ct') return false;

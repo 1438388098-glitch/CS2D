@@ -1,5 +1,5 @@
 // 战术目标层：CT 守点/回防/前压/保枪、T 进点/装弹/守弹/转点/绕后、玩家指令服从
-import {BOT_AI, diffOf} from '../config.js';
+import {BOT_AI, diffOf, MAP_CT_COOP} from '../config.js';
 import {getMap, nearestSite, inSite, los, nearestWalkable, walkable} from '../map.js';
 import {weaponDef, ammoFor} from '../entities.js';
 import {rand, clamp} from '../utils.js';
@@ -660,10 +660,10 @@ export function botObjectiveRaw(e, game) {
         return spreadPoint(e, game.bomb.x, game.bomb.y, 90, 180);
       }
       const retakeSite = getMap().sites[game.bomb.site];
-      // metro 特化：CT 回防 A 点推荐路线（candidate-156）——按寻路路径选进点（近+安全侧夹击），
+      // CT 回防推荐路线（candidate-156 → candidate-563 全图化）——按寻路路径选进点（近+安全侧夹击），
       // 避免旧逻辑按欧氏距离排序把"看着近、绕远路"的进点排到前面；侧翼由 anchorIdx 分配，
       // 强制侧绕行超过上限时 retakeRoute 自动退回最短侧。
-      if (getMap().id === 'metro' && game.bomb.site === 'A' && retakeSite) {
+      if (retakeSite) {
         const metroSide = ((e.anchorIdx || 0) % 2) ? 'lane' : 'east';
         const rr = retakeRoute(getMap(), e.x, e.y, retakeSite, { side: metroSide });
         if (rr && rr.route && rr.route.length) {
@@ -674,7 +674,7 @@ export function botObjectiveRaw(e, game) {
             e.lastSample = { x: e.x, y: e.y };
             e.repathT = 0;
           }
-          logAct(game, e, 'retake', 'metro A ' + rr.side + ' ' + rr.entryName + ' entryLen ' + rr.entryLen);
+          logAct(game, e, 'retake', retakeSite.label + ' ' + rr.side + ' ' + rr.entryName + ' entryLen ' + rr.entryLen);
           return { x: rr.target.x, y: rr.target.y, face: rr.face !== undefined ? rr.face : Math.atan2(retakeSite.cy - rr.entry.y, retakeSite.cx - rr.entry.x), peek: true, nade: true };
         }
       }
@@ -855,7 +855,19 @@ export function botObjectiveRaw(e, game) {
           e.objAt = 0;
           logAct(game, e, 'rotate', 'hold shift');
         }
-        const p = hold.anchors[e.anchorIdx % hold.anchors.length] || hold.anchors[0];
+        let p = hold.anchors[e.anchorIdx % hold.anchors.length] || hold.anchors[0];
+        // CT 协防（candidate-562）：atrium 等通视图上，接战即败的根因是锚点各自为战——
+        // coop 权重高的图让同点第二名优先互补锚点（与队友形成夹角交叉火力）
+        const coop = MAP_CT_COOP[getMap().id] || 1;
+        if (coop > 1 && hold.anchors.length > 1) {
+          const mate = game.entities.find((o) => o.bot && o.team === 'ct' && !o.dead && o !== e && o.role === e.role);
+          if (mate) {
+            const mateP = hold.anchors[mate.anchorIdx % hold.anchors.length] || p;
+            if (mateP === p) {
+              p = hold.anchors[(e.anchorIdx + 1) % hold.anchors.length] || p; // 与队友错开锚点
+            }
+          }
+        }
         return { x: p.x, y: p.y, face: p.face !== undefined ? p.face : Math.atan2(hold.entry.y - p.y, hold.entry.x - p.x) };
       }
       const fallbackSpawn = getMap().spawns.ct[0];

@@ -1272,3 +1272,6 @@ table.sb tr.mvp td{background:rgba(255,210,122,.07)}
 .cr-row b{width:52px;text-align:right;font-family:var(--f-mono);color:var(--gold)}
 
 .coach-line{color:#8fd8ff !important;font-size:12.5px}
+
+.buy-preset{display:flex;gap:8px;padding:8px 14px 0;justify-content:flex-end}
+.buy-preset .btn{width:auto;padding:6px 14px;font-size:12px}

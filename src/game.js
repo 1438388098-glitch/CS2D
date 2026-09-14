@@ -1,4 +1,4 @@
-import {ROUND, ECONOMY, MAX_PARTICLES, resolveDiff, MAP_CT_REACT, hellParamsAt, MOVEMENT} from './config.js';
+import {ROUND, ECONOMY, WEAPONS, MAX_PARTICLES, resolveDiff, MAP_CT_REACT, hellParamsAt, MOVEMENT} from './config.js';
 import {addMoney, clearEquipment} from './economy.js';
 import {getMap, loadMap, findMapById, collideCircle, los, pathTo, tileAt, passableTolerant, fallbackSpawn} from './map.js';
 import {createEntity, spawnEntity, weaponDef, ammoFor} from './entities.js';
@@ -414,6 +414,23 @@ export function startRound(game) {
   // 残留 C4 清理：淘汰结束时炸弹可能仍 planted，遗留到下一回合会带着旧引信乱结算（回防模式在 startRound 后自行重设）
   game.bomb = null;
   spawnRound(game);
+  // 装备保险赔付（candidate-570）：上回合阵亡且投保 → 返还主武器价 50%
+  if (game.player && game.player.insured && game.player._diedLastRound) {
+    const pw = game.player.insuredWid;
+    const pay = pw && WEAPONS[pw] ? Math.round(WEAPONS[pw].price * (ECONOMY.INSURANCE_PAYOUT || 0.5)) : 150;
+    addMoney(game.player, pay);
+    emit('sysfeed', { text: '🛡 保险赔付 +$' + pay });
+    game.player._diedLastRound = false;
+    game.player.insuredWid = null;
+  }
+  game.player && (game.player.insured = false);
+  // 残局起点记录（candidate-583）：队友全灭且敌方 ≥2 → 翻盘奖励判定基线
+  game.clutchStart = null;
+  if (game.player && !game.player.dead) {
+    const mates = game.entities.filter((e) => e !== game.player && e.team === game.player.team && !e.dead).length;
+    const foes = game.entities.filter((e) => e.team !== game.player.team && !e.dead).length;
+    if (mates === 0 && foes >= 2) game.clutchStart = { n: foes };
+  }
   // 回合悬赏：敌方击杀榜第一名成为赏金目标（击杀 +$300），被悬赏有压力、拿赏有爽感
   game.bounty = null;
   if (game.player && game.opts.gameplayPlus) {
@@ -469,10 +486,21 @@ export function endRound(game, winner, reason, winType) {
         addMoney(e, bonus);
         // CS 规则：T 安弹后落败，全队额外补偿（eco 安弹战术的收益来源）
         if (e.team === 't' && game._plantedRound) addMoney(e, ECONOMY.PLANT_LOSS_BONUS);
+        // 连败救济金（candidate-582）：3 连败以上且买不起甲的赤贫队，保底购买力
+        if (e.lossStreak >= 3 && e.money < 1200) {
+          addMoney(e, ECONOMY.RELIEF_MONEY);
+          if (e === game.player) emit('sysfeed', { text: '🤝 连败救济 +$' + ECONOMY.RELIEF_MONEY });
+        }
       }
     }
     if (winner === 'ct' && game._plantedRound) {
       emit('sysfeed', { text: '安弹补偿：T 队每人 +$' + ECONOMY.PLANT_LOSS_BONUS });
+    }
+    // 残局翻盘奖励（candidate-583）：本回合开局队友全灭、玩家独活且活到最后翻盘
+    if (winner && game.clutchStart && game.player && winner === game.player.team &&
+        !game.player.dead && !game.over) {
+      addMoney(game.player, ECONOMY.CLUTCH_WIN_MONEY);
+      emit('sysfeed', { text: '🔥 1v' + game.clutchStart.n + ' 残局翻盘 +$' + ECONOMY.CLUTCH_WIN_MONEY });
     }
     // 局内强化：玩家方获胜 → 三选一增益待选（下回合起生效）
     if (winner && game.player && winner === game.player.team && !game.over) {
@@ -963,7 +991,8 @@ function updateTimers(game, dt) {
       }
     }
     if (!bombPlanted && game.roundTime >= game.roundDur) {
-      endRound(game, 'ct', '时间耗尽', 'timeout');
+      // 模式可覆盖时间耗尽判胜方（人质解救：时间到 = T 守住）
+      endRound(game, (game.opts && game.opts.timeoutWinner) || 'ct', '时间耗尽', 'timeout');
     }
   } else if (game.state === 'END') {
     game.endedT -= dt;

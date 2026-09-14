@@ -236,6 +236,27 @@ function createUiApi() {
             box.appendChild(l2);
           }
         }
+        // 死亡热点（candidate-572）：热力图采样聚合到站点/象限，给一句可行动提示
+        if (Array.isArray(game.heatLog) && game.heatLog.some((h) => h.kind === 'death')) {
+          const sites = (getMap() && getMap().sites) || {};
+          const deaths = game.heatLog.filter((h) => h.kind === 'death');
+          const zoneCount = {};
+          for (const d of deaths) {
+            let zone = null;
+            for (const k in sites) {
+              if (sites[k] && Math.hypot(d.x - sites[k].cx, d.y - sites[k].cy) < 260) { zone = sites[k].label + ' 区'; break; }
+            }
+            if (!zone) zone = (d.x > (getMap().W || 0) / 2 ? '东' : '西') + (d.y > (getMap().H || 0) / 2 ? '南' : '北') + '区';
+            zoneCount[zone] = (zoneCount[zone] || 0) + 1;
+          }
+          const top = Object.entries(zoneCount).sort((a, b) => b[1] - a[1])[0];
+          if (top && top[1] >= 3 && box) {
+            const hl = doc.createElement('div');
+            hl.className = 'stat-line coach-line';
+            hl.innerHTML = '🗺 死亡热点：' + esc(top[0]) + '（' + top[1] + ' 次）——下局绕开或提前预瞄';
+            box.appendChild(hl);
+          }
+        }
         // AI 教练复盘（candidate-573）：死亡归因 + 改进建议
         const coach = buildCoachLines(game);
         if (coach.length && box) {
@@ -492,12 +513,12 @@ const BUY_CATS = [
   { label: '霰弹枪', items: [['xm', 'XM1014', '8 弹丸 · 近战']] },
   { label: '步枪', items: [['ak', 'AK-47', 'T 专用 · 全自动'], ['m4', 'M4A4', 'CT 专用 · 全自动'], ['famas', 'FAMAS', 'CT 专用 · 中间步枪'], ['sg553', 'SG 553', 'T 专用 · 穿甲中间步枪'], ['aug', 'AUG', 'CT 专用 · 精准中间步枪']] },
   { label: '狙击枪', items: [['awp', 'AWP', '开镜 · 一枪致命']] },
-  { label: '装备', items: [['armor', '防弹衣', '50% 减伤'], ['helm', '防弹衣+头盔', '防爆头'], ['kit', '拆弹钳', '拆弹减半']] },
+  { label: '装备', items: [['armor', '防弹衣', '50% 减伤'], ['helm', '防弹衣+头盔', '防爆头'], ['kit', '拆弹钳', '拆弹减半'], ['insurance', '装备保险', '阵亡返还主武器价50%'], ['ext', '扩容弹匣', '备弹 +50%'], ['sil', '消音器', '枪声情报半径 -70%']] },
   { label: '投掷物', items: [['he', '高爆手雷', '范围伤害'], ['flash', '闪光弹', '致盲敌人'], ['smoke', '烟雾弹', '遮挡视线'], ['decoy', '诱饵弹', '伪造枪声 12s 引敌侦查'], ['moly', '燃烧瓶', '区域封锁 · 持续灼烧'], ['emp', 'EMP干扰弹', '压制小地图与听声 6s']] }
 ];
 
 function buyCatPrice() {
-  return { armor: PRICES.ARMOR, helm: PRICES.HELM, kit: PRICES.KIT, he: PRICES.HE, flash: PRICES.FLASH, smoke: PRICES.SMOKE, decoy: PRICES.DECOY, moly: PRICES.MOLLY, emp: PRICES.EMP };
+  return { armor: PRICES.ARMOR, helm: PRICES.HELM, kit: PRICES.KIT, he: PRICES.HE, flash: PRICES.FLASH, smoke: PRICES.SMOKE, decoy: PRICES.DECOY, moly: PRICES.MOLLY, emp: PRICES.EMP, insurance: PRICES.INSURANCE, ext: PRICES.EXT_MAG, sil: PRICES.SILENCER };
 }
 
 export function renderBuyMenu(gameRef) {
@@ -522,6 +543,30 @@ export function renderBuyMenu(gameRef) {
     b.onclick = () => { buyCat = i; renderBuyMenu(gameRef); };
     cats.appendChild(b);
   });
+  // 一键复购预设（candidate-578）
+  const presetBar = el('buyPreset');
+  if (presetBar && !presetBar._bound) {
+    presetBar._bound = true;
+    presetBar.innerHTML = '<button class="btn small" id="presetSave">保存配置</button><button class="btn small" id="presetBuy">一键复购</button>';
+    el('presetSave').onclick = () => {
+      const p0 = gameRef.player;
+      const kit = [];
+      if (p0.weapons.primary) kit.push(p0.weapons.primary);
+      for (const nd of ['he', 'flash', 'smoke', 'decoy', 'moly', 'emp']) if (p0.weapons.nades[nd]) kit.push(nd);
+      if (p0.helmet) kit.push('helm'); else if (p0.armor >= 100) kit.push('armor');
+      if (p0.weapons.kit) kit.push('kit');
+      try { localStorage.setItem('cs2d_buy_preset_v1', JSON.stringify(kit)); } catch (e0) { /* 忽略 */ }
+      showToast('已保存复购配置（' + kit.length + ' 件）');
+    };
+    el('presetBuy').onclick = () => {
+      let kit = [];
+      try { kit = JSON.parse(localStorage.getItem('cs2d_buy_preset_v1') || '[]'); } catch (e0) { kit = []; }
+      let boughtN = 0;
+      for (const id of kit) { if (buyItem(gameRef, id)) boughtN++; }
+      showToast(boughtN ? '复购完成：' + boughtN + ' 件' : '没有可复购的装备');
+      if (boughtN) uiSfx('confirm', 0.5);
+    };
+  }
   const grid = el('buyGrid');
   grid.innerHTML = '';
   const catPrice = buyCatPrice();
@@ -535,6 +580,8 @@ export function renderBuyMenu(gameRef) {
     if (id === 'armor') owned = p.armor >= 100;
     else if (id === 'helm') owned = p.helmet || p.armor >= 100;
     else if (id === 'kit') owned = p.weapons.kit;
+    else if (id === 'insurance') owned = p.insured === true;
+    else if (id === 'ext' || id === 'sil') owned = !!(p.mods && p.mods[id]);
     else if (id === 'he' || id === 'flash' || id === 'smoke' || id === 'decoy' || id === 'moly' || id === 'emp') owned = p.weapons.nades[id] >= (id === 'flash' ? 2 : 1);
     else owned = p.weapons.primary === id;
     const fac = catFaction[id];
@@ -739,6 +786,7 @@ import { DUEL_MAPS } from './duel-maps.js';
 import { choosePerk } from './perks.js';
 import { getA11yMode, setA11yMode } from './a11y.js';
 import { buildCoachLines } from './coach.js';
+import { getMap } from './map.js';
 import { dailyScenario, loadDaily } from './daily.js';
 
 let lastHoverT = 0;

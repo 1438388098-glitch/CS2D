@@ -33,7 +33,7 @@ export const WEAPONS = new Proxy({}, {
   getOwnPropertyDescriptor: () => ({ configurable: true, enumerable: true })
 });
 
-export const PRICES = { ARMOR: 650, HELM: 1000, KIT: 400, HE: 300, FLASH: 200, SMOKE: 300, DECOY: 400, MOLLY: 500, EMP: 500 };
+export const PRICES = { ARMOR: 650, HELM: 1000, KIT: 400, HE: 300, FLASH: 200, SMOKE: 300, DECOY: 400, MOLLY: 500, EMP: 500, EXT_MAG: 300, SILENCER: 400, INSURANCE: 300 };
 
 // 粒子/弹孔等动态元素上限（防爆炸峰值 GC 卡顿）
 export const MAX_PARTICLES = 600;
@@ -54,6 +54,10 @@ export const ECONOMY = {
   NEMESIS_BONUS: 300,
   PLANT_MONEY: 300,
   PLANT_LOSS_BONUS: 800,
+  INSURANCE_PRICE: 300,
+  INSURANCE_PAYOUT: 0.5,
+  RELIEF_MONEY: 300,
+  CLUTCH_WIN_MONEY: 500,
   DEFUSE_MONEY: 300,
   LOSS_BONUS: [1400, 1900, 2400, 2900, 3400]
 };
@@ -109,6 +113,13 @@ export const DIFF = {
     training: { gens: 8, pop: 16, map: 'dust2', evalRounds: 6, fitness: 101.0, note: 'S1 基线 normal/尘2图' },
     ladder: buildHellLadder()
   }
+};
+
+// CT 协防权重（candidate-562）：balance-report 定论 atrium 失衡在 AI 层（CT 接战即败）——
+// >1 的图让同点第二名 CT 优先互补锚点形成交叉火力，而非继续改地图几何
+export const MAP_CT_COOP = {
+  atrium: 1.4,
+  arctic: 1.15
 };
 
 export const MAP_CT_REACT = {
