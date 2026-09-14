@@ -29,7 +29,9 @@
     <div id="hud-top">
       <div class="ht-main">
         <span class="ht-t" id="hudScoreT">T 0</span>
+        <span class="pips" id="pipsT"></span>
         <span class="ht-time" id="hudTime">01:55</span>
+        <span class="pips" id="pipsCT"></span>
         <span class="ht-c" id="hudScoreC">0 CT</span>
       </div>
       <div class="ht-sub" id="hudBuyTip" style="display:none"></div>
@@ -68,6 +70,7 @@
         <span class="nade" id="nadeHe"><svg class="nade-ic"><use href="assets/icons.svg#ic-grenade"/></svg><b>4</b></span>
         <span class="nade" id="nadeFlash"><svg class="nade-ic"><use href="assets/icons.svg#ic-flash"/></svg><b>5</b></span>
         <span class="nade" id="nadeSmoke"><svg class="nade-ic"><use href="assets/icons.svg#ic-smoke"/></svg><b>6</b></span>
+        <span class="nade" id="nadeDecoy"><svg class="nade-ic"><use href="assets/icons.svg#ic-grenade"/></svg><b>7</b></span>
       </div>
     </div>
 
@@ -86,6 +89,7 @@
   </div>
 
   <div id="banner"><div class="b1" id="ban1"></div><div class="b2" id="ban2"></div></div>
+  <div id="perkDraft"><div class="pd-title">回合胜利强化 · 三选一</div><div class="pd-cards"></div></div>
   <div id="streak"><div class="s1"></div><div class="s2"></div></div>
   <div id="killfeed"></div>
   <div id="toast"></div>
@@ -113,6 +117,7 @@
               <summary>娱乐模式</summary>
               <div class="mode-more-grid">
                 <button class="mode-card" data-mode="retake"><svg class="mc-ic"><use href="assets/icons.svg#ic-shield"/></svg><b>回防模式</b><small>CT 回防拆弹</small></button>
+                <button class="mode-card" data-mode="gungame"><svg class="mc-ic"><use href="assets/icons.svg#ic-fire"/></svg><b>军备竞赛</b><small>击杀升级 · 刀杀收尾</small></button>
                 <button class="mode-card" data-mode="duel"><svg class="mc-ic"><use href="assets/icons.svg#ic-knife-w"/></svg><b>单挑模式</b><small>1v1 MR9</small></button>
                 <button class="mode-card" data-mode="major"><svg class="mc-ic"><use href="assets/icons.svg#ic-headshot"/></svg><b>Major 锦标赛</b><small>48 队冲冠</small></button>
                 <button class="mode-card" data-mode="lan"><svg class="mc-ic"><use href="assets/icons.svg#ic-volume"/></svg><b>局域网对战</b><small>双人同图</small></button>
@@ -168,6 +173,7 @@
             <label class="check-row"><input type="checkbox" id="fogCheck"> 迷雾</label>
           </div>
           <button class="btn primary" id="startBtn">开 始 比 赛</button>
+          <button class="btn" id="dailyBtn">每日挑战</button>
         </aside>
       </div>
       <button class="help-btn" id="helpBtn" title="操作说明">?</button>

@@ -246,14 +246,16 @@ function drawWeatherLayer(game) {
   const map = getMap();
   if (!map) return;
   const themeW = themeWeatherOf(map.id);
-  const kind = themeW ? themeW.kind : weatherKind(map.id);
+  // 回合事件可覆盖天气（「浓雾弥漫」强制 fog 且加密粒子），事件结束恢复主题天气
+  const evW = game.roundEvent && game.roundEvent.weather;
+  const kind = evW || (themeW ? themeW.kind : weatherKind(map.id));
   if (!kind) return;
   if (kind === 'rain') spawnRainRipples(game);
   const z = game.zoom || 1;
   const vw = game.canvasW / z;
   const vh = game.canvasH / z;
   if (!(vw > 0) || !(vh > 0)) return;
-  const count = Math.round(WEATHER_MAX_PARTICLES * (themeW ? themeW.density : 0.55));
+  const count = Math.round(WEATHER_MAX_PARTICLES * (evW ? (game.roundEvent.density || 0.8) : (themeW ? themeW.density : 0.55)));
   const parts = weatherParticles(kind, game.time, count, vw, vh, weatherSeed(String(map.id)));
   if (!parts.length) return;
   const ox = (game.camX || 0) - vw / 2;
@@ -1060,6 +1062,21 @@ function drawEntities(game) {
         ctx.fillRect(ex - 17, ey - 39, 34, 4);
         ctx.fillStyle = hpBarColor(e.hp);
         ctx.fillRect(ex - 16, ey - 38, 32 * clamp(e.hp / 100, 0, 1), 2);
+      }
+      // 回合悬赏 $（金色，右）/ 宿敌 ☠（红色，左）：避开血条位置的头顶标记
+      if (game.bounty === e) {
+        ctx.fillStyle = '#ffd75e';
+        ctx.font = 'bold 13px Consolas, monospace';
+        ctx.textAlign = 'center';
+        ctx.fillText('$', ex + 22, ey - 40);
+        ctx.textAlign = 'left';
+      }
+      if (e.nemesis) {
+        ctx.fillStyle = '#ff5b4d';
+        ctx.font = '12px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText('☠', ex - 22, ey - 41);
+        ctx.textAlign = 'left';
       }
     }
     if (e.defuseT > 0) {

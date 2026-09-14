@@ -33,7 +33,7 @@ export const WEAPONS = new Proxy({}, {
   getOwnPropertyDescriptor: () => ({ configurable: true, enumerable: true })
 });
 
-export const PRICES = { ARMOR: 650, HELM: 1000, KIT: 400, HE: 300, FLASH: 200, SMOKE: 300 };
+export const PRICES = { ARMOR: 650, HELM: 1000, KIT: 400, HE: 300, FLASH: 200, SMOKE: 300, DECOY: 400 };
 
 // 粒子/弹孔等动态元素上限（防爆炸峰值 GC 卡顿）
 export const MAX_PARTICLES = 600;
@@ -50,6 +50,8 @@ export const ECONOMY = {
   KILL_MONEY_SMG: 600,
   KILL_MONEY_SHOTGUN: 900,
   ASSIST_MONEY: 100,
+  BOUNTY_MONEY: 300,
+  NEMESIS_BONUS: 300,
   PLANT_MONEY: 300,
   PLANT_LOSS_BONUS: 800,
   DEFUSE_MONEY: 300,

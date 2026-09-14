@@ -15,6 +15,7 @@ import {dropBomb} from './bomb.js';
 import {throwGrenade} from './grenades.js';
 import {effectiveSpread, registerShot, headshotChance, distanceFalloff} from './ballistic.js';
 import {addRipple} from './water-fx.js';
+import {recordNemesisDeath, recordRevenge} from './nemesis.js';
 
 const emit = (evt, p) => ctx.bus.emit(evt, p);
 const mapTile = () => getMap()?.tile || TILE;
@@ -468,12 +469,14 @@ export function killEntity(v, killer, weapon, head, game) {
     if (!killer.weapKills) killer.weapKills = {};
     const wk = WEAPONS[weapon] ? weapon : (weapon === 'grenade' ? 'grenade' : 'knife');
     killer.weapKills[wk] = (killer.weapKills[wk] || 0) + 1;
-    addMoney(killer, killRewardFor(weapon));
+    addMoney(killer, Math.round(killRewardFor(weapon) * ((game.roundEvent && game.roundEvent.killMult) || 1)));
     for (const o of game.entities) {
       if (o !== killer && o.team === killer.team && !o.dead) {
         if (v.lastDmgFrom === o && (game.time * 1000 - v.lastDmgT) < 6000) {
           o.assists++;
           addMoney(o, ECONOMY.ASSIST_MONEY);
+          // 助攻即时反馈：此前助攻静默计数，与击杀的全套反馈落差过大
+          if (o === game.player) emit('sysfeed', { text: '助攻 +$' + ECONOMY.ASSIST_MONEY });
         }
       }
     }
@@ -483,6 +486,14 @@ export function killEntity(v, killer, weapon, head, game) {
     me: killer === game.player ? 'k' : (v === game.player ? 'v' : null),
     n: killer === game.player ? (killer.streak || 0) + 1 : null
   });
+  // 回合悬赏结算：击杀赏金目标额外入账（bot 也可争夺，观战更有戏剧性）
+  if (game.bounty && v === game.bounty && killer && killer.team !== v.team) {
+    addMoney(killer, ECONOMY.BOUNTY_MONEY);
+    emit('sysfeed', { text: (killer === game.player ? '悬赏到手 ' : '赏金目标被 ' + killer.name + ' 击杀 · ') + '+$' + ECONOMY.BOUNTY_MONEY });
+    game.bounty = null;
+  }
+  // 实体级击杀事件（军备竞赛等模式的钩子）：killfeed 只有名字，这里带引用
+  emit('entityKill', { killer, victim: v, weapon, game });
   if (v.hasBomb && (!game.bomb || !game.bomb.planted)) {
     dropBomb(v.x, v.y, game);
   }
@@ -496,6 +507,13 @@ export function killEntity(v, killer, weapon, head, game) {
     game.killLabelHead = !!head;
     game.player.killStreakT = KILL_LABEL_DUR;
     if (head) game.stats.headshots++;
+    // 宿敌复仇：击杀跨局宿敌额外赏金并清零其宿敌值
+    if (v.nemesis) {
+      addMoney(killer, ECONOMY.NEMESIS_BONUS);
+      emit('sysfeed', { text: '宿敌复仇！干掉 ' + v.name + ' · +$' + ECONOMY.NEMESIS_BONUS });
+      recordRevenge(v.name);
+      v.nemesis = false;
+    }
     if (killer.streak >= 5) {
       emit('streak', { n: killer.streak });
       emit('sfx', { name: 'streak', vol: 0.8, game });
@@ -509,6 +527,8 @@ export function killEntity(v, killer, weapon, head, game) {
     game.player.killStreakT = 0;
     game.killStreak = 0;
     game.lastKiller = killer;
+    // 宿敌记账：跨局记住杀你最多的 bot
+    recordNemesisDeath(killer && killer.bot ? killer.name : null);
     // 击杀镜头：死亡后短暂锁定击杀者视角（0.9s），随后切入队友观战
     game.killCamT = 0.9;
     emit('deathinfo', { killer: killer ? killer.name : '环境', weapon: wname, head: !!head });

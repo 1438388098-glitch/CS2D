@@ -14,6 +14,7 @@ import {isMuted, setAudioContext, startAmbient, initAudio, getBusVolume, setBusV
 import './modes.js';
 import './retake-mode.js';
 import './manager-match.js';
+import './gungame-mode.js';
 import {nextRenderScale} from './render-scale.js';
 import {initCareerUi} from './career-ui.js';
 import {initManagerUi} from './manager-ui.js';
@@ -23,7 +24,7 @@ import {openMapEditor, closeMapEditor, saveEditorMap, playEditorMapNow, installS
 import {smoothRenderEntities} from './render-smooth.js';
 
 const canvas = document.getElementById('game');
-const game = createGame();
+const game = createGame({ gameplayPlus: true });
 
 setMutedFnExposed(() => isMuted());
 setAudioContext(() => game);

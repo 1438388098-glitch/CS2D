@@ -69,7 +69,7 @@ function bindBus() {
   bus.on('streak', (p) => showKillStreak(p.n));
   bus.on('deathinfo', (p) => showDeathInfo(p.killer, p.weapon, p.head));
   bus.on('damagereport', (p) => showDmgReport(p.dmg, p.heads));
-  bus.on('banner', (p) => api.showBanner(p.t1, p.t2, p.col));
+  bus.on('banner', (p) => api.showBanner(p.t1, p.t2, p.col, p.dur));
   bus.on('bannerHide', () => uiHideBanner());
   bus.on('objtext', (p) => api.setObjText(p.main, p.sub));
   bus.on('objtextShow', () => { const ot = el('objtext'); if (ot) ot.style.display = 'block'; });
@@ -107,18 +107,25 @@ function bindBus() {
   });
   bus.on('refreshScoreboard', () => { if (sbOpen) renderScoreboard(game); });
   bus.on('buyUpdated', () => { if (buyOpen) renderBuyMenu(game); });
+  bus.on('perkDraft', (p) => showPerkDraft(p.options));
+  bus.on('perkDraftHide', () => { const w = el('perkDraft'); if (w) w.classList.remove('show'); });
 }
 
 function createUiApi() {
   const noop = () => {};
   return {
-    showBanner: (t1, t2, col) => {
+    showBanner: (t1, t2, col, dur) => {
       const b1 = el('ban1'), b2 = el('ban2'), b = el('banner');
       if (!b1 || !b2 || !b) return;
       b1.textContent = t1;
       b2.textContent = t2;
       b1.style.color = col;
       b.classList.add('show');
+      // dur：回合开局类横幅（手枪局/赛点局）自动收起，不清场会压整回合视野
+      if (dur) {
+        clearTimeout(showBanner._t);
+        showBanner._t = setTimeout(() => b.classList.remove('show'), dur);
+      }
     },
     hideBanner: () => { const b = el('banner'); if (b) b.classList.remove('show'); },
     showToast: (t) => {
@@ -475,11 +482,11 @@ const BUY_CATS = [
   { label: '步枪', items: [['ak', 'AK-47', 'T 专用 · 全自动'], ['m4', 'M4A4', 'CT 专用 · 全自动'], ['famas', 'FAMAS', 'CT 专用 · 中间步枪'], ['sg553', 'SG 553', 'T 专用 · 穿甲中间步枪'], ['aug', 'AUG', 'CT 专用 · 精准中间步枪']] },
   { label: '狙击枪', items: [['awp', 'AWP', '开镜 · 一枪致命']] },
   { label: '装备', items: [['armor', '防弹衣', '50% 减伤'], ['helm', '防弹衣+头盔', '防爆头'], ['kit', '拆弹钳', '拆弹减半']] },
-  { label: '投掷物', items: [['he', '高爆手雷', '范围伤害'], ['flash', '闪光弹', '致盲敌人'], ['smoke', '烟雾弹', '遮挡视线']] }
+  { label: '投掷物', items: [['he', '高爆手雷', '范围伤害'], ['flash', '闪光弹', '致盲敌人'], ['smoke', '烟雾弹', '遮挡视线'], ['decoy', '诱饵弹', '伪造枪声 12s 引敌侦查']] }
 ];
 
 function buyCatPrice() {
-  return { armor: PRICES.ARMOR, helm: PRICES.HELM, kit: PRICES.KIT, he: PRICES.HE, flash: PRICES.FLASH, smoke: PRICES.SMOKE };
+  return { armor: PRICES.ARMOR, helm: PRICES.HELM, kit: PRICES.KIT, he: PRICES.HE, flash: PRICES.FLASH, smoke: PRICES.SMOKE, decoy: PRICES.DECOY };
 }
 
 export function renderBuyMenu(gameRef) {
@@ -517,7 +524,7 @@ export function renderBuyMenu(gameRef) {
     if (id === 'armor') owned = p.armor >= 100;
     else if (id === 'helm') owned = p.helmet || p.armor >= 100;
     else if (id === 'kit') owned = p.weapons.kit;
-    else if (id === 'he' || id === 'flash' || id === 'smoke') owned = p.weapons.nades[id] >= (id === 'flash' ? 2 : 1);
+    else if (id === 'he' || id === 'flash' || id === 'smoke' || id === 'decoy') owned = p.weapons.nades[id] >= (id === 'flash' ? 2 : 1);
     else owned = p.weapons.primary === id;
     const fac = catFaction[id];
     const locked = fac && fac !== p.team && !owned;
@@ -561,6 +568,23 @@ export function switchBuyCat(n) {
   if (!buyOpen || !BUY_CATS[n]) return;
   buyCat = n;
   renderBuyMenu(game);
+}
+
+// 局内强化三选一浮层：赢回合后展示 3 张增益卡，点选即生效
+function showPerkDraft(options) {
+  const wrap = el('perkDraft');
+  if (!wrap) return;
+  const cards = wrap.querySelector('.pd-cards');
+  if (!cards) return;
+  cards.innerHTML = '';
+  for (const o of options) {
+    const b = doc.createElement('button');
+    b.className = 'pd-card';
+    b.innerHTML = '<b>' + esc(o.name) + '</b><small>' + esc(o.desc) + '</small>';
+    b.onclick = () => { choosePerk(game, o.id); };
+    cards.appendChild(b);
+  }
+  wrap.classList.add('show');
 }
 
 let lastSbRender = 0;
@@ -700,6 +724,8 @@ import { buyItem } from './economy.js';
 import { MAJOR_TEAMS, majorAction, CYBER_ROSTER, CYBER_START_COINS, CYBER_BAILOUT_COINS, CYBER_BAILOUT_AT, cyberCoins, cyberStats, cyberHistory, cyberChance, cyberPayout, parseCustomGroupList } from './modes.js';
 import { OPPONENTS, getStats, resetDuel, pickDuelMap } from './duel.js';
 import { DUEL_MAPS } from './duel-maps.js';
+import { choosePerk } from './perks.js';
+import { dailyScenario, loadDaily } from './daily.js';
 
 let lastHoverT = 0;
 
@@ -873,7 +899,7 @@ function renderDuelPanel() {
   }).join('');
   const hist = stats.history.slice(0, 10).map((h) => '<div class="duel-hist-row"><span class="' + (h.win ? 'w' : 'l') + '">' + (h.win ? '胜' : '负') + '</span><span>' + h.kills + '杀 / ' + h.deaths + '死</span>' + (h.opp ? '<span>vs ' + h.opp + '</span>' : '') + '<span>' + mapTitle(h.map) + '</span></div>').join('') || '<div class="mode-hint">暂无比赛记录</div>';
   body.innerHTML =
-    '<div class="duel-top"><h3>单挑模式</h3><span class="duel-sub">1v1 · ' + ROUND.MATCH_WIN + ' 胜（BO' + (ROUND.MATCH_WIN * 2 - 1) + '）· 第 ' + (Math.floor(ROUND.MATCH_WIN / 2) + 1) + ' 回合换边</span><button class="btn small" id="duelBackBtn">← 主菜单</button></div>' +
+      '<div class="duel-top"><h3>单挑模式</h3><span class="duel-sub">1v1 · ' + ROUND.MATCH_WIN + ' 胜（BO' + (ROUND.MATCH_WIN * 2 - 1) + '）· 第 ' + (Math.floor((ROUND.MATCH_WIN * 2 - 1) / 2) + 1) + ' 回合换边</span><button class="btn small" id="duelBackBtn">← 主菜单</button></div>' +
     '<div class="duel-body">' +
       '<div class="duel-section"><h5>选择对手</h5><div class="duel-opp-grid">' + oppCards + '</div></div>' +
       '<div class="duel-section"><h5>地图</h5><div class="duel-map-chips">' + mapChips + '</div><div class="mode-hint" id="duelMapHint">' + mapHint + '</div></div>' +
@@ -1073,6 +1099,20 @@ function bindMenu() {
       tutorialShown = true;
     }
     if (!(tut && tut.checked && !tutorialShown)) requestFpsPointerLock(game);
+    e.currentTarget.blur();
+  };
+
+  // 每日挑战：日期种子固定场景（地图/HELL 难度/阵营 4v4），打赢打卡记连胜
+  const dailyBtn = el('dailyBtn');
+  if (dailyBtn) dailyBtn.onclick = (e) => {
+    initAudio();
+    const sc = dailyScenario();
+    const d = loadDaily();
+    game._dailyBackup = { mapId: game.opts.mapId, diff: game.opts.diff, hellLevel: game.opts.hellLevel, bots: game.opts.bots, team: game.opts.team };
+    Object.assign(game.opts, { mode: 'classic', mapId: sc.mapId, diff: 'hell', hellLevel: sc.hellLevel, bots: sc.bots, team: sc.team, daily: true });
+    game.seed = sc.seed;
+    startMatch(game);
+    showToast('每日挑战 ' + sc.date + (d.done ? '（今日已打卡）' : '') + '：' + sc.label);
     e.currentTarget.blur();
   };
 }

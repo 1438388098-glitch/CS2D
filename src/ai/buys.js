@@ -320,7 +320,7 @@ export function botBuyAll(game) {
     const teamType = game.teamBuyType && game.teamBuyType[e.team];
     const rifle = rifleFor(e.team);
     const smg = smgFor(e.team);
-    const allowAwp = awpAlloc[e.team] === e;
+    const allowAwp = awpAlloc[e.team] === e && !(game.roundEvent && game.roundEvent.noAwp);
     // 反 eco（敌方穷局）：保持/换 SMG 抢节奏
     const teamAnti = (e.team === 't' && game.roundPlan && game.roundPlan.antiEco) || (e.team === 'ct' && game.ctPlan && game.ctPlan.antiEco);
     if (teamAnti) {

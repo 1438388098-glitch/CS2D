@@ -23,6 +23,10 @@ import { stuckObjective } from './ai/stability.js';
 import { castAimRay as castAimRayFps } from './fps-laser.js';
 import { addRipple, pruneRipples } from './water-fx.js';
 import { IMPACT_LIFE } from './impact-fx.js';
+import { maybeRollRoundEvent, clearRoundEvent } from './round-events.js';
+import { offerPerks, resolvePendingPerks, resetPerks } from './perks.js';
+import { markNemesis } from './nemesis.js';
+import { settleDaily } from './daily.js';
 
 const emit = (evt, p) => ctx.bus.emit(evt, p);
 
@@ -102,7 +106,7 @@ function fpsMoveScale(game) {
 export function createGame(opts = {}) {
   const game = {
     state: 'MENU',
-    entities: [], grenades: [], particles: [], tracers: [], smokes: [], decals: [], drops: [], barrels: [], crates: [], _particlePool: [], ripples: [], impacts: [],
+    entities: [], grenades: [], particles: [], tracers: [], smokes: [], decals: [], drops: [], barrels: [], crates: [], _particlePool: [], ripples: [], impacts: [], decoys: [],
     lastSplash: null,
     player: null,
     camX: 1200, camY: 900,
@@ -216,8 +220,9 @@ export function startMatch(game) {
   initInfo(game);
   initOppModel(game);
   game.over = false;
+  resetPerks(game);
   // 清理模式残留（cyber/major 等按模式注入的 game 字段，避免跨模式泄漏）
-  for (const k of ['major', 'cyber']) delete game[k];
+  for (const k of ['major', 'cyber', 'gg', '_ggRound', '_ggOff', 'pendingPerks', 'perkLog']) delete game[k];
   const modeDef = game.mode ? getMode(game.mode) : null;
   if (modeDef && modeDef.start) {
     modeDef.start(game);
@@ -393,10 +398,30 @@ export function startRound(game) {
   game.endedT = 0;
   game._plantedRound = false;
   spawnRound(game);
+  // 回合悬赏：敌方击杀榜第一名成为赏金目标（击杀 +$300），被悬赏有压力、拿赏有爽感
+  game.bounty = null;
+  if (game.player && game.opts.gameplayPlus) {
+    const enemies = game.entities.filter((e) => e.bot && e.team !== game.player.team && !e.dead);
+    if (enemies.length) {
+      enemies.sort((a, b) => (b.kills || 0) - (a.kills || 0));
+      game.bounty = enemies[0];
+    }
+  }
+  markNemesis(game);
+  resolvePendingPerks(game);
+  maybeRollRoundEvent(game);
   emit('sfx', { name: 'whistle', vol: 0.7, game });
   if (game.ui) {
     emit('bannerHide');
     emit('toast', { text: '第 ' + game.round + ' 回合' });
+    // 手枪局/赛点局横幅演出：banner 组件在回合开始时刻的仪式感位
+    const winAt = game.ot ? (game.otWin || ROUND.OT_WIN) : (game.matchWin || ROUND.MATCH_WIN);
+    if (game.round === 1) {
+      emit('banner', { t1: '手枪局', t2: '经济局 · 省着花', col: '#ffd75e', dur: 2000 });
+    } else if (game.score.T === winAt - 1 || game.score.CT === winAt - 1) {
+      const leader = game.score.T === winAt - 1 ? 'T' : 'CT';
+      emit('banner', { t1: '赛 点 局', t2: leader + ' 队拿到赛点 · 先赢 ' + winAt + ' 回合获胜', col: '#ff6b4d', dur: 2200 });
+    }
   }
   updateBombHud(game);
 }
@@ -405,6 +430,7 @@ export function endRound(game, winner, reason, winType) {
   if (game.state === 'END') return;
   game.state = 'END';
   game.endedT = ROUND.END_DELAY;
+  clearRoundEvent(game);
   if (!game.winHistory) game.winHistory = [];
   game.winHistory.push(winner === 't' ? 'T' : winner === 'ct' ? 'C' : 'D');
   recordRoundResult(game, winner, winType);
@@ -430,6 +456,10 @@ export function endRound(game, winner, reason, winType) {
     if (winner === 'ct' && game._plantedRound) {
       emit('sysfeed', { text: '安弹补偿：T 队每人 +$' + ECONOMY.PLANT_LOSS_BONUS });
     }
+    // 局内强化：玩家方获胜 → 三选一增益待选（下回合起生效）
+    if (winner && game.player && winner === game.player.team && !game.over) {
+      offerPerks(game);
+    }
     game[winKey] = 0;
     game[lossKey] = lossStreak + 1;
   } else {
@@ -447,6 +477,7 @@ export function endRound(game, winner, reason, winType) {
 export function finishMatch(game) {
   game.over = true;
   game.state = 'END';
+  clearRoundEvent(game);
   const modeDef = game.mode ? getMode(game.mode) : null;
   if (modeDef && modeDef.onFinish) modeDef.onFinish(game);
   const winAt = game.ot ? (game.otWin || ROUND.OT_WIN) : (game.matchWin || ROUND.MATCH_WIN);
@@ -467,6 +498,7 @@ export function finishMatch(game) {
   const win = (game.score.T >= winAt && game.player.team === 't') ||
     (game.score.CT >= winAt && game.player.team === 'ct');
   recordDifficultyResult(game, win);
+  settleDaily(game, win);
   const ui = game.ui;
   if (!ui) return;
   const p = game.player;

@@ -27,7 +27,7 @@ export function nextRoundBudget(p, game) {
 export function clearEquipment(e) {
   e.weapons.primary = null;
   e.weapons.secondary = null;
-  e.weapons.nades = { he: 0, flash: 0, smoke: 0 };
+  e.weapons.nades = { he: 0, flash: 0, smoke: 0, decoy: 0 };
   e.weapons.kit = false;
   e.armor = 0;
   e.helmet = false;
@@ -59,9 +59,9 @@ export function buyItem(game, what) {
     p.money -= PRICES.KIT;
     p.weapons.kit = true;
     bought = true;
-  } else if (what === 'he' || what === 'flash' || what === 'smoke') {
-    const pr = what === 'he' ? PRICES.HE : (what === 'flash' ? PRICES.FLASH : PRICES.SMOKE);
-    const maxn = what === 'he' ? 1 : (what === 'flash' ? 2 : 1);
+  } else if (what === 'he' || what === 'flash' || what === 'smoke' || what === 'decoy') {
+    const pr = what === 'he' ? PRICES.HE : (what === 'flash' ? PRICES.FLASH : (what === 'decoy' ? PRICES.DECOY : PRICES.SMOKE));
+    const maxn = what === 'flash' ? 2 : 1;
     if (p.weapons.nades[what] >= maxn || p.money < pr) return false;
     p.money -= pr;
     p.weapons.nades[what]++;
@@ -69,6 +69,8 @@ export function buyItem(game, what) {
   } else {
     const w = WEAPONS[what];
     if (!w) return false;
+    // 回合事件「禁狙令」：本回合 AWP 不可购买（bot 购买同步受 buys.js allowAwp 门控）
+    if (what === 'awp' && game.roundEvent && game.roundEvent.noAwp) return false;
     if (what === 'glock' || what === 'usp') {
       if (p.weapons.secondary === what || p.money < w.price) return false;
       p.money -= w.price;

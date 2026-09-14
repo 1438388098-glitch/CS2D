@@ -43,10 +43,11 @@ export function initUiDom(gameRef) {
   game = gameRef;
   const ids = [
     'hud-root', 'hud-top', 'hud-left', 'hud-right', 'hudScoreT', 'hudTime', 'hudScoreC', 'hudBuyTip', 'hudHellTip',
+    'pipsT', 'pipsCT',
     'hudWeaponIc', 'hudWeaponName', 'hudHp', 'hudHpBar', 'hudArmorBar', 'hudMoney',
     'hudStateRow', 'hudStateIc', 'hudStateText',
     'hudAmmoMag', 'hudAmmoRes', 'hudReloadRing', 'hudAmmoName',
-    'nadeHe', 'nadeFlash', 'nadeSmoke',
+    'nadeHe', 'nadeFlash', 'nadeSmoke', 'nadeDecoy',
     'hudBomb', 'hudBombSecs', 'hudSpectate', 'hudSpecText'
   ];
   for (const id of ids) D[id] = document.getElementById(id);
@@ -176,7 +177,7 @@ function updateRight(p, now) {
 
   const nades = p.weapons.nades;
   const nk = p.slot && p.slot.indexOf('nade:') === 0 ? p.slot.split(':')[1] : null;
-  const defs = [['he', 'nadeHe'], ['flash', 'nadeFlash'], ['smoke', 'nadeSmoke']];
+  const defs = [['he', 'nadeHe'], ['flash', 'nadeFlash'], ['smoke', 'nadeSmoke'], ['decoy', 'nadeDecoy']];
   for (const [k, id] of defs) {
     const e = D[id];
     if (!e) continue;
@@ -184,10 +185,28 @@ function updateRight(p, now) {
     e.classList.toggle('empty', n <= 0);
     e.classList.toggle('active', nk === k);
     const b = e.querySelector('b');
-    if (b && b.textContent !== (k === 'flash' ? '5' : k === 'smoke' ? '6' : '4')) {
-      b.textContent = k === 'flash' ? '5' : k === 'smoke' ? '6' : '4';
+    const keyNum = k === 'flash' ? '5' : (k === 'smoke' ? '6' : (k === 'decoy' ? '7' : '4'));
+    if (b && b.textContent !== keyNum) {
+      b.textContent = keyNum;
     }
   }
+}
+
+// 存活 pips：信号差量重绘（总人数:存活数 变化才 innerHTML），平时零 DOM 写
+function updatePips(el, team) {
+  if (!el) return;
+  let total = 0, alive = 0;
+  for (const e of game.entities) {
+    if (e.team !== team) continue;
+    total++;
+    if (!e.dead) alive++;
+  }
+  const sig = total + ':' + alive;
+  if (el._sig === sig) return;
+  el._sig = sig;
+  let html = '';
+  for (let i = 0; i < total; i++) html += '<i class="' + (i < alive ? 'on' : 'off') + '"></i>';
+  el.innerHTML = html;
 }
 
 function updateTop(p, now) {
@@ -202,6 +221,9 @@ function updateTop(p, now) {
     const sc = game.score.CT + ' CT';
     if (D.hudScoreT.textContent !== st) D.hudScoreT.textContent = st;
     if (D.hudScoreC.textContent !== sc) D.hudScoreC.textContent = sc;
+    // 队伍存活状态条：对局中一眼读出双方存活数（此前必须按 Tab 开记分板）
+    updatePips(D.pipsT, 't');
+    updatePips(D.pipsCT, 'ct');
   }
 
   if (game.state === 'BUY' && game.buyTime > 0) {
