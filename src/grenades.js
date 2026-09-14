@@ -77,6 +77,10 @@ export function updateGrenades(game, dt) {
             e.blind = Math.max(e.blind, dur);
           }
         }
+      } else if (g.kind === 'decoy') {
+        // 诱饵弹落地激活：周期性伪造枪声（写 lastSound 走 bot 听声链），敌方大脑被骗来侦查
+        game.decoys.push({ x: g.x, y: g.y, life: 12, tick: 0.4, owner: g.owner });
+        spawnParticle(game, { kind: 'smokep', x: g.x, y: g.y, vx: 0, vy: 12, life: 0.8, size: 6 });
       } else if (g.kind === 'smoke') {
         emit('sfx', { name: 'smoke', vol: 0.8, x: g.x, y: g.y, game });
         game.lastSound = { x: g.x, y: g.y, t: game.time, radius: 500, conf: 0.4 };
@@ -128,5 +132,18 @@ export function updateGrenades(game, dt) {
     sm.life -= dt;
     sm.r = sm.r + (sm.gr - sm.r) * (1 - Math.exp(-3 * dt));
     if (sm.life <= 0) game.smokes.splice(s, 1);
+  }
+  // 诱饵侦查期：每 1.1s 一声伪枪 + 枪口小火花，半径内敌 bot 经 lastSound 误判有交火
+  for (let d = game.decoys.length - 1; d >= 0; d--) {
+    const dc = game.decoys[d];
+    dc.life -= dt;
+    dc.tick -= dt;
+    if (dc.tick <= 0) {
+      dc.tick = 1.1;
+      game.lastSound = { x: dc.x, y: dc.y, t: game.time, radius: 750, conf: 0.5 };
+      emit('sfx', { name: 'shot', vol: 0.5, x: dc.x, y: dc.y, game });
+      spawnParticle(game, { kind: 'fire', x: dc.x, y: dc.y, vx: rand(-14, 14), vy: rand(-24, -6), life: 0.18, size: 3 });
+    }
+    if (dc.life <= 0) game.decoys.splice(d, 1);
   }
 }

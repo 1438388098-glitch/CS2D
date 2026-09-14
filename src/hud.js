@@ -7,7 +7,7 @@ import { crosshairSpreadPx, shouldDrawFpsSpreadCrosshair, crosshairHitFeedback, 
 import { getBindLabel } from './keymap.js';
 import { fogEnabled } from './fog.js';
 import { castAimRay } from './fps-laser.js';
-import { lowHpVignette, drawLowHpVignette, lowHpPulse, drawLowHpPulse, killFlash, drawKillFlash } from './screen-fx.js';
+import { lowHpVignette, drawLowHpVignette, lowHpPulse, drawLowHpPulse, killFlash, drawKillFlash, deathVeilAlpha, drawDeathVeil } from './screen-fx.js';
 import { activePings, drawMinimapPings } from './ping-fx.js';
 import { crosshairStyle, crosshairColorCss, CROSSHAIR_DEFAULTS } from './crosshair-prefs.js';
 import { bombPulseAlpha, drawBombPulse } from './c4-pulse-fx.js';
@@ -759,6 +759,10 @@ export function renderHud(game) {
   // 2D 击杀屏幕边缘白色闪光（candidate-304）：左右下三边 0.35s 内从 1 衰减到 0
   if (game.killFlashT > 0) {
     drawKillFlash(ctx, w2, h2, killFlash(game.killFlashT));
+  }
+  // 死亡冷色滤镜（candidate-543）：deathT 从 1.8 倒数，残影随死亡时长渐入
+  if (p && p.dead) {
+    drawDeathVeil(ctx, w2, h2, deathVeilAlpha(1.8 - (p.deathT || 0)));
   }
   // 残局 1vN 指示：玩家为队内最后一人且敌方 ≥2 人存活（candidate-508）
   const clutch = clutchInfo(game);

@@ -138,6 +138,15 @@ export function fireWeapon(e, game) {
   }
 }
 
+// 玩家 spray 轨迹（candidate-544）：保留最近 6 条 0.8s 渐隐细线，压枪时看得见前几发落点
+export const SPRAY_TRACE_LIFE = 0.8;
+function pushSprayTrace(game, e, x1, y1, x2, y2) {
+  if (e !== game.player) return;
+  game.sprayTrace = game.sprayTrace || [];
+  game.sprayTrace.push({ x1, y1, x2, y2, life: SPRAY_TRACE_LIFE });
+  if (game.sprayTrace.length > 6) game.sprayTrace.shift();
+}
+
 function meleeAttack(e, game) {
   const wk = WEAPONS.knife;
   const heavy = e.bot ? rand() < 0.25 : game.input.rdown;
@@ -254,10 +263,12 @@ function fireRay(e, game, ang, w, dmg, isPellet) {
     spawnBlood(hx, hy, ang, head, game);
     if (head) spawnGoldBurst(game, spawnParticle, hx, hy, ang);
     game.tracers.push({ x1: ox, y1: oy, x2: hx, y2: hy, life: TRACER_LIFE, kind: w.kind, team: e.team });
+    pushSprayTrace(game, e, ox, oy, hx, hy);
     addDecal(game, hx, hy, 'hole', ang);
     recordImpact(game, hx, hy);
   } else {
     game.tracers.push({ x1: ox, y1: oy, x2: tx, y2: ty, life: TRACER_LIFE, kind: w.kind, team: e.team });
+    pushSprayTrace(game, e, ox, oy, tx, ty);
     addDecal(game, tx, ty, 'spark', ang);
     recordImpact(game, tx, ty);
     for (let sp = 0; sp < 6; sp++) {

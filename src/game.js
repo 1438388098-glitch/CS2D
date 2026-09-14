@@ -27,6 +27,7 @@ import { maybeRollRoundEvent, clearRoundEvent } from './round-events.js';
 import { offerPerks, resolvePendingPerks, resetPerks } from './perks.js';
 import { markNemesis } from './nemesis.js';
 import { settleDaily } from './daily.js';
+import { updateAirdrop } from './airdrop.js';
 
 const emit = (evt, p) => ctx.bus.emit(evt, p);
 
@@ -345,6 +346,7 @@ function spawnRound(game) {
   game._particlePool.push(...game.particles);
   game.particles.length = 0;
   game.tracers.length = 0;
+  if (game.sprayTrace) game.sprayTrace.length = 0;
   game.ripples.length = 0;
   game.lastPlantSite = null;
   game.decals.length = 0;
@@ -430,6 +432,7 @@ export function endRound(game, winner, reason, winType) {
   if (game.state === 'END') return;
   game.state = 'END';
   game.endedT = ROUND.END_DELAY;
+  const _pm0 = game.player ? game.player.money : 0;
   clearRoundEvent(game);
   if (!game.winHistory) game.winHistory = [];
   game.winHistory.push(winner === 't' ? 'T' : winner === 'ct' ? 'C' : 'D');
@@ -465,6 +468,11 @@ export function endRound(game, winner, reason, winType) {
   } else {
     // 平局（同归于尽）：双方获得固定补偿，不改变连胜/连败，避免"白打一回合"
     for (const e of game.entities) addMoney(e, 1500);
+  }
+  // 回合经济播报：资金变动可见化（此前钱"凭空变化"，连败补偿档位必须开菜单才能看到）
+  if (game.player && game.ui) {
+    const delta = game.player.money - _pm0;
+    emit('sysfeed', { text: (delta >= 0 ? '本回合资金 +$' : '本回合资金 -$') + Math.abs(delta) + ' → $' + game.player.money });
   }
   const text = winner === 't' ? 'TERRORISTS WIN' : (winner === 'ct' ? 'COUNTER-TERRORISTS WIN' : 'DRAW');
   const col = winner === 't' ? '#ffb545' : (winner === 'ct' ? '#5ab0ff' : '#888');
@@ -584,6 +592,7 @@ export function update(game, dt) {
   else updateBots(game, dt);
 
   updateGrenades(game, dt);
+  updateAirdrop(game, dt);
   // IGL 继任 / 补位：本帧有 bot 阵亡则刷新（幂等、不抛错）
   refreshLeadershipOnDeath(game);
   for (const e of game.entities) {
@@ -619,6 +628,17 @@ export function update(game, dt) {
       }
     }
     if (e.bot) {
+      // bot 脚步空间音：节流/材质/空间化管线此前仅玩家消费，bot 移动完全无声（candidate-536）
+      e.stepT -= dt;
+      const botSpd = Math.hypot(e.vx, e.vy);
+      if (botSpd > 40 && e.stepT <= 0) {
+        e.stepT = botSpd < 130 ? 0.45 : 0.3;
+        let stMat = 'flat';
+        if (curTile === '≈' || curTile === '~') stMat = 'water';
+        else if (curTile === '=') stMat = 'thin';
+        else if (curTile === 'M' || curTile === 'm') stMat = 'metal';
+        emit('sfx', { name: 'step', vol: botSpd < 130 ? 0.14 : 0.35, x: e.x, y: e.y, game, mat: stMat });
+      }
       e.stuckT += dt;
       const navNow = e.navTime || game.time || 0;
       if (e.stuckT > 0.6 && (!e.lastRerouteAt || navNow - e.lastRerouteAt >= 1.2)) {
@@ -649,6 +669,12 @@ export function update(game, dt) {
   for (let t2 = game.tracers.length - 1; t2 >= 0; t2--) {
     game.tracers[t2].life -= dt;
     if (game.tracers[t2].life <= 0) game.tracers.splice(t2, 1);
+  }
+  if (game.sprayTrace && game.sprayTrace.length) {
+    for (let st2 = game.sprayTrace.length - 1; st2 >= 0; st2--) {
+      game.sprayTrace[st2].life -= dt;
+      if (game.sprayTrace[st2].life <= 0) game.sprayTrace.splice(st2, 1);
+    }
   }
   // 子弹弹孔印记：按 IMPACT_LIFE 剪除过期弹孔（避免数组无限增长，绘制按年龄过滤）
   if (game.impacts && game.impacts.length) {
@@ -777,7 +803,24 @@ export function pickSpectateTarget(game, mates) {
   if (game._specTarget && !game._specTarget.dead && mates.includes(game._specTarget)) {
     return game._specTarget;
   }
-  const t = mates.length ? mates[game.spectateIdx % mates.length] : null;
+  if (!mates.length) {
+    game._specTarget = null;
+    return null;
+  }
+  // 导演镜头：按戏剧性评分选最有看点的目标（交火 > 开枪 > 持包 > 残局独活 > 赏金），
+  // 无热度时退回 spectateIdx 轮换（candidate-520，纯函数行为向后兼容）
+  let best = null, bestScore = 0;
+  for (const m of mates) {
+    let s = 0;
+    if (m.aimTarget && !m.aimTarget.dead) s += 4;
+    if (game.time !== undefined && m.lastShot !== undefined && game.time - m.lastShot / 1000 < 3) s += 3;
+    if (m.hasBomb) s += 2;
+    if (mates.length === 1) s += 2;
+    if (game.bounty === m) s += 1;
+    s += (m.kills || 0) * 0.1;
+    if (s > bestScore) { bestScore = s; best = m; }
+  }
+  const t = best ? best : mates[game.spectateIdx % mates.length];
   game._specTarget = t || null;
   return t;
 }
@@ -875,6 +918,16 @@ function updateTimers(game, dt) {
   } else if (game.state === 'LIVE') {
     const bombPlanted = !!(game.bomb && game.bomb.planted);
     if (!bombPlanted) game.roundTime += dt;
+    // 回合最后 10 秒：每秒滴答预警（HUD 时间同步红显），无弹时才报
+    if (!bombPlanted && game.state === 'LIVE') {
+      const remain = Math.ceil(game.roundDur - game.roundTime);
+      if (remain <= 10 && remain >= 1 && game._urgentTick !== remain) {
+        game._urgentTick = remain;
+        emit('sfx', { name: 'beepWarn', vol: 0.3 + (10 - remain) * 0.02, game });
+      } else if (remain > 10) {
+        game._urgentTick = undefined;
+      }
+    }
     if (!bombPlanted && game.roundTime >= game.roundDur) {
       endRound(game, 'ct', '时间耗尽', 'timeout');
     }

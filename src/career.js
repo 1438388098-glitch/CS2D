@@ -2529,7 +2529,15 @@ function careerStart(game) {
     const p = roster[i];
     e.name = p.name;
     e.role = p.role;
-    e.aiParams = { ...friendBase };
+    // 个体属性映射（对齐 manager-match 逐人公式）：面板 react/aim/movement 真正决定队友强度，
+    // 修掉"全队共享 friendBase、买 90 排=60 排"的脱钩
+    const base = { ...friendBase };
+    const ra = p.attrs || { aim: 60, move: 60, react: 60, nade: 60 };
+    base.react = clamp(0.22 - (ra.react || 60) / 625, 0.06, 0.22);
+    base.aimSpeed = 40 + (ra.react || 60) * 0.9;
+    base.spreadMult = clamp(1.1 - (ra.aim || 60) / 200, 0.5, 1.05);
+    base.strafe = clamp(0.6 - (ra.move || 60) / 400, 0.36, 0.6);
+    e.aiParams = base;
   });
   const foeRoster = TEAM_ROSTERS[opp.tag] || CAND_NAMES;
   let foeIdx = 0;

@@ -180,6 +180,7 @@ export function render(game) {
   drawParticles(game);
   drawImpacts(game);
   drawTracers(game);
+  drawSprayTrace(game);
   __marks.fx = performance.now() - __s;
   __s = performance.now();
   drawWeatherLayer(game);
@@ -1355,6 +1356,26 @@ export function tracerStyle(t, weaponKind) {
     len: s.len,
     color: s.color
   };
+}
+
+// 玩家 spray 轨迹（candidate-544）：金色细线 0.8s 渐隐，纯渲染不影响判定
+function drawSprayTrace(game) {
+  const st = game.sprayTrace;
+  if (!st || !st.length) return;
+  ctx.save();
+  ctx.globalCompositeOperation = 'lighter';
+  ctx.lineCap = 'round';
+  for (const s of st) {
+    const a = clamp(s.life / 0.8, 0, 1) * 0.5;
+    if (a <= 0.01) continue;
+    ctx.strokeStyle = 'rgba(255,215,94,' + a.toFixed(3) + ')';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.moveTo(s.x1, s.y1);
+    ctx.lineTo(s.x2, s.y2);
+    ctx.stroke();
+  }
+  ctx.restore();
 }
 
 function drawTracers(game) {

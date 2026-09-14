@@ -96,7 +96,17 @@ function updateLeft(p, now) {
     const hp = Math.max(0, Math.ceil(p.hp));
     D.hudHp.textContent = hp;
     D.hudHpBar.classList.toggle('low', hp <= 25);
-    D.hudHpBar.firstElementChild.style.width = clamp(p.hp / 100, 0, 1) * 100 + '%';
+    // 伤害残影（candidate-542）：白条留在旧值缓降追平（35%/s），量化"这一下掉了多少血"
+    {
+      const bar = D.hudHpBar;
+      const hpNow = clamp(p.hp / 100, 0, 1) * 100;
+      const dts = bar._lastNow === undefined ? 0.1 : Math.min(0.2, Math.max(0, (now - bar._lastNow) / 1000));
+      bar._lastNow = now;
+      const gw = Math.max(hpNow, (bar._ghost === undefined ? hpNow : bar._ghost) - dts * 35);
+      bar._ghost = gw;
+      bar.firstElementChild.style.width = gw + '%';
+      bar.lastElementChild.style.width = hpNow + '%';
+    }
     D.hudArmorBar.firstElementChild.style.width = clamp(p.armor / 100, 0, 1) * 100 + '%';
     D.hudMoney.textContent = '$' + p.money;
 
@@ -217,6 +227,8 @@ function updateTop(p, now) {
     const tSec = tT % 60;
     const timeStr = (tMin < 10 ? '0' : '') + tMin + ':' + (tSec < 10 ? '0' : '') + tSec;
     if (D.hudTime.textContent !== timeStr) D.hudTime.textContent = timeStr;
+    // 回合最后 10 秒红显（与 beepWarn 滴答同步；炸弹已安放时由炸弹卡接管紧迫显示）
+    D.hudTime.classList.toggle('urgent', game.state === 'LIVE' && tT <= 10 && tT > 0 && !(game.bomb && game.bomb.planted));
     const st = 'T ' + game.score.T;
     const sc = game.score.CT + ' CT';
     if (D.hudScoreT.textContent !== st) D.hudScoreT.textContent = st;

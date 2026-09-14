@@ -9,7 +9,8 @@ export const PING_MAX = 8;
 export const PING_COLORS = {
   plant: '255,80,60',
   defuse: '90,170,255',
-  boom: '255,150,50'
+  boom: '255,150,50',
+  airdrop: '120,255,160'
 };
 
 // 记录一次事件 ping（超上限淘汰最旧，常量级内存）

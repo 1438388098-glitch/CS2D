@@ -139,3 +139,21 @@ export function drawKillFlash(ctx, w, h, fx) {
   }
   ctx.restore();
 }
+
+// 死亡冷色滤镜（candidate-543）：出局后画面蓝灰渐入（1.2s 至上限 0.32），
+// 给死亡后约 3s 的观战期一个"你已出局"的氛围过渡，与低血红边形成冷暖对比
+export const DEATH_VEIL_MAX = 0.32;
+export const DEATH_VEIL_RAMP = 1.2;
+
+export function deathVeilAlpha(deadFor) {
+  if (!Number.isFinite(deadFor) || deadFor <= 0) return 0;
+  return Math.min(DEATH_VEIL_MAX, (deadFor / DEATH_VEIL_RAMP) * DEATH_VEIL_MAX);
+}
+
+export function drawDeathVeil(ctx, w, h, alpha) {
+  if (!(alpha > 0)) return;
+  ctx.save();
+  ctx.fillStyle = 'rgba(38,56,80,' + alpha.toFixed(3) + ')';
+  ctx.fillRect(0, 0, w, h);
+  ctx.restore();
+}

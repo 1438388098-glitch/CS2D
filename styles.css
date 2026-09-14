@@ -1234,3 +1234,22 @@ table.sb tr.mvp td{background:rgba(255,210,122,.07)}
 #perkDraft .pd-card b{color:#ffd75e;font-size:15px;letter-spacing:1px}
 #perkDraft .pd-card small{color:#c8d2dc;font-size:12px;line-height:1.5}
 @media (prefers-reduced-motion: reduce){#perkDraft{transition:none}}
+
+/* 回合最后 10s 计时红显脉冲（与 beepWarn 滴答同步） */
+.ht-time.urgent{color:#ff5b4d;animation:time-urgent 1s steps(2,end) infinite}
+@keyframes time-urgent{0%,100%{opacity:1}50%{opacity:.45}}
+@media (prefers-reduced-motion: reduce){.ht-time.urgent{animation:none}}
+
+/* HP 伤害残影：白色 ghost 层垫底，主条立即掉落、ghost 缓降追平 */
+#hudHpBar{position:relative}
+#hudHpBar i{position:absolute;left:0;top:0}
+#hudHpBar i.ghost{background:rgba(255,255,255,.55);transition:none;animation:none}
+
+/* 结算面板入场演出：胜利大字→数据行→图表→按钮 依次上浮（candidate-547） */
+#end.show .final,#end.show .stat-line,#end.show .end-grid,#end.show .end-bars,#end.show .btn{animation:end-rise .34s var(--ease) both}
+#end.show .stat-line{animation-delay:.07s}
+#end.show .end-grid{animation-delay:.14s}
+#end.show .end-bars{animation-delay:.21s}
+#end.show .btn{animation-delay:.28s}
+@keyframes end-rise{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
+@media (prefers-reduced-motion: reduce){#end.show .final,#end.show .stat-line,#end.show .end-grid,#end.show .end-bars,#end.show .btn{animation:none}}
