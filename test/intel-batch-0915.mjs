@@ -145,7 +145,7 @@ function game_lastStep(g, p, walk) {
   const victim = g.entities.find((e) => e.bot && e.team === 'ct');
   const before = g.radioLog.length;
   killEntity(victim, killer, 'ak', false, g);
-  ok('bot kill feeds radio', g.radioLog.length > before && g.radioLog[g.radioLog.length - 1].text.indexOf('击倒') !== -1);
+  ok('bot kill feeds radio', g.radioLog.length > before && g.radioLog.some((r) => r.text.indexOf('击倒') !== -1)); // 吐槽弹幕可能插队
 }
 
 // —— 8. 单挑评分记录 ——

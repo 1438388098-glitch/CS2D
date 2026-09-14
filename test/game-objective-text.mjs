@@ -10,11 +10,12 @@ function g(opts = {}) {
 assert.deepEqual(objectiveText(g()), { main: '', sub: '' }, 'no player should yield empty text');
 
 // 死亡观战优先级最高（压过已下包）
-assert.deepEqual(
-  objectiveText(g({ player: { dead: true, team: 'ct' }, bomb: { planted: true, site: 'A' } })),
-  { main: '观战中…', sub: '等待下回合' },
-  'dead player overrides everything'
-);
+{
+  // 死亡观战优先级最高（压过已下包）；round-10 sub 改为按键提示
+  const ot = objectiveText(g({ player: { dead: true, team: 'ct' }, bomb: { planted: true, site: 'A' } }));
+  assert.equal(ot.main, '观战中…', 'dead player overrides everything');
+  assert.ok(typeof ot.sub === 'string' && ot.sub.length > 0, 'dead player has hint sub');
+}
 
 // CT：已下包 → 拆弹（A/B 区文案），未下包 → 守卫
 assert.equal(objectiveText(g({ player: { dead: false, team: 'ct' }, bomb: { planted: true, site: 'A' } })).main, '拆除炸弹！');

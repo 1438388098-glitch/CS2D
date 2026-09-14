@@ -8,6 +8,7 @@ import { CROSSHAIR_DEFAULTS, KILL_STYLES, setCrosshairPrefs, crosshairStyle } fr
 import { voiceEnabled, setVoiceEnabled } from '../src/audio/voice.js';
 import { ECONOMY } from '../src/config.js';
 import { ctx } from '../src/ctx.js';
+import { warmupOnShot } from '../src/warmup.js';
 
 const errors = [];
 const ok = (name, cond) => {
