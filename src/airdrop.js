@@ -20,6 +20,7 @@ export function updateAirdrop(game, dt) {
   if (game._airdropRound !== game.round) {
     game._airdropRound = game.round;
     game._airdropAt = null;
+    game._airdropDone = false; // 每回合独立掷取（candidate-640：此前一次性封死全场只出一颗）
     if (rand() < AIRDROP_CHANCE) {
       game._airdropAt = WINDOW_START + rand() * (WINDOW_END - WINDOW_START);
     }

@@ -108,7 +108,7 @@ function updateLeft(p, now) {
       bar.lastElementChild.style.width = hpNow + '%';
     }
     D.hudArmorBar.firstElementChild.style.width = clamp(p.armor / 100, 0, 1) * 100 + '%';
-    D.hudMoney.textContent = '$' + p.money;
+    D.hudMoney.textContent = '$' + Number(p.money || 0).toLocaleString('zh-CN');
 
     const icon = ICON_BY_WEAPON[wk] || 'ic-p250';
     if (D.hudWeaponIc.getAttribute('href') !== 'assets/icons.svg#' + icon) {
@@ -126,7 +126,7 @@ function updateLeft(p, now) {
         if (old) old.remove();
         const tip = document.createElement('span');
         tip.className = 'hl-moneydelta ' + (delta > 0 ? 'gain' : 'loss');
-        tip.textContent = (delta > 0 ? '+$' : '-$') + Math.abs(delta);
+        tip.textContent = (delta > 0 ? '+$' : '-$') + Number(Math.abs(delta)).toLocaleString('zh-CN');
         foot.appendChild(tip);
         setTimeout(() => tip.remove(), 1300);
       }

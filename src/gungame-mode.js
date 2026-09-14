@@ -9,7 +9,7 @@ import { ctx } from './ctx.js';
 
 const emit = (evt, p) => ctx.bus.emit(evt, p);
 
-const GG_LADDER = ['glock', 'p250', 'deagle', 'mp9', 'mac10', 'xm', 'famas', 'sg553', 'aug', 'awp'];
+export const GG_LADDER = ['glock', 'p250', 'deagle', 'mp9', 'mac10', 'xm', 'famas', 'sg553', 'aug', 'awp'];
 
 function ggGive(e, game) {
   const idx = game.gg.tiers.get(e) || 0;

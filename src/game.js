@@ -247,7 +247,7 @@ export function startMatch(game) {
   game.over = false;
   resetPerks(game);
   // 清理模式残留（cyber/major 等按模式注入的 game 字段，避免跨模式泄漏）
-  for (const k of ['major', 'cyber', 'gg', '_ggRound', '_ggOff', 'pendingPerks', 'perkLog', 'empPulse', 'contract', 'deathLog', 'hostages', '_hostageRound', 'rangeStats', 'rangeRound', '_rangeStatT', 'replayBuf', 'replayClip']) delete game[k];
+  for (const k of ['major', 'cyber', 'gg', '_ggRound', '_ggOff', 'pendingPerks', 'perkLog', 'empPulse', 'contract', 'deathLog', 'hostages', '_hostageRound', 'rangeStats', 'rangeRound', '_rangeStatT', 'replayBuf', 'replayClip', 'teamMorale', 'warmupTargets', 'warmupShots', '_airdropRound', '_airdropAt', '_airdropDone', '_thunderMap', 'thunderUntil']) delete game[k];
   const modeDef = game.mode ? getMode(game.mode) : null;
   if (modeDef && modeDef.start) {
     modeDef.start(game);
@@ -488,7 +488,7 @@ export function startRound(game) {
   }
   // 回合悬赏：敌方击杀榜第一名成为赏金目标（击杀 +$300），被悬赏有压力、拿赏有爽感
   game.bounty = null;
-  if (game.player && game.opts.gameplayPlus) {
+  if (game.player && game.opts.gameplayPlus && !game.mode) {
     const enemies = game.entities.filter((e) => e.bot && e.team !== game.player.team && !e.dead);
     if (enemies.length) {
       enemies.sort((a, b) => (b.kills || 0) - (a.kills || 0));

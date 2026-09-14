@@ -851,7 +851,6 @@ import { initVoice, setVoiceEnabled, voiceEnabled } from './audio/voice.js';
 import { setSoundPack, soundPack } from './audio/master.js';
 import { PAINTS, equipGlobalPaint, equippedGlobalPaint, paintLocked, totalMastery } from './skins.js';
 import { exportSave, importSave } from './savecode.js';
-import { rankedSummary as _rankedSummary } from './ranked.js';
 import { renderShareCard } from './share-card.js';
 import { nemesisStats } from './nemesis.js';
 import { buildCoachLines } from './coach.js';

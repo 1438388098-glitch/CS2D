@@ -246,6 +246,59 @@ function fresh(opts) {
   ok('range tier-2 no frame errors', errCount === 0);
 }
 
+// —— 14. round-15 补充：空投跨回合复位 / fuse 事件优先 / gungame 合约门控 / done日败局文案 ——
+{
+  const { updateAirdrop } = await import('../src/airdrop.js');
+  const g = fresh({ gameplayPlus: true });
+  while (g.state === 'BUY' && g.buyTime > 0) update(g, 0.5);
+  while (g.freezeT > 0) update(g, 0.5);
+  g.round = 3;
+  g.state = 'LIVE'; g.freezeT = 0; // startRound 后保持 LIVE 让 updateAirdrop 掷取
+  g._airdropRound = undefined;
+  updateAirdrop(g, 0.01);
+  g._airdropAt = 1;
+  g.roundTime = 5;
+  updateAirdrop(g, 0.1);
+  const dropsR3 = g.drops.length;
+  // 下一回合：复位后可再次掷取（不再被 _airdropDone 永久封死）
+  startRound(g);
+  g.state = 'LIVE'; // startRound 后是 BUY，updateAirdrop 会早退
+  g._airdropRound = undefined;
+  updateAirdrop(g, 0.01);
+  ok('airdrop reset for new round', g._airdropDone === false && g._airdropAt !== undefined);
+  // fuse 事件优先于 opts.fuse
+  const g2 = fresh({ gameplayPlus: false });
+  startRound(g2);
+  g2.opts.fuse = 50;
+  g2.roundEvent = { id: 'shortfuse', fuse: 20 };
+  const { plantBomb } = await import('../src/bomb.js');
+  const { getMap: gm } = await import('../src/map.js');
+  const t2 = g2.entities.find((e) => e.bot && e.team === 't');
+  const site2 = gm().sites.A;
+  t2.hasBomb = true; t2.x = site2.cx; t2.y = site2.cy;
+  g2.dt = 3.5;
+  plantBomb(t2, g2);
+  ok('event fuse beats opts.fuse', g2.bomb && g2.bomb.timer === 20);
+  // gungame 不发合约/悬赏
+  const g3 = fresh({ mode: 'gungame', gameplayPlus: true });
+  const { rollContract } = await import('../src/contracts.js');
+  rollContract(g3);
+  ok('no contract in gungame', !g3.contract && !g3.bounty);
+  // done 日败局文案
+  const { settleDaily: sd } = await import('../src/daily.js');
+  const g4 = fresh({ gameplayPlus: false });
+  g4.opts.daily = true;
+  sd(g4, true);
+  const feeds = [];
+  const hh = (p2) => feeds.push(p2.text || '');
+  g4.ui = {};
+  g4.opts.daily = true; // 复玩 = 新一场每日对局（settleDaily 首次调用会删 opts.daily）
+  ctx.bus.on('sysfeed', hh);
+  sd(g4, false);
+  ctx.bus.off('sysfeed', hh);
+  ok('done-day loss copy updated', feeds.some((t) => t.indexOf('复玩败局不影响') === 0));
+}
+
 if (errors.length) {
   console.error('personal-batch FAIL: ' + errors.join(', '));
   process.exit(1);

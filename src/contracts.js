@@ -20,7 +20,8 @@ const CONTRACT_POOL = [
 // startRound（gameplayPlus 开启时）：掷本回合合约
 export function rollContract(game) {
   game.contract = null;
-  if (!game || !game.opts.gameplayPlus || !game.player) return;
+  // 与 round-events/perks 同门控：军备竞赛（禁买清钱）等模式不发经济合约
+  if (!game || !game.opts.gameplayPlus || !game.player || game.mode) return;
   // 经济过滤（candidate-622）：买不起的武器合约是纯噪音（手枪局不发 AWP 合约）
   const money = game.player.money || 0;
   const affordable = CONTRACT_POOL.filter((c) => {

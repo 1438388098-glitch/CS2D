@@ -50,7 +50,7 @@ export function plantBomb(e, game) {
   if (e.plantT >= 3) {
     e.plantT = 0;
     e.hasBomb = false;
-    game.bomb = { x: e.x, y: e.y, dropped: false, planted: true, site: s.label, timer: Number(game.opts.fuse) || (game.roundEvent && game.roundEvent.fuse) || ROUND.BOMB_FUSE, defusing: false, defuseT: 0 };
+    game.bomb = { x: e.x, y: e.y, dropped: false, planted: true, site: s.label, timer: (game.roundEvent && game.roundEvent.fuse) || Number(game.opts.fuse) || ROUND.BOMB_FUSE, defusing: false, defuseT: 0 };
     e.plants++;
     game._plantedRound = true;
     addMoney(e, ECONOMY.PLANT_MONEY);

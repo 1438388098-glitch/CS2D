@@ -83,6 +83,7 @@ export function settleDaily(game, win) {
   saveDaily(d);
   if (win && firstToday) emit('sysfeed', { text: '每日挑战完成 ✓ 连胜 ' + d.streak + ' 天（最佳 ' + d.best + '）' });
   else if (win) emit('sysfeed', { text: '每日挑战今日已打卡，连胜 ' + d.streak + ' 天' });
+  else if (d.done) emit('sysfeed', { text: '复玩败局不影响今日已到手的连胜（' + d.streak + ' 天）' });
   else emit('sysfeed', { text: '每日挑战失败，连胜中断 — 明天再来' });
   // 还原玩家此前的设置，避免每日参数泄漏到普通对局
   if (game._dailyBackup) {

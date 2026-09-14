@@ -816,13 +816,26 @@ export function renderHud(game) {
   if (p && p.dead) {
     drawDeathVeil(ctx, w2, h2, deathVeilAlpha(1.8 - (p.deathT || 0)));
   }
+  // 回合事件 chip（candidate-642）：⚡ 事件名常驻右下，生效期可见
+  if (game.roundEvent && game.roundEvent.name && game.viewMode === 'top') {
+    ctx.save();
+    ctx.font = "700 11px 'Microsoft YaHei',sans-serif";
+    ctx.textAlign = 'left';
+    const label = '⚡ ' + game.roundEvent.name;
+    const wpx = ctx.measureText(label).width + 14;
+    ctx.fillStyle = 'rgba(20,16,8,.68)';
+    ctx.fillRect(w2 - 154, h2 - 100, wpx, 16);
+    ctx.fillStyle = '#ffd75e';
+    ctx.fillText(label, w2 - 147, h2 - 88.5);
+    ctx.restore();
+  }
   // 军备竞赛梯阶 chip（candidate-635）：🔫 n/10 常驻右下，梯顶显示 🔪
   if (game.gg && game.player && game.viewMode === 'top') {
     const idx = game.gg.tiers.get(game.player) || 0;
     ctx.save();
     ctx.font = "700 11px 'Microsoft YaHei',sans-serif";
     ctx.textAlign = 'left';
-    const label = idx >= 10 ? '🔪 刀杀收尾！' : '🔫 ' + idx + '/10';
+    const label = idx >= GG_LADDER.length ? '🔪 刀杀收尾！' : '🔫 ' + idx + '/' + GG_LADDER.length;
     const wpx = ctx.measureText(label).width + 14;
     ctx.fillStyle = 'rgba(10,13,17,.6)';
     ctx.fillRect(w2 - 154, h2 - 80, wpx, 16);

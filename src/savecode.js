@@ -1,7 +1,7 @@
 // 存档导出/导入码（candidate-591）：career/manager/duel 单槽 localStorage 存档 → base64 JSON 码。
 // 换机/换浏览器玩家旅程此前完全没被服务；导入做结构与字段校验，坏码明确报错不写入。
 const MODES = ['career', 'manager', 'duel', 'profile'];
-const PROFILE_KEYS = ['cs2d_ranked_v1', 'cs2d_skins_v1', 'cs2d_mastery_v1', 'cs2d_daily_v1', 'cs2d_nemesis_v1', 'cs2d_sound_pack_v1', 'cs2d_theme_v1'];
+const PROFILE_KEYS = ['cs2d_ranked_v1', 'cs2d_skins_v1', 'cs2d_mastery_v1', 'cs2d_daily_v1', 'cs2d_nemesis_v1', 'cs2d_sound_pack_v1', 'cs2d_theme_v1', 'cs2d_voice_v1'];
 
 function store() {
   try { return typeof localStorage === 'undefined' ? null : localStorage; } catch (e) { return null; }
