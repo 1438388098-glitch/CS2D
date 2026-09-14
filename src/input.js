@@ -133,6 +133,7 @@ export function initInput(game, canvasRef) {
     if (matches(e.code, 'nadeFlash')) switchNade(game.player, 'flash');
     if (matches(e.code, 'nadeSmoke')) switchNade(game.player, 'smoke');
     if (matches(e.code, 'nadeDecoy')) switchNade(game.player, 'decoy');
+    if (matches(e.code, 'nadeMoly')) switchNade(game.player, 'moly');
     if (matches(e.code, 'lastWeapon')) {
       const p = game.player;
       if (p && p.lastSlot) switchWeapon(p, p.lastSlot);
@@ -148,7 +149,7 @@ export function initInput(game, canvasRef) {
     keys[e.code] = false;
     if (matches(e.code, 'scoreboard')) game.ui.toggleScoreboard(false);
     // 快速投掷松键：若仍手持该投掷物则切回原武器
-    if (matches(e.code, 'nadeHe') || matches(e.code, 'nadeFlash') || matches(e.code, 'nadeSmoke') || matches(e.code, 'nadeDecoy')) {
+    if (matches(e.code, 'nadeHe') || matches(e.code, 'nadeFlash') || matches(e.code, 'nadeSmoke') || matches(e.code, 'nadeDecoy') || matches(e.code, 'nadeMoly')) {
       const p = game.player;
       if (p && p.slot && p.slot.indexOf('nade:') === 0 && p.lastSlot) {
         p.slot = p.lastSlot;

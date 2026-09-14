@@ -121,10 +121,11 @@ function createUiApi() {
       b2.textContent = t2;
       b1.style.color = col;
       b.classList.add('show');
-      // dur：回合开局类横幅（手枪局/赛点局）自动收起，不清场会压整回合视野
+      // dur：回合开局类横幅（手枪局/赛点局）自动收起，不清场会压整回合视野。
+      // 定时器存模块级变量：对象字面量箭头函数作用域里没有 showBanner 这个标识符
       if (dur) {
-        clearTimeout(showBanner._t);
-        showBanner._t = setTimeout(() => b.classList.remove('show'), dur);
+        clearTimeout(bannerAutoHideT);
+        bannerAutoHideT = setTimeout(() => b.classList.remove('show'), dur);
       }
     },
     hideBanner: () => { const b = el('banner'); if (b) b.classList.remove('show'); },
@@ -482,11 +483,11 @@ const BUY_CATS = [
   { label: '步枪', items: [['ak', 'AK-47', 'T 专用 · 全自动'], ['m4', 'M4A4', 'CT 专用 · 全自动'], ['famas', 'FAMAS', 'CT 专用 · 中间步枪'], ['sg553', 'SG 553', 'T 专用 · 穿甲中间步枪'], ['aug', 'AUG', 'CT 专用 · 精准中间步枪']] },
   { label: '狙击枪', items: [['awp', 'AWP', '开镜 · 一枪致命']] },
   { label: '装备', items: [['armor', '防弹衣', '50% 减伤'], ['helm', '防弹衣+头盔', '防爆头'], ['kit', '拆弹钳', '拆弹减半']] },
-  { label: '投掷物', items: [['he', '高爆手雷', '范围伤害'], ['flash', '闪光弹', '致盲敌人'], ['smoke', '烟雾弹', '遮挡视线'], ['decoy', '诱饵弹', '伪造枪声 12s 引敌侦查']] }
+  { label: '投掷物', items: [['he', '高爆手雷', '范围伤害'], ['flash', '闪光弹', '致盲敌人'], ['smoke', '烟雾弹', '遮挡视线'], ['decoy', '诱饵弹', '伪造枪声 12s 引敌侦查'], ['moly', '燃烧瓶', '区域封锁 · 持续灼烧']] }
 ];
 
 function buyCatPrice() {
-  return { armor: PRICES.ARMOR, helm: PRICES.HELM, kit: PRICES.KIT, he: PRICES.HE, flash: PRICES.FLASH, smoke: PRICES.SMOKE, decoy: PRICES.DECOY };
+  return { armor: PRICES.ARMOR, helm: PRICES.HELM, kit: PRICES.KIT, he: PRICES.HE, flash: PRICES.FLASH, smoke: PRICES.SMOKE, decoy: PRICES.DECOY, moly: PRICES.MOLLY };
 }
 
 export function renderBuyMenu(gameRef) {
@@ -524,7 +525,7 @@ export function renderBuyMenu(gameRef) {
     if (id === 'armor') owned = p.armor >= 100;
     else if (id === 'helm') owned = p.helmet || p.armor >= 100;
     else if (id === 'kit') owned = p.weapons.kit;
-    else if (id === 'he' || id === 'flash' || id === 'smoke' || id === 'decoy') owned = p.weapons.nades[id] >= (id === 'flash' ? 2 : 1);
+    else if (id === 'he' || id === 'flash' || id === 'smoke' || id === 'decoy' || id === 'moly') owned = p.weapons.nades[id] >= (id === 'flash' ? 2 : 1);
     else owned = p.weapons.primary === id;
     const fac = catFaction[id];
     const locked = fac && fac !== p.team && !owned;
@@ -587,6 +588,7 @@ function showPerkDraft(options) {
   wrap.classList.add('show');
 }
 
+let bannerAutoHideT = null;
 let lastSbRender = 0;
 
 const SB_ICON = {

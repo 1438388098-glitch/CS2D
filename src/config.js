@@ -33,7 +33,7 @@ export const WEAPONS = new Proxy({}, {
   getOwnPropertyDescriptor: () => ({ configurable: true, enumerable: true })
 });
 
-export const PRICES = { ARMOR: 650, HELM: 1000, KIT: 400, HE: 300, FLASH: 200, SMOKE: 300, DECOY: 400 };
+export const PRICES = { ARMOR: 650, HELM: 1000, KIT: 400, HE: 300, FLASH: 200, SMOKE: 300, DECOY: 400, MOLLY: 500 };
 
 // 粒子/弹孔等动态元素上限（防爆炸峰值 GC 卡顿）
 export const MAX_PARTICLES = 600;

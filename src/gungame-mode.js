@@ -52,6 +52,7 @@ function ggRoundRefresh(game) {
   game._ggRound = game.round;
   for (const e of game.entities) {
     e.hasBomb = false;
+    e.money = 0; // 经济在军备竞赛无意义，清零避免购买菜单/播报出戏
     ggGive(e, game);
   }
   game.bomb = null;

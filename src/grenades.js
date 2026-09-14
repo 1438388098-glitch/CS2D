@@ -77,6 +77,15 @@ export function updateGrenades(game, dt) {
             e.blind = Math.max(e.blind, dur);
           }
         }
+      } else if (g.kind === 'moly') {
+        // 燃烧瓶（candidate-564）：落地生成火区，复用 smokes 的生命周期管线
+        game.fires.push({ x: g.x, y: g.y, r: 20, gr: 105, life: 7, tick: 0 });
+        emit('sfx', { name: 'boom', vol: 0.6, x: g.x, y: g.y, game });
+        game.lastSound = { x: g.x, y: g.y, t: game.time, radius: 600, conf: 0.45 };
+        for (let f = 0; f < 12; f++) {
+          const a = rand() * Math.PI * 2;
+          spawnParticle(game, { kind: 'fire', x: g.x + Math.cos(a) * 14, y: g.y + Math.sin(a) * 14, vx: Math.cos(a) * 30, vy: Math.sin(a) * 30 - 30, life: rand(0.3, 0.7), size: rand(3, 6) });
+        }
       } else if (g.kind === 'decoy') {
         // 诱饵弹落地激活：周期性伪造枪声（写 lastSound 走 bot 听声链），敌方大脑被骗来侦查
         game.decoys.push({ x: g.x, y: g.y, life: 12, tick: 0.4, owner: g.owner });
@@ -132,6 +141,28 @@ export function updateGrenades(game, dt) {
     sm.life -= dt;
     sm.r = sm.r + (sm.gr - sm.r) * (1 - Math.exp(-3 * dt));
     if (sm.life <= 0) game.smokes.splice(s, 1);
+  }
+  // 火区灼烧：每 0.4s 对区内所有实体施 DoT（敌我皆烧，抛点即战术）；火粒与浓烟持续外溢
+  for (let fi = game.fires.length - 1; fi >= 0; fi--) {
+    const fr = game.fires[fi];
+    fr.life -= dt;
+    fr.r = fr.r + (fr.gr - fr.r) * (1 - Math.exp(-2.2 * dt));
+    fr.tick -= dt;
+    if (fr.tick <= 0) {
+      fr.tick = 0.4;
+      for (const e of game.entities) {
+        if (e.dead) continue;
+        const d = Math.hypot(e.x - fr.x, e.y - fr.y);
+        if (d > fr.r + e.rad) continue;
+        applyDamage(e, 14, { killer: fr.owner && !fr.owner.dead ? fr.owner : null, weapon: 'grenade', head: false }, game);
+      }
+      for (let f = 0; f < 3; f++) {
+        const a = rand() * Math.PI * 2, rr = rand(0, fr.r);
+        spawnParticle(game, { kind: 'fire', x: fr.x + Math.cos(a) * rr, y: fr.y + Math.sin(a) * rr, vx: rand(-12, 12), vy: rand(-50, -16), life: rand(0.25, 0.55), size: rand(2, 5) });
+      }
+      if (rand() < 0.5) spawnParticle(game, { kind: 'smokep', x: fr.x + rand(-fr.r, fr.r) * 0.6, y: fr.y + rand(-fr.r, fr.r) * 0.6, vx: 0, vy: -14, life: rand(0.6, 1.2), size: rand(4, 9) });
+    }
+    if (fr.life <= 0) game.fires.splice(fi, 1);
   }
   // 诱饵侦查期：每 1.1s 一声伪枪 + 枪口小火花，半径内敌 bot 经 lastSound 误判有交火
   for (let d = game.decoys.length - 1; d >= 0; d--) {

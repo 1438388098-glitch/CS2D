@@ -96,7 +96,7 @@ export function managerStart(game) {
   game.entities = [];
   setupMatchEntities(game);
   game.entities = game.entities.filter((e) => e.bot);
-  game.player = { dead: true, kills: 0, deaths: 0, assists: 0, team: 'ct', name: '经理', x: 0, y: 0, vx: 0, vy: 0, angle: 0, height: 0, weapons: {}, ammoMap: {}, reserveMap: {}, wKills: {}, stats: { hits: 0, shots: 0, headshots: 0 } };
+  game.player = { dead: true, kills: 0, deaths: 0, assists: 0, team: 'ct', name: '经理', x: 0, y: 0, vx: 0, vy: 0, angle: 0, height: 0, money: 0, weapons: {}, ammoMap: {}, reserveMap: {}, wKills: {}, stats: { hits: 0, shots: 0, headshots: 0 } };
   const tBots = game.entities.filter((e) => e.bot && e.team === 't');
   const cBots = game.entities.filter((e) => e.bot && e.team === 'ct');
   const myRoster = s.team.roster.slice().sort((a, b) => (a.role === '指挥' ? -1 : b.role === '指挥' ? 1 : 0));
@@ -111,6 +111,19 @@ export function managerStart(game) {
   };
   startRound(game);
   emit('toast', { text: '我的战队 vs ' + opp.name + ' 开赛' });
+}
+
+// 逐人 K/D/A 小表（candidate-558）：观战时看得见谁在 Carry 谁在送头
+function managerPlayerRows(bots, label, es) {
+  const rows = bots.slice().sort((a, b) => (b.kills || 0) - (a.kills || 0)).map((e) =>
+    '<div class="m-row"><span class="m-n">' + es(e.name) + '</span>' +
+    '<span class="m-k">' + (e.kills || 0) + 'K</span>' +
+    '<span class="m-d">' + (e.deaths || 0) + 'D</span>' +
+    '<span class="m-a">' + (e.assists || 0) + 'A</span>' +
+    (e.dead ? '<span class="m-x">阵亡</span>' : '<span class="m-alive">存活</span>') +
+    '</div>'
+  ).join('');
+  return '<div class="m-table"><div class="m-head">' + label + '</div>' + (rows || '<div class="m-row"><span class="m-n">—</span></div>') + '</div>';
 }
 
 function managerPanelHtml(game) {
@@ -133,6 +146,8 @@ function managerPanelHtml(game) {
     '<div class="cyber-card c-right"><b>' + es(g.oppName) + '</b><span>对手</span><i>' + g.oppRating + '</i><em>' + oppScore + ' · ' + oppKills + ' 击杀</em></div>' +
     '<div class="cyber-controls"><button data-m-speed="1" class="cyber-speed' + (g.speed === 1 ? ' on' : '') + '">1x</button><button data-m-speed="2" class="cyber-speed' + (g.speed === 2 ? ' on' : '') + '">2x</button><button data-m-speed="4" class="cyber-speed' + (g.speed === 4 ? ' on' : '') + '">4x</button><button data-m-speed="8" class="cyber-speed' + (g.speed === 8 ? ' on' : '') + '">8x</button><button data-m-skip="1" class="cyber-skip">跳过本回合</button></div>' +
     (leader ? '<div class="cyber-mvp">MVP ' + es(leader.name) + ' · ' + leader.kills + ' 击杀</div>' : '') +
+    managerPlayerRows(myBots, '我方选手', es) +
+    managerPlayerRows(oppBots, '对方选手', es) +
     '</div>';
 }
 

@@ -117,9 +117,11 @@ function fresh(opts) {
 // —— 6. 回合末滴答预警 ——
 {
   const g = fresh({ gameplayPlus: false });
-  while (g.state === 'BUY' && g.buyTime > 0) update(g, 0.5);
-  while (g.freezeT > 0) update(g, 0.5);
-  g.bomb = null; // 清掉烧 freeze 期间 bot 可能安下的弹（安弹会接管倒计时）
+  startRound(g);
+  // 确定性设置 LIVE 态（不走无监督模拟：bot 乱打会让回合提前结束产生 flake）
+  g.state = 'LIVE';
+  g.freezeT = 0;
+  g.bomb = null;
   g.roundTime = 108; // 剩 7 秒
   g._urgentTick = undefined;
   update(g, 0.05);

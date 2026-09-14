@@ -403,7 +403,7 @@ function botThink(e, game, dt) {
       return;
     }
   }
-  if (e.team === 't' && shouldSaveForEco(e, e.money || 0, (e.weapons && (e.weapons.primary === 'ak' || e.weapons.primary === 'm4' || e.weapons.primary === 'famas' || e.weapons.primary === 'awp')) ? 2 : 0, game.roundTime || 0, game.roundDur || 115)) {
+  if (e.team === 't' && shouldSaveForEco(e, e.money || 0, (e.weapons && (e.weapons.primary === 'ak' || e.weapons.primary === 'm4' || e.weapons.primary === 'famas' || e.weapons.primary === 'awp' || e.weapons.primary === 'aug' || e.weapons.primary === 'sg553')) ? 2 : 0, game.roundTime || 0, game.roundDur || 115)) {
     e.trigger = false;
     e.ecoRetreat = true;
     const tSpawn = getMap().spawns.t && getMap().spawns.t[0];

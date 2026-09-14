@@ -10,13 +10,14 @@ const CLUSTER_R = 200; // 聚类半径（px）：热点合并阈值
 const EVENT_W = { kill: 1.5, sight: 1.2, dmg: 1.0, shot: 0.7 };
 
 export function initOppModel(game) {
-  if (!game.oppModel) game.oppModel = { dust2: [], canal: [], metro: [] };
+  if (!game.oppModel) game.oppModel = {};
 }
 
 function bucketFor(game) {
   if (!game.oppModel) return null;
   const mapId = game.opts.mapId || 'dust2';
-  return game.oppModel[mapId] || null;
+  // 惰性建桶（candidate-555）：此前只预建 3 张旧图，其余竞技图对手建模静默失效
+  return game.oppModel[mapId] || (game.oppModel[mapId] = []);
 }
 
 // 单条记录可信权重 = 年龄 × 记录权重 × 事件精确度 × 武器威胁度（高威胁武器站位更有价值）

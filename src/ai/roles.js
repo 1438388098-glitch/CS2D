@@ -2,6 +2,7 @@
 import {diffOf} from '../config.js';
 ;
 import {ctx} from '../ctx.js';
+import {addPing} from '../ping-fx.js';
 import {assignArchetypes, rollPersonality, ARCHETYPES} from '../persona.js';
 import {emit, redistributeTLanes} from './shared.js';
 
@@ -500,6 +501,8 @@ export function setPlayerOrder(game, type) {
   if (!p || p.dead || game.over || game.state === 'MENU') return;
   if (!ORDER_TEXT[type]) return;
   game.tOrder = { type, at: game.roundTime, x: p.x, y: p.y };
+  // 指令落点 ping（candidate-566）：F1-F4 下令除 toast 外给小地图一个紫色方位标记
+  addPing(game, 'order', p.x, p.y);
   // 玩家直接下"攻 A/B"令 → 同步 IGL 转点并重排 lane（复用 shared 的 redistributeTLanes）
   if ((type === 'siteA' || type === 'siteB') && game.state === 'LIVE' && !(game.bomb && game.bomb.planted)) {
     const target = type === 'siteA' ? 'A' : 'B';

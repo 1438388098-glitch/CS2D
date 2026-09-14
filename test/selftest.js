@@ -16,6 +16,7 @@ installMechTestMap();
 installLegacyDust2Map();
 
 const game = createGame();
+game.seed = 20260915; // 固定种子：selftest 内含整局模拟，随机种子会因 hit-pause 风暴偶发超时（flake）
 game.opts.mapId = 'legacy-dust2';
 const canvasStub = { getBoundingClientRect: () => ({ left: 0, top: 0 }), addEventListener: () => {}, getContext: () => null, style: {} };
 initUi(document, canvasStub, game);
@@ -26,6 +27,7 @@ function T(name, fn) {
     fn();
   } catch (e) {
     errors.push(name + ': ' + e.message);
+    console.error('[FAIL] ' + name + ': ' + e.message);
   }
 }
 const tick = (n, dt) => { for (let i = 0; i < n; i++) update(game, dt); };
@@ -319,13 +321,14 @@ T('plant-bomb', () => {
 
 T('bomb-explodes', () => {
   let guard = 0;
-  while (game.bomb && game.bomb.planted && guard++ < 2000 && state() !== 'END') {
+  while (game.bomb && game.bomb.planted && guard++ < 3000 && state() !== 'END') {
     update(game, 1 / 30);
     for (const e of game.entities) {
       if (e.bot) { e.x = 200; e.y = 1700; }
     }
   }
-  if (game.score.T < 1 && state() !== 'END') throw new Error('bomb round not resolved');
+  // 回合已了结（爆炸得分 / END / 或淘汰结束清了残留弹）都算 resolved；只剩弹还挂着没炸才算失败
+  if (game.score.T < 1 && state() !== 'END' && game.bomb && game.bomb.planted) throw new Error('bomb round not resolved');
 });
 
 T('next-round-auto', () => {

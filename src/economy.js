@@ -27,7 +27,7 @@ export function nextRoundBudget(p, game) {
 export function clearEquipment(e) {
   e.weapons.primary = null;
   e.weapons.secondary = null;
-  e.weapons.nades = { he: 0, flash: 0, smoke: 0, decoy: 0 };
+  e.weapons.nades = { he: 0, flash: 0, smoke: 0, decoy: 0, moly: 0 };
   e.weapons.kit = false;
   e.armor = 0;
   e.helmet = false;
@@ -40,6 +40,8 @@ export function clearEquipment(e) {
 export function buyItem(game, what) {
   const p = game.player;
   if (!p || p.dead) return false;
+  // 军备竞赛：武器由梯阶决定，购买可绕梯（BUY 期买 AWP 直接跳梯）
+  if (game.opts && game.opts.mode === 'gungame') return false;
   if (game.state !== 'BUY' && !(game.state === 'LIVE' && game.buyTime > 0)) return false;
   let bought = false;
   if (what === 'armor') {
@@ -59,8 +61,8 @@ export function buyItem(game, what) {
     p.money -= PRICES.KIT;
     p.weapons.kit = true;
     bought = true;
-  } else if (what === 'he' || what === 'flash' || what === 'smoke' || what === 'decoy') {
-    const pr = what === 'he' ? PRICES.HE : (what === 'flash' ? PRICES.FLASH : (what === 'decoy' ? PRICES.DECOY : PRICES.SMOKE));
+  } else if (what === 'he' || what === 'flash' || what === 'smoke' || what === 'decoy' || what === 'moly') {
+    const pr = what === 'he' ? PRICES.HE : (what === 'flash' ? PRICES.FLASH : (what === 'decoy' ? PRICES.DECOY : (what === 'moly' ? PRICES.MOLLY : PRICES.SMOKE)));
     const maxn = what === 'flash' ? 2 : 1;
     if (p.weapons.nades[what] >= maxn || p.money < pr) return false;
     p.money -= pr;

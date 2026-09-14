@@ -10,7 +10,7 @@ export function createEntity(team, bot) {
     name: bot ? BOT_NAMES[botNameIdx++ % BOT_NAMES.length] : 'You',
     x: 0, y: 0, vx: 0, vy: 0, angle: 0, pitch: 0, rad: 13, moveRad: 10,
     hp: 100, armor: 0, helmet: false, money: ECONOMY.START_MONEY,
-    weapons: { primary: null, secondary: null, knife: 'knife', nades: { he: 0, flash: 0, smoke: 0, decoy: 0 }, kit: false },
+    weapons: { primary: null, secondary: null, knife: 'knife', nades: { he: 0, flash: 0, smoke: 0, decoy: 0, moly: 0 }, kit: false },
     slot: 'secondary', lastSlot: 'knife',
     reloading: false, reloadT: 0, fireCd: 0, recoil: 0, shotStreak: 0, crouched: false,
     ammoMap: {}, reserveMap: {},

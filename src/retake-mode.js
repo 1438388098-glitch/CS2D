@@ -2,7 +2,7 @@
 // 本模块从 modes.js 拆出独立（modes.js 为 skip-worktree 保护的本地工作文件，不进入 git 提交），
 // 由 main.js 以副作用 import 完成模式注册，test/retake.mjs 亦直接 import 本模块。
 import {registerMode} from './registry.js';
-import {getMap, nearestWalkable} from './map.js';
+import {getMap, nearestWalkable, passableTolerant} from './map.js';
 import {setupMatchEntities, startRound} from './game.js';
 import {TILE} from './config.js';
 import {ctx} from './ctx.js';
@@ -11,12 +11,10 @@ import {rand} from './utils.js';
 const emit = (evt, p) => ctx.bus.emit(evt, p);
 const mapTile = () => getMap()?.tile || TILE;
 
-function retakeStart(game) {
-  game.noRoundEnd = false;
-  // 玩家固定 CT（回防方），T 为守包 bot
-  game.opts.team = 'ct';
-  setupMatchEntities(game);
-  startRound(game);
+// 每回合重放回防布置（candidate-552）：此前只有 start 钩子，第 2 回合起 spawnRound
+// 重发持包人 + game.bomb=null，模式退化为经典规则；换边也会破坏"固定 CT"前提
+function applyRetakeRound(game) {
+  game._retakeRound = game.round;
   const map = getMap();
   const sites = map && map.sites ? map.sites : {};
   const keys = Object.keys(sites).filter((k) => sites[k]);
@@ -44,18 +42,48 @@ function retakeStart(game) {
       e.angle = Math.atan2(site.cy - e.y, site.cx - e.x);
       e.path = null; e.objCache = null; e.aimTarget = null;
     }
-    // CT 回防：从原 CT 出生点出发（与站点拉开距离，形成回防推进）
+    // CT 回防（candidate-553）：按出生点序位分散出发，不再全员叠同一像素
+    let ctIdx = 0;
     for (const e of game.entities) {
       if (e.team !== 'ct' || e.dead) continue;
-      const sp = (map.spawns && map.spawns.ct && map.spawns.ct.length) ? map.spawns.ct[0] : null;
-      if (sp) { e.x = sp.x; e.y = sp.y; e.angle = Math.atan2(site.cy - e.y, site.cx - e.x); }
+      const ctSpawns = (map.spawns && map.spawns.ct) || [];
+      const sp = ctSpawns[ctIdx % Math.max(1, ctSpawns.length)] || null;
+      ctIdx++;
+      if (sp) {
+        e.x = sp.x; e.y = sp.y;
+        // 出生点重叠（第 5 人）时沿可通行方向散开，复用 spawnRound 的防重叠思路
+        for (let r = 16; r <= 96 && Math.hypot(e.x - sp.x, e.y - sp.y) < 1; r += 16) {
+          const nx = sp.x + r * (ctIdx % 2 ? 1 : -1), ny = sp.y + r * (ctIdx % 3 ? 1 : -1);
+          if (passableTolerant(nx, ny)) { e.x = nx; e.y = ny; }
+        }
+      }
+      e.angle = Math.atan2(site.cy - e.y, site.cx - e.x);
       e.path = null; e.objCache = null; e.aimTarget = null;
     }
+    game._plantedRound = true;
     emit('sysfeed', { text: '回防模式：炸弹已安在 ' + siteKey + ' 区，拆除它！' });
+  }
+}
+
+function retakeStart(game) {
+  game.noRoundEnd = false;
+  // 玩家固定 CT（回防方），T 为守包 bot；固定阵营禁用换边（round-1 修复的 round 9 换边会破坏模式前提）
+  game.opts.team = 'ct';
+  game.opts.sideSwapAfter = Infinity;
+  setupMatchEntities(game);
+  startRound(game);
+  applyRetakeRound(game);
+}
+
+function retakeUpdate(game) {
+  if (!game || game.over) return;
+  if (game.round !== game._retakeRound && (game.state === 'BUY' || game.state === 'LIVE')) {
+    applyRetakeRound(game);
   }
 }
 
 registerMode({
   id: 'retake', name: '回防模式', desc: 'T 已安弹守包，CT 回防拆弹', customBots: false,
-  start: retakeStart
+  start: retakeStart,
+  update: retakeUpdate
 });

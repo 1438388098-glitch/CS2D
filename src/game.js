@@ -107,7 +107,7 @@ function fpsMoveScale(game) {
 export function createGame(opts = {}) {
   const game = {
     state: 'MENU',
-    entities: [], grenades: [], particles: [], tracers: [], smokes: [], decals: [], drops: [], barrels: [], crates: [], _particlePool: [], ripples: [], impacts: [], decoys: [],
+    entities: [], grenades: [], particles: [], tracers: [], smokes: [], decals: [], drops: [], barrels: [], crates: [], _particlePool: [], ripples: [], impacts: [], decoys: [], fires: [],
     lastSplash: null,
     player: null,
     camX: 1200, camY: 900,
@@ -269,6 +269,7 @@ function spawnRound(game) {
   const spawnTick = { t: 0, ct: 0 };
   for (const e of game.entities) {
     e.lastNadeT = 0;
+    e.decoy = false; // 假打诱饵标记逐回合复位，否则粘滞跨回合朝错误站点开枪
     let list = e.team === 'ct' ? getMap().spawns.ct : getMap().spawns.t;
     if (!list || !list.length) {
       const fb = fallbackSpawn(e.team);
@@ -347,6 +348,7 @@ function spawnRound(game) {
   game.particles.length = 0;
   game.tracers.length = 0;
   if (game.sprayTrace) game.sprayTrace.length = 0;
+  if (game.fires) game.fires.length = 0;
   game.ripples.length = 0;
   game.lastPlantSite = null;
   game.decals.length = 0;
@@ -399,6 +401,8 @@ export function startRound(game) {
   game.freezeT = ROUND.FREEZE;
   game.endedT = 0;
   game._plantedRound = false;
+  // 残留 C4 清理：淘汰结束时炸弹可能仍 planted，遗留到下一回合会带着旧引信乱结算（回防模式在 startRound 后自行重设）
+  game.bomb = null;
   spawnRound(game);
   // 回合悬赏：敌方击杀榜第一名成为赏金目标（击杀 +$300），被悬赏有压力、拿赏有爽感
   game.bounty = null;
@@ -470,7 +474,7 @@ export function endRound(game, winner, reason, winType) {
     for (const e of game.entities) addMoney(e, 1500);
   }
   // 回合经济播报：资金变动可见化（此前钱"凭空变化"，连败补偿档位必须开菜单才能看到）
-  if (game.player && game.ui) {
+  if (game.player && game.ui && Number.isFinite(game.player.money) && Number.isFinite(_pm0)) {
     const delta = game.player.money - _pm0;
     emit('sysfeed', { text: (delta >= 0 ? '本回合资金 +$' : '本回合资金 -$') + Math.abs(delta) + ' → $' + game.player.money });
   }

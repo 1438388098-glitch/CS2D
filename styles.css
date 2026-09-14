@@ -1253,3 +1253,14 @@ table.sb tr.mvp td{background:rgba(255,210,122,.07)}
 #end.show .btn{animation-delay:.28s}
 @keyframes end-rise{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
 @media (prefers-reduced-motion: reduce){#end.show .final,#end.show .stat-line,#end.show .end-grid,#end.show .end-bars,#end.show .btn{animation:none}}
+
+/* 经理观战逐人 K/D/A 小表（candidate-558） */
+.m-table{margin-top:8px;padding:6px 10px;background:rgba(10,13,17,.55);border:1px solid rgba(255,255,255,.08);border-radius:8px;min-width:210px}
+.m-table .m-head{font-size:11px;letter-spacing:2px;color:#8b98a5;margin-bottom:4px}
+.m-row{display:flex;gap:10px;align-items:center;font-size:12px;color:#d6dee6;padding:1.5px 0}
+.m-row .m-n{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.m-row .m-k{color:#ffd75e;min-width:32px}
+.m-row .m-d{color:#ff8a7a;min-width:32px}
+.m-row .m-a{color:#8fd0ff;min-width:32px}
+.m-row .m-alive{color:#7de59a;font-size:11px}
+.m-row .m-x{color:#666;font-size:11px}

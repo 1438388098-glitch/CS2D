@@ -1112,6 +1112,20 @@ function drawEntities(game) {
 
 function drawSmokes(game) {
   ctx.save();
+  for (const fr of game.fires || []) {
+    const fl = clamp(fr.life / 7, 0, 1);
+    const flick = 0.82 + 0.18 * Math.sin(game.time * 17 + fr.x);
+    ctx.save();
+    const fg = ctx.createRadialGradient(fr.x, fr.y, fr.r * 0.15, fr.x, fr.y, fr.r);
+    fg.addColorStop(0, 'rgba(255,190,60,' + (0.5 * fl * flick).toFixed(3) + ')');
+    fg.addColorStop(0.6, 'rgba(255,110,26,' + (0.34 * fl * flick).toFixed(3) + ')');
+    fg.addColorStop(1, 'rgba(160,40,10,0)');
+    ctx.fillStyle = fg;
+    ctx.beginPath();
+    ctx.arc(fr.x, fr.y, fr.r, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+  }
   for (const s of game.smokes) {
     // 淡入（半径增长期）+ 淡出（生命末期 2s），其余时段完全遮挡
     const fade = clamp(s.life / SMOKE_DISSOLVE_LIFE, 0, 1) * clamp((s.r - 20) / 40, 0.3, 1);
