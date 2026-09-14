@@ -15,7 +15,11 @@ const BOT_REPLIES = ['收到', '别吵，在架枪', '你先上我掩护', '干�
 
 export function cycleEmote(game) {
   const p = game.player;
-  if (!p || p.dead) return;
+  if (!p || p.dead) {
+    // 阵亡按 G 不能静默失败（candidate-619）：观战期玩家会以为按键坏了
+    if (p && p.dead) emit('toast', { text: '阵亡后无法发表情' });
+    return;
+  }
   const cur = ((p.emoteIdx || 0) + 1) % EMOTES.length;
   p.emoteIdx = cur;
   p.emoteT = 2;

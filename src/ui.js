@@ -168,6 +168,15 @@ function createUiApi() {
           rb.innerHTML = '<b style="color:' + rs.color + '">' + rs.tier + '</b><span>' + rs.w + '胜/' + rs.played + '场</span><span class="rr">' + rs.rr + ' RR</span>';
         } catch (e0) { /* 存储不可用静默 */ }
       }
+      // 每日挑战按钮常驻状态（candidate-615/616）：打卡/连胜/中断一眼可读
+      const dailyBtn = el('dailyBtn');
+      if (dailyBtn) {
+        try {
+          const d = loadDaily();
+          dailyBtn.textContent = d.done ? '每日挑战 · 已打卡 连胜' + d.streak : (d.streak > 0 ? '每日挑战 · 上次连胜' + d.streak + '（今日未打卡）' : '每日挑战');
+          if (!d.done && d.streak === 0 && d.date === (d.date || '')) { /* 首次无中断提示 */ }
+        } catch (e0) { dailyBtn.textContent = '每日挑战'; }
+      }
     },
     hideMenu: () => el('menu') && el('menu').classList.remove('show'),
     hideEnd: () => el('end') && el('end').classList.remove('show'),
@@ -286,6 +295,16 @@ function createUiApi() {
             lx.className = 'stat-line';
             lx.innerHTML = parts2.join(' · ');
             box.appendChild(lx);
+          }
+        }
+        // 涂装熟练度进度（candidate-612）：下一个解锁的临近感
+        {
+          const next = PAINTS.filter((pc) => pc.need > 0 && pc.need > totalMastery()).sort((a, b) => a.need - b.need)[0];
+          if (next && box) {
+            const mn = doc.createElement('div');
+            mn.className = 'stat-line';
+            mn.innerHTML = '🎨 距「' + esc(next.name) + '」涂装还差 <b>' + (next.need - totalMastery()) + '</b> 击杀';
+            box.appendChild(mn);
           }
         }
         // 排位结算（candidate-587）：RR 增减 + 段位晋级提示
@@ -825,6 +844,7 @@ import { initVoice, setVoiceEnabled, voiceEnabled } from './audio/voice.js';
 import { setSoundPack, soundPack } from './audio/master.js';
 import { PAINTS, equipGlobalPaint, equippedGlobalPaint, paintLocked, totalMastery } from './skins.js';
 import { exportSave, importSave } from './savecode.js';
+import { rankedSummary as _rankedSummary } from './ranked.js';
 import { buildCoachLines } from './coach.js';
 import { getMap } from './map.js';
 import { dailyScenario, loadDaily } from './daily.js';
@@ -1418,6 +1438,7 @@ function bindSettings() {
       paintSel.appendChild(hint);
     };
     renderPaints();
+    paintSel._refresh = renderPaints; // 设置打开时刷新锁定态（candidate-613）
   }
   // 击杀音效包（candidate-588）
   const packSel = el('packSel');
@@ -1499,6 +1520,8 @@ function bindSettings() {
       settings.classList.add('show');
       if (searchEl) searchEl.value = '';
       applySettingsFilter();
+      const ps = el('paintSel');
+      if (ps && ps._refresh) ps._refresh(); // 对局中解锁涂装后刷新锁定态（candidate-613）
       renderKeybindList(listEl);
       refreshViewSel();
     };

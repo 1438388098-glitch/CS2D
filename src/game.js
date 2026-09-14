@@ -614,8 +614,9 @@ export function finishMatch(game) {
   const win = (game.score.T >= winAt && game.player.team === 't') ||
     (game.score.CT >= winAt && game.player.team === 'ct');
   recordDifficultyResult(game, win);
-  settleDaily(game, win);
-  game._rankedResult = settleRanked(game, win);
+  const dailyFirst = settleDaily(game, win);
+  // 每日首胜 × 排位联动（candidate-611）：打卡首胜给 RR +5
+  game._rankedResult = settleRanked(game, win, dailyFirst ? 5 : 0);
   saveOppModel(game);
   const ui = game.ui;
   if (!ui) return;

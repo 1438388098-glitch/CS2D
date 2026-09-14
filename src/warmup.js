@@ -20,6 +20,7 @@ export function spawnWarmupTargets(game) {
     game.warmupTargets.push({ x: sp.x + Math.cos(ang) * (300 + i * 120), y: sp.y + Math.sin(ang) * (300 + i * 120), r: 16, hit: 0, flashT: 0 });
   }
   game.warmupShots = 0;
+  if (game.round === 1) emit('toast', { text: '冻结期可打热身靶练枪，解冻时播报命中率' });
 }
 
 // fireWeapon（玩家、冻结/购买期）调用：射线命中判定（视线方向 ± 弥散由调用方传角）

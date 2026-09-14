@@ -9,6 +9,7 @@ import { cycleEmote, EMOTES, activeEmote } from '../src/emote.js';
 import { spawnWarmupTargets, warmupOnShot } from '../src/warmup.js';
 import { getMode } from '../src/registry.js';
 import '../src/range-mode.js';
+import { ctx } from '../src/ctx.js';
 
 const _ls = new Map();
 globalThis.localStorage = {
@@ -105,7 +106,7 @@ function fresh(opts) {
 
 // —— 6. 存档导出/导入 ——
 {
-  ok('supported modes', supportedModes().join(',') === 'career,manager,duel');
+  ok('supported modes', supportedModes().join(',') === 'career,manager,duel,profile');
   _ls.set('cs2d_duel', JSON.stringify({ stats: { w: 7 } }));
   const code = exportSave('duel');
   ok('export produces prefixed code', typeof code === 'string' && code.startsWith('duel.'));
@@ -133,6 +134,28 @@ function fresh(opts) {
 {
   const g = fresh({ mode: 'range', gameplayPlus: false });
   ok('range still boots', getMode('range') !== null && !!g.rangeRound);
+}
+
+// —— 10. round-11 补充：profile 存档码 / 每日首胜RR加成 / 表情dead提示 ——
+{
+  // profile 导出导入
+  _ls.set('cs2d_ranked_v1', JSON.stringify({ rr: 1234, played: 5, w: 3 }));
+  _ls.set('cs2d_mastery_v1', JSON.stringify({ ak: 9 }));
+  const code = exportSave('profile');
+  ok('profile export works', typeof code === 'string' && code.startsWith('profile.'));
+  _ls.delete('cs2d_ranked_v1');
+  ok('profile import restores keys', importSave('profile', code) === true && _ls.get('cs2d_ranked_v1').includes('1234'));
+  // rrDelta bonus
+  ok('rr bonus applied', rrDelta(true, 1, 1, 5) === rrDelta(true, 1, 1) + 5);
+  // emote dead 提示
+  const g = fresh({ gameplayPlus: false });
+  g.player.dead = true;
+  const toasts = [];
+  const h = (p2) => toasts.push(p2.text || '');
+  ctx.bus.on('toast', h);
+  cycleEmote(g);
+  ctx.bus.off('toast', h);
+  ok('emote dead toast', toasts.some((t) => t.indexOf('阵亡') !== -1));
 }
 
 if (errors.length) {

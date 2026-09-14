@@ -43,18 +43,19 @@ export function tierOf(rr) {
 }
 
 // 纯函数：结算 RR 增量（可单测）。胜：+18 基础 + 表现加成（KD>1 至 +7）；负：-22 基础 + 表现减免（KD>1 至 +8）
-export function rrDelta(win, kills, deaths) {
+export function rrDelta(win, kills, deaths, bonus) {
   const kd = deaths > 0 ? kills / deaths : kills;
-  if (win) return Math.round(18 + Math.min(7, Math.max(0, (kd - 1) * 8)));
-  return Math.round(-22 + Math.min(8, Math.max(0, (kd - 1) * 8)));
+  const b = Number(bonus) || 0;
+  if (win) return Math.round(18 + b + Math.min(7, Math.max(0, (kd - 1) * 8)));
+  return Math.round(-22 + b + Math.min(8, Math.max(0, (kd - 1) * 8)));
 }
 
 // finishMatch 调用（经典模式限定）：结算并返回 {delta, rr, tier, promoted}
-export function settleRanked(game, win) {
+export function settleRanked(game, win, bonus) {
   if (!game || game.mode || !game.player) return null;
   const d = loadRanked();
   const before = tierOf(d.rr);
-  const delta = rrDelta(win, game.player.kills || 0, game.player.deaths || 0);
+  const delta = rrDelta(win, game.player.kills || 0, game.player.deaths || 0, bonus);
   d.rr = Math.max(0, Math.min(RR_MAX, d.rr + delta));
   d.played = (d.played || 0) + 1;
   if (win) d.w = (d.w || 0) + 1;
