@@ -816,6 +816,22 @@ export function renderHud(game) {
   if (p && p.dead) {
     drawDeathVeil(ctx, w2, h2, deathVeilAlpha(1.8 - (p.deathT || 0)));
   }
+  // 合约进度 chip（candidate-623）：📋 n/N 常驻右下，完成态变金
+  {
+    const c = contractState(game);
+    if (c && !c.complete && game.viewMode === 'top') {
+      ctx.save();
+      const txt = '📋 ' + c.done + '/' + c.n;
+      ctx.font = "700 11px 'Microsoft YaHei',sans-serif";
+      ctx.textAlign = 'left';
+      const wpx = ctx.measureText(txt).width + 14;
+      ctx.fillStyle = 'rgba(10,13,17,.6)';
+      ctx.fillRect(w2 - 154, h2 - 60, wpx, 16);
+      ctx.fillStyle = c.done > 0 ? '#ffd75e' : 'rgba(200,210,220,.85)';
+      ctx.fillText(txt, w2 - 147, h2 - 48.5);
+      ctx.restore();
+    }
+  }
   // 队伍士气条（candidate-597）：右下角小条，士气高低一眼可读
   if (game.teamMorale && p && game.teamMorale[p.team] !== undefined && game.viewMode === 'top') {
     const mine = game.teamMorale[p.team];

@@ -15,7 +15,8 @@ export function buildShareCardData(game) {
     a: p.assists || 0,
     acc,
     longest: (game.stats && game.stats.longestKill) ? game.stats.longestKill.d + 'm' : null,
-    round: game.round || 0
+    round: game.round || 0,
+    ranked: game._rankedResult || null
   };
 }
 
@@ -54,6 +55,7 @@ export function renderShareCard(game, opts) {
     ['命中率', data.acc + '%'],
     ['最远击杀', data.longest || '—']
   ];
+  if (data.ranked) rows.push(['段位 / RR', data.ranked.tier + ' ' + data.ranked.rr + '（' + (data.ranked.delta >= 0 ? '+' : '') + data.ranked.delta + '）']);
   let y = 210;
   x.textAlign = 'center';
   for (const [label, val] of rows) {

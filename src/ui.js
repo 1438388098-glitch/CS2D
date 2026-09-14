@@ -168,6 +168,13 @@ function createUiApi() {
           rb.innerHTML = '<b style="color:' + rs.color + '">' + rs.tier + '</b><span>' + rs.w + '胜/' + rs.played + '场</span><span class="rr">' + rs.rr + ' RR</span>';
         } catch (e0) { /* 存储不可用静默 */ }
       }
+      // 宿敌统计曝光（candidate-627）：rankBadge 同行追加
+      if (rb) {
+        try {
+          const ns = nemesisStats();
+          if (ns.name) rb.innerHTML += '<span class="rank-nemesis">☠ 宿敌 ' + ns.name + ' · 复仇 ' + ns.revenges + ' 次</span>';
+        } catch (e0) { /* 静默 */ }
+      }
       // 每日挑战按钮常驻状态（candidate-615/616）：打卡/连胜/中断一眼可读
       const dailyBtn = el('dailyBtn');
       if (dailyBtn) {
@@ -846,6 +853,7 @@ import { PAINTS, equipGlobalPaint, equippedGlobalPaint, paintLocked, totalMaster
 import { exportSave, importSave } from './savecode.js';
 import { rankedSummary as _rankedSummary } from './ranked.js';
 import { renderShareCard } from './share-card.js';
+import { nemesisStats } from './nemesis.js';
 import { buildCoachLines } from './coach.js';
 import { getMap } from './map.js';
 import { dailyScenario, loadDaily } from './daily.js';

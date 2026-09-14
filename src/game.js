@@ -29,6 +29,7 @@ import { offerPerks, resolvePendingPerks, resetPerks } from './perks.js';
 import { markNemesis } from './nemesis.js';
 import { settleDaily } from './daily.js';
 import { settleRanked } from './ranked.js';
+import { computeMvp } from './mvp-score.js';
 import { initMorale, applyMoraleResult, applyMoraleToEntities } from './morale.js';
 import { updateAirdrop } from './airdrop.js';
 import { spawnWarmupTargets, settleWarmup } from './warmup.js';
@@ -215,6 +216,12 @@ export function startMatch(game) {
   const fresh = createGame();
   // 保留调用者传入的世界种子（训练/回放确定性）：Object.assign 会用 fresh.seed=null 覆盖
   const callerSeed = game.seed;
+  // 每日挑战中途放弃的残留清理（candidate-620）：opts.daily 未结算会被普通局误打卡+误发 RR
+  if (game.opts && game.opts.daily) {
+    if (game._dailyBackup) Object.assign(game.opts, game._dailyBackup);
+    delete game._dailyBackup;
+    delete game.opts.daily;
+  }
   fresh.opts = game.opts;
   // 一次性模式覆盖（如单挑的短局换边）不跨对局残留：非该模式的 startMatch 一律回归默认
   delete fresh.opts.sideSwapAfter;
@@ -627,7 +634,10 @@ export function finishMatch(game) {
   const p = game.player;
   const all = game.entities.slice();
   all.sort((a, b) => b.kills - a.kills);
-  const mvp = all[0];
+  // MVP 用表现分选取（candidate-628）：mvp-score 的助攻/伤害/下拆包加权，不再裸击杀排序
+  for (const e of all) { if (e.dmgGiven !== undefined) e.damage = e.dmgGiven; }
+  const mvpPick = computeMvp(all.filter((e) => !e.bot || e.kills > 0 || e.assists > 0 || e.damage));
+  const mvp = (mvpPick && mvpPick.player) || all[0];
   let bestWeapon = null;
   let bestN = 0;
   for (const key in p.wKills) {

@@ -23,6 +23,7 @@ export function cycleEmote(game) {
   const cur = ((p.emoteIdx || 0) + 1) % EMOTES.length;
   p.emoteIdx = cur;
   p.emoteT = 2;
+  emit('toast', { text: '表情：' + EMOTES[cur].face + ' ' + EMOTES[cur].label + '（再按 G 切换）' });
   emit('sfx', { name: 'buy', vol: 0.35, game });
   if (Math.random() < 0.35) {
     const mates = game.entities.filter((e) => e.bot && e.team === p.team && !e.dead);

@@ -75,7 +75,8 @@ export function settleDaily(game, win) {
       d.best = Math.max(d.best || 0, d.streak);
       d.date = todayStr();
     }
-  } else {
+  } else if (!d.done) {
+    // 已打卡日复玩败局不惩罚（candidate-621）：连胜是"当天承诺"的记录
     d.streak = 0;
     d.date = todayStr();
   }

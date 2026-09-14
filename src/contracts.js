@@ -3,6 +3,7 @@
 // 让 eco 局/手枪局也有事情可追。wKills 已按武器统计，判定近零成本。
 import { ctx } from './ctx.js';
 import { rand } from './utils.js';
+import { WEAPONS } from './config.js';
 
 const emit = (evt, p) => ctx.bus.emit(evt, p);
 
@@ -20,12 +21,23 @@ const CONTRACT_POOL = [
 export function rollContract(game) {
   game.contract = null;
   if (!game || !game.opts.gameplayPlus || !game.player) return;
-  const c = CONTRACT_POOL[Math.floor(rand() * CONTRACT_POOL.length)];
+  // 经济过滤（candidate-622）：买不起的武器合约是纯噪音（手枪局不发 AWP 合约）
+  const money = game.player.money || 0;
+  const affordable = CONTRACT_POOL.filter((c) => {
+    const w = WEAPONS[c.w];
+    return !w || w.price <= money + 1400; // 允许 eco 局攒钱达标的轻度弹性
+  });
+  const pool = affordable.length ? affordable : CONTRACT_POOL.filter((c) => c.w === 'usp' || c.w === 'glock' || c.w === 'knife');
+  const c = pool[Math.floor(rand() * pool.length)];
   game.contract = { w: c.w, n: c.n, reward: c.reward, label: c.label, done: 0 };
   emit('sysfeed', { text: '📋 回合合约：' + c.label + '（+$' + c.reward + '）' });
 }
 
 // killEntity（killer === game.player）时结算
+export function contractState(game) {
+  return game && game.contract ? game.contract : null;
+}
+
 export function contractOnKill(game, weapon) {
   const c = game.contract;
   if (!c || c.complete) return false;

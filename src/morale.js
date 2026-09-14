@@ -43,7 +43,9 @@ export function applyMoraleToEntities(game) {
   for (const e of game.entities) {
     if (!e.bot) continue;
     if (e._baseSpeedMult === undefined) e._baseSpeedMult = e.speedMult || 1;
+    if (e._baseRecoverMult === undefined) e._baseRecoverMult = e.recoverMult || 1;
     const m = game.teamMorale[e.team] || 50;
     e.speedMult = e._baseSpeedMult * moraleMult(m);
+    e.recoverMult = e._baseRecoverMult * moraleMult(m); // 准星恢复同样受士气（candidate-626）
   }
 }

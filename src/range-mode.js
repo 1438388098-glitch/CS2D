@@ -19,7 +19,11 @@ function rangeStart(game) {
   bots.forEach((e, i) => {
     const ang = (i / Math.max(1, bots.length)) * Math.PI * 2;
     e.rangeHome = { x: mid.x + Math.cos(ang) * 420, y: mid.y + Math.sin(ang) * 420 };
+    // 靶型档位（candidate-630）：0 静止 / 1 横移巡航 / 2 随机变速
+    e.rangeTier = i % 3;
+    e.rangePatrolT = 0;
   });
+  game.rangeStats = { hits: 0, headshots: 0, shotsAtStart: game.stats.shots || 0, hitsAtStart: game.stats.hits || 0, killsAtStart: 0 };
   game.rangeRound = game.round;
   emit('sysfeed', { text: '训练场：木桩会自动复活，B 键免费购买任意装备' });
 }
@@ -43,14 +47,32 @@ function refreshDummies(game) {
         e.y = e.rangeHome.y;
         e._rangeRespawnT = undefined;
       }
+    } else if (e.rangeTier === 1) {
+      // 横移巡航：沿锚点左右巡逻
+      e.rangePatrolT += 0.05;
+      e.x = e.rangeHome.x + Math.sin(e.rangePatrolT * 1.2) * 160;
+      e.y = e.rangeHome.y + Math.cos(e.rangePatrolT * 0.8) * 40;
+    } else if (e.rangeTier === 2) {
+      // 随机变速游走
+      e.rangePatrolT += 0.05;
+      e.x = e.rangeHome.x + Math.sin(e.rangePatrolT * (1.6 + (i % 2))) * 130;
+      e.y = e.rangeHome.y + Math.cos(e.rangePatrolT * 1.1) * 110;
     } else if (Math.hypot(e.x - e.rangeHome.x, e.y - e.rangeHome.y) > 60) {
-      e.x = e.rangeHome.x; e.y = e.rangeHome.y; // 木桩不乱跑
+      e.x = e.rangeHome.x; e.y = e.rangeHome.y; // 静止靶回锚
     }
   }
 }
 
 function rangeUpdate(game, dt) {
   if (!game || game.over) return;
+  // 练枪成绩小结（candidate-630）：每 20s 播一次命中率
+  game._rangeStatT = (game._rangeStatT === undefined ? 20 : game._rangeStatT) - (dt || 0.016);
+  if (game._rangeStatT <= 0) {
+    game._rangeStatT = 20;
+    const shots = (game.stats.shots || 0) - (game.rangeStats.shotsAtStart || 0);
+    const hits = (game.stats.hits || 0) - (game.rangeStats.hitsAtStart || 0);
+    if (shots >= 10) emit('sysfeed', { text: '🎯 近 20s 命中率 ' + Math.round((hits / shots) * 100) + '%（' + hits + '/' + shots + '）' });
+  }
   if (game.round !== game.rangeRound) {
     game.rangeRound = game.round;
     for (const e of game.entities) e.hasBomb = false;

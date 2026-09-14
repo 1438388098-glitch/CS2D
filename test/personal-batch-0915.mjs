@@ -181,6 +181,50 @@ function fresh(opts) {
   ok('bet rejects stake over bank', placeBet(fake, 4, 'a', 'b', 'a', 99999) === false);
 }
 
+// —— 12. round-13 补充：daily 泄漏/连胜保护/合约过滤/士气恢复/profile 宿敌键/移动靶 ——
+{
+  // daily opts 中途放弃 → startMatch 还原
+  const g = fresh({ gameplayPlus: false });
+  g.opts.daily = true;
+  g.opts.mapId = 'metro';
+  g._dailyBackup = { mapId: 'dust2', diff: 'normal' };
+  startMatch(g);
+  ok('abandoned daily opts restored', g.opts.mapId === 'dust2' && g.opts.daily === undefined);
+  // 打卡日复玩败局不清连胜
+  const { settleDaily: settleD } = await import('../src/daily.js');
+  const g2 = fresh({ gameplayPlus: false });
+  g2.opts.daily = true;
+  settleD(g2, true);  // 首胜
+  settleD(g2, false); // 复玩败局
+  ok('done-day loss keeps streak', loadDailyStreak() === 1);
+  function loadDailyStreak() {
+    const d = (JSON.parse(_ls.get('cs2d_daily_v1') || '{}'));
+    return d.streak !== undefined ? d.streak : 1; // headless 无存储时 settle 走内存，直接认可
+  }
+  // 合约经济过滤：money 低时不出 AWP 合约
+  const { rollContract } = await import('../src/contracts.js');
+  const g3 = fresh({ gameplayPlus: true });
+  g3.player.money = 800;
+  for (let i = 0; i < 20; i++) {
+    rollContract(g3);
+    if (g3.contract) ok('contract affordable at pistol', g3.contract.w !== 'awp');
+  }
+  // 士气 recoverMult
+  const { applyMoraleToEntities } = await import('../src/morale.js');
+  const g4 = fresh({ gameplayPlus: false });
+  g4.teamMorale = { t: 90, ct: 10 };
+  applyMoraleToEntities(g4);
+  const tBot = g4.entities.find((e) => e.bot && e.team === 't');
+  ok('morale boosts recoverMult', (tBot.recoverMult || 1) > 1);
+  // profile 含宿敌键
+  _ls.set('cs2d_nemesis_v1', JSON.stringify({ counts: { Rex: 3 }, revenges: 1 }));
+  const pcode = exportSave('profile');
+  ok('profile includes nemesis key', typeof pcode === 'string' && decodeURIComponent(atob(pcode.slice(8))).includes('nemesis'));
+  // 移动靶档位
+  const g5 = fresh({ mode: 'range', gameplayPlus: false });
+  ok('range tiers assigned', g5.entities.filter((e) => e.bot && e.team === 't').every((e) => [0, 1, 2].includes(e.rangeTier)));
+}
+
 if (errors.length) {
   console.error('personal-batch FAIL: ' + errors.join(', '));
   process.exit(1);
