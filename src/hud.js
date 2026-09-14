@@ -358,6 +358,43 @@ export function renderMinimap(game) {
     for (const sp of mmap.spawns.ct || []) mctx.fillRect(ox + sp.x * s - 1.5, oy + sp.y * s - 1.5, 3, 3);
   }
 
+  // 燃烧瓶火区（candidate-602）：橙红斑与烟雾图层对称，DoT 区域雷达可读
+  if (game.fires && game.fires.length) {
+    mctx.fillStyle = 'rgba(255,120,40,0.55)';
+    for (const fr of game.fires) {
+      mctx.beginPath();
+      mctx.arc(ox + fr.x * s, oy + fr.y * s, Math.max(4, fr.r * s), 0, Math.PI * 2);
+      mctx.fill();
+    }
+  }
+  // 人质（candidate-603）：人质解救模式的护送目标，绿十字标记（已救转暗）
+  if (game.hostages && game.hostages.length) {
+    for (const h of game.hostages) {
+      mctx.strokeStyle = h.rescued ? 'rgba(120,140,130,.5)' : 'rgba(120,255,160,.95)';
+      mctx.lineWidth = 2;
+      mctx.beginPath();
+      mctx.moveTo(ox + h.x * s - 4, oy + h.y * s);
+      mctx.lineTo(ox + h.x * s + 4, oy + h.y * s);
+      mctx.moveTo(ox + h.x * s, oy + h.y * s - 4);
+      mctx.lineTo(ox + h.x * s, oy + h.y * s + 4);
+      mctx.stroke();
+    }
+  }
+  // 空投补给常驻标记（candidate-607）：落地后小地图持续绿点直到被拾取/过期
+  if (game.drops && game.drops.length) {
+    for (const d of game.drops) {
+      if (!d.airdrop) continue;
+      mctx.fillStyle = 'rgba(120,255,160,.9)';
+      mctx.beginPath();
+      mctx.arc(ox + d.x * s, oy + d.y * s, 3.5, 0, Math.PI * 2);
+      mctx.fill();
+      mctx.strokeStyle = 'rgba(120,255,160,.4)';
+      mctx.lineWidth = 1;
+      mctx.beginPath();
+      mctx.arc(ox + d.x * s, oy + d.y * s, 6, 0, Math.PI * 2);
+      mctx.stroke();
+    }
+  }
   // 烟雾区：灰斑覆盖对应区域，提升战术可读性
   if (game.smokes && game.smokes.length) {
     mctx.fillStyle = 'rgba(170,175,185,0.5)';

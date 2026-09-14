@@ -1293,3 +1293,5 @@ body[data-theme="crimson"]{--gold:#ff6b6b;--t:#ff8a5c}
 .savecode-bar .set-btn{cursor:pointer}
 .sc-mode{background:var(--bg-2);color:var(--txt-0);border:1px solid var(--line-1);border-radius:6px;padding:4px 8px;font-size:12px}
 .sc-text{width:100%;background:var(--bg-2);color:var(--txt-0);border:1px solid var(--line-1);border-radius:6px;padding:6px;font-size:11px;font-family:var(--f-mono);resize:vertical}
+
+.kf .kfd{color:#9aa7b4;font-size:11px}

@@ -126,6 +126,21 @@ function fresh(opts) {
   ok('no crash without boxes', (g.powerBoxes || []).length === 0);
 }
 
+// —— 8b. round-10 补充：warmupShots 自增 + 门进度播报 + 最远击杀 ——
+{
+  const g = fresh({ gameplayPlus: true });
+  startRound(g);
+  const t0 = g.warmupTargets[0];
+  const ang = Math.atan2(t0.y - g.player.y, t0.x - g.player.x);
+  warmupOnShot(g, g.player.x, g.player.y, ang);
+  ok('warmupShots increments', (g.warmupShots || 0) === 1);
+  // 最远击杀
+  const enemy = g.entities.find((e) => e.bot && e.team !== g.player.team && !e.dead);
+  enemy.x = g.player.x + 800; enemy.y = g.player.y;
+  killEntity(enemy, g.player, 'ak', false, g);
+  ok('longest kill recorded', g.stats.longestKill && g.stats.longestKill.d === 20);
+}
+
 // —— 9. 回放缓冲 ——
 {
   const g = fresh({ gameplayPlus: false });

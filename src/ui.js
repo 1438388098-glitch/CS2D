@@ -159,6 +159,15 @@ function createUiApi() {
       game.state = 'MENU'; game.over = false; const ot = el('objtext'); if (ot) ot.style.display = 'none'; uiHideBanner();
       hideModePanels();
       renderModeSettings();
+      // 主菜单段位徽章（candidate-599）：rankedSummary 常驻曝光
+      const rb = el('rankBadge');
+      if (rb) {
+        try {
+          const rs = rankedSummary();
+          rb.className = 'rank-badge show';
+          rb.innerHTML = '<b style="color:' + rs.color + '">' + rs.tier + '</b><span>' + rs.w + '胜/' + rs.played + '场</span><span class="rr">' + rs.rr + ' RR</span>';
+        } catch (e0) { /* 存储不可用静默 */ }
+      }
     },
     hideMenu: () => el('menu') && el('menu').classList.remove('show'),
     hideEnd: () => el('end') && el('end').classList.remove('show'),
@@ -265,6 +274,18 @@ function createUiApi() {
             cl.className = 'stat-line coach-line';
             cl.innerHTML = '🎓 ' + esc(line);
             box.appendChild(cl);
+          }
+        }
+        // 伤害列（candidate-604）+ 最远击杀（candidate-605）补进结算
+        if (box && game.player && (game.player.dmgTotal || game.stats.longestKill)) {
+          const parts2 = [];
+          if (game.player.dmgTotal) parts2.push('总伤害 <b>' + Math.round(game.player.dmgTotal) + '</b>');
+          if (game.stats.longestKill) parts2.push('最远击杀 <b>' + game.stats.longestKill.d + 'm</b>（' + esc(game.stats.longestKill.w || '') + '）');
+          if (parts2.length) {
+            const lx = doc.createElement('div');
+            lx.className = 'stat-line';
+            lx.innerHTML = parts2.join(' · ');
+            box.appendChild(lx);
           }
         }
         // 排位结算（candidate-587）：RR 增减 + 段位晋级提示

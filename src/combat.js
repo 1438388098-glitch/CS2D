@@ -389,6 +389,7 @@ export function hitDoorByShot(game, px, py, shooter) {
     d.hp -= 1;
     spawnParticle(game, { kind: 'spark', x: px, y: py, vx: rand(-70, 70), vy: rand(-70, 70), life: 0.2, size: 2 });
     emit('sfx', { name: 'crateHit', vol: 0.5, x: d.x, y: d.y, game });
+    if (shooter === game.player) emit('sysfeed', { text: '🚪 木门受损 ' + d.hp + '/4' });
     if (d.hp <= 0) {
       doors.splice(i, 1);
       emit('sfx', { name: 'crateBreak', vol: 0.7, x: d.x, y: d.y, game });
@@ -585,6 +586,11 @@ export function killEntity(v, killer, weapon, head, game) {
   // bot 无线电播报（candidate-567）：bot 间击倒事件进左下情报条
   if (killer && killer.bot && v.bot) pushRadio(game, killer.name + ' 击倒了 ' + v.name);
   maybeTaunt(game, killer);
+  // 最远击杀纪录（candidate-605）：killfeed 距离算完别丢，进结算面板
+  if (killer === game.player && killer !== v) {
+    const dM = Math.round(Math.hypot(killer.x - v.x, killer.y - v.y) / 40);
+    if (!game.stats.longestKill || dM > game.stats.longestKill.d) game.stats.longestKill = { d: dM, w: wname };
+  }
   // 回合合约结算（candidate-569）
   if (killer === game.player && contractOnKill(game, weapon)) {
     addMoney(killer, game.contract.reward);

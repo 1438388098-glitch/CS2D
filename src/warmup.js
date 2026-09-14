@@ -38,6 +38,7 @@ export function warmupOnShot(game, originX, originY, angle) {
       hit = true;
     }
   }
+  game.warmupShots = (game.warmupShots || 0) + 1;
   if (hit) emit('sfx', { name: 'hit', vol: 0.4, game });
   return hit;
 }

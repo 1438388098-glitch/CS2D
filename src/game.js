@@ -574,6 +574,7 @@ export function endRound(game, winner, reason, winType) {
     }
     if (mvp && best >= 2) {
       emit('sysfeed', { text: '⭐ 回合 MVP：' + mvp.name + '（' + best + ' 杀）' });
+      if (mvp === game.player) emit('sfx', { name: 'streak', vol: 0.7, game });
     }
   }
   // 回合经济播报：资金变动可见化（此前钱"凭空变化"，连败补偿档位必须开菜单才能看到）
@@ -643,7 +644,7 @@ export function objectiveText(game) {
   const p = game.player;
   if (!p) return { main: '', sub: '' };
   const ik = getBindLabel('interact');
-  if (p.dead) return { main: '观战中…', sub: '等待下回合' };
+  if (p.dead) return { main: '观战中…', sub: '切目标 ' + getBindLabel('spectatePrev') + '/' + getBindLabel('spectateNext') + ' · 自由镜头 ' + getBindLabel('spectateFree') };
   if (p.team === 'ct') {
     if (game.bomb && game.bomb.planted) return { main: '拆除炸弹！', sub: '前往 ' + (game.bomb.site === 'A' ? 'A 区' : 'B 区') + ' · 按住 ' + ik };
     return { main: '守卫目标点', sub: '阻止 T 方安装炸弹' };
