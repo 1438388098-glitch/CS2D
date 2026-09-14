@@ -1,3 +1,4 @@
+import { a11yPalette } from './a11y.js';
 import { clamp } from './utils.js';
 
 // 受击方向红弧特效（candidate-308，2D 画面增强）。
@@ -45,10 +46,12 @@ export function drawDamageArc(ctx, w, h, fx) {
   const a0 = fx.angle - fx.spread;
   const a1 = fx.angle + fx.spread;
   ctx.save();
+  const pal = a11yPalette();
+  const c = pal ? pal.hit : [[190, 10, 8], [205, 14, 10], [220, 22, 12]];
   const g = ctx.createRadialGradient(cx, cy, r0, cx, cy, r1);
-  g.addColorStop(0, 'rgba(190,10,8,0)');
-  g.addColorStop(0.7, 'rgba(205,14,10,' + (fx.alpha * 0.55).toFixed(3) + ')');
-  g.addColorStop(1, 'rgba(220,22,12,' + fx.alpha.toFixed(3) + ')');
+  g.addColorStop(0, 'rgba(' + c[0][0] + ',' + c[0][1] + ',' + c[0][2] + ',0)');
+  g.addColorStop(0.7, 'rgba(' + c[1][0] + ',' + c[1][1] + ',' + c[1][2] + ',' + (fx.alpha * 0.55).toFixed(3) + ')');
+  g.addColorStop(1, 'rgba(' + c[2][0] + ',' + c[2][1] + ',' + c[2][2] + ',' + fx.alpha.toFixed(3) + ')');
   ctx.fillStyle = g;
   ctx.beginPath();
   ctx.arc(cx, cy, r1, a0, a1, false);

@@ -1,3 +1,4 @@
+import { a11yPalette } from './a11y.js';
 import { clamp } from './utils.js';
 
 // 低血量 (<30%) 屏幕边缘红色脉冲警示特效（2D 画面增强）。
@@ -37,11 +38,13 @@ export function drawLowHpVignette(ctx, w, h, fx) {
   const inner = Math.min(w, h) * fx.radius;
   const outer = Math.hypot(w, h) / 2 + 8;
   ctx.save();
+  const pal = a11yPalette();
+  const lc = pal ? pal.lowhp : [220, 22, 12];
   const g = ctx.createRadialGradient(cx, cy, Math.max(0, inner), cx, cy, outer);
-  g.addColorStop(0, 'rgba(190,10,8,0)');
-  g.addColorStop(0.55, 'rgba(190,10,8,' + (fx.alpha * 0.25).toFixed(3) + ')');
-  g.addColorStop(0.85, 'rgba(205,14,10,' + (fx.alpha * 0.62).toFixed(3) + ')');
-  g.addColorStop(1, 'rgba(220,22,12,' + fx.alpha.toFixed(3) + ')');
+  g.addColorStop(0, 'rgba(' + lc[0] + ',' + lc[1] + ',' + lc[2] + ',0)');
+  g.addColorStop(0.55, 'rgba(' + lc[0] + ',' + lc[1] + ',' + lc[2] + ',' + (fx.alpha * 0.25).toFixed(3) + ')');
+  g.addColorStop(0.85, 'rgba(' + Math.round(lc[0] * 0.93) + ',' + Math.round(lc[1] * 0.64) + ',' + Math.round(lc[2] * 0.45) + ',' + (fx.alpha * 0.62).toFixed(3) + ')');
+  g.addColorStop(1, 'rgba(' + lc[0] + ',' + lc[1] + ',' + lc[2] + ',' + fx.alpha.toFixed(3) + ')');
   ctx.fillStyle = g;
   ctx.fillRect(0, 0, w, h);
   ctx.restore();

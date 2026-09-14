@@ -17,6 +17,7 @@ import { aimSensitivityCurve } from './aim.js';
 import {pressed, getBindLabel} from './keymap.js';
 import {initInfo, prune} from './info.js';
 import {initOppModel} from './ai/oppmodel.js';
+import {saveOppModel} from './ai/oppmodel.js';
 import {hasLineOfSight} from './fog.js';
 import { shouldRerouteStuck } from './ai/rules.js';
 import { stuckObjective } from './ai/stability.js';
@@ -28,6 +29,8 @@ import { offerPerks, resolvePendingPerks, resetPerks } from './perks.js';
 import { markNemesis } from './nemesis.js';
 import { settleDaily } from './daily.js';
 import { updateAirdrop } from './airdrop.js';
+import { rollContract } from './contracts.js';
+import { weatherKind } from './weather-fx.js';
 
 const emit = (evt, p) => ctx.bus.emit(evt, p);
 
@@ -107,7 +110,7 @@ function fpsMoveScale(game) {
 export function createGame(opts = {}) {
   const game = {
     state: 'MENU',
-    entities: [], grenades: [], particles: [], tracers: [], smokes: [], decals: [], drops: [], barrels: [], crates: [], _particlePool: [], ripples: [], impacts: [], decoys: [], fires: [],
+    entities: [], grenades: [], particles: [], tracers: [], smokes: [], decals: [], drops: [], barrels: [], crates: [], _particlePool: [], ripples: [], impacts: [], decoys: [], fires: [], radioLog: [], deathLog: [],
     lastSplash: null,
     player: null,
     camX: 1200, camY: 900,
@@ -223,7 +226,7 @@ export function startMatch(game) {
   game.over = false;
   resetPerks(game);
   // 清理模式残留（cyber/major 等按模式注入的 game 字段，避免跨模式泄漏）
-  for (const k of ['major', 'cyber', 'gg', '_ggRound', '_ggOff', 'pendingPerks', 'perkLog']) delete game[k];
+  for (const k of ['major', 'cyber', 'gg', '_ggRound', '_ggOff', 'pendingPerks', 'perkLog', 'empPulse', 'contract', 'deathLog']) delete game[k];
   const modeDef = game.mode ? getMode(game.mode) : null;
   if (modeDef && modeDef.start) {
     modeDef.start(game);
@@ -257,6 +260,11 @@ export function setupMatchEntities(game) {
   const diffParams = game.opts.diffParams || resolveDiff(game.opts.diff, game.opts.hellLevel);
   for (const e of game.entities) {
     if (e.bot && !e.aiParams) e.aiParams = { ...diffParams };
+  }
+  // 自定义起始资金（candidate-571）
+  if (Number.isFinite(Number(game.opts.startMoney))) {
+    const sm = Number(game.opts.startMoney);
+    for (const e of game.entities) e.money = sm;
   }
 }
 
@@ -397,7 +405,9 @@ export function startRound(game) {
   }
   game.state = 'BUY';
   game.roundTime = 0;
-  game.buyTime = ROUND.BUY_TIME;
+  // 自定义规则（candidate-571）：回合时长/购买时间可在菜单滑杆覆盖
+  game.roundDur = Number(game.opts.roundDur) || ROUND.DURATION;
+  game.buyTime = Number(game.opts.buyTime) || ROUND.BUY_TIME;
   game.freezeT = ROUND.FREEZE;
   game.endedT = 0;
   game._plantedRound = false;
@@ -416,6 +426,7 @@ export function startRound(game) {
   markNemesis(game);
   resolvePendingPerks(game);
   maybeRollRoundEvent(game);
+  rollContract(game);
   emit('sfx', { name: 'whistle', vol: 0.7, game });
   if (game.ui) {
     emit('bannerHide');
@@ -511,6 +522,7 @@ export function finishMatch(game) {
     (game.score.CT >= winAt && game.player.team === 'ct');
   recordDifficultyResult(game, win);
   settleDaily(game, win);
+  saveOppModel(game);
   const ui = game.ui;
   if (!ui) return;
   const p = game.player;
@@ -597,6 +609,7 @@ export function update(game, dt) {
 
   updateGrenades(game, dt);
   updateAirdrop(game, dt);
+  updateThunder(game, dt);
   // IGL 继任 / 补位：本帧有 bot 阵亡则刷新（幂等、不抛错）
   refreshLeadershipOnDeath(game);
   for (const e of game.entities) {
@@ -908,6 +921,23 @@ function updateCam(game, dt) {
   const hh = game.canvasH / 2 / z;
   game.camX = clamp(game.camX, hw, Math.max(hw, game.mapW - hw));
   game.camY = clamp(game.camY, hh, Math.max(hh, game.mapH - hh));
+}
+
+// 雷暴（candidate-568）：雨天图每 9-16s 一声雷，1.5s 窗口内 bot 听声半径减半——
+// 天气从纯视觉变成可利用的战术资源
+function updateThunder(game, dt) {
+  if (game.state !== 'LIVE' || game.over) return;
+  if (!game._thunderMap) {
+    game._thunderMap = weatherKind(game.opts.mapId || (getMap() && getMap().id)) === 'rain';
+    game._thunderAt = game._thunderMap ? 6 + rand() * 8 : Infinity;
+  }
+  if (game._thunderAt === undefined || !isFinite(game._thunderAt)) return;
+  if (game.roundTime >= game._thunderAt) {
+    game._thunderAt = game.roundTime + 9 + rand() * 7;
+    game.thunderUntil = game.time + 1.5;
+    emit('sfx', { name: 'boom', vol: 0.22, game });
+  }
+  if (game.thunderUntil && game.time > game.thunderUntil + 2) game.thunderUntil = 0;
 }
 
 function updateTimers(game, dt) {

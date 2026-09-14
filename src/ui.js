@@ -236,6 +236,16 @@ function createUiApi() {
             box.appendChild(l2);
           }
         }
+        // AI 教练复盘（candidate-573）：死亡归因 + 改进建议
+        const coach = buildCoachLines(game);
+        if (coach.length && box) {
+          for (const line of coach) {
+            const cl = doc.createElement('div');
+            cl.className = 'stat-line coach-line';
+            cl.innerHTML = '🎓 ' + esc(line);
+            box.appendChild(cl);
+          }
+        }
         // 数据小结四格
         const grid = el('endGrid');
         if (grid) {
@@ -483,11 +493,11 @@ const BUY_CATS = [
   { label: '步枪', items: [['ak', 'AK-47', 'T 专用 · 全自动'], ['m4', 'M4A4', 'CT 专用 · 全自动'], ['famas', 'FAMAS', 'CT 专用 · 中间步枪'], ['sg553', 'SG 553', 'T 专用 · 穿甲中间步枪'], ['aug', 'AUG', 'CT 专用 · 精准中间步枪']] },
   { label: '狙击枪', items: [['awp', 'AWP', '开镜 · 一枪致命']] },
   { label: '装备', items: [['armor', '防弹衣', '50% 减伤'], ['helm', '防弹衣+头盔', '防爆头'], ['kit', '拆弹钳', '拆弹减半']] },
-  { label: '投掷物', items: [['he', '高爆手雷', '范围伤害'], ['flash', '闪光弹', '致盲敌人'], ['smoke', '烟雾弹', '遮挡视线'], ['decoy', '诱饵弹', '伪造枪声 12s 引敌侦查'], ['moly', '燃烧瓶', '区域封锁 · 持续灼烧']] }
+  { label: '投掷物', items: [['he', '高爆手雷', '范围伤害'], ['flash', '闪光弹', '致盲敌人'], ['smoke', '烟雾弹', '遮挡视线'], ['decoy', '诱饵弹', '伪造枪声 12s 引敌侦查'], ['moly', '燃烧瓶', '区域封锁 · 持续灼烧'], ['emp', 'EMP干扰弹', '压制小地图与听声 6s']] }
 ];
 
 function buyCatPrice() {
-  return { armor: PRICES.ARMOR, helm: PRICES.HELM, kit: PRICES.KIT, he: PRICES.HE, flash: PRICES.FLASH, smoke: PRICES.SMOKE, decoy: PRICES.DECOY, moly: PRICES.MOLLY };
+  return { armor: PRICES.ARMOR, helm: PRICES.HELM, kit: PRICES.KIT, he: PRICES.HE, flash: PRICES.FLASH, smoke: PRICES.SMOKE, decoy: PRICES.DECOY, moly: PRICES.MOLLY, emp: PRICES.EMP };
 }
 
 export function renderBuyMenu(gameRef) {
@@ -525,7 +535,7 @@ export function renderBuyMenu(gameRef) {
     if (id === 'armor') owned = p.armor >= 100;
     else if (id === 'helm') owned = p.helmet || p.armor >= 100;
     else if (id === 'kit') owned = p.weapons.kit;
-    else if (id === 'he' || id === 'flash' || id === 'smoke' || id === 'decoy' || id === 'moly') owned = p.weapons.nades[id] >= (id === 'flash' ? 2 : 1);
+    else if (id === 'he' || id === 'flash' || id === 'smoke' || id === 'decoy' || id === 'moly' || id === 'emp') owned = p.weapons.nades[id] >= (id === 'flash' ? 2 : 1);
     else owned = p.weapons.primary === id;
     const fac = catFaction[id];
     const locked = fac && fac !== p.team && !owned;
@@ -727,6 +737,8 @@ import { MAJOR_TEAMS, majorAction, CYBER_ROSTER, CYBER_START_COINS, CYBER_BAILOU
 import { OPPONENTS, getStats, resetDuel, pickDuelMap } from './duel.js';
 import { DUEL_MAPS } from './duel-maps.js';
 import { choosePerk } from './perks.js';
+import { getA11yMode, setA11yMode } from './a11y.js';
+import { buildCoachLines } from './coach.js';
 import { dailyScenario, loadDaily } from './daily.js';
 
 let lastHoverT = 0;
@@ -899,7 +911,7 @@ function renderDuelPanel() {
     const pct = v.w + v.l > 0 ? Math.round(v.w / (v.w + v.l) * 100) : 0;
     return '<div class="duel-vs-row"><span>' + k + '</span><span class="duel-winbar"><i style="width:' + pct + '%"></i></span><b>' + v.w + '胜 ' + v.l + '负 ' + pct + '%</b></div>';
   }).join('');
-  const hist = stats.history.slice(0, 10).map((h) => '<div class="duel-hist-row"><span class="' + (h.win ? 'w' : 'l') + '">' + (h.win ? '胜' : '负') + '</span><span>' + h.kills + '杀 / ' + h.deaths + '死</span>' + (h.opp ? '<span>vs ' + h.opp + '</span>' : '') + '<span>' + mapTitle(h.map) + '</span></div>').join('') || '<div class="mode-hint">暂无比赛记录</div>';
+  const hist = stats.history.slice(0, 10).map((h) => '<div class="duel-hist-row"><span class="' + (h.win ? 'w' : 'l') + '">' + (h.win ? '胜' : '负') + '</span><span>' + h.kills + '杀 / ' + h.deaths + '死</span>' + (h.r !== undefined ? '<span class="dr">' + '★'.repeat(Math.round(h.r)) + '☆'.repeat(3 - Math.round(h.r)) + '</span>' : '') + (h.opp ? '<span>vs ' + h.opp + '</span>' : '') + '<span>' + mapTitle(h.map) + '</span></div>').join('') || '<div class="mode-hint">暂无比赛记录</div>';
   body.innerHTML =
       '<div class="duel-top"><h3>单挑模式</h3><span class="duel-sub">1v1 · ' + ROUND.MATCH_WIN + ' 胜（BO' + (ROUND.MATCH_WIN * 2 - 1) + '）· 第 ' + (Math.floor((ROUND.MATCH_WIN * 2 - 1) / 2) + 1) + ' 回合换边</span><button class="btn small" id="duelBackBtn">← 主菜单</button></div>' +
     '<div class="duel-body">' +
@@ -1117,6 +1129,34 @@ function bindMenu() {
     showToast('每日挑战 ' + sc.date + (d.done ? '（今日已打卡）' : '') + '：' + sc.label);
     e.currentTarget.blur();
   };
+
+  // 自定义对局规则滑杆（candidate-571）：回合时长/购买时间/起始资金/C4引信，localStorage 持久化
+  const CR_DEFS = [['crRound', 'crRoundVal', 'roundDur', (v) => v + 's'], ['crBuy', 'crBuyVal', 'buyTime', (v) => v + 's'], ['crMoney', 'crMoneyVal', 'startMoney', (v) => '$' + v], ['crFuse', 'crFuseVal', 'fuse', (v) => v + 's']];
+  const CR_KEY = 'cs2d_match_prefs_v1';
+  let saved = {};
+  try { saved = JSON.parse(localStorage.getItem(CR_KEY) || '{}'); } catch (err) { saved = {}; }
+  for (const [rid, vid, key, fmt] of CR_DEFS) {
+    const r = el(rid), v = el(vid);
+    if (!r || !v) continue;
+    const def = Number(r.value);
+    const val = Number.isFinite(saved[key]) ? saved[key] : def;
+    r.value = val;
+    v.textContent = fmt(val);
+    if (val !== def) game.opts[key] = val;
+    r.oninput = () => {
+      const n = Number(r.value);
+      v.textContent = fmt(n);
+      if (n === def) delete game.opts[key];
+      else game.opts[key] = n;
+      const store = {};
+      for (const [rid2, , key2] of CR_DEFS) {
+        const r2 = el(rid2);
+        const def2 = Number(r2.value);
+        if (Number(r2.value) !== def2) store[key2] = Number(r2.value);
+      }
+      try { localStorage.setItem(CR_KEY, JSON.stringify(store)); } catch (err2) { /* 配额忽略 */ }
+    };
+  }
 }
 
 function bindOverlays() {
@@ -1243,6 +1283,18 @@ function bindSettings() {
     }
     if (emptyEl) emptyEl.style.display = any ? 'none' : '';
   };
+  // 色弱辅助色板选择（candidate-549）
+  const a11ySel = el('a11ySel');
+  if (a11ySel) {
+    const syncA11y = () => {
+      const cur = getA11yMode();
+      for (const b of a11ySel.querySelectorAll('.set-btn')) b.classList.toggle('sel', b.getAttribute('data-a11y') === cur);
+    };
+    syncA11y();
+    for (const b of a11ySel.querySelectorAll('.set-btn')) {
+      b.onclick = () => { setA11yMode(b.getAttribute('data-a11y')); syncA11y(); uiSfx('confirm', 0.4); };
+    }
+  }
   if (settingsBtn && settings) {
     settingsBtn.onclick = () => {
       settings.classList.add('show');

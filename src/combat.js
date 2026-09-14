@@ -16,6 +16,8 @@ import {throwGrenade} from './grenades.js';
 import {effectiveSpread, registerShot, headshotChance, distanceFalloff} from './ballistic.js';
 import {addRipple} from './water-fx.js';
 import {recordNemesisDeath, recordRevenge} from './nemesis.js';
+import {contractOnKill} from './contracts.js';
+import {recordDeathForCoach} from './coach.js';
 
 const emit = (evt, p) => ctx.bus.emit(evt, p);
 const mapTile = () => getMap()?.tile || TILE;
@@ -139,6 +141,14 @@ export function fireWeapon(e, game) {
 }
 
 // 玩家 spray 轨迹（candidate-544）：保留最近 6 条 0.8s 渐隐细线，压枪时看得见前几发落点
+// bot 无线电情报条（candidate-567）：事件推入 game.radioLog，HUD 左下渲染 3s 渐隐
+export function pushRadio(game, text) {
+  if (!game) return;
+  game.radioLog = game.radioLog || [];
+  game.radioLog.push({ text, t: game.time || 0 });
+  if (game.radioLog.length > 4) game.radioLog.shift();
+}
+
 export const SPRAY_TRACE_LIFE = 0.8;
 function pushSprayTrace(game, e, x1, y1, x2, y2) {
   if (e !== game.player) return;
@@ -497,6 +507,12 @@ export function killEntity(v, killer, weapon, head, game) {
     me: killer === game.player ? 'k' : (v === game.player ? 'v' : null),
     n: killer === game.player ? (killer.streak || 0) + 1 : null
   });
+  // bot 无线电播报（candidate-567）：bot 间击倒事件进左下情报条
+  if (killer && killer.bot && v.bot) pushRadio(game, killer.name + ' 击倒了 ' + v.name);
+  // 回合合约结算（candidate-569）
+  if (killer === game.player && contractOnKill(game, weapon)) {
+    addMoney(killer, game.contract.reward);
+  }
   // 回合悬赏结算：击杀赏金目标额外入账（bot 也可争夺，观战更有戏剧性）
   if (game.bounty && v === game.bounty && killer && killer.team !== v.team) {
     addMoney(killer, ECONOMY.BOUNTY_MONEY);
@@ -540,6 +556,8 @@ export function killEntity(v, killer, weapon, head, game) {
     game.lastKiller = killer;
     // 宿敌记账：跨局记住杀你最多的 bot
     recordNemesisDeath(killer && killer.bot ? killer.name : null);
+    // AI 教练归因（candidate-573）
+    recordDeathForCoach(game, killer, v);
     // 击杀镜头：死亡后短暂锁定击杀者视角（0.9s），随后切入队友观战
     game.killCamT = 0.9;
     emit('deathinfo', { killer: killer ? killer.name : '环境', weapon: wname, head: !!head });

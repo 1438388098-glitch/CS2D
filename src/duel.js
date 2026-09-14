@@ -164,7 +164,9 @@ export function recordResult(s, win, kills, deaths, oppName, mapId) {
     v.kills += kills;
     v.deaths += deaths;
   }
-  s.history.unshift({ t: Date.now(), win, kills, deaths, opp: oppName || null, map: mapId || null });
+  // 单场评分 0-3（candidate-559）：胜负为主 + 击杀/阵亡修正，结算面板画星
+  const r = Math.max(0, Math.min(3, Math.round(((win ? 1.8 : 0.6) + kills / 8 - deaths / 10) * 10) / 10));
+  s.history.unshift({ t: Date.now(), win, kills, deaths, opp: oppName || null, map: mapId || null, r });
   if (s.history.length > 20) s.history.length = 20;
 }
 

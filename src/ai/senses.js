@@ -32,8 +32,9 @@ function remember(e, x, y, game, conf, vx = 0, vy = 0) {
 }
 
 export function hearGunshot(e, shooter, game, weapon) {
+  if (hearSuppressed(e, game)) return false;
   const clear = los(game, e.x, e.y, shooter.x, shooter.y);
-  const radius = weaponHearRadius(weapon) * (clear ? 1 : 0.55);
+  const radius = weaponHearRadius(weapon) * (clear ? 1 : 0.55) * thunderMul(game);
   const dx = shooter.x - e.x, dy = shooter.y - e.y;
   const d = Math.hypot(dx, dy);
   if (d > radius) return false;
@@ -50,13 +51,25 @@ export function hearGunshot(e, shooter, game, weapon) {
   return true;
 }
 
+export function hearSuppressed(e, game) {
+  const emp = game && game.empPulse;
+  return !!(emp && game.time < emp.until && Math.hypot(e.x - emp.x, e.y - emp.y) < emp.r);
+}
+
+// 雷暴窗口内声源半径减半（candidate-568）：雷声掩盖脚步/枪声
+function thunderMul(game) {
+  return game && game.thunderUntil && game.time < game.thunderUntil ? 0.5 : 1;
+}
+
 export function hearWorldSound(e, game) {
+  if (hearSuppressed(e, game)) return false;
   const s = game.lastSound;
   if (!s) return false;
+  const sRadius = s.radius * thunderMul(game);
   const age = game.time - s.t;
   if (age > 0.75) return false;
   const d = Math.hypot(e.x - s.x, e.y - s.y);
-  if (d > s.radius) return false;
+  if (d > sRadius) return false;
   // 世界音源（爆炸/拆装弹）为静态源；若调用方附带音源移动速度则使用，否则 0
   const vx = Number.isFinite(s.vx) ? s.vx : 0;
   const vy = Number.isFinite(s.vy) ? s.vy : 0;
@@ -66,11 +79,12 @@ export function hearWorldSound(e, game) {
 }
 
 export function hearStep(e, game) {
+  if (hearSuppressed(e, game)) return false;
   const s = game.lastStep;
   if (!s || s.team === e.team) return false;
   const age = game.time - s.t;
   if (age > 0.6) return false;
-  const radius = s.walk ? 380 : 760;
+  const radius = (s.walk ? 380 : 760) * thunderMul(game);
   const d = Math.hypot(e.x - s.x, e.y - s.y);
   if (d > radius) return false;
   // 若能目击脚步声源附近的移动敌人，附带其速度（供记忆外推）

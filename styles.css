@@ -1264,3 +1264,11 @@ table.sb tr.mvp td{background:rgba(255,210,122,.07)}
 .m-row .m-a{color:#8fd0ff;min-width:32px}
 .m-row .m-alive{color:#7de59a;font-size:11px}
 .m-row .m-x{color:#666;font-size:11px}
+
+/* 自定义规则滑杆（candidate-571） */
+.cr-row{display:flex;align-items:center;gap:8px;margin:4px 0;font-size:12px;color:var(--txt-1)}
+.cr-row span{width:32px;color:#8b98a5}
+.cr-row input{flex:1}
+.cr-row b{width:52px;text-align:right;font-family:var(--f-mono);color:var(--gold)}
+
+.coach-line{color:#8fd8ff !important;font-size:12.5px}

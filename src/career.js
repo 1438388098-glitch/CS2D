@@ -2541,9 +2541,19 @@ function careerStart(game) {
   });
   const foeRoster = TEAM_ROSTERS[opp.tag] || CAND_NAMES;
   let foeIdx = 0;
+  // 对手个体化（candidate-560）：按 foeRoster 序位确定性抖动 + 分配小队定位，不再全员共享参数
+  const FOE_ARCH = ['rifler', 'breacher', 'support', 'sniper'];
   for (const e of game.entities.filter((x) => x.bot && x.team !== game.opts.team)) {
-    e.name = foeRoster[foeIdx++ % foeRoster.length];
-    e.aiParams = { ...foeBase };
+    e.name = foeRoster[foeIdx % foeRoster.length];
+    e.archetype = FOE_ARCH[foeIdx % FOE_ARCH.length];
+    const jitter = (k, scale, span) => 1 + ((((foeIdx + 1) * k) % span) - (span - 1) / 2) * scale;
+    const fb = { ...foeBase };
+    fb.react = Math.max(0.06, fb.react * jitter(37, 0.03, 9));
+    fb.spreadMult = Math.max(0.5, Math.min(1.3, fb.spreadMult * jitter(53, 0.04, 9)));
+    fb.aimSpeed = Math.max(30, fb.aimSpeed * jitter(29, 0.04, 7));
+    fb.strafe = Math.max(0.36, Math.min(0.7, fb.strafe * jitter(41, 0.04, 9)));
+    e.aiParams = fb;
+    foeIdx++;
   }
   const p = game.player;
   const a = effectiveAttrs(s);

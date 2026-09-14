@@ -314,6 +314,9 @@ export function renderMinimap(game) {
       mctx.restore();
     } else {
       if (p && e.team !== p.team) {
+        // EMP 压制：脉冲半径内的敌点从小地图隐去（candidate-565）
+        const emp = game.empPulse;
+        if (emp && game.time < emp.until && Math.hypot(e.x - emp.x, e.y - emp.y) < emp.r) continue;
         const d = Math.hypot(e.x - p.x, e.y - p.y);
         if (d >= 300 && (!canSee || !los(game, p.x, p.y, e.x, e.y, p.height))) continue;
       }
@@ -763,6 +766,22 @@ export function renderHud(game) {
   // 死亡冷色滤镜（candidate-543）：deathT 从 1.8 倒数，残影随死亡时长渐入
   if (p && p.dead) {
     drawDeathVeil(ctx, w2, h2, deathVeilAlpha(1.8 - (p.deathT || 0)));
+  }
+  // bot 无线电情报条（candidate-567）：左下角最多 3 行，3s 渐隐
+  if (game.radioLog && game.radioLog.length && game.viewMode === 'top') {
+    ctx.save();
+    ctx.textAlign = 'left';
+    ctx.font = "600 12px 'Microsoft YaHei','Segoe UI',sans-serif";
+    const now = game.time || 0;
+    const lines = game.radioLog.slice(-3);
+    lines.forEach((rl, i) => {
+      const age = now - rl.t;
+      if (age > 3) return;
+      const a = Math.max(0, 1 - age / 3) * 0.85;
+      ctx.fillStyle = 'rgba(140,220,160,' + a.toFixed(3) + ')';
+      ctx.fillText('📻 ' + rl.text, 14, h2 - 96 + i * 17);
+    });
+    ctx.restore();
   }
   // 残局 1vN 指示：玩家为队内最后一人且敌方 ≥2 人存活（candidate-508）
   const clutch = clutchInfo(game);

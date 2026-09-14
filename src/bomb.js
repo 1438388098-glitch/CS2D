@@ -3,6 +3,7 @@ import {addMoney} from './economy.js';
 import {inSite, los, getMap} from './map.js';
 import {applyDamage, addDecal} from './combat.js';
 import {endRound, spawnParticle} from './game.js';
+import {pushRadio} from './combat.js';
 
 import {ctx} from './ctx.js';
 import {rand} from './utils.js';
@@ -49,11 +50,12 @@ export function plantBomb(e, game) {
   if (e.plantT >= 3) {
     e.plantT = 0;
     e.hasBomb = false;
-    game.bomb = { x: e.x, y: e.y, dropped: false, planted: true, site: s.label, timer: (game.roundEvent && game.roundEvent.fuse) || ROUND.BOMB_FUSE, defusing: false, defuseT: 0 };
+    game.bomb = { x: e.x, y: e.y, dropped: false, planted: true, site: s.label, timer: Number(game.opts.fuse) || (game.roundEvent && game.roundEvent.fuse) || ROUND.BOMB_FUSE, defusing: false, defuseT: 0 };
     e.plants++;
     game._plantedRound = true;
     addMoney(e, ECONOMY.PLANT_MONEY);
     emit('sysfeed', { text: 'Bomb has been planted at ' + (s.label === 'A' ? 'A' : 'B') });
+    pushRadio(game, '炸弹已安放 ' + (s.label === 'A' ? 'A' : 'B') + ' 区');
     emit('sfx', { name: 'bombPlanted', vol: 0.9, x: e.x, y: e.y, game });
     game.lastSound = { x: e.x, y: e.y, t: game.time, radius: 900, conf: 0.6 };
     addPing(game, 'plant', e.x, e.y);
@@ -87,6 +89,7 @@ export function defuseBomb(e, game) {
     e.defuses++;
     addMoney(e, ECONOMY.DEFUSE_MONEY);
     emit('sysfeed', { text: 'Bomb has been defused!' });
+    pushRadio(game, e.name + ' 完成拆弹');
     // bombDefused 专用胜利音（patches 已有音色此前从未触发）；回合结束的 win 音由 endRound 统一播
     emit('sfx', { name: 'bombDefused', vol: 0.9, x: e.x, y: e.y, game });
     game.lastSound = { x: e.x, y: e.y, t: game.time, radius: 900, conf: 0.6 };

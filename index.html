@@ -72,6 +72,7 @@
         <span class="nade" id="nadeSmoke"><svg class="nade-ic"><use href="assets/icons.svg#ic-smoke"/></svg><b>6</b></span>
         <span class="nade" id="nadeDecoy"><svg class="nade-ic"><use href="assets/icons.svg#ic-grenade"/></svg><b>7</b></span>
         <span class="nade" id="nadeMoly"><svg class="nade-ic"><use href="assets/icons.svg#ic-fire"/></svg><b>8</b></span>
+        <span class="nade" id="nadeEmp"><svg class="nade-ic"><use href="assets/icons.svg#ic-volume"/></svg><b>9</b></span>
       </div>
     </div>
 
@@ -166,6 +167,12 @@
               <span class="step-val" id="botVal">4</span>
               <button class="step-btn" id="botPlus">＋</button>
             </div>
+          </div>
+          <div class="field" id="customRules"><label>自定义规则</label>
+            <div class="cr-row"><span>回合</span><input type="range" id="crRound" min="60" max="180" step="5" value="115"><b id="crRoundVal">115s</b></div>
+            <div class="cr-row"><span>购买</span><input type="range" id="crBuy" min="10" max="45" step="5" value="20"><b id="crBuyVal">20s</b></div>
+            <div class="cr-row"><span>资金</span><input type="range" id="crMoney" min="800" max="16000" step="400" value="800"><b id="crMoneyVal">$800</b></div>
+            <div class="cr-row"><span>引信</span><input type="range" id="crFuse" min="20" max="60" step="5" value="40"><b id="crFuseVal">40s</b></div>
           </div>
           <div class="menu-util-row">
             <button class="btn small" id="muteBtn"><span id="muteLabel">声音开</span></button>
@@ -284,6 +291,14 @@
         <div class="set-row">
           <label>HUD 大小</label>
           <input type="range" id="hudScale" min="0.8" max="1.3" step="0.05">
+        </div>
+        <div class="set-row">
+          <label>色弱辅助</label>
+          <div class="set-btns" id="a11ySel">
+            <button class="set-btn" data-a11y="off">关</button>
+            <button class="set-btn" data-a11y="deutan">绿色盲</button>
+            <button class="set-btn" data-a11y="protan">红色盲</button>
+          </div>
         </div>
         <div class="set-row">
           <label>垂直灵敏度</label>

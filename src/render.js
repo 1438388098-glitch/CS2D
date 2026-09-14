@@ -181,6 +181,7 @@ export function render(game) {
   drawImpacts(game);
   drawTracers(game);
   drawSprayTrace(game);
+  drawEmpPulse(game);
   __marks.fx = performance.now() - __s;
   __s = performance.now();
   drawWeatherLayer(game);
@@ -1370,6 +1371,21 @@ export function tracerStyle(t, weaponKind) {
     len: s.len,
     color: s.color
   };
+}
+
+// EMP 脉冲环（candidate-565）：激活期内干扰圈呼吸扩散，压迫感可视化
+function drawEmpPulse(game) {
+  const emp = game.empPulse;
+  if (!emp || game.time >= emp.until) return;
+  const age = emp.until - game.time;
+  const pulse = 1 + 0.08 * Math.sin(game.time * 9);
+  ctx.save();
+  ctx.strokeStyle = 'rgba(120,190,255,' + (0.28 + 0.1 * Math.sin(game.time * 11)).toFixed(3) + ')';
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.arc(emp.x, emp.y, emp.r * pulse * Math.min(1, 0.4 + age / 6), 0, Math.PI * 2);
+  ctx.stroke();
+  ctx.restore();
 }
 
 // 玩家 spray 轨迹（candidate-544）：金色细线 0.8s 渐隐，纯渲染不影响判定

@@ -27,7 +27,7 @@ export function nextRoundBudget(p, game) {
 export function clearEquipment(e) {
   e.weapons.primary = null;
   e.weapons.secondary = null;
-  e.weapons.nades = { he: 0, flash: 0, smoke: 0, decoy: 0, moly: 0 };
+  e.weapons.nades = { he: 0, flash: 0, smoke: 0, decoy: 0, moly: 0, emp: 0 };
   e.weapons.kit = false;
   e.armor = 0;
   e.helmet = false;
@@ -61,8 +61,8 @@ export function buyItem(game, what) {
     p.money -= PRICES.KIT;
     p.weapons.kit = true;
     bought = true;
-  } else if (what === 'he' || what === 'flash' || what === 'smoke' || what === 'decoy' || what === 'moly') {
-    const pr = what === 'he' ? PRICES.HE : (what === 'flash' ? PRICES.FLASH : (what === 'decoy' ? PRICES.DECOY : (what === 'moly' ? PRICES.MOLLY : PRICES.SMOKE)));
+  } else if (what === 'he' || what === 'flash' || what === 'smoke' || what === 'decoy' || what === 'moly' || what === 'emp') {
+    const pr = what === 'he' ? PRICES.HE : (what === 'flash' ? PRICES.FLASH : (what === 'decoy' ? PRICES.DECOY : (what === 'moly' ? PRICES.MOLLY : (what === 'emp' ? PRICES.EMP : PRICES.SMOKE))));
     const maxn = what === 'flash' ? 2 : 1;
     if (p.weapons.nades[what] >= maxn || p.money < pr) return false;
     p.money -= pr;

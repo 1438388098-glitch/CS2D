@@ -9,8 +9,43 @@ const CLUSTER_R = 200; // 聚类半径（px）：热点合并阈值
 // 击杀=尸体精确位置 → 1.5；目击=直接看到 → 1.2；受击=大致方向 → 1.0；枪声/模糊 → 0.7
 const EVENT_W = { kill: 1.5, sight: 1.2, dmg: 1.0, shot: 0.7 };
 
+const OM_KEY = 'cs2d_oppmodel_v1';
+
+function omStore() {
+  try { return typeof localStorage === 'undefined' ? null : localStorage; } catch (e) { return null; }
+}
+
 export function initOppModel(game) {
   if (!game.oppModel) game.oppModel = {};
+  // 持久对手记忆（candidate-521）：高难度下载入该图的历史站位热点，bot 开局即预判你的习惯位
+  if (!game.opts || game.opts.diff !== 'hell') return;
+  const st = omStore();
+  if (!st) return;
+  try {
+    const raw = JSON.parse(st.getItem(OM_KEY) || '{}');
+    const recs = raw[game.opts.mapId || 'dust2'];
+    if (Array.isArray(recs) && recs.length) {
+      // 存档年龄转负时间戳：recWeight 的 now - r.t 直接给出"陈旧度"，热区随对局推进自然衰减
+      const base = game.time || 0;
+      game.oppModel[game.opts.mapId || 'dust2'] = recs.slice(-12).map((r) => ({ ...r, t: base - (r.age || 30) }));
+    }
+  } catch (e) { /* 坏档忽略 */ }
+}
+
+// finishMatch 调用：把本局的 CT 站位热点写盘（仅 hell 且有数据时）
+export function saveOppModel(game) {
+  if (!game || !game.oppModel || !game.opts || game.opts.diff !== 'hell') return;
+  const st = omStore();
+  if (!st) return;
+  const mapId = game.opts.mapId || 'dust2';
+  const recs = game.oppModel[mapId];
+  if (!Array.isArray(recs) || !recs.length) return;
+  try {
+    const raw = (() => { try { return JSON.parse(st.getItem(OM_KEY) || '{}'); } catch (e) { return {}; } })();
+    const base = game.time || 0;
+    raw[mapId] = recs.slice(-12).map((r) => ({ x: Math.round(r.x), y: Math.round(r.y), eventType: r.eventType, w: r.w || 1, weaponTier: r.weaponTier || 1, age: Math.round(Math.max(0, Math.min(90, base - r.t))) }));
+    st.setItem(OM_KEY, JSON.stringify(raw));
+  } catch (e) { /* 配额满忽略 */ }
 }
 
 function bucketFor(game) {

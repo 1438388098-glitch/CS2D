@@ -86,6 +86,14 @@ export function updateGrenades(game, dt) {
           const a = rand() * Math.PI * 2;
           spawnParticle(game, { kind: 'fire', x: g.x + Math.cos(a) * 14, y: g.y + Math.sin(a) * 14, vx: Math.cos(a) * 30, vy: Math.sin(a) * 30 - 30, life: rand(0.3, 0.7), size: rand(3, 6) });
         }
+      } else if (g.kind === 'emp') {
+        // EMP 干扰弹（candidate-565）：6s 内压制半径内 bot 听声 + 小地图敌点
+        game.empPulse = { x: g.x, y: g.y, until: game.time + 6, r: 460 };
+        emit('sfx', { name: 'beep', vol: 0.7, x: g.x, y: g.y, game });
+        for (let f = 0; f < 14; f++) {
+          const a = rand() * Math.PI * 2;
+          spawnParticle(game, { kind: 'spark', x: g.x, y: g.y, vx: Math.cos(a) * rand(120, 320), vy: Math.sin(a) * rand(120, 320), life: rand(0.2, 0.5), size: 2 });
+        }
       } else if (g.kind === 'decoy') {
         // 诱饵弹落地激活：周期性伪造枪声（写 lastSound 走 bot 听声链），敌方大脑被骗来侦查
         game.decoys.push({ x: g.x, y: g.y, life: 12, tick: 0.4, owner: g.owner });

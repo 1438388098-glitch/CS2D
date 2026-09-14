@@ -47,7 +47,7 @@ export function initUiDom(gameRef) {
     'hudWeaponIc', 'hudWeaponName', 'hudHp', 'hudHpBar', 'hudArmorBar', 'hudMoney',
     'hudStateRow', 'hudStateIc', 'hudStateText',
     'hudAmmoMag', 'hudAmmoRes', 'hudReloadRing', 'hudAmmoName',
-    'nadeHe', 'nadeFlash', 'nadeSmoke', 'nadeDecoy', 'nadeMoly',
+    'nadeHe', 'nadeFlash', 'nadeSmoke', 'nadeDecoy', 'nadeMoly', 'nadeEmp',
     'hudBomb', 'hudBombSecs', 'hudSpectate', 'hudSpecText'
   ];
   for (const id of ids) D[id] = document.getElementById(id);
@@ -187,7 +187,7 @@ function updateRight(p, now) {
 
   const nades = p.weapons.nades;
   const nk = p.slot && p.slot.indexOf('nade:') === 0 ? p.slot.split(':')[1] : null;
-  const defs = [['he', 'nadeHe'], ['flash', 'nadeFlash'], ['smoke', 'nadeSmoke'], ['decoy', 'nadeDecoy'], ['moly', 'nadeMoly']];
+  const defs = [['he', 'nadeHe'], ['flash', 'nadeFlash'], ['smoke', 'nadeSmoke'], ['decoy', 'nadeDecoy'], ['moly', 'nadeMoly'], ['emp', 'nadeEmp']];
   for (const [k, id] of defs) {
     const e = D[id];
     if (!e) continue;
@@ -195,7 +195,7 @@ function updateRight(p, now) {
     e.classList.toggle('empty', n <= 0);
     e.classList.toggle('active', nk === k);
     const b = e.querySelector('b');
-    const keyNum = k === 'flash' ? '5' : (k === 'smoke' ? '6' : (k === 'decoy' ? '7' : (k === 'moly' ? '8' : '4')));
+    const keyNum = k === 'flash' ? '5' : (k === 'smoke' ? '6' : (k === 'decoy' ? '7' : (k === 'moly' ? '8' : (k === 'emp' ? '9' : '4'))));
     if (b && b.textContent !== keyNum) {
       b.textContent = keyNum;
     }
