@@ -18,7 +18,7 @@ import {addRipple} from './water-fx.js';
 import {recordNemesisDeath, recordRevenge} from './nemesis.js';
 import {contractOnKill} from './contracts.js';
 import {warmupOnShot} from './warmup.js';
-import {addMastery, unlockNotice, equippedGlobalPaint} from './skins.js';
+import {addMastery, unlockNotice, equippedPaint} from './skins.js';
 import {recordDeathForCoach} from './coach.js';
 
 const emit = (evt, p) => ctx.bus.emit(evt, p);
@@ -301,12 +301,12 @@ function fireRay(e, game, ang, w, dmg, isPellet) {
     const hx = ox + cos * hitLen, hy = oy + sin * hitLen;
     spawnBlood(hx, hy, ang, head, game);
     if (head) spawnGoldBurst(game, spawnParticle, hx, hy, ang);
-    game.tracers.push({ x1: ox, y1: oy, x2: hx, y2: hy, life: TRACER_LIFE, kind: w.kind, team: e.team, paint: e === game.player ? equippedGlobalPaint().tint : null });
+    game.tracers.push({ x1: ox, y1: oy, x2: hx, y2: hy, life: TRACER_LIFE, kind: w.kind, team: e.team, paint: e === game.player ? equippedPaint(wkey(e)).tint : null });
     pushSprayTrace(game, e, ox, oy, hx, hy);
     addDecal(game, hx, hy, 'hole', ang);
     recordImpact(game, hx, hy);
   } else {
-    game.tracers.push({ x1: ox, y1: oy, x2: tx, y2: ty, life: TRACER_LIFE, kind: w.kind, team: e.team, paint: e === game.player ? equippedGlobalPaint().tint : null });
+    game.tracers.push({ x1: ox, y1: oy, x2: tx, y2: ty, life: TRACER_LIFE, kind: w.kind, team: e.team, paint: e === game.player ? equippedPaint(wkey(e)).tint : null });
     pushSprayTrace(game, e, ox, oy, tx, ty);
     addDecal(game, tx, ty, 'spark', ang);
     recordImpact(game, tx, ty);

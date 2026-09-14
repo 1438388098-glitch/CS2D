@@ -187,6 +187,7 @@ export function render(game) {
   drawReplayGhosts(game);
   drawWarmupTargets(game);
   drawDoors(game);
+  drawHostageMarkers(game);
   __marks.fx = performance.now() - __s;
   __s = performance.now();
   drawWeatherLayer(game);
@@ -1433,6 +1434,28 @@ function drawDoors(game) {
       ctx.moveTo(d.x + 14, d.y - 10); ctx.lineTo(d.x - 2, d.y + 8);
       ctx.stroke();
     }
+  }
+  ctx.restore();
+}
+
+// 人质世界标记（candidate-634）：绿十字+名字，主画面可见护送目标（此前只有小地图有）
+function drawHostageMarkers(game) {
+  const hs = game.hostages;
+  if (!hs || !hs.length) return;
+  ctx.save();
+  ctx.textAlign = 'center';
+  for (const h of hs) {
+    if (h.rescued) continue;
+    const pulse = 0.7 + 0.3 * Math.sin((game.time || 0) * 4);
+    ctx.strokeStyle = 'rgba(120,255,160,' + pulse.toFixed(2) + ')';
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.moveTo(h.x - 10, h.y); ctx.lineTo(h.x + 10, h.y);
+    ctx.moveTo(h.x, h.y - 10); ctx.lineTo(h.x, h.y + 10);
+    ctx.stroke();
+    ctx.fillStyle = 'rgba(200,255,220,.9)';
+    ctx.font = "600 11px 'Microsoft YaHei',sans-serif";
+    ctx.fillText(h.name + (h.following ? '（护送中）' : ''), h.x, h.y - 16);
   }
   ctx.restore();
 }

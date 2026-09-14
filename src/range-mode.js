@@ -55,7 +55,7 @@ function refreshDummies(game) {
     } else if (e.rangeTier === 2) {
       // 随机变速游走
       e.rangePatrolT += 0.05;
-      e.x = e.rangeHome.x + Math.sin(e.rangePatrolT * (1.6 + (i % 2))) * 130;
+      e.x = e.rangeHome.x + Math.sin(e.rangePatrolT * (1.6 + (e.rangeTier % 2))) * 130;
       e.y = e.rangeHome.y + Math.cos(e.rangePatrolT * 1.1) * 110;
     } else if (Math.hypot(e.x - e.rangeHome.x, e.y - e.rangeHome.y) > 60) {
       e.x = e.rangeHome.x; e.y = e.rangeHome.y; // 静止靶回锚

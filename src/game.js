@@ -247,7 +247,7 @@ export function startMatch(game) {
   game.over = false;
   resetPerks(game);
   // 清理模式残留（cyber/major 等按模式注入的 game 字段，避免跨模式泄漏）
-  for (const k of ['major', 'cyber', 'gg', '_ggRound', '_ggOff', 'pendingPerks', 'perkLog', 'empPulse', 'contract', 'deathLog']) delete game[k];
+  for (const k of ['major', 'cyber', 'gg', '_ggRound', '_ggOff', 'pendingPerks', 'perkLog', 'empPulse', 'contract', 'deathLog', 'hostages', '_hostageRound', 'rangeStats', 'rangeRound', '_rangeStatT', 'replayBuf', 'replayClip']) delete game[k];
   const modeDef = game.mode ? getMode(game.mode) : null;
   if (modeDef && modeDef.start) {
     modeDef.start(game);
@@ -660,6 +660,13 @@ export function objectiveText(game) {
   if (!p) return { main: '', sub: '' };
   const ik = getBindLabel('interact');
   if (p.dead) return { main: '观战中…', sub: '切目标 ' + getBindLabel('spectatePrev') + '/' + getBindLabel('spectateNext') + ' · 自由镜头 ' + getBindLabel('spectateFree') };
+  // 新模式目标文案（candidate-633）：bomb=null 时旧逻辑会显示矛盾的炸弹提示
+  if (game.mode === 'hostage') {
+    const rescued = (game.hostages || []).filter((h) => h.rescued).length;
+    return { main: '人质解救 ' + rescued + '/2', sub: '触碰人质护送至撤离区' };
+  }
+  if (game.mode === 'gungame') return { main: '军备竞赛', sub: '击杀升级武器，梯顶刀杀收尾夺冠' };
+  if (game.mode === 'range') return { main: '训练场', sub: 'B 免费购买 · 木桩自动复活' };
   if (p.team === 'ct') {
     if (game.bomb && game.bomb.planted) return { main: '拆除炸弹！', sub: '前往 ' + (game.bomb.site === 'A' ? 'A 区' : 'B 区') + ' · 按住 ' + ik };
     return { main: '守卫目标点', sub: '阻止 T 方安装炸弹' };

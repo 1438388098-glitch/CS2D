@@ -17,8 +17,6 @@ import './manager-match.js';
 import './gungame-mode.js';
 import './hostage-mode.js';
 import './range-mode.js';
-import './hostage-mode.js';
-import './range-mode.js';
 import {nextRenderScale} from './render-scale.js';
 import {initCareerUi} from './career-ui.js';
 import {initManagerUi} from './manager-ui.js';

@@ -225,6 +225,27 @@ function fresh(opts) {
   ok('range tiers assigned', g5.entities.filter((e) => e.bot && e.team === 't').every((e) => [0, 1, 2].includes(e.rangeTier)));
 }
 
+// —— 13. round-14 补充：跨模式残留清理 / objectiveText 模式分支 / tier-2 不炸帧 ——
+{
+  const g = fresh({ mode: 'hostage', gameplayPlus: false });
+  g.hostages = [{ x: 1, y: 1, rescued: false }];
+  g._hostageRound = 1;
+  startMatch(g); // 换普通局
+  ok('hostage residue cleaned', g.hostages === undefined && g._hostageRound === undefined);
+  // objectiveText 人质分支
+  const g2 = fresh({ mode: 'hostage', gameplayPlus: false });
+  const { objectiveText } = await import('../src/game.js');
+  const ot = objectiveText(g2);
+  ok('objectiveText hostage branch', ot.main.indexOf('人质解救') === 0);
+  // 训练场 tier-2 更新不炸
+  const g3 = fresh({ mode: 'range', gameplayPlus: false });
+  let errCount = 0;
+  for (let i = 0; i < 20; i++) {
+    try { update(g3, 0.05); } catch (e) { errCount++; }
+  }
+  ok('range tier-2 no frame errors', errCount === 0);
+}
+
 if (errors.length) {
   console.error('personal-batch FAIL: ' + errors.join(', '));
   process.exit(1);

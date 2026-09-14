@@ -816,6 +816,20 @@ export function renderHud(game) {
   if (p && p.dead) {
     drawDeathVeil(ctx, w2, h2, deathVeilAlpha(1.8 - (p.deathT || 0)));
   }
+  // 军备竞赛梯阶 chip（candidate-635）：🔫 n/10 常驻右下，梯顶显示 🔪
+  if (game.gg && game.player && game.viewMode === 'top') {
+    const idx = game.gg.tiers.get(game.player) || 0;
+    ctx.save();
+    ctx.font = "700 11px 'Microsoft YaHei',sans-serif";
+    ctx.textAlign = 'left';
+    const label = idx >= 10 ? '🔪 刀杀收尾！' : '🔫 ' + idx + '/10';
+    const wpx = ctx.measureText(label).width + 14;
+    ctx.fillStyle = 'rgba(10,13,17,.6)';
+    ctx.fillRect(w2 - 154, h2 - 80, wpx, 16);
+    ctx.fillStyle = idx >= 10 ? '#ff9a3d' : 'rgba(200,210,220,.85)';
+    ctx.fillText(label, w2 - 147, h2 - 68.5);
+    ctx.restore();
+  }
   // 合约进度 chip（candidate-623）：📋 n/N 常驻右下，完成态变金
   {
     const c = contractState(game);
