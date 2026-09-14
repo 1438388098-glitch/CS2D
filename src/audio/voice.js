@@ -23,7 +23,7 @@ export function initVoice() {
   ctx.bus.on('sysfeed', (p) => {
     if (!enabled || !p || !p.text) return;
     const t = String(p.text);
-    const hot = ['炸弹已安放', '完成拆弹', '回合 MVP', '残局翻盘', '人质'];
+    const hot = ['炸弹已安放', '炸弹已拆除', '回合 MVP', '残局翻盘', '人质'];
     if (hot.some((k) => t.includes(k)) && Date.now() - last > 2500) {
       last = Date.now();
       speak(t);

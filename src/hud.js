@@ -839,7 +839,7 @@ export function renderHud(game) {
     const wpx = ctx.measureText(label).width + 14;
     ctx.fillStyle = 'rgba(10,13,17,.6)';
     ctx.fillRect(w2 - 154, h2 - 80, wpx, 16);
-    ctx.fillStyle = idx >= 10 ? '#ff9a3d' : 'rgba(200,210,220,.85)';
+    ctx.fillStyle = idx >= GG_LADDER.length ? '#ff9a3d' : 'rgba(200,210,220,.85)';
     ctx.fillText(label, w2 - 147, h2 - 68.5);
     ctx.restore();
   }

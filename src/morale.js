@@ -31,7 +31,7 @@ export function applyMoraleResult(game, winner) {
   }
 }
 
-// 微增益乘数（speedMult/recoverMult 消费）：0-100 士气 → 0.97-1.06
+// 微增益乘数（speedMult/recoverMult 消费）：0-100 士气 → 0.94-1.06
 export function moraleMult(morale) {
   const m = Math.max(0, Math.min(MORALE_MAX, Number(morale) || 0));
   return 0.94 + (m / MORALE_MAX) * 0.12;

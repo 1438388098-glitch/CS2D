@@ -145,6 +145,7 @@ function fresh(opts) {
   ok('profile export works', typeof code === 'string' && code.startsWith('profile.'));
   _ls.delete('cs2d_ranked_v1');
   ok('profile import restores keys', importSave('profile', code) === true && _ls.get('cs2d_ranked_v1').includes('1234'));
+  ok('profile import leaves per-key backup', _ls.has('cs2d_mastery_v1_backup'));
   // rrDelta bonus
   ok('rr bonus applied', rrDelta(true, 1, 1, 5) === rrDelta(true, 1, 1) + 5);
   // emote dead 提示

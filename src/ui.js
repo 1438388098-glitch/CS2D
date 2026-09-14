@@ -586,7 +586,7 @@ function buyCatPrice() {
 export function renderBuyMenu(gameRef) {
   if (!buyOpen) return;
   const p = gameRef.player;
-  el('buyCash').textContent = '$' + p.money;
+  el('buyCash').textContent = '$' + Number(p.money || 0).toLocaleString('zh-CN');
   el('buyTime').textContent = Math.max(0, gameRef.buyTime).toFixed(1) + 's';
   const ecoEl = el('buyEco');
   if (ecoEl) {
@@ -769,7 +769,7 @@ function renderScoreboard(gameRef) {
       tr.appendChild(tdA);
       const tdM = doc.createElement('td');
       tdM.className = 'num money';
-      tdM.textContent = '$' + e.money;
+      tdM.textContent = '$' + Number(e.money || 0).toLocaleString('zh-CN');
       tr.appendChild(tdM);
       const tdW = doc.createElement('td');
       tdW.className = 'sb-w';

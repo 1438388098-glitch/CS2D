@@ -54,7 +54,7 @@ export function plantBomb(e, game) {
     e.plants++;
     game._plantedRound = true;
     addMoney(e, ECONOMY.PLANT_MONEY);
-    emit('sysfeed', { text: 'Bomb has been planted at ' + (s.label === 'A' ? 'A' : 'B') });
+    emit('sysfeed', { text: '炸弹已安放于 ' + (s.label === 'A' ? 'A' : 'B') + ' 点' });
     pushRadio(game, '炸弹已安放 ' + (s.label === 'A' ? 'A' : 'B') + ' 区');
     emit('sfx', { name: 'bombPlanted', vol: 0.9, x: e.x, y: e.y, game });
     game.lastSound = { x: e.x, y: e.y, t: game.time, radius: 900, conf: 0.6 };
@@ -88,7 +88,7 @@ export function defuseBomb(e, game) {
     game.bomb = null;
     e.defuses++;
     addMoney(e, ECONOMY.DEFUSE_MONEY);
-    emit('sysfeed', { text: 'Bomb has been defused!' });
+    emit('sysfeed', { text: '炸弹已拆除！' });
     pushRadio(game, e.name + ' 完成拆弹');
     // bombDefused 专用胜利音（patches 已有音色此前从未触发）；回合结束的 win 音由 endRound 统一播
     emit('sfx', { name: 'bombDefused', vol: 0.9, x: e.x, y: e.y, game });
