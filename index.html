@@ -145,6 +145,7 @@
         </section>
         <aside class="glass menu-col settings-col">
           <h2 class="menu-sec">对 战 设 置</h2>
+          <div class="rank-badge" id="rankBadge"></div>
           <div class="field"><label>你的阵营</label>
             <div class="seg">
               <button class="btn team-wide ct sel" id="teamCt">CT 反恐</button>
@@ -296,6 +297,38 @@
         <div class="set-row">
           <label>HUD 大小</label>
           <input type="range" id="hudScale" min="0.8" max="1.3" step="0.05">
+        </div>
+        <div class="set-row">
+          <label>存档码</label>
+          <div class="savecode-bar">
+            <select id="scMode" class="sc-mode"><option value="career">生涯</option><option value="manager">经理</option><option value="duel">单挑</option></select>
+            <button class="set-btn" id="scExport">导出</button>
+            <button class="set-btn" id="scImport">导入</button>
+          </div>
+        </div>
+        <div class="set-row" id="scRow" style="display:none">
+          <textarea id="scText" class="sc-text" rows="3" placeholder="粘贴存档码后点导入"></textarea>
+        </div>
+        <div class="set-row">
+          <label>弹道涂装</label>
+          <div class="set-btns" id="paintSel"></div>
+        </div>
+        <div class="set-row">
+          <label>击杀音效</label>
+          <div class="set-btns" id="packSel">
+            <button class="set-btn" data-pack="classic">经典</button>
+            <button class="set-btn" data-pack="metal">金属</button>
+            <button class="set-btn" data-pack="bit8">8bit</button>
+          </div>
+        </div>
+        <div class="set-row">
+          <label>界面主题</label>
+          <div class="set-btns" id="themeSel">
+            <button class="set-btn" data-theme="default">默认</button>
+            <button class="set-btn" data-theme="cyan">青蓝</button>
+            <button class="set-btn" data-theme="violet">紫韵</button>
+            <button class="set-btn" data-theme="crimson">绯红</button>
+          </div>
         </div>
         <div class="set-row">
           <label>击杀反馈</label>

@@ -17,6 +17,8 @@ import {effectiveSpread, registerShot, headshotChance, distanceFalloff} from './
 import {addRipple} from './water-fx.js';
 import {recordNemesisDeath, recordRevenge} from './nemesis.js';
 import {contractOnKill} from './contracts.js';
+import {warmupOnShot} from './warmup.js';
+import {addMastery, unlockNotice, equippedGlobalPaint} from './skins.js';
 import {recordDeathForCoach} from './coach.js';
 
 const emit = (evt, p) => ctx.bus.emit(evt, p);
@@ -86,6 +88,10 @@ export function fireWeapon(e, game) {
   // S3 微观增强：探身对枪精度（探身状态 peekT>0 时散布减免，H11 专用）
   if (e.bot && e.peekT > 0 && e.aiParams && e.aiParams.peekSkill !== undefined) {
     spread *= e.aiParams.peekSkill;
+  }
+  // 冻结/购买期热身打靶（candidate-593）：射线与热身靶相交即命中
+  if (e === game.player && game.warmupTargets && game.state === 'BUY') {
+    warmupOnShot(game, e.x, e.y, e.angle);
   }
   let moveSpread = 0;
   const recoilSpread = e.recoil * 0.6;
@@ -261,6 +267,7 @@ function fireRay(e, game, ang, w, dmg, isPellet) {
     if (!passableTolerant(px, py)) {
       if (c === 'o') hitBarrelByShot(game, px, py, e);
       hitPowerBoxByShot(game, px, py, e);
+      hitDoorByShot(game, px, py, e);
       wallT = s * 6;
       break;
     }
@@ -294,12 +301,12 @@ function fireRay(e, game, ang, w, dmg, isPellet) {
     const hx = ox + cos * hitLen, hy = oy + sin * hitLen;
     spawnBlood(hx, hy, ang, head, game);
     if (head) spawnGoldBurst(game, spawnParticle, hx, hy, ang);
-    game.tracers.push({ x1: ox, y1: oy, x2: hx, y2: hy, life: TRACER_LIFE, kind: w.kind, team: e.team });
+    game.tracers.push({ x1: ox, y1: oy, x2: hx, y2: hy, life: TRACER_LIFE, kind: w.kind, team: e.team, paint: e === game.player ? equippedGlobalPaint().tint : null });
     pushSprayTrace(game, e, ox, oy, hx, hy);
     addDecal(game, hx, hy, 'hole', ang);
     recordImpact(game, hx, hy);
   } else {
-    game.tracers.push({ x1: ox, y1: oy, x2: tx, y2: ty, life: TRACER_LIFE, kind: w.kind, team: e.team });
+    game.tracers.push({ x1: ox, y1: oy, x2: tx, y2: ty, life: TRACER_LIFE, kind: w.kind, team: e.team, paint: e === game.player ? equippedGlobalPaint().tint : null });
     pushSprayTrace(game, e, ox, oy, tx, ty);
     addDecal(game, tx, ty, 'spark', ang);
     recordImpact(game, tx, ty);
@@ -369,6 +376,25 @@ export function destroyCrate(game, c, shooter) {
       o.lastKnownT = 0;
       if (o.aimTarget === null && o.path !== null) o.path = null;
     }
+  }
+}
+
+// 木门受击（candidate-575）：4 发破坏，破坏后通道开放（推挤阻挡随门消失）
+export function hitDoorByShot(game, px, py, shooter) {
+  const doors = game.doors;
+  if (!doors || !doors.length) return;
+  for (let i = doors.length - 1; i >= 0; i--) {
+    const d = doors[i];
+    if (Math.abs(px - d.x) > d.w / 2 + 4 || Math.abs(py - d.y) > d.w / 2 + 4) continue;
+    d.hp -= 1;
+    spawnParticle(game, { kind: 'spark', x: px, y: py, vx: rand(-70, 70), vy: rand(-70, 70), life: 0.2, size: 2 });
+    emit('sfx', { name: 'crateHit', vol: 0.5, x: d.x, y: d.y, game });
+    if (d.hp <= 0) {
+      doors.splice(i, 1);
+      emit('sfx', { name: 'crateBreak', vol: 0.7, x: d.x, y: d.y, game });
+      emit('sysfeed', { text: '🚪 木门被击破！' });
+    }
+    break;
   }
 }
 
@@ -562,6 +588,12 @@ export function killEntity(v, killer, weapon, head, game) {
   // 回合合约结算（candidate-569）
   if (killer === game.player && contractOnKill(game, weapon)) {
     addMoney(killer, game.contract.reward);
+  }
+  // 武器熟练度与涂装解锁（candidate-586）：先计数再判门槛
+  if (killer === game.player && WEAPONS[weapon]) {
+    const after = addMastery(weapon);
+    const notice = unlockNotice(weapon, after);
+    if (notice) emit('sysfeed', { text: notice });
   }
   // 回合悬赏结算：击杀赏金目标额外入账（bot 也可争夺，观战更有戏剧性）
   if (game.bounty && v === game.bounty && killer && killer.team !== v.team) {

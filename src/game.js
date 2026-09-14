@@ -28,7 +28,9 @@ import { maybeRollRoundEvent, clearRoundEvent } from './round-events.js';
 import { offerPerks, resolvePendingPerks, resetPerks } from './perks.js';
 import { markNemesis } from './nemesis.js';
 import { settleDaily } from './daily.js';
+import { settleRanked } from './ranked.js';
 import { updateAirdrop } from './airdrop.js';
+import { spawnWarmupTargets, settleWarmup } from './warmup.js';
 import { rollContract } from './contracts.js';
 import { weatherKind } from './weather-fx.js';
 
@@ -272,6 +274,13 @@ export function setupMatchEntities(game) {
   for (const e of game.entities) {
     if (e.bot && !e.aiParams) e.aiParams = { ...diffParams };
   }
+  // 自定义 bot 名单（candidate-594）：opts.botNames 优先于内置名池
+  if (Array.isArray(game.opts.botNames) && game.opts.botNames.length) {
+    let ni = 0;
+    for (const e of game.entities) {
+      if (e.bot) e.name = game.opts.botNames[ni++ % game.opts.botNames.length];
+    }
+  }
   // 自定义起始资金（candidate-571）
   if (Number.isFinite(Number(game.opts.startMoney))) {
     const sm = Number(game.opts.startMoney);
@@ -288,6 +297,7 @@ function spawnRound(game) {
   const spawnTick = { t: 0, ct: 0 };
   for (const e of game.entities) {
     e.lastNadeT = 0;
+    if (e.emoteT > 0) e.emoteT = 0;
     e._roundStartKills = e.kills || 0; // 回合 MVP 基线（candidate-581）
     e.decoy = false; // 假打诱饵标记逐回合复位，否则粘滞跨回合朝错误站点开枪
     let list = e.team === 'ct' ? getMap().spawns.ct : getMap().spawns.t;
@@ -426,6 +436,21 @@ export function startRound(game) {
   // 残留 C4 清理：淘汰结束时炸弹可能仍 planted，遗留到下一回合会带着旧引信乱结算（回防模式在 startRound 后自行重设）
   game.bomb = null;
   spawnRound(game);
+  // 可破坏木门（candidate-575）：出生区与包点之间的走廊上生成 2 道门，射击 4 次破坏
+  game.doors = [];
+  if (game.opts.gameplayPlus && game.round >= 2 && game.mode === null) {
+    const sites = getMap().sites || {};
+    const labels = Object.keys(sites).filter((k) => sites[k]);
+    const ctSp = getMap().spawns && getMap().spawns.ct && getMap().spawns.ct[0];
+    if (labels.length && ctSp) {
+      for (const lb of labels.slice(0, 2)) {
+        const site = sites[lb];
+        const mx = ctSp.x + (site.cx - ctSp.x) * 0.55;
+        const my = ctSp.y + (site.cy - ctSp.y) * 0.55;
+        if (passableTolerant(mx, my)) game.doors.push({ x: mx, y: my, hp: 4, w: 46 });
+      }
+    }
+  }
   // 断电机关（candidate-524）：每回合在随机包点附近生成可射击配电箱，击毁后区域黑灯
   game.powerBoxes = [];
   if (game.opts.gameplayPlus && game.round >= 2 && game.mode === null) {
@@ -462,6 +487,7 @@ export function startRound(game) {
       game.bounty = enemies[0];
     }
   }
+  spawnWarmupTargets(game);
   markNemesis(game);
   resolvePendingPerks(game);
   maybeRollRoundEvent(game);
@@ -588,6 +614,7 @@ export function finishMatch(game) {
     (game.score.CT >= winAt && game.player.team === 'ct');
   recordDifficultyResult(game, win);
   settleDaily(game, win);
+  game._rankedResult = settleRanked(game, win);
   saveOppModel(game);
   const ui = game.ui;
   if (!ui) return;
@@ -676,6 +703,7 @@ export function update(game, dt) {
   updateGrenades(game, dt);
   updateAirdrop(game, dt);
   updateThunder(game, dt);
+  settleWarmup(game);
   // 回合高光回放缓冲（candidate-523）：10Hz 实体快照，环形上限 24s
   game._replayT = (game._replayT || 0) - dt;
   if (game._replayT <= 0) {
@@ -697,9 +725,22 @@ export function update(game, dt) {
     if (e.stunT > 0) { e.vx *= 0.3; e.vy *= 0.3; }
     // FPS 下 bot 与玩家同步减速（玩家已在 updatePlayer 内缩放，此处仅 bot）
     const mvS = e.bot && game.viewMode === 'fps' ? fpsMoveScale(game) : 1;
+    if (e.emoteT > 0) e.emoteT -= dt;
     e.x += e.vx * dt * mvS;
     e.y += e.vy * dt * mvS;
     collideCircle(e);
+    // 木门阻挡（candidate-575）：存活门对实体做圆形推挤（不修改寻路网格，破坏后自然通行）
+    if (game.doors && game.doors.length) {
+      for (const dr of game.doors) {
+        const dx = e.x - dr.x, dy = e.y - dr.y;
+        const d = Math.hypot(dx, dy);
+        const minD = dr.w / 2 + 10;
+        if (d < minD) {
+          if (d > 0.001) { e.x = dr.x + (dx / d) * minD; e.y = dr.y + (dy / d) * minD; }
+          else { e.x = dr.x + minD; } // 与门完全重叠：沿 x 轴推出
+        }
+      }
+    }
     const prevH = e.height;
     e.height = curTile === '^' ? 1 : curTile === 'R' ? 0.5 : 0;
     if (prevH === 1 && e.height === 0) e.stunT = MOVEMENT.STUN_ON_DROP;
@@ -921,10 +962,26 @@ export function pickSpectateTarget(game, mates) {
 
 // 相机跟随（从 update 拆出）：观战目标选取 + follow 平滑/普通 lerp + 地图边界夹取
 function updateCamera(game, dt) {
+  // 观战自由镜头（candidate-595）：死亡观战中按 KeyT 切换，WASD 自由飞行
+  if (game.player && game.player.dead && game.input && game.input.keys) {
+    const keys = game.input.keys;
+    if (pressed(keys, 'spectateFree') && !game._fcKey) {
+      game._fcKey = true;
+      game.freeCam = game.freeCam ? null : { x: game.camX, y: game.camY };
+      emit('toast', { text: game.freeCam ? '自由镜头：WASD 移动' : '自由镜头关闭' });
+    } else if (!pressed(keys, 'spectateFree')) game._fcKey = false;
+    if (game.freeCam) {
+      const sp = 520 * dt;
+      if (pressed(keys, 'moveUp')) game.freeCam.y -= sp;
+      if (pressed(keys, 'moveDown')) game.freeCam.y += sp;
+      if (pressed(keys, 'moveLeft')) game.freeCam.x -= sp;
+      if (pressed(keys, 'moveRight')) game.freeCam.x += sp;
+    }
+  }
   let camTarget = game.player;
   if (game.player && game.player.dead) {
     if (game.killCamT > 0) game.killCamT -= dt;
-    camTarget = deathCamTarget(game);
+    camTarget = game.freeCam || deathCamTarget(game);
     if (game.cyber && !game.cyber.ended) game.zoom = 0.75;
   }
   // 跟随视角：相机以玩家为绝对中心（不 clamp，世界随朝向旋转由 render 完成）

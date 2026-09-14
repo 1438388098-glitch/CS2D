@@ -1,0 +1,46 @@
+// 存档导出/导入码（candidate-591）：career/manager/duel 单槽 localStorage 存档 → base64 JSON 码。
+// 换机/换浏览器玩家旅程此前完全没被服务；导入做结构与字段校验，坏码明确报错不写入。
+const MODES = ['career', 'manager', 'duel'];
+
+function store() {
+  try { return typeof localStorage === 'undefined' ? null : localStorage; } catch (e) { return null; }
+}
+
+function keyOf(mode) {
+  return { career: 'cs2d_career_v1', manager: 'cs2d_manager_v1', duel: 'cs2d_duel' }[mode] || null;
+}
+
+// 导出：返回 base64 码（带模式前缀），存档缺失返回 null
+export function exportSave(mode) {
+  const s = store();
+  const key = keyOf(mode);
+  if (!s || !key) return null;
+  const raw = s.getItem(key);
+  if (!raw) return null;
+  try {
+    return mode + '.' + btoa(encodeURIComponent(raw));
+  } catch (e) { return null; }
+}
+
+// 导入：校验前缀 + JSON 可解析 + 顶层是 object；成功写入并返回 true
+export function importSave(mode, code) {
+  const s = store();
+  const key = keyOf(mode);
+  if (!s || !key || typeof code !== 'string') return false;
+  const sep = code.indexOf('.');
+  if (sep <= 0 || code.slice(0, sep) !== mode) return false;
+  try {
+    const json = decodeURIComponent(atob(code.slice(sep + 1)));
+    const obj = JSON.parse(json);
+    if (!obj || typeof obj !== 'object' || Array.isArray(obj)) return false;
+    // 防覆盖前备份当前存档（一次性回退点）
+    const cur = s.getItem(key);
+    if (cur) s.setItem(key + '_backup', cur);
+    s.setItem(key, json);
+    return true;
+  } catch (e) {
+    return false;
+  }
+}
+
+export function supportedModes() { return MODES.slice(); }

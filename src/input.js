@@ -3,6 +3,7 @@ import { initAudio, setMuted, uiSfx } from './audio.js';
 import { isMiniZoomed } from './hud.js';
 import { matches } from './keymap.js';
 import { setPlayerOrder } from './ai.js';
+import { cycleEmote } from './emote.js';
 import { SWITCH_POP_DURATION } from './weapon-fx.js';
 
 let lastWheelT = 0;
@@ -135,6 +136,7 @@ export function initInput(game, canvasRef) {
     if (matches(e.code, 'nadeDecoy')) switchNade(game.player, 'decoy');
     if (matches(e.code, 'nadeMoly')) switchNade(game.player, 'moly');
     if (matches(e.code, 'nadeEmp')) switchNade(game.player, 'emp');
+    if (matches(e.code, 'emote')) cycleEmote(game);
     if (matches(e.code, 'lastWeapon')) {
       const p = game.player;
       if (p && p.lastSlot) switchWeapon(p, p.lastSlot);

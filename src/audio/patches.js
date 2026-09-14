@@ -221,8 +221,18 @@ export function buildSfx(ac, env) {
     case 'flash': oscDrop(ac, { out, vol: vol * 0.7, dur: 0.25, type: 'square', f0: 2800, f1: 2200, guard }); break;
     case 'smoke': noiseBurst(ac, { out, vol: vol * 0.4, dur: 0.4, freq: 600, q: 0.8, type: 'lowpass', guard }); break;
     case 'kill': {
-      oscDrop(ac, { out, vol: Math.min(1, vol * 1.1), dur: 0.13, type: 'sine', f0: 150, f1: 38, guard });
-      oscDrop(ac, { out, vol: vol * 0.28, dur: 0.1, type: 'square', f0: 2100, f1: 1800, at: 0.015, guard });
+      if (env.pack === 'metal') {
+        // 金属叮：高频方波+带限噪声，清脆断言
+        oscDrop(ac, { out, vol: vol * 0.8, dur: 0.09, type: 'square', f0: 2450, f1: 1900, guard });
+        noiseBurst(ac, { out, vol: vol * 0.35, dur: 0.05, freq: 3400, q: 4, type: 'bandpass', guard });
+      } else if (env.pack === 'bit8') {
+        // 8bit：上行方波双音
+        oscDrop(ac, { out, vol: vol * 0.7, dur: 0.06, type: 'square', f0: 660, f1: 660, guard });
+        oscDrop(ac, { out, vol: vol * 0.7, dur: 0.08, type: 'square', f0: 990, f1: 990, at: 0.06, guard });
+      } else {
+        oscDrop(ac, { out, vol: Math.min(1, vol * 1.1), dur: 0.13, type: 'sine', f0: 150, f1: 38, guard });
+        oscDrop(ac, { out, vol: vol * 0.28, dur: 0.1, type: 'square', f0: 2100, f1: 1800, at: 0.015, guard });
+      }
       break;
     }
     case 'doublekill': {

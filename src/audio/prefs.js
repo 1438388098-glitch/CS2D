@@ -17,6 +17,8 @@ export function normalizeAudioPrefs(input = {}) {
   }
   // 静音状态持久化（M 键/菜单静音开关跨会话保留）
   out.muted = src.muted === true || src.muted === 1;
+  // 击杀音效包（candidate-588）：classic / metal / bit8
+  out.pack = ['classic', 'metal', 'bit8'].includes(src.pack) ? src.pack : 'classic';
   // Legacy v1 entries could leave only the sfx bus at zero while ui/amb
   // stayed audible. That made every weapon/world sound disappear, so repair
   // those stale prefs once instead of letting them silently break gameplay.

@@ -267,6 +267,15 @@ function createUiApi() {
             box.appendChild(cl);
           }
         }
+        // 排位结算（candidate-587）：RR 增减 + 段位晋级提示
+        if (game._rankedResult) {
+          const rk = game._rankedResult;
+          const rl = doc.createElement('div');
+          rl.className = 'stat-line rank-line';
+          rl.innerHTML = '🏅 ' + esc(rk.tier) + ' <b>' + (rk.delta >= 0 ? '+' : '') + rk.delta + ' RR</b>（' + rk.rr + '）' +
+            (rk.promoted ? ' <span class="rank-up">晋级！</span>' : (rk.demoted ? ' <span class="rank-dn">降段</span>' : ''));
+          if (box) box.appendChild(rl);
+        }
         // 数据小结四格
         const grid = el('endGrid');
         if (grid) {
@@ -792,9 +801,13 @@ import { DUEL_MAPS } from './duel-maps.js';
 import { choosePerk } from './perks.js';
 import { getA11yMode, setA11yMode } from './a11y.js';
 import { initVoice, setVoiceEnabled, voiceEnabled } from './audio/voice.js';
+import { setSoundPack, soundPack } from './audio/master.js';
+import { PAINTS, equipGlobalPaint, equippedGlobalPaint, paintLocked, totalMastery } from './skins.js';
+import { exportSave, importSave } from './savecode.js';
 import { buildCoachLines } from './coach.js';
 import { getMap } from './map.js';
 import { dailyScenario, loadDaily } from './daily.js';
+import { rankedSummary } from './ranked.js';
 
 let lastHoverT = 0;
 
@@ -1338,6 +1351,92 @@ function bindSettings() {
     }
     if (emptyEl) emptyEl.style.display = any ? 'none' : '';
   };
+  // 存档导出/导入（candidate-591）
+  const scMode = el('scMode'), scExport = el('scExport'), scImport = el('scImport'), scText = el('scText'), scRow = el('scRow');
+  if (scExport && scImport && scMode) {
+    scExport.onclick = () => {
+      const code = exportSave(scMode.value);
+      const label = scMode.options[scMode.selectedIndex].textContent;
+      if (!code) { showToast(label + '暂无存档可导出'); return; }
+      if (scRow) scRow.style.display = '';
+      if (scText) { scText.value = code; scText.select && scText.select(); }
+      try { document.execCommand('copy'); } catch (e0) { /* 剪贴板失败不阻塞 */ }
+      showToast(label + '存档码已生成并复制');
+    };
+    scImport.onclick = () => {
+      const label = scMode.options[scMode.selectedIndex].textContent;
+      const code = scText && scText.value ? scText.value.trim() : '';
+      if (!code) { if (scRow) scRow.style.display = scRow.style.display === 'none' ? '' : 'none'; showToast('先粘贴存档码'); return; }
+      if (importSave(scMode.value, code)) showToast(label + '存档导入成功，刷新页面生效');
+      else showToast('存档码无效');
+    };
+  }
+  // 弹道涂装（candidate-586）：总熟练度解锁，锁定项灰显
+  const paintSel = el('paintSel');
+  if (paintSel) {
+    const renderPaints = () => {
+      paintSel.innerHTML = '';
+      for (const pc of PAINTS) {
+        const b = doc.createElement('button');
+        b.className = 'set-btn';
+        const locked = paintLocked(pc.id);
+        const cur = equippedGlobalPaint().id === pc.id;
+        if (cur) b.classList.add('sel');
+        b.textContent = locked ? pc.name + '🔒' + pc.need : pc.name;
+        if (pc.tint) b.style.color = pc.tint;
+        if (locked) b.classList.add('disabled');
+        b.onclick = () => {
+          if (equipGlobalPaint(pc.id)) { uiSfx('confirm', 0.5); renderPaints(); }
+          else uiSfx('error', 0.4);
+        };
+        paintSel.appendChild(b);
+      }
+      const hint = doc.createElement('small');
+      hint.style.cssText = 'font-size:11px;color:#8b98a5;align-self:center;margin-left:6px';
+      hint.textContent = '总击杀 ' + totalMastery();
+      paintSel.appendChild(hint);
+    };
+    renderPaints();
+  }
+  // 击杀音效包（candidate-588）
+  const packSel = el('packSel');
+  if (packSel) {
+    const PACK_KEY = 'cs2d_sound_pack_v1';
+    const syncPack = () => {
+      for (const b of packSel.querySelectorAll('.set-btn')) b.classList.toggle('sel', b.getAttribute('data-pack') === soundPack());
+    };
+    try { setSoundPack(localStorage.getItem(PACK_KEY) || 'classic'); } catch (e0) { /* 忽略 */ }
+    syncPack();
+    for (const b of packSel.querySelectorAll('.set-btn')) {
+      b.onclick = () => {
+        setSoundPack(b.getAttribute('data-pack'));
+        try { localStorage.setItem(PACK_KEY, b.getAttribute('data-pack')); } catch (e0) { /* 忽略 */ }
+        syncPack();
+        uiSfx('confirm', 0.5);
+      };
+    }
+  }
+  // UI 主题包（candidate-589）：强调色四选一，持久化到 body data-theme
+  const themeSel = el('themeSel');
+  if (themeSel) {
+    const THEME_KEY = 'cs2d_theme_v1';
+    const applyTheme = (t) => {
+      if (t === 'default') delete document.body.dataset.theme;
+      else document.body.dataset.theme = t;
+      for (const b of themeSel.querySelectorAll('.set-btn')) b.classList.toggle('sel', b.getAttribute('data-theme') === t);
+    };
+    let savedTheme = 'default';
+    try { savedTheme = localStorage.getItem(THEME_KEY) || 'default'; } catch (e0) { /* 忽略 */ }
+    applyTheme(savedTheme);
+    for (const b of themeSel.querySelectorAll('.set-btn')) {
+      b.onclick = () => {
+        const t = b.getAttribute('data-theme');
+        applyTheme(t);
+        try { localStorage.setItem(THEME_KEY, t); } catch (e0) { /* 忽略 */ }
+        uiSfx('confirm', 0.4);
+      };
+    }
+  }
   // 击杀反馈样式（candidate-577）
   const ksSel = el('killStyleSel');
   if (ksSel) {

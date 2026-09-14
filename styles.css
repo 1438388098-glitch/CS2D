@@ -1275,3 +1275,21 @@ table.sb tr.mvp td{background:rgba(255,210,122,.07)}
 
 .buy-preset{display:flex;gap:8px;padding:8px 14px 0;justify-content:flex-end}
 .buy-preset .btn{width:auto;padding:6px 14px;font-size:12px}
+
+/* 排位段位徽章（candidate-587） */
+.rank-badge{display:none;margin:0 0 8px;padding:6px 12px;border:1px solid rgba(255,255,255,.12);border-radius:8px;font-size:12px;color:var(--txt-1);align-items:center;gap:8px}
+.rank-badge.show{display:flex}
+.rank-badge b{font-size:13px}
+.rank-badge .rr{font-family:var(--f-mono);color:var(--gold);margin-left:auto}
+.rank-line .rank-up{color:#7de59a;font-weight:700}
+.rank-line .rank-dn{color:#ff7d7d;font-weight:700}
+
+/* UI 主题包（candidate-589）：强调色四选一，data-theme 挂 body */
+body[data-theme="cyan"]{--gold:#4dd7ff;--t:#4dd7ff}
+body[data-theme="violet"]{--gold:#c39dff;--t:#e08aff}
+body[data-theme="crimson"]{--gold:#ff6b6b;--t:#ff8a5c}
+
+.savecode-bar{display:flex;gap:8px;align-items:center}
+.savecode-bar .set-btn{cursor:pointer}
+.sc-mode{background:var(--bg-2);color:var(--txt-0);border:1px solid var(--line-1);border-radius:6px;padding:4px 8px;font-size:12px}
+.sc-text{width:100%;background:var(--bg-2);color:var(--txt-0);border:1px solid var(--line-1);border-radius:6px;padding:6px;font-size:11px;font-family:var(--f-mono);resize:vertical}

@@ -8,8 +8,8 @@ export const ACTIONS = {
   reload: '换弹', buy: '购买菜单', scoreboard: '记分板', pause: '暂停',
   weaponPrimary: '主武器', weaponSecondary: '手枪', weaponKnife: '战术刀',
   nadeHe: '手雷（快速投掷）', nadeFlash: '闪光（快速投掷）', nadeSmoke: '烟雾（快速投掷）', nadeDecoy: '诱饵弹（快速投掷）', nadeMoly: '燃烧瓶（快速投掷）', nadeEmp: 'EMP干扰弹（快速投掷）',
-  lastWeapon: '切回上一武器', viewToggle: '切换视角', turnLeft: '左转', turnRight: '右转', mute: '静音', help: '帮助',
-  spectateNext: '观战下一个', spectatePrev: '观战上一个',
+  lastWeapon: '切回上一武器', emote: '快捷表情', viewToggle: '切换视角', turnLeft: '左转', turnRight: '右转', mute: '静音', help: '帮助',
+  spectateNext: '观战下一个', spectatePrev: '观战上一个', spectateFree: '观战自由镜头',
   orderFollow: '指令：集合', orderSiteA: '指令：攻A', orderSiteB: '指令：攻B', orderHold: '指令：守点',
   buyCat1: '购买分类1', buyCat2: '购买分类2', buyCat3: '购买分类3', buyCat4: '购买分类4',
   buyCat5: '购买分类5', buyCat6: '购买分类6', buyCat7: '购买分类7'
@@ -21,8 +21,8 @@ const DEFAULTS = {
   reload: ['KeyR'], buy: ['KeyB'], scoreboard: ['Tab'], pause: ['Escape'],
   weaponPrimary: ['Digit1'], weaponSecondary: ['Digit2'], weaponKnife: ['Digit3'],
   nadeHe: ['Digit4'], nadeFlash: ['Digit5'], nadeSmoke: ['Digit6'], nadeDecoy: ['Digit7'], nadeMoly: ['Digit8'], nadeEmp: ['Digit9'],
-  lastWeapon: ['KeyQ'], viewToggle: ['KeyV'], turnLeft: ['ArrowLeft'], turnRight: ['ArrowRight'], mute: ['KeyM'], help: ['KeyH'],
-  spectateNext: ['KeyE'], spectatePrev: ['KeyQ'],
+  lastWeapon: ['KeyQ'], emote: ['KeyG'], viewToggle: ['KeyV'], turnLeft: ['ArrowLeft'], turnRight: ['ArrowRight'], mute: ['KeyM'], help: ['KeyH'],
+  spectateNext: ['KeyE'], spectatePrev: ['KeyQ'], spectateFree: ['KeyT'],
   orderFollow: ['F1'], orderSiteA: ['F2'], orderSiteB: ['F3'], orderHold: ['F4'],
   buyCat1: ['Digit1'], buyCat2: ['Digit2'], buyCat3: ['Digit3'], buyCat4: ['Digit4'],
   buyCat5: ['Digit5'], buyCat6: ['Digit6'], buyCat7: ['Digit7']

@@ -15,6 +15,7 @@ import {smokeDissolveTrail, drawSmokeTrail, SMOKE_DISSOLVE_LIFE} from './smoke-f
 import {stepCycle, stepDust, drawStepFx, DUST_PER_STEP} from './anim-fx.js';
 import {impactMarksAt, drawImpact} from './impact-fx.js';
 import {weatherKind, weatherParticles, drawWeather, weatherRecycle, MAX_PARTICLES as WEATHER_MAX_PARTICLES} from './weather-fx.js';
+import { activeEmote } from './emote.js';
 import {themeWeatherOf} from './textures.js';
 import {emberSpec, goldStreakSpec} from './burst-fx.js';
 import {enhancedBoomSpec, drawEnhancedBoom} from './boom-fx.js';
@@ -184,6 +185,8 @@ export function render(game) {
   drawEmpPulse(game);
   drawBlackout(game);
   drawReplayGhosts(game);
+  drawWarmupTargets(game);
+  drawDoors(game);
   __marks.fx = performance.now() - __s;
   __s = performance.now();
   drawWeatherLayer(game);
@@ -1102,6 +1105,18 @@ function drawEntities(game) {
         ctx.textAlign = 'left';
       }
     }
+    // 表情气泡（candidate-592）：所有实体头顶 2s 渐隐（含玩家自己）
+    {
+      const em = activeEmote(e);
+      if (em) {
+        ctx.save();
+        ctx.font = '13px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.globalAlpha = Math.min(1, Math.max(0, e.emoteT) / 0.6);
+        ctx.fillText(em.face, ex, ey - 46);
+        ctx.restore();
+      }
+    }
     if (e.defuseT > 0) {
       const pct = clamp(e.defuseT / (e.weapons.kit ? 2.5 : 5), 0, 1);
       ctx.fillStyle = 'rgba(0,0,0,0.55)';
@@ -1394,6 +1409,53 @@ export function tracerStyle(t, weaponKind) {
   };
 }
 
+// 木门（candidate-575）：带裂纹分档的木纹门板，hp 越低裂纹越重
+function drawDoors(game) {
+  const doors = game.doors;
+  if (!doors || !doors.length) return;
+  ctx.save();
+  for (const d of doors) {
+    const hpF = Math.max(0, d.hp) / 4;
+    ctx.fillStyle = 'rgba(122,82,44,.92)';
+    ctx.fillRect(d.x - d.w / 2, d.y - d.w / 2, d.w, d.w);
+    ctx.strokeStyle = 'rgba(60,38,18,.95)';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(d.x - d.w / 2, d.y - d.w / 2, d.w, d.w);
+    if (hpF < 0.75) {
+      ctx.strokeStyle = 'rgba(30,18,8,.8)';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(d.x - 12, d.y - 14); ctx.lineTo(d.x + 4, d.y + 2); ctx.lineTo(d.x - 6, d.y + 16);
+      ctx.stroke();
+    }
+    if (hpF < 0.5) {
+      ctx.beginPath();
+      ctx.moveTo(d.x + 14, d.y - 10); ctx.lineTo(d.x - 2, d.y + 8);
+      ctx.stroke();
+    }
+  }
+  ctx.restore();
+}
+
+// 冻结期热身靶（candidate-593）：空心圆靶，命中闪光
+function drawWarmupTargets(game) {
+  const ts = game.warmupTargets;
+  if (!ts || !ts.length) return;
+  ctx.save();
+  for (const t of ts) {
+    ctx.strokeStyle = t.flashT > 0 ? 'rgba(255,220,120,.95)' : 'rgba(160,200,255,.4)';
+    ctx.lineWidth = t.flashT > 0 ? 3 : 1.5;
+    ctx.beginPath();
+    ctx.arc(t.x, t.y, t.r, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.arc(t.x, t.y, 3, 0, Math.PI * 2);
+    ctx.fillStyle = 'rgba(160,200,255,.5)';
+    ctx.fill();
+  }
+  ctx.restore();
+}
+
 // 回合高光回放（candidate-523）：END 延迟期把最后 8s 快照以 2 倍速幽灵重放
 function drawReplayGhosts(game) {
   if (game.state !== 'END' || game.over) return;
@@ -1498,7 +1560,12 @@ function drawTracers(game) {
     const ex = t.x1 + ux * dist * s.len, ey = t.y1 + uy * dist * s.len;
     // 双段描边替代每帧渐变：粗低透段模拟渐变尾，细亮核段做弹道光芯；
     // lighter 合成增强发光感（CT 冷蓝、T 方武器口径暖色）
-    const rgb = t.team === 'ct' ? '135,190,255' : s.color;
+    let rgb = t.team === 'ct' ? '135,190,255' : s.color;
+    if (t.paint) {
+      // 涂装（candidate-586）：玩家弹道用涂装色
+      const h2v = t.paint;
+      rgb = parseInt(h2v.slice(1, 3), 16) + ',' + parseInt(h2v.slice(3, 5), 16) + ',' + parseInt(h2v.slice(5, 7), 16);
+    }
     ctx.globalCompositeOperation = 'lighter';
     ctx.strokeStyle = 'rgba(' + rgb + ',' + (s.alpha * 0.35) + ')';
     ctx.lineWidth = s.width * 2.2;

@@ -4,6 +4,11 @@ import {initAudioCore, getAc, isAudioReady, resumeAudio, bindAudioUnlock, getBus
 import {buildShot, buildSfx, buildUi, buildAmbient} from './patches.js';
 import {readAudioPrefs, writeAudioPrefs} from './prefs.js';
 
+// 击杀音效包（candidate-588）：classic / metal / bit8，由设置写入
+let _soundPack = 'classic';
+export function setSoundPack(pk) { if (['classic', 'metal', 'bit8'].includes(pk)) _soundPack = pk; }
+export function soundPack() { return _soundPack; }
+
 let muted = false;
 let gameProvider = null;
 
@@ -233,7 +238,7 @@ export function sfx(name, vol, x, y, game, wid, mat) {
         }
       };
     }
-    const env = { out: chain, vol: v, lp: lp ? lp.frequency.value : 3000, mapId: g && g.mapId, wid, mat, guard: tailGuard };
+    const env = { out: chain, vol: v, lp: lp ? lp.frequency.value : 3000, mapId: g && g.mapId, wid, mat, guard: tailGuard, pack: _soundPack };
     if (name === 'shot' || name === 'awp' || name === 'pistol' || name === 'smg' || name === 'shotgun') {
       buildShot(ac, { ...env, variant: shotVariantFor(name, wid) });
     } else {
