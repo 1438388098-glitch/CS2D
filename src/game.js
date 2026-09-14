@@ -34,6 +34,17 @@ import { weatherKind } from './weather-fx.js';
 
 const emit = (evt, p) => ctx.bus.emit(evt, p);
 
+// 地图欢迎信板（candidate-584）：给每张图一句身份叙事，首回合开局横幅 2.4s
+const MAP_MOTTO = {
+  dust2: '风沙之下的经典，每一道墙都记得枪声',
+  metro: '霓虹废墟里，地铁隧道通向黎明',
+  forge: '熔炉不熄，钢铁与胆量一同淬火',
+  atrium: '玻璃穹顶之下，没有藏身之处',
+  arctic: '冰封港湾，热血是唯一的暖流',
+  harbor: '潮起潮落，码头从不等待犹豫的人',
+  canal: '水道纵横，一步一陷阱'
+};
+
 // —— 难度自适应（item 10）——
 // localStorage 记录玩家各档位胜率：胜率 >65% 升档、<40% 降档（每 0.5 档平滑步进），
 // 用 hellParamsAt 做相邻档位插值平滑；浏览器外（Node 测试）自动禁用。
@@ -277,6 +288,7 @@ function spawnRound(game) {
   const spawnTick = { t: 0, ct: 0 };
   for (const e of game.entities) {
     e.lastNadeT = 0;
+    e._roundStartKills = e.kills || 0; // 回合 MVP 基线（candidate-581）
     e.decoy = false; // 假打诱饵标记逐回合复位，否则粘滞跨回合朝错误站点开枪
     let list = e.team === 'ct' ? getMap().spawns.ct : getMap().spawns.t;
     if (!list || !list.length) {
@@ -414,6 +426,16 @@ export function startRound(game) {
   // 残留 C4 清理：淘汰结束时炸弹可能仍 planted，遗留到下一回合会带着旧引信乱结算（回防模式在 startRound 后自行重设）
   game.bomb = null;
   spawnRound(game);
+  // 断电机关（candidate-524）：每回合在随机包点附近生成可射击配电箱，击毁后区域黑灯
+  game.powerBoxes = [];
+  if (game.opts.gameplayPlus && game.round >= 2 && game.mode === null) {
+    const sites = getMap().sites || {};
+    const labels = Object.keys(sites).filter((k) => sites[k]);
+    if (labels.length) {
+      const site = sites[labels[Math.floor(rand() * labels.length)]];
+      game.powerBoxes.push({ x: site.cx + rand(-160, 160), y: site.cy + rand(-160, 160), hp: 80, maxHp: 80 });
+    }
+  }
   // 装备保险赔付（candidate-570）：上回合阵亡且投保 → 返还主武器价 50%
   if (game.player && game.player.insured && game.player._diedLastRound) {
     const pw = game.player.insuredWid;
@@ -450,8 +472,10 @@ export function startRound(game) {
     emit('toast', { text: '第 ' + game.round + ' 回合' });
     // 手枪局/赛点局横幅演出：banner 组件在回合开始时刻的仪式感位
     const winAt = game.ot ? (game.otWin || ROUND.OT_WIN) : (game.matchWin || ROUND.MATCH_WIN);
+    const motto = MAP_MOTTO[game.mapId] || MAP_MOTTO[game.opts.mapId];
     if (game.round === 1) {
       emit('banner', { t1: '手枪局', t2: '经济局 · 省着花', col: '#ffd75e', dur: 2000 });
+      if (motto) setTimeout(() => game.over === false && emit('banner', { t1: '【' + (game.mapId || game.opts.mapId || '').toUpperCase() + '】', t2: motto, col: '#9ad0ff', dur: 2400 }), 2300);
     } else if (game.score.T === winAt - 1 || game.score.CT === winAt - 1) {
       const leader = game.score.T === winAt - 1 ? 'T' : 'CT';
       emit('banner', { t1: '赛 点 局', t2: leader + ' 队拿到赛点 · 先赢 ' + winAt + ' 回合获胜', col: '#ff6b4d', dur: 2200 });
@@ -464,6 +488,9 @@ export function endRound(game, winner, reason, winType) {
   if (game.state === 'END') return;
   game.state = 'END';
   game.endedT = ROUND.END_DELAY;
+  // 冻结本回合最后 8s 快照供 END 延迟期回放（candidate-523）
+  game.replayClip = (game.replayBuf || []).filter((f) => game.time - f.t <= 8);
+  game._replayShown = false;
   const _pm0 = game.player ? game.player.money : 0;
   clearRoundEvent(game);
   if (!game.winHistory) game.winHistory = [];
@@ -511,6 +538,17 @@ export function endRound(game, winner, reason, winType) {
   } else {
     // 平局（同归于尽）：双方获得固定补偿，不改变连胜/连败，避免"白打一回合"
     for (const e of game.entities) addMoney(e, 1500);
+  }
+  // 回合 MVP 播报（candidate-581）：回合内击杀最多者，全场可感知
+  if (winner && game.state === 'END') {
+    let mvp = null, best = 0;
+    for (const e of game.entities) {
+      const dk = (e.kills || 0) - (e._roundStartKills || 0);
+      if (dk > best) { best = dk; mvp = e; }
+    }
+    if (mvp && best >= 2) {
+      emit('sysfeed', { text: '⭐ 回合 MVP：' + mvp.name + '（' + best + ' 杀）' });
+    }
   }
   // 回合经济播报：资金变动可见化（此前钱"凭空变化"，连败补偿档位必须开菜单才能看到）
   if (game.player && game.ui && Number.isFinite(game.player.money) && Number.isFinite(_pm0)) {
@@ -638,6 +676,17 @@ export function update(game, dt) {
   updateGrenades(game, dt);
   updateAirdrop(game, dt);
   updateThunder(game, dt);
+  // 回合高光回放缓冲（candidate-523）：10Hz 实体快照，环形上限 24s
+  game._replayT = (game._replayT || 0) - dt;
+  if (game._replayT <= 0) {
+    game._replayT = 0.1;
+    game.replayBuf = game.replayBuf || [];
+    game.replayBuf.push({
+      t: game.time,
+      ents: game.entities.filter((e) => !e.dead).map((e) => ({ x: e.x, y: e.y, a: e.angle, team: e.team }))
+    });
+    if (game.replayBuf.length > 240) game.replayBuf.shift();
+  }
   // IGL 继任 / 补位：本帧有 bot 阵亡则刷新（幂等、不抛错）
   refreshLeadershipOnDeath(game);
   for (const e of game.entities) {

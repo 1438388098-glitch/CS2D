@@ -618,8 +618,9 @@ export function renderHud(game) {
       }
     }
   }
-  // 击杀环（FPS 下锚定屏幕中心 + 径向光晕强化反馈）
-  if (game.killRingT > 0) {
+  // 击杀反馈样式（candidate-577）：ring 圆环 / x 双弧 / cross 十字闪 / off 关闭
+  const killStyle = crosshairStyle().killStyle || 'ring';
+  if (game.killRingT > 0 && killStyle !== 'off') {
     const kt = 0.7 - game.killRingT;
     const pr = Math.min(1, Math.max(0, kt / 0.35));
     const a = (1 - pr) * 0.9;
@@ -636,7 +637,18 @@ export function renderHud(game) {
     ctx.strokeStyle = 'rgba(255,210,90,' + a + ')';
     ctx.lineWidth = game.viewMode === 'fps' ? 3.5 : 2.5;
     ctx.beginPath();
-    ctx.arc(aimX, aimY, 20 + pr * 55, 0, Math.PI * 2);
+    if (killStyle === 'x') {
+      const r1 = 18 + pr * 46, r2x = 30 + pr * 58;
+      for (const off of [0, Math.PI]) {
+        ctx.arc(aimX, aimY, (r1 + r2x) / 2, off - 0.55 + pr * 0.35, off + 0.55 - pr * 0.35);
+      }
+    } else if (killStyle === 'cross') {
+      const arm = 12 + pr * 22;
+      ctx.moveTo(aimX - arm, aimY); ctx.lineTo(aimX + arm, aimY);
+      ctx.moveTo(aimX, aimY - arm); ctx.lineTo(aimX, aimY + arm);
+    } else {
+      ctx.arc(aimX, aimY, 20 + pr * 55, 0, Math.PI * 2);
+    }
     ctx.stroke();
   }  if (p && !p.dead && p.scoped && (game.viewMode !== 'fps' || game._render3dBackend === 'next')) {
     // 开镜环：legacy 后端在 FPS 下由 render3d 的 drawScope 负责（黑环+十字线），此处跳过避免双镜错位；

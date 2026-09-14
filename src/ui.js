@@ -63,7 +63,7 @@ function bindUiSfx() {
 function bindBus() {
   const bus = ctx.bus;
   const api = game.ui;
-  bus.on('killfeed', (p) => addKillFeed(p.k, p.v, p.w, p.head, p.tm, p.me, p.n));
+  bus.on('killfeed', (p) => addKillFeed(p.k, p.v, p.w, p.head, p.tm, p.me, p.n, p.dist));
   bus.on('sysfeed', (p) => addSysFeed(p.text));
   bus.on('toast', (p) => api.showToast(p.text));
   bus.on('streak', (p) => showKillStreak(p.n));
@@ -374,7 +374,7 @@ function kfExpire(div) {
   }, KF_LIFE_MS);
 }
 
-export function addKillFeed(k, v, w, head, tm, me, n) {
+export function addKillFeed(k, v, w, head, tm, me, n, dist) {
   if (!doc) return;
   const div = doc.createElement('div');
   div.className = 'kf ' + (tm === 't' ? 't' : 'ct') +
@@ -407,6 +407,12 @@ export function addKillFeed(k, v, w, head, tm, me, n) {
     nn.className = 'multin';
     nn.textContent = ' ×' + n;
     div.appendChild(nn);
+  }
+  if (dist) {
+    const dd = doc.createElement('span');
+    dd.className = 'kfd';
+    dd.textContent = ' · ' + dist;
+    div.appendChild(dd);
   }
   const kf = el('killfeed');
   if (!kf) return;
@@ -785,6 +791,7 @@ import { OPPONENTS, getStats, resetDuel, pickDuelMap } from './duel.js';
 import { DUEL_MAPS } from './duel-maps.js';
 import { choosePerk } from './perks.js';
 import { getA11yMode, setA11yMode } from './a11y.js';
+import { initVoice, setVoiceEnabled, voiceEnabled } from './audio/voice.js';
 import { buildCoachLines } from './coach.js';
 import { getMap } from './map.js';
 import { dailyScenario, loadDaily } from './daily.js';
@@ -1331,6 +1338,30 @@ function bindSettings() {
     }
     if (emptyEl) emptyEl.style.display = any ? 'none' : '';
   };
+  // 击杀反馈样式（candidate-577）
+  const ksSel = el('killStyleSel');
+  if (ksSel) {
+    const syncKs = () => {
+      const cur = crosshairStyle().killStyle || 'ring';
+      for (const b of ksSel.querySelectorAll('.set-btn')) b.classList.toggle('sel', b.getAttribute('data-ks') === cur);
+    };
+    syncKs();
+    for (const b of ksSel.querySelectorAll('.set-btn')) {
+      b.onclick = () => { setCrosshairPrefs({ killStyle: b.getAttribute('data-ks') }); syncKs(); uiSfx('confirm', 0.4); };
+    }
+  }
+  // 中文语音播报（candidate-579）
+  const voiceSel = el('voiceSel');
+  if (voiceSel) {
+    initVoice();
+    const syncVoice = () => {
+      for (const b of voiceSel.querySelectorAll('.set-btn')) b.classList.toggle('sel', b.getAttribute('data-voice') === (voiceEnabled() ? 'on' : 'off'));
+    };
+    syncVoice();
+    for (const b of voiceSel.querySelectorAll('.set-btn')) {
+      b.onclick = () => { setVoiceEnabled(b.getAttribute('data-voice') === 'on'); syncVoice(); uiSfx('confirm', 0.4); };
+    }
+  }
   // 色弱辅助色板选择（candidate-549）
   const a11ySel = el('a11ySel');
   if (a11ySel) {

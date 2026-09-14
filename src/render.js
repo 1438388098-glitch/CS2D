@@ -182,6 +182,8 @@ export function render(game) {
   drawTracers(game);
   drawSprayTrace(game);
   drawEmpPulse(game);
+  drawBlackout(game);
+  drawReplayGhosts(game);
   __marks.fx = performance.now() - __s;
   __s = performance.now();
   drawWeatherLayer(game);
@@ -751,6 +753,14 @@ function drawDrops(game) {
     ctx.beginPath();
     ctx.ellipse(0, 5, 11, 5, 0, 0, Math.PI * 2);
     ctx.fill();
+    // 价值分档描边（candidate-576）：高档武器地面一眼可辨
+    if (info.tier >= 1) {
+      ctx.strokeStyle = info.edge;
+      ctx.lineWidth = info.tier >= 3 ? 2.5 : 1.5;
+      ctx.beginPath();
+      ctx.arc(0, 0, 14 + info.tier, 0, Math.PI * 2);
+      ctx.stroke();
+    }
     if (info.kind === 'kit') {
       ctx.fillStyle = 'rgba(24,26,32,' + blink + ')';
       ctx.fillRect(-7, -5, 14, 10);
@@ -785,12 +795,23 @@ function drawDrops(game) {
   ctx.restore();
 }
 
+// 价值分档（candidate-576）：价格越高描边越醒目，地面 AWP 与 Glock 视觉权重不再相同
+export function priceTier(price) {
+  if (!Number.isFinite(price)) return 0;
+  if (price >= 4600) return 3;
+  if (price >= 2900) return 2;
+  if (price >= 1200) return 1;
+  return 0;
+}
+const TIER_EDGE = ['rgba(255,255,255,0)', 'rgba(126,217,87,.75)', 'rgba(90,160,255,.8)', 'rgba(255,205,80,.9)'];
+
 export function dropRenderInfo(d) {
   if (!d) return null;
-  if (d.kind === 'kit') return { label: '拆弹钳', kind: 'kit', color: '#ffd34d' };
+  if (d.kind === 'kit') return { label: '拆弹钳', kind: 'kit', color: '#ffd34d', tier: 2, edge: TIER_EDGE[2] };
   const w = d.wid && WEAPONS[d.wid];
   if (!w) return null;
-  return { label: w.name, kind: w.kind, color: DROP_COL[w.kind] || '#ccc' };
+  const tier = priceTier(w.price);
+  return { label: w.name, kind: w.kind, color: DROP_COL[w.kind] || '#ccc', tier, edge: TIER_EDGE[tier] };
 }
 
 function drawLaser(game) {
@@ -1371,6 +1392,60 @@ export function tracerStyle(t, weaponKind) {
     len: s.len,
     color: s.color
   };
+}
+
+// 回合高光回放（candidate-523）：END 延迟期把最后 8s 快照以 2 倍速幽灵重放
+function drawReplayGhosts(game) {
+  if (game.state !== 'END' || game.over) return;
+  const clip = game.replayClip;
+  if (!clip || clip.length < 4) return;
+  // 回放进度：END_DELAY 3s 内把 8s 素材 2 倍速放完（留 1s 给胜负横幅）
+  const prog = Math.min(1, Math.max(0, (ROUND_END_WINDOW - (game.endedT || 0) - 0.6) / 1.8));
+  const tTarget = clip[0].t + (clip[clip.length - 1].t - clip[0].t) * prog;
+  let i = 0;
+  while (i < clip.length - 1 && clip[i + 1].t < tTarget) i++;
+  const f = clip[i];
+  if (!f) return;
+  ctx.save();
+  ctx.globalAlpha = 0.4;
+  for (const e of f.ents) {
+    ctx.fillStyle = e.team === 'ct' ? '#7fb8ff' : '#ffcf8a';
+    ctx.beginPath();
+    ctx.arc(e.x, e.y, 9, 0, Math.PI * 2);
+    ctx.fill();
+    // 朝向短线
+    ctx.strokeStyle = 'rgba(255,255,255,.7)';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.moveTo(e.x, e.y);
+    ctx.lineTo(e.x + Math.cos(e.a) * 14, e.y + Math.sin(e.a) * 14);
+    ctx.stroke();
+  }
+  ctx.globalAlpha = 0.85;
+  ctx.fillStyle = '#ffd75e';
+  ctx.font = "700 13px 'Microsoft YaHei','Segoe UI',sans-serif";
+  ctx.textAlign = 'center';
+  ctx.fillText('◉ 高光回放', game.camX, game.camY - (game.canvasH / (game.zoom || 1)) / 2 + 26);
+  ctx.restore();
+}
+const ROUND_END_WINDOW = 3.0;
+
+// 断电黑幕（candidate-524）：配电箱击毁后以断电点为心的暗幕，半径外视野正常
+function drawBlackout(game) {
+  const bo = game.blackout;
+  if (!bo) return;
+  const remain = bo.until - (game.time || 0);
+  if (remain <= 0) { game.blackout = null; return; }
+  const a = Math.min(0.78, remain / 5.5 * 0.9);
+  ctx.save();
+  const g = ctx.createRadialGradient(bo.x, bo.y, 60, bo.x, bo.y, 380);
+  g.addColorStop(0, 'rgba(4,6,10,' + a.toFixed(3) + ')');
+  g.addColorStop(1, 'rgba(4,6,10,0)');
+  ctx.fillStyle = g;
+  ctx.beginPath();
+  ctx.arc(bo.x, bo.y, 380, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
 }
 
 // EMP 脉冲环（candidate-565）：激活期内干扰圈呼吸扩散，压迫感可视化

@@ -143,6 +143,25 @@ export function fireWeapon(e, game) {
 }
 
 // 玩家 spray 轨迹（candidate-544）：保留最近 6 条 0.8s 渐隐细线，压枪时看得见前几发落点
+// bot 人格吐槽（candidate-580）：击杀后概率发一句人格化台词，同回合限 2 条防刷屏
+const TAUNTS = {
+  lurk: ['绕后成功，守株待兔～', '你们的后方归我了'],
+  breacher: ['正面突破！下一个！', '门都是给我撞开的'],
+  sniper: ['一枪一个，太简单了', '距离就是我的护城河'],
+  support: ['辅助也会拿头的', '道具开路，跟紧我'],
+  rifler: ['教科书式对枪', '这波在我预料之中']
+};
+function maybeTaunt(game, killer) {
+  if (!killer || !killer.bot || !game) return;
+  game._tauntCount = game._tauntCount || {};
+  const rk = game.round || 0;
+  if ((game._tauntCount[rk] || 0) >= 2) return;
+  if (Math.random() >= 0.3) return;
+  const pool = TAUNTS[killer.archetype] || TAUNTS.rifler;
+  game._tauntCount[rk] = (game._tauntCount[rk] || 0) + 1;
+  pushRadio(game, killer.name + '：' + pool[Math.floor(Math.random() * pool.length)]);
+}
+
 // bot 无线电情报条（candidate-567）：事件推入 game.radioLog，HUD 左下渲染 3s 渐隐
 export function pushRadio(game, text) {
   if (!game) return;
@@ -241,6 +260,7 @@ function fireRay(e, game, ang, w, dmg, isPellet) {
     if (c === '≈') { addRipple(game, px, py, 5); wallT = s * 6; break; }
     if (!passableTolerant(px, py)) {
       if (c === 'o') hitBarrelByShot(game, px, py, e);
+      hitPowerBoxByShot(game, px, py, e);
       wallT = s * 6;
       break;
     }
@@ -349,6 +369,31 @@ export function destroyCrate(game, c, shooter) {
       o.lastKnownT = 0;
       if (o.aimTarget === null && o.path !== null) o.path = null;
     }
+  }
+}
+
+// 断电配电箱受击（candidate-524）：击毁后半径内黑灯 5.5s——bot 致盲、玩家暗幕，环境成为战术工具
+export function hitPowerBoxByShot(game, px, py, shooter) {
+  const boxes = game.powerBoxes;
+  if (!boxes || !boxes.length) return;
+  for (let i = boxes.length - 1; i >= 0; i--) {
+    const b = boxes[i];
+    if (Math.hypot(b.x - px, b.y - py) > 18) continue;
+    b.hp -= 30;
+    spawnParticle(game, { kind: 'spark', x: b.x, y: b.y, vx: rand(-90, 90), vy: rand(-90, 90), life: 0.25, size: 2 });
+    if (b.hp <= 0) {
+      boxes.splice(i, 1);
+      emit('sfx', { name: 'boom', vol: 0.5, x: b.x, y: b.y, game });
+      game.blackout = { x: b.x, y: b.y, until: game.time + 5.5 };
+      for (const o of game.entities) {
+        if (o.dead) continue;
+        if (Math.hypot(o.x - b.x, o.y - b.y) < 380) {
+          if (o.bot) o.blind = Math.max(o.blind || 0, 5.5);
+        }
+      }
+      emit('sysfeed', { text: '💡 配电箱被击毁：区域断电！' });
+    }
+    break;
   }
 }
 
@@ -507,10 +552,13 @@ export function killEntity(v, killer, weapon, head, game) {
   emit('killfeed', {
     k: killer ? killer.name : '?', v: v.name, w: wname, head, tm: killer ? killer.team : null,
     me: killer === game.player ? 'k' : (v === game.player ? 'v' : null),
-    n: killer === game.player ? (killer.streak || 0) + 1 : null
+    n: killer === game.player ? (killer.streak || 0) + 1 : null,
+    // 击杀距离标注（candidate-585）：CS 直播观感要素，观战时可读
+    dist: killer && killer !== v ? Math.max(1, Math.round(Math.hypot(killer.x - v.x, killer.y - v.y) / 40)) + 'm' : null
   });
   // bot 无线电播报（candidate-567）：bot 间击倒事件进左下情报条
   if (killer && killer.bot && v.bot) pushRadio(game, killer.name + ' 击倒了 ' + v.name);
+  maybeTaunt(game, killer);
   // 回合合约结算（candidate-569）
   if (killer === game.player && contractOnKill(game, weapon)) {
     addMoney(killer, game.contract.reward);

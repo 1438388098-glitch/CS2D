@@ -1,7 +1,8 @@
 // 准星个性化偏好（颜色/长度/间隙/粗细/中点）：localStorage 持久化，全部数值夹取防坏档。
 // 纯偏好模块：不依赖 canvas/DOM（localStorage 访问全部守卫），可在 node 测试中直接驱动。
 
-export const CROSSHAIR_DEFAULTS = { color: '#ffffff', len: 7, gap: 6, thickness: 1.5, dot: true };
+export const CROSSHAIR_DEFAULTS = { color: '#ffffff', len: 7, gap: 6, thickness: 1.5, dot: true, killStyle: 'ring' };
+export const KILL_STYLES = ['ring', 'x', 'cross', 'off'];
 export const CROSSHAIR_COLORS = ['#ffffff', '#00ffea', '#7cff4d', '#ffe14d', '#ff9a3d', '#ff4d4d', '#ff7ce8', '#9db4ff'];
 
 const KEY = 'cs2d_crosshair';
@@ -18,6 +19,7 @@ function validColor(c) {
 function load() {
   if (prefs) return prefs;
   prefs = { ...CROSSHAIR_DEFAULTS };
+  if (!KILL_STYLES.includes(prefs.killStyle)) prefs.killStyle = 'ring';
   try {
     if (typeof localStorage !== 'undefined') {
       const raw = localStorage.getItem(KEY);
@@ -61,12 +63,14 @@ export function setCrosshairPrefs(partial) {
   if ('gap' in partial) p.gap = clampN(partial.gap, 0, 14, p.gap);
   if ('thickness' in partial) p.thickness = clampN(partial.thickness, 1, 3.5, p.thickness);
   if (typeof partial.dot === 'boolean') p.dot = partial.dot;
+  if (KILL_STYLES.includes(partial.killStyle)) p.killStyle = partial.killStyle;
   try { if (typeof localStorage !== 'undefined') localStorage.setItem(KEY, JSON.stringify(p)); } catch (e) { /* 无存储 */ }
   return { ...p };
 }
 
 export function resetCrosshairPrefs() {
   prefs = { ...CROSSHAIR_DEFAULTS };
+  if (!KILL_STYLES.includes(prefs.killStyle)) prefs.killStyle = 'ring';
   try { if (typeof localStorage !== 'undefined') localStorage.setItem(KEY, JSON.stringify(prefs)); } catch (e) { /* 无存储 */ }
   return { ...prefs };
 }
