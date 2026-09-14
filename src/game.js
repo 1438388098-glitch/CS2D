@@ -391,6 +391,7 @@ export function startRound(game) {
   game.buyTime = ROUND.BUY_TIME;
   game.freezeT = ROUND.FREEZE;
   game.endedT = 0;
+  game._plantedRound = false;
   spawnRound(game);
   emit('sfx', { name: 'whistle', vol: 0.7, game });
   if (game.ui) {
@@ -422,7 +423,12 @@ export function endRound(game, winner, reason, winType) {
       } else {
         e.lossStreak = lossStreak + 1;
         addMoney(e, bonus);
+        // CS 规则：T 安弹后落败，全队额外补偿（eco 安弹战术的收益来源）
+        if (e.team === 't' && game._plantedRound) addMoney(e, ECONOMY.PLANT_LOSS_BONUS);
       }
+    }
+    if (winner === 'ct' && game._plantedRound) {
+      emit('sysfeed', { text: '安弹补偿：T 队每人 +$' + ECONOMY.PLANT_LOSS_BONUS });
     }
     game[winKey] = 0;
     game[lossKey] = lossStreak + 1;
@@ -856,7 +862,8 @@ function updateTimers(game, dt) {
       }
     }
   }
-  if ((game.state === 'BUY' || game.state === 'LIVE') && game.bomb && game.bomb.planted) {
+  // 引信只在 LIVE 燃烧：BUY 阶段购买期不得吃掉引信（回防模式 25s 引信曾被 20s 购买期吞掉）
+  if (game.state === 'LIVE' && game.bomb && game.bomb.planted) {
     game.bomb.timer -= dt;
     if (game.bomb.timer <= 0) explodeBomb(game);
     // 倒计时 beep 加速：>10s 每秒、<10s 半秒、<5s 1/4 秒升频

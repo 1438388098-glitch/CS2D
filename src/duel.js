@@ -184,7 +184,8 @@ function duelStart(game) {
   const base = teamDiffParams({ rating: effRating });
   const personality = opp.p || {};
   game.opts.diffParams = { ...base, ...personality };
-  game.opts.sideSwapAfter = Math.max(1, Math.floor(ROUND.MATCH_WIN / 2));
+  // BO9 满打 9 局，第 4 局后换边（每边 4-5 局）；旧值 floor(5/2)=2 导致第 3 局就换边
+  game.opts.sideSwapAfter = Math.max(1, Math.floor((ROUND.MATCH_WIN * 2 - 1) / 2));
   game.noRoundEnd = false;
   setupMatchEntities(game);
   game.entities = game.entities.filter((e) => !(e.bot && e.team === game.opts.team));

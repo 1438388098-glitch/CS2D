@@ -197,6 +197,11 @@ function buyFull(e, game, opts) {
     if (e.archetype === 'sniper' && allowAwp) {
       tries.push({ w: 'awp', cost: WEAPONS.awp.price + fullArmor, equip: () => { e.armor = 100; e.helmet = true; } });
     }
+    // 富余升级变体步枪（CT: AUG / T: SG553）：需够「价+全套甲」，避免挤掉护甲预算
+    const variant = e.team === 'ct' ? 'aug' : 'sg553';
+    if (WEAPONS[variant]) {
+      tries.push({ w: variant, cost: WEAPONS[variant].price + fullArmor, equip: () => { e.armor = 100; e.helmet = true; } });
+    }
     tries.push(
       { w: rifle, cost: WEAPONS[rifle].price + fullArmor, equip: () => { e.armor = 100; e.helmet = true; } },
       { w: rifle, cost: WEAPONS[rifle].price + PRICES.ARMOR, equip: () => { e.armor = 100; } }

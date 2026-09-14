@@ -27,8 +27,9 @@ function retakeStart(game) {
     emit('toast', { text: '当前地图无包点，回防模式按经典规则进行' });
   }
   if (site) {
-    // 炸弹已 planted 在站点中心；缩短引信，加快回防节奏
+    // 炸弹已 planted 在站点中心；缩短引信，加快回防节奏（引信只从 LIVE 起算，购买期不再吃引信）
     game.bomb = { x: site.cx, y: site.cy, dropped: false, planted: true, site: siteKey, timer: 25, defusing: false, defuseT: 0 };
+    game._plantedRound = true;
     // CT（玩家+bot）全员配拆弹钳；清除持包标记（炸弹已安，无人持包）
     for (const e of game.entities) {
       if (e.dead) continue;

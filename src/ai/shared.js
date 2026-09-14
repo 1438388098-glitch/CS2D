@@ -48,7 +48,7 @@ export function idealRange(e, d = {}) {
 
 export function hasGoodGun(e) {
   const p = e && e.weapons && e.weapons.primary;
-  return p === 'ak' || p === 'm4' || p === 'famas' || p === 'awp';
+  return p === 'ak' || p === 'm4' || p === 'famas' || p === 'awp' || p === 'aug' || p === 'sg553';
 }
 
 export function redistributeTLanes(game) {

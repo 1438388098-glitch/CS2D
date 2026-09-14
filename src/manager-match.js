@@ -1,5 +1,5 @@
 import { registerMode } from './registry.js';
-import { setupMatchEntities, startRound, endRound, startMatch } from './game.js';
+import { setupMatchEntities, startRound, endRound, startMatch, skipSpectatedRound } from './game.js';
 import { teamDiffParams } from './modes.js';
 import { ROLE_ARCHE, sameTeamBonus, getState, settlePlayerMatch, nextFixture, MATCH_WIN_LIMIT, MATCH_MAX_ROUNDS } from './manager.js';
 import { clamp } from './utils.js';
@@ -213,7 +213,11 @@ export function managerUpdate(game, dt) {
   if (!g || g.ended || game.over) return;
   if (g.skip) {
     g.skip = false;
-    if (game.state !== 'END') endRound(game, null, '本回合跳过', 'skip');
+    // 跳过 = 快进模拟本回合让胜负自然产生；此前直接 endRound(null) 被结算成平局（双方+1500、winHistory 写 D）
+    if (game.state !== 'END' && !game.over) {
+      skipSpectatedRound(game);
+      if (game.state !== 'END' && !game.over) endRound(game, null, '本回合跳过', 'skip');
+    }
     game.endedT = 0.05;
     return;
   }

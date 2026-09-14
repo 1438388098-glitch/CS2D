@@ -47,7 +47,11 @@ export const ECONOMY = {
   KILL_MONEY: 300,
   KILL_MONEY_AWP: 100,
   KILL_MONEY_KNIFE: 1500,
+  KILL_MONEY_SMG: 600,
+  KILL_MONEY_SHOTGUN: 900,
+  ASSIST_MONEY: 100,
   PLANT_MONEY: 300,
+  PLANT_LOSS_BONUS: 800,
   DEFUSE_MONEY: 300,
   LOSS_BONUS: [1400, 1900, 2400, 2900, 3400]
 };
@@ -142,9 +146,9 @@ function buildHellLadder() {
   ladder[5] = { react: 0.05, spreadMult: 0.50285, view: 1136.441063982525, strafe: 0.4583, aimSpeed: 141.012, idealMin: 223.53133573030587, idealMax: 589.84, peekChance: 0.09415, nadeUse: 0.9598387243686088, riskT: 0.9788399999999999, rushChance: 0.37, rotateChance: 0.6429052847178501, saveChance: 0.5746075777102903, trained: true, note: 'H5 经济纪律', genome: [0,0.0019,0.6728821279650503,0.6751,0.4305,0.0588283393257647,0.0996,0.1883,0.9497984054607611,0.5657,0.45,0.7381754745297502,0.4682594721378628] };
   ladder[6] = { react: 0.06385, spreadMult: 0.5, view: 1181.8843921094826, strafe: 0.4583, aimSpeed: 153.40282561653726, idealMin: 237.88, idealMax: 589.84, peekChance: 0.09415, nadeUse: 0.8333048730292143, riskT: 0.9788399999999999, rushChance: 0.3547418178454663, rotateChance: 0.3940649072295054, saveChance: 0.6682515175314829, trained: true, note: 'H6 闪光配合', genome: [0.0277,0,0.7637687842189653,0.7783568801378106,0.4305,0.0947,0.0996,0.1883,0.7916310912865178,0.5657,0.4245696964091106,0.32344151204917565,0.5853143969143536] };
   ladder[7] = { react: 0.056569858429277683, spreadMult: 0.50285, view: 1278.9088568778911, strafe: 0.4583, aimSpeed: 136.9322370280611, idealMin: 237.88, idealMax: 630.0248889827443, peekChance: 0.16212163334726068, nadeUse: 0.93072, riskT: 0.9005000192861046, rushChance: 0.48138633056057145, rotateChance: 0.56, saveChance: 0.7454464254763373, trained: true, note: 'H7 转点反制', genome: [0.013139716858555361,0.0019,0.9578177137557821,0.6411019752338426,0.4305,0.0947,0.20006222245686064,0.32424326669452136,0.9134,0.5004166827384205,0.6356438842676191,0.6,0.6818080318454216] };
-      ladder[8] = { ...degParams(1.0), trained: true, style: "H8 保守架点流", note: "DQN push@best(课程学习, 5图)", netWeights: AI_LADDER_WEIGHTS[8] };
-  ladder[9] = { ...degParams(1.0), trained: true, style: "H9 主动控图流", note: "DQN hold@best(课程学习, 5图)", netWeights: AI_LADDER_WEIGHTS[8] };
-  ladder[10] = { ...degParams(1.0), trained: true, style: "H10 压迫前压流", note: "DQN control@best(课程学习, 5图)", netWeights: AI_LADDER_WEIGHTS[8] };
+      ladder[8] = { ...degParams(1.0), rushChance: 0.3, rotateChance: 0.72, saveChance: 0.86, peekChance: 0.06, trained: true, style: "H8 保守架点流", note: "DQN push@best(课程学习, 5图) + 架点纪律参数", netWeights: AI_LADDER_WEIGHTS[8] };
+  ladder[9] = { ...degParams(1.0), trained: true, style: "H9 主动控图流", note: "DQN hold@best(课程学习, 5图) · 基准档 rush.45/rotate.75/save.8", netWeights: AI_LADDER_WEIGHTS[8] };
+  ladder[10] = { ...degParams(1.0), rushChance: 0.56, rotateChance: 0.68, saveChance: 0.6, peekChance: 0.14, trained: true, style: "H10 压迫前压流", note: "DQN control@best(课程学习, 5图) + 前压参数", netWeights: AI_LADDER_WEIGHTS[8] };
         ladder[12] = { react: 0.24, spreadMult: 1.15, view: 1000, strafe: 0.55, aimSpeed: 32, idealMin: 220, idealMax: 550, rushChance: 0.3, rotateChance: 0.4, saveChance: 0.5, trained: true, style: "H12 团队配合流", note: "DQN 团队合作训练 v3(对手池自对游, 对规则50%/对历史-%, 能力公平 normal)", netWeights: AI_LADDER_WEIGHTS[8] };
         ladder[11] = { react: 0.05, spreadMult: 0.5, view: 1056.2666378768135, strafe: 0.3481067598819857, aimSpeed: 66.06570746315808, idealMin: 432.2824965599221, idealMax: 832.9960945366279, peekChance: 0.4885696106524431, nadeUse: 0.6417468918153586, riskT: 0.42588297321173496, rushChance: 0.7, rotateChance: 0.4010832729909953, saveChance: 0.9896181707219265, peekSkill: 0.8777037067912195, counterStrafe: 0.591522385554393, prefireChance: 0.3856263583497848, ecoDiscipline: 0.4, tradeSpeed: 1.954029072624416, spreadCtrl: 1.4095065308375792, trained: true, style: "H11 军备竞赛", note: "GA 军备竞赛(网络+intel 试验后回滚, fitness 0.80 gen67)", intel: true, oppModel: true, netWeights: null };
 return ladder;

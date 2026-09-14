@@ -1,4 +1,4 @@
-import {WEAPONS, diffOf, MAX_DECALS, TILE} from './config.js';
+import {WEAPONS, ECONOMY, diffOf, MAX_DECALS, TILE} from './config.js';
 import {killRewardFor, addMoney, clearEquipment} from './economy.js';
 import {passableTolerant, los, tileAt, getGrid, getMap, invalidatePathCache} from './map.js';
 import {weaponDef, wkey, ammoFor, reserveFor} from './entities.js';
@@ -72,6 +72,11 @@ export function fireWeapon(e, game) {
       return;
     }
   }
+  // bot AWP 开镜态：站定且有交战目标才开镜（此前 bot 永不开镜，全程 14° 散布形同虚设）
+  if (e.bot && w.kind === 'sniper') {
+    const botSpeed = Math.hypot(e.vx || 0, e.vy || 0);
+    e.scoped = botSpeed < 30 && !!e.aimTarget;
+  }
   let spread = effectiveSpread(w, e);
   registerShot(e);
   if (e.bot) spread *= (e.aiParams || diffOf(game)).spreadMult;
@@ -82,7 +87,8 @@ export function fireWeapon(e, game) {
   let moveSpread = 0;
   const recoilSpread = e.recoil * 0.6;
   if (w.kind === 'sniper') {
-    spread = e.scoped ? 0.15 : spread;
+    // bot 开镜散布按 spreadMult 放宽（冠军 1.5° → easy 4.6°），避免 0.15° 激光成必中挂
+    if (e.scoped) spread = e.bot ? 0.3 + 2.4 * ((e.aiParams || diffOf(game)).spreadMult || 1) : 0.15;
     moveSpread = e.scoped ? 0 : moveSpread;
   }
   const pellets = w.pellets || 1;
@@ -100,8 +106,10 @@ export function fireWeapon(e, game) {
     spawnParticle(game, { kind: 'shell', x: e.x + Math.cos(e.angle + 1.4) * 10, y: e.y + Math.sin(e.angle + 1.4) * 10, vx: Math.cos(e.angle + rand(1, 2.2)) * rand(60, 140), vy: Math.sin(e.angle + rand(1, 2.2)) * rand(60, 140), life: 0.5, size: 2, spin: rand(0, Math.PI * 2) });
   }
   if (w.kind === 'sniper') {
-    e.scoped = !!(e === game.player && game.input && game.input.mouse && game.input.mouse.rdown);
-    if (e.scoped && game.zoom !== undefined) game.zoom = 0.75;
+    if (!e.bot) {
+      e.scoped = !!(e === game.player && game.input && game.input.mouse && game.input.mouse.rdown);
+      if (e.scoped && game.zoom !== undefined) game.zoom = 0.75;
+    }
     emit('sfx', { name: 'awp', vol: 0.9, x: e.x, y: e.y, game, wid: e.weapons.primary || e.weapons.secondary });
     game.shake = Math.max(game.shake, 5);
   } else if (w.kind === 'shotgun') {
@@ -463,11 +471,18 @@ export function killEntity(v, killer, weapon, head, game) {
     addMoney(killer, killRewardFor(weapon));
     for (const o of game.entities) {
       if (o !== killer && o.team === killer.team && !o.dead) {
-        if (v.lastDmgFrom === o && (game.time * 1000 - v.lastDmgT) < 6000) o.assists++;
+        if (v.lastDmgFrom === o && (game.time * 1000 - v.lastDmgT) < 6000) {
+          o.assists++;
+          addMoney(o, ECONOMY.ASSIST_MONEY);
+        }
       }
     }
   }
-  emit('killfeed', { k: killer ? killer.name : '?', v: v.name, w: wname, head, tm: killer ? killer.team : null });
+  emit('killfeed', {
+    k: killer ? killer.name : '?', v: v.name, w: wname, head, tm: killer ? killer.team : null,
+    me: killer === game.player ? 'k' : (v === game.player ? 'v' : null),
+    n: killer === game.player ? (killer.streak || 0) + 1 : null
+  });
   if (v.hasBomb && (!game.bomb || !game.bomb.planted)) {
     dropBomb(v.x, v.y, game);
   }

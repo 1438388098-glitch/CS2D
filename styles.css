@@ -1210,3 +1210,8 @@ table.sb tr.mvp td{background:rgba(255,210,122,.07)}
 .duel-hist-row span:last-child{margin-left:auto}
 .duel-actions{display:flex;gap:10px;justify-content:flex-end;padding:14px 20px;border-top:1px solid rgba(255,255,255,.09);position:sticky;bottom:0;background:rgba(10,13,17,.8);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px)}
 .duel-actions .btn{width:auto;padding:10px 26px}
+
+/* Killfeed 自我参与高亮 + 连杀 ×N 标记：自己的击杀金框、被杀红框，无关击杀不干扰 */
+.kf.self-k{border-color:rgba(255,215,94,.65);box-shadow:0 0 8px rgba(255,215,94,.18)}
+.kf.self-v{border-color:rgba(255,77,77,.65);box-shadow:0 0 8px rgba(255,77,77,.18)}
+.kf .multin{color:#ffd75e;font-weight:700;margin-left:6px}

@@ -51,6 +51,7 @@ export function plantBomb(e, game) {
     e.hasBomb = false;
     game.bomb = { x: e.x, y: e.y, dropped: false, planted: true, site: s.label, timer: ROUND.BOMB_FUSE, defusing: false, defuseT: 0 };
     e.plants++;
+    game._plantedRound = true;
     addMoney(e, ECONOMY.PLANT_MONEY);
     emit('sysfeed', { text: 'Bomb has been planted at ' + (s.label === 'A' ? 'A' : 'B') });
     emit('sfx', { name: 'bombPlanted', vol: 0.9, x: e.x, y: e.y, game });

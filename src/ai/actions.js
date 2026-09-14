@@ -96,7 +96,7 @@ export function postPlantSmokePoint(game) {
 }
 
 function weaponScore(wid) {
-  if (wid === 'ak' || wid === 'm4' || wid === 'famas' || wid === 'awp') return 3;
+  if (wid === 'ak' || wid === 'm4' || wid === 'famas' || wid === 'awp' || wid === 'aug' || wid === 'sg553') return 3;
   if (wid === 'mac10' || wid === 'mp9' || wid === 'p90' || wid === 'xm') return 2;
   if (wid === 'deagle') return 1.6;
   if (wid === 'p250') return 1;

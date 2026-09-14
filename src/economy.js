@@ -5,6 +5,9 @@ const emit = (evt, p) => ctx.bus.emit(evt, p);
 export function killRewardFor(weapon) {
   if (weapon === 'knife') return ECONOMY.KILL_MONEY_KNIFE;
   if (weapon === 'awp') return ECONOMY.KILL_MONEY_AWP;
+  const w = WEAPONS[weapon];
+  if (w && w.kind === 'smg') return ECONOMY.KILL_MONEY_SMG;
+  if (w && w.kind === 'shotgun') return ECONOMY.KILL_MONEY_SHOTGUN;
   return ECONOMY.KILL_MONEY;
 }
 

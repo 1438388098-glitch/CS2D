@@ -63,7 +63,7 @@ function bindUiSfx() {
 function bindBus() {
   const bus = ctx.bus;
   const api = game.ui;
-  bus.on('killfeed', (p) => addKillFeed(p.k, p.v, p.w, p.head, p.tm));
+  bus.on('killfeed', (p) => addKillFeed(p.k, p.v, p.w, p.head, p.tm, p.me, p.n));
   bus.on('sysfeed', (p) => addSysFeed(p.text));
   bus.on('toast', (p) => api.showToast(p.text));
   bus.on('streak', (p) => showKillStreak(p.n));
@@ -335,10 +335,11 @@ function kfExpire(div) {
   }, KF_LIFE_MS);
 }
 
-export function addKillFeed(k, v, w, head, tm) {
+export function addKillFeed(k, v, w, head, tm, me, n) {
   if (!doc) return;
   const div = doc.createElement('div');
-  div.className = 'kf ' + (tm === 't' ? 't' : 'ct');
+  div.className = 'kf ' + (tm === 't' ? 't' : 'ct') +
+    (me === 'k' ? ' self-k' : me === 'v' ? ' self-v' : '');
   const h = doc.createElement('span');
   h.className = 'kn';
   h.textContent = k;
@@ -361,6 +362,12 @@ export function addKillFeed(k, v, w, head, tm) {
     hh.className = 'hs';
     hh.textContent = ' ☠';
     div.appendChild(hh);
+  }
+  if (n >= 2) {
+    const nn = doc.createElement('span');
+    nn.className = 'multin';
+    nn.textContent = ' ×' + n;
+    div.appendChild(nn);
   }
   const kf = el('killfeed');
   if (!kf) return;
