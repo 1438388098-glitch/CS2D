@@ -29,6 +29,7 @@ import { offerPerks, resolvePendingPerks, resetPerks } from './perks.js';
 import { markNemesis } from './nemesis.js';
 import { settleDaily } from './daily.js';
 import { settleRanked } from './ranked.js';
+import { initMorale, applyMoraleResult, applyMoraleToEntities } from './morale.js';
 import { updateAirdrop } from './airdrop.js';
 import { spawnWarmupTargets, settleWarmup } from './warmup.js';
 import { rollContract } from './contracts.js';
@@ -498,7 +499,9 @@ export function startRound(game) {
     emit('toast', { text: '第 ' + game.round + ' 回合' });
     // 手枪局/赛点局横幅演出：banner 组件在回合开始时刻的仪式感位
     const winAt = game.ot ? (game.otWin || ROUND.OT_WIN) : (game.matchWin || ROUND.MATCH_WIN);
-    const motto = MAP_MOTTO[game.mapId] || MAP_MOTTO[game.opts.mapId];
+    initMorale(game);
+  applyMoraleToEntities(game);
+  const motto = MAP_MOTTO[game.mapId] || MAP_MOTTO[game.opts.mapId];
     if (game.round === 1) {
       emit('banner', { t1: '手枪局', t2: '经济局 · 省着花', col: '#ffd75e', dur: 2000 });
       if (motto) setTimeout(() => game.over === false && emit('banner', { t1: '【' + (game.mapId || game.opts.mapId || '').toUpperCase() + '】', t2: motto, col: '#9ad0ff', dur: 2400 }), 2300);
@@ -549,6 +552,7 @@ export function endRound(game, winner, reason, winType) {
     if (winner === 'ct' && game._plantedRound) {
       emit('sysfeed', { text: '安弹补偿：T 队每人 +$' + ECONOMY.PLANT_LOSS_BONUS });
     }
+    applyMoraleResult(game, winner);
     // 残局翻盘奖励（candidate-583）：本回合开局队友全灭、玩家独活且活到最后翻盘
     if (winner && game.clutchStart && game.player && winner === game.player.team &&
         !game.player.dead && !game.over) {

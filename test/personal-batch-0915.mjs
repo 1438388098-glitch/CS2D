@@ -158,6 +158,29 @@ function fresh(opts) {
   ok('emote dead toast', toasts.some((t) => t.indexOf('阵亡') !== -1));
 }
 
+// —— 11. round-12 补充：士气纯函数 + 战报数据 + 经理竞猜结算 ——
+{
+  const { initMorale, applyMoraleResult, moraleMult, applyMoraleToEntities } = await import('../src/morale.js');
+  const g = fresh({ gameplayPlus: false });
+  initMorale(g);
+  applyMoraleResult(g, 't');
+  ok('morale winner up loser down', g.teamMorale.t === 62 && g.teamMorale.ct === 42);
+  ok('moraleMult bounded', moraleMult(0) >= 0.94 && moraleMult(100) <= 1.06);
+  const bot = g.entities.find((e) => e.bot);
+  const base = bot.speedMult || 1;
+  applyMoraleToEntities(g);
+  ok('morale applies without compounding', Math.abs(bot.speedMult - base * moraleMult(bot._moraleMult ? g.teamMorale[bot.team] : g.teamMorale[bot.team])) < 0.3);
+  const { buildShareCardData } = await import('../src/share-card.js');
+  const data = buildShareCardData(g);
+  ok('share card data built', !!data && typeof data.score === 'string' && data.k !== undefined);
+  const { placeBet, settleBetsForRound } = await import('../src/manager.js');
+  const fake = { team: { bank: 5000, ledger: [] }, bets: [], season: { id: 1, round: 3, fixtures: [{ round: 3, home: 'a', away: 'b', played: true, winner: 'a' }] } };
+  const betOk = placeBet(fake, 3, 'a', 'b', 'a', 100);
+  settleBetsForRound(fake, 3);
+  ok('manager bet placed and settled', betOk === true && fake.team.bank === 5000 - 100 + 220 && fake.bets[0].settled === true);
+  ok('bet rejects stake over bank', placeBet(fake, 4, 'a', 'b', 'a', 99999) === false);
+}
+
 if (errors.length) {
   console.error('personal-batch FAIL: ' + errors.join(', '));
   process.exit(1);

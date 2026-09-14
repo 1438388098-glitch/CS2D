@@ -816,6 +816,20 @@ export function renderHud(game) {
   if (p && p.dead) {
     drawDeathVeil(ctx, w2, h2, deathVeilAlpha(1.8 - (p.deathT || 0)));
   }
+  // 队伍士气条（candidate-597）：右下角小条，士气高低一眼可读
+  if (game.teamMorale && p && game.teamMorale[p.team] !== undefined && game.viewMode === 'top') {
+    const mine = game.teamMorale[p.team];
+    ctx.save();
+    ctx.fillStyle = 'rgba(10,13,17,.6)';
+    ctx.fillRect(w2 - 154, h2 - 40, 140, 14);
+    ctx.fillStyle = mine >= 60 ? 'rgba(125,229,154,.85)' : mine >= 30 ? 'rgba(255,211,77,.85)' : 'rgba(255,120,110,.85)';
+    ctx.fillRect(w2 - 152, h2 - 38, 136 * (mine / 100), 10);
+    ctx.fillStyle = 'rgba(230,238,245,.9)';
+    ctx.font = '9px Segoe UI,Microsoft YaHei,sans-serif';
+    ctx.textAlign = 'left';
+    ctx.fillText('士气 ' + Math.round(mine), w2 - 150, h2 - 30.5);
+    ctx.restore();
+  }
   // bot 无线电情报条（candidate-567）：左下角最多 3 行，3s 渐隐
   if (game.radioLog && game.radioLog.length && game.viewMode === 'top') {
     ctx.save();

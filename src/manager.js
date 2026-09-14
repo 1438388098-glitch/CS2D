@@ -1328,11 +1328,41 @@ function simulateLeagueRound(s) {
     f.simRounds = r.rounds.length;
     markFixture(s, f, r.score, r.winner);
   }
+  settleBetsForRound(s, s.season.round);
   if (!s.season.fixtures.some((f) => f.round === s.season.round && !f.played)) {
     if (s.season.round < s.season.totalRounds) {
       s.season.round++;
     } else if (s.season.cup.phase === 'idle') {
       s.season.cup = makeCup(s.season.standings);
+    }
+  }
+}
+
+// ===== 联赛竞猜（candidate-590）：用战队资金押注非本队场次，赛果随轮次自动结算 =====
+export function placeBet(s, round, home, away, side, stake) {
+  if (!s || side !== home && side !== away) return false;
+  stake = Math.round(Number(stake));
+  if (!Number.isFinite(stake) || stake < 100 || stake > 1000) return false;
+  if (stake > s.team.bank) return false;
+  s.bets = s.bets || [];
+  if (s.bets.some((b) => !b.settled && b.round === round && b.home === home && b.away === away)) return false;
+  s.team.bank -= stake;
+  addLedger(s, 'expense', stake, '竞猜押注：' + home + ' vs ' + away);
+  s.bets.push({ round, home, away, side, stake, settled: false });
+  return true;
+}
+
+export function settleBetsForRound(s, round) {
+  if (!s || !s.bets) return;
+  for (const b of s.bets) {
+    if (b.settled || b.round !== round) continue;
+    const f = s.season.fixtures.find((x) => x.round === round && x.home === b.home && x.away === b.away && x.played);
+    if (!f) continue;
+    b.settled = true;
+    if (f.winner === b.side) {
+      const payout = Math.round(b.stake * 2.2);
+      s.team.bank += payout;
+      addLedger(s, 'income', payout, '竞猜命中：' + b.home + ' vs ' + b.away);
     }
   }
 }

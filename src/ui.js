@@ -845,6 +845,7 @@ import { setSoundPack, soundPack } from './audio/master.js';
 import { PAINTS, equipGlobalPaint, equippedGlobalPaint, paintLocked, totalMastery } from './skins.js';
 import { exportSave, importSave } from './savecode.js';
 import { rankedSummary as _rankedSummary } from './ranked.js';
+import { renderShareCard } from './share-card.js';
 import { buildCoachLines } from './coach.js';
 import { getMap } from './map.js';
 import { dailyScenario, loadDaily } from './daily.js';
@@ -1281,6 +1282,20 @@ function bindOverlays() {
   el('quitBtn').onclick = (e) => { game.ui.unpause(); game.ui.showMenu(); e.currentTarget.blur(); };
   el('againBtn').onclick = (e) => { game.ui.hideEnd(); startMatch(game); requestFpsPointerLock(game); e.currentTarget.blur(); };
   el('endMenuBtn').onclick = (e) => { game.ui.hideEnd(); game.ui.showMenu(); e.currentTarget.blur(); };
+  // 战报分享图（candidate-596）：结算数据画 PNG，可右键/下载保存
+  const shareBtn = el('shareCardBtn');
+  if (shareBtn) {
+    shareBtn.onclick = (e) => {
+      const url = renderShareCard(game);
+      const img = el('shareCardImg');
+      const dl = el('shareCardDl');
+      if (!url) { showToast('当前环境无法生成战报图'); return; }
+      if (img) { img.src = url; img.style.display = 'inline-block'; }
+      if (dl) { dl.href = url; dl.style.display = 'inline-block'; dl.className = 'btn small'; dl.textContent = '下载战报图'; }
+      uiSfx('confirm', 0.5);
+      e.currentTarget.blur();
+    };
+  }
   const majorSim = el('majorSim');
   if (majorSim) majorSim.onclick = () => { majorAction(game, 'simRound'); };
   const majorMenu = el('majorMenu');
@@ -1835,15 +1850,20 @@ export function renderHelpBindings() {
   const groups = [
     { actions: ['moveUp', 'moveDown', 'moveLeft', 'moveRight'], label: '移动' },
     { actions: ['walk'], label: '静步' },
+    { actions: ['crouch'], label: '蹲伏' },
     { actions: ['reload'], label: '换弹' },
     { actions: ['interact'], label: '互动（装/拆/拾取）' },
     { actions: ['weaponPrimary', 'weaponSecondary', 'weaponKnife'], label: '武器切换' },
-    { actions: ['nadeHe', 'nadeFlash', 'nadeSmoke'], label: '投掷（装备后左键投出，松键切回）' },
+    { actions: ['lastWeapon'], label: '切回上一武器' },
+    { actions: ['nadeHe', 'nadeFlash', 'nadeSmoke', 'nadeDecoy', 'nadeMoly', 'nadeEmp'], label: '投掷（装备后左键投出，松键切回）' },
+    { actions: ['emote'], label: '快捷表情' },
     { actions: ['orderFollow', 'orderSiteA', 'orderSiteB', 'orderHold'], label: '指挥队友' },
     { actions: ['buy'], label: '购买菜单' },
     { actions: ['scoreboard'], label: '记分板' },
     { actions: ['pause', 'mute'], label: '暂停 / 静音' },
     { actions: ['viewToggle'], label: '切换视角' },
+    { actions: ['spectateNext', 'spectatePrev'], label: '观战切换目标' },
+    { actions: ['spectateFree'], label: '观战自由镜头' },
     { actions: ['help'], label: '帮助' }
   ];
   box.innerHTML = groups.map((g) => {

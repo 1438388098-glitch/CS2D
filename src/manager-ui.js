@@ -9,7 +9,7 @@ import {
   ledgerRecent, transferProfit, computeChemistry, pendingEvents, respondEvent,
   formatDate, isChristmasBreak,
   TRAIN_TIERS, ATTRS, PERSONALITY_CN, NEED_ROLES, ROLES
-} from './manager.js';
+, placeBet } from './manager.js';
 import { yearlyTop } from './hltv-rating.js';
 import { startManagerMatch } from './manager-match.js';
 
@@ -300,7 +300,17 @@ function renderSchedule(s) {
       if (f.played) label = (h ? h.tag : '') + ' ' + (f.score ? f.score.join(':') : '') + ' ' + (a ? a.tag : '');
       else if (mine) label = '我 vs ' + (a ? a.tag : '');
       else label = (h ? h.tag : '') + ' vs ' + (a ? a.tag : '');
-      html += '<div class="career-fixture' + (mine ? ' mine' : '') + '"><span>' + esc(label) + '</span>' + (mine && !f.played ? '<button data-act="play">打</button>' : '') + (mine && f.played ? '<span>·' + (f.winner === 'player' ? '胜' : '负') + '</span>' : '') + '</div>';
+      // 竞猜按钮（candidate-590）：当前轮非本队场次可押主/客（$100），命中 2.2 倍返还
+      let betBtns = '';
+      if (!mine && !f.played && r === s.season.round) {
+        const bet = s.bets && s.bets.find((b) => !b.settled && b.round === r && b.home === f.home && b.away === f.away);
+        betBtns = bet
+          ? '<span class="mng-bet on">已押 ' + (bet.side === f.home ? (h ? h.tag : '') : (a ? a.tag : '')) + '</span>'
+          : '<span class="mng-bet-btns"><button data-bet="' + r + '|' + f.home + '|' + f.away + '|' + f.home + '" title="押主队 $100">押' + (h ? h.tag : '') + '</button><button data-bet="' + r + '|' + f.home + '|' + f.away + '|' + f.away + '" title="押客队 $100">押' + (a ? a.tag : '') + '</button></span>';
+      }
+      let resultMark = '';
+      if (f.played && !mine) resultMark = '<span class="mng-res">' + (f.winner === f.home ? '主胜' : '客胜') + '</span>';
+      html += '<div class="career-fixture' + (mine ? ' mine' : '') + '"><span>' + esc(label) + '</span>' + (mine && !f.played ? '<button data-act="play">打</button>' : '') + betBtns + resultMark + (mine && f.played ? '<span>·' + (f.winner === 'player' ? '胜' : '负') + '</span>' : '') + '</div>';
     }
     html += '</div>';
   }
@@ -351,6 +361,16 @@ function renderFinance(s) {
 }
 
 function onClick(e) {
+  // 竞猜押注按钮（candidate-590）：data-bet="round|home|away|side"
+  const betEl = e.target && e.target.closest ? e.target.closest('[data-bet]') : null;
+  if (betEl) {
+    const parts = betEl.getAttribute('data-bet').split('|');
+    const s2 = getState();
+    const okBet = placeBet(s2, Number(parts[0]), parts[1], parts[2], parts[3], 100);
+    toast(okBet ? '押注成功 $100（命中 2.2 倍返还）' : '押注失败（余额不足或已押过）');
+    render();
+    return;
+  }
   const t = e.target && e.target.closest ? e.target.closest('[data-act]') : null;
   if (!t) return;
   const act = t.getAttribute('data-act');
