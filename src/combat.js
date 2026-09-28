@@ -8,7 +8,7 @@ import {report, MSG} from './info.js';
 
 import {endRound, spawnParticle} from './game.js';
 import {spawnGoldBurst, spawnEmbers} from './burst-fx.js';
-import {DEATH_MARKER_LIFE, TRACER_LIFE} from './render.js';
+import {DEATH_MARKER_LIFE, TRACER_LIFE} from './render-utils.js';
 import {KILL_LABEL_DUR} from './killcam-fx.js';
 import {HIT_ARC_DURATION} from './damage-fx.js';
 import {dropBomb} from './bomb.js';

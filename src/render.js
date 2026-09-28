@@ -1,3 +1,5 @@
+import { DEATH_MARKER_LIFE, TRACER_LIFE } from './render-utils.js';
+export { DEATH_MARKER_LIFE, TRACER_LIFE };
 import {WEAPONS, DROP_COL, TILE} from './config.js';
 import {weaponDef} from './entities.js';
 import {getMap, getGrid} from './map.js';
@@ -557,7 +559,7 @@ export function boomShockwaveSpec(p) {
 }
 
 // 死亡特效生命周期：闪白轮廓在 DEATH_FLASH_TIME 内衰减，尸体星/十字标记停留 DEATH_MARKER_LIFE
-export const DEATH_MARKER_LIFE = 1.8;
+
 export const DEATH_FLASH_TIME = 0.28;
 
 // 死亡特效纯计算：统一由死亡剩余时间驱动（确定性，无 Math.random），供绘制与测试断言
@@ -1385,7 +1387,7 @@ function drawFog(game) {
 }
 
 // 弹道拖尾生命周期：可见时长从旧的 0.09s 延长，配合 len 拉伸形成更清晰的弹道拖尾
-export const TRACER_LIFE = 0.16;
+
 
 // 口径分档样式：大威力（步枪/狙击）更长更亮更粗，手枪/冲锋枪较短（颜色为 RGB 三元组）
 const TRACER_STYLE = {
