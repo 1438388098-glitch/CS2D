@@ -1,5 +1,9 @@
 ﻿# CS2D · 平面反恐精英
 
+> **English**: A modular HTML5 top-view 5v5 tactical shooter (Counter-Strike-like) built with ES Modules and zero dependencies, iterated through ADRs.
+> Features an A/B-site bomb defusal mode with a CS2-style economy system (kill / round-win / loss-streak bonuses), throwables, AI bots, multiple maps, two camera views (overhead / follow), and extra modes such as Career, Ranked, and Esports Manager.
+> **Run**: double-click `start.bat` (or `npm start` / `node server.js`) and open http://localhost:8080.
+
 模块化 HTML5 5v5 战术射击游戏（ES Modules，零依赖）。顶部视角 CS，含 A/B 点爆破模式、经济系统、投掷物、AI 人机、多地图。
 
 > 参与开发前先读 [CONTRIBUTING.md](CONTRIBUTING.md)（铁律与流程）与 [docs/ADR/](docs/ADR/)（关键决策）；版本历史见 [CHANGELOG.md](CHANGELOG.md)，推送后按 [docs/PLAYTEST.md](docs/PLAYTEST.md) 验收。
